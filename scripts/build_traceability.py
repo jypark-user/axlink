@@ -26,7 +26,8 @@ ROOT = Path(__file__).resolve().parent.parent
 DOCS = ROOT / "docs"
 OUT = DOCS / "traceability.csv"
 
-ID_RE = re.compile(r"\b(REQ|DSN|TST|RSK|DEF)-(\d{3})\b")
+# 설계 접두는 CLAUDE.md §2 가 정한 ARC 다. DSN 은 파일럿 시절 표기라 읽기만 하고 새로 쓰지 않는다.
+ID_RE = re.compile(r"\b(REQ|ARC|DSN|TST|RSK|DEF)-(\d{3})\b")
 # 도구별 접두 필수: GH-23 (GitHub) / RM-204 (Redmine).
 # 맨 "#17"은 규약 위반 — 도구 구분이 안 되고, Redmine이 자기 이슈로 오인한다.
 ISSUE_RE = re.compile(r"\b(GH|RM)-(\d+)\b")
