@@ -1,0 +1,348 @@
+import { DEFAULT_SIZE } from '@/features/dashboard/layout-mapper';
+import type { GridItem, WidgetSpec, WidgetTemplate } from '@/types/api';
+
+/**
+ * 진행 상황 추천 구성 — 위젯 여러 개를 한 번에 배치하는 사전 구성.
+ * 위젯은 코드가 아니라 데이터(spec)이므로 여기서는 명세만 정의하고
+ * 검증은 서버 시맨틱 카탈로그(measure/dimension)가 한다.
+ */
+export interface PresetWidget {
+  template: WidgetTemplate;
+  title: string;
+  measure: string;
+  dimensions?: string[];
+}
+
+export interface DashboardPreset {
+  id: string;
+  name: string;
+  description: string;
+  widgets: PresetWidget[];
+}
+
+/**
+ * 셋은 보는 목적이 달라서 그리는 방식도 달라야 한다.
+ * 숫자 카드만 늘어놓은 화면을 세 개 주면 고를 이유가 없다.
+ *   · 전체 진행 현황  — 지표판: 핵심 수치 석 장 + 장기 추이 + 구성비
+ *   · 이슈 · 위험     — 분포판: 어디에 몰렸는지(누적) · 누가 막혔는지(순위) · 고른지(방사형)
+ *   · 산출물 · 요구사항 — 점검판: 22종을 하나씩 짚고, 활동 × 유형 격자로 구멍을 찾는다
+ *
+ * 템플릿은 데이터 모양에 맞춰 고른다 — 채팅 인포그래픽과 같은 기준이다.
+ *   시간축 12구간 이하 선 · 초과 면적 / 범주 3 이하 원 · 6 이하 도넛 · 12 이하 막대 ·
+ *   초과 가로 막대 / 축 2개 누적 막대(칸 40 이하)·격자(초과) / 비율 8개 이하 방사형
+ * measure × dimension 은 서버 시맨틱 카탈로그가 허용한 짝만 쓴다.
+ */
+export const DASHBOARD_PRESETS: DashboardPreset[] = [
+  {
+    id: 'full',
+    name: '전체 인포템플릿',
+    description: '그릴 수 있는 위젯 전부를 한 판에 — 어떤 그림이 있는지 훑어보고 골라내는 용도.',
+    // GANTT_SUMMARY 만 뺐다 — planned/actual 컬럼을 요구하는데 시맨틱 집계는 그 모양을 못 만든다.
+    widgets: [
+      // ① 지금 위치 — 숫자·목표선·잔추세
+      {
+        template: 'STAT_CARD',
+        title: '일정 진척(계획 대비)',
+        measure: 'schedule_variance_pct',
+        dimensions: ['period_month'],
+      },
+      {
+        template: 'BULLET_CHART',
+        title: '용역사별 이슈 처리율 vs 목표',
+        measure: 'issue_resolution_rate',
+        dimensions: ['contractor_org'],
+      },
+      {
+        template: 'SPARKLINE',
+        title: '상태별 이슈 잔추세',
+        measure: 'issue_count',
+        dimensions: ['period_month', 'issue_status'],
+      },
+      // ② 흐름 — 시간이 지나며 어떻게 변하나
+      {
+        template: 'LINE_CHART',
+        title: '월별 시험 통과율',
+        measure: 'test_pass_rate',
+        dimensions: ['period_month'],
+      },
+      {
+        template: 'AREA_CHART',
+        title: '주별 이슈 처리율 추이',
+        measure: 'issue_resolution_rate',
+        dimensions: ['period_week'],
+      },
+      {
+        template: 'CUMULATIVE_FLOW',
+        title: '이슈 누적 흐름(쌓임 vs 닫힘)',
+        measure: 'issue_count',
+        dimensions: ['period_month', 'issue_status'],
+      },
+      {
+        template: 'CALENDAR_HEATMAP',
+        title: '일별 커밋·MR 활동',
+        measure: 'code_activity_count',
+        dimensions: ['period_day'],
+      },
+      // ③ 분포 — 어디에 몰렸나
+      {
+        template: 'BAR_CHART',
+        title: '심각도별 열린 이슈',
+        measure: 'open_issue_count',
+        dimensions: ['issue_severity'],
+      },
+      {
+        template: 'PARETO',
+        title: '담당자별 열린 이슈 집중도',
+        measure: 'open_issue_count',
+        dimensions: ['assignee'],
+      },
+      {
+        template: 'STACKED_BAR_CHART',
+        title: '용역사 × 심각도별 이슈',
+        measure: 'issue_count',
+        dimensions: ['contractor_org', 'issue_severity'],
+      },
+      {
+        template: 'HEATMAP',
+        title: '활동 × 산출물 유형별 미제출',
+        measure: 'work_product_missing_count',
+        dimensions: ['iso_activity', 'work_product_type'],
+      },
+      {
+        template: 'TREEMAP',
+        title: '유형별 미제출 산출물 크기',
+        measure: 'work_product_missing_count',
+        dimensions: ['work_product_type'],
+      },
+      // ④ 구성 — 무엇으로 이뤄졌나
+      {
+        template: 'PIE_CHART',
+        title: '상태별 열린 리스크',
+        measure: 'open_risk_count',
+        dimensions: ['risk_status'],
+      },
+      {
+        template: 'DONUT_CHART',
+        title: '우선순위별 요구사항 비중',
+        measure: 'requirement_fulfillment_rate',
+        dimensions: ['requirement_priority'],
+      },
+      {
+        template: 'STATUS_FLOW',
+        title: '요구사항 단계 분포',
+        measure: 'requirement_fulfillment_rate',
+        dimensions: ['requirement_status'],
+      },
+      {
+        template: 'RADAR_CHART',
+        title: '활동별 산출물 승인률 균형',
+        measure: 'work_product_approval_rate',
+        dimensions: ['iso_activity'],
+      },
+      // ⑤ 변화 — 순위와 기울기
+      {
+        template: 'SLOPE_CHART',
+        title: '용역사별 이슈, 처음과 지금',
+        measure: 'issue_count',
+        dimensions: ['period_month', 'contractor_org'],
+      },
+      {
+        template: 'BUMP_CHART',
+        title: '심각도별 이슈 순위 변화',
+        measure: 'issue_count',
+        dimensions: ['period_month', 'issue_severity'],
+      },
+      // ⑥ 점검 — 하나씩 짚기
+      {
+        template: 'PROGRESS_LIST',
+        title: '용역사별 요구사항 이행률',
+        measure: 'requirement_fulfillment_rate',
+        dimensions: ['contractor_org'],
+      },
+      {
+        template: 'HORIZONTAL_BAR_CHART',
+        title: '산출물 22종 승인률',
+        measure: 'work_product_approval_rate',
+        dimensions: ['work_product_type'],
+      },
+      {
+        template: 'CHECKLIST',
+        title: '산출물 22종 승인 점검표',
+        measure: 'work_product_approval_rate',
+        dimensions: ['work_product_type'],
+      },
+      {
+        template: 'DATA_TABLE',
+        title: '담당자별 이슈 평균 처리일',
+        measure: 'issue_avg_resolution_days',
+        dimensions: ['assignee'],
+      },
+    ],
+  },
+  {
+    id: 'overview',
+    name: '전체 진행 현황',
+    description: '핵심 수치로 지금 위치를 읽고, 추이와 구성비로 흐름을 본다. 보고용.',
+    widgets: [
+      // 기간 축을 달아 카드 안에 추세선이 그려지게 한다 — 숫자만으로는 방향을 모른다.
+      {
+        template: 'STAT_CARD',
+        title: '일정 진척(계획 대비)',
+        measure: 'schedule_variance_pct',
+        dimensions: ['period_month'],
+      },
+      {
+        template: 'STAT_CARD',
+        title: '요구사항 이행률',
+        measure: 'requirement_fulfillment_rate',
+        dimensions: ['period_month'],
+      },
+      { template: 'STAT_CARD', title: '산출물 승인률', measure: 'work_product_approval_rate' },
+      // 월이 쌓이면 선이 빽빽해진다 — 면적이 흐름을 더 잘 보여 준다.
+      {
+        template: 'AREA_CHART',
+        title: '월별 요구사항 이행률 추이',
+        measure: 'requirement_fulfillment_rate',
+        dimensions: ['period_month'],
+      },
+      {
+        template: 'STATUS_FLOW',
+        title: '요구사항 단계 분포',
+        measure: 'requirement_fulfillment_rate',
+        dimensions: ['requirement_status'],
+      },
+      // MoSCoW 넷 — 원보다 도넛이 가운데에 합계를 둘 수 있어 낫다.
+      {
+        template: 'DONUT_CHART',
+        title: '우선순위별 요구사항 비중',
+        measure: 'requirement_fulfillment_rate',
+        dimensions: ['requirement_priority'],
+      },
+    ],
+  },
+  {
+    id: 'issue',
+    name: '이슈 · 위험 중심',
+    description: '어디에 몰려 있고 누가 막혀 있는지 — 분포·순위·균형으로 본다.',
+    widgets: [
+      { template: 'STAT_CARD', title: '이슈 평균 처리일', measure: 'issue_avg_resolution_days' },
+      // 용역사 안에서 심각도가 어떻게 갈리는지 — 막대 둘로 나눠 보면 비교가 안 된다.
+      {
+        template: 'STACKED_BAR_CHART',
+        title: '용역사 × 심각도별 열린 이슈',
+        measure: 'open_issue_count',
+        dimensions: ['contractor_org', 'issue_severity'],
+      },
+      // 담당자는 수가 많다 — 세로 막대는 이름이 겹쳐 읽히지 않는다.
+      {
+        template: 'HORIZONTAL_BAR_CHART',
+        title: '담당자별 열린 이슈',
+        measure: 'open_issue_count',
+        dimensions: ['assignee'],
+      },
+      {
+        template: 'AREA_CHART',
+        title: '주별 이슈 처리율 추이',
+        measure: 'issue_resolution_rate',
+        dimensions: ['period_week'],
+      },
+      // 처리율이 한쪽만 낮으면 찌그러진 모양으로 바로 보인다.
+      {
+        template: 'RADAR_CHART',
+        title: '용역사별 이슈 처리율 균형',
+        measure: 'issue_resolution_rate',
+        dimensions: ['contractor_org'],
+      },
+      {
+        template: 'DONUT_CHART',
+        title: '심각도별 열린 리스크',
+        measure: 'open_risk_count',
+        dimensions: ['risk_severity'],
+      },
+    ],
+  },
+  {
+    id: 'deliverable',
+    name: '산출물 · 요구사항 중심',
+    description: '받기로 한 것 중 무엇이 비었는지 — 점검표로 하나씩 짚는다.',
+    widgets: [
+      {
+        template: 'STATUS_FLOW',
+        title: '산출물 상태 분포',
+        measure: 'work_product_approval_rate',
+        dimensions: ['work_product_status'],
+      },
+      {
+        template: 'HEATMAP',
+        title: '활동 × 산출물 유형별 미제출',
+        measure: 'work_product_missing_count',
+        dimensions: ['iso_activity', 'work_product_type'],
+      },
+      {
+        template: 'CHECKLIST',
+        title: '산출물 22종 승인 점검표',
+        measure: 'work_product_approval_rate',
+        dimensions: ['work_product_type'],
+      },
+      // 22종은 세로 막대로 못 읽는다 — 눕히고 낮은 것부터 눈에 들어오게 한다.
+      {
+        template: 'HORIZONTAL_BAR_CHART',
+        title: '산출물 22종 승인률',
+        measure: 'work_product_approval_rate',
+        dimensions: ['work_product_type'],
+      },
+      // PM·SI 활동 10단계 — 어느 단계가 처지는지 균형으로 본다.
+      {
+        template: 'RADAR_CHART',
+        title: '활동별 산출물 승인률 균형',
+        measure: 'work_product_approval_rate',
+        dimensions: ['iso_activity'],
+      },
+      {
+        template: 'STAT_CARD',
+        title: '요구사항→시험 추적률',
+        measure: 'requirement_test_trace_rate',
+      },
+    ],
+  },
+];
+
+export const toWidgetSpec = (widget: PresetWidget, projectId: string): WidgetSpec => ({
+  template: widget.template,
+  title: widget.title,
+  query: {
+    measure: widget.measure,
+    dimensions: widget.dimensions ?? [],
+    filters: [],
+    projectScope: [projectId],
+    limit: null,
+  },
+  options: {
+    unit: null,
+    sort: 'desc',
+    threshold: null,
+    stacked: null,
+    showLegend: null,
+    compareWithPrevious: null,
+    columns: null,
+  },
+});
+
+/** 위젯을 12컬럼 안에서 왼쪽→오른쪽으로 흘려 담는다. 서버가 i 를 위젯 id 로 채운다. */
+export const packGrid = (widgets: PresetWidget[], startY = 0, cols = 12): GridItem[] => {
+  let x = 0;
+  let y = startY;
+  let rowHeight = 0;
+  return widgets.map((w) => {
+    const size = DEFAULT_SIZE[w.template];
+    if (x + size.w > cols) {
+      x = 0;
+      y += rowHeight;
+      rowHeight = 0;
+    }
+    const item: GridItem = { i: '', x, y, w: size.w, h: size.h, minW: size.minW, minH: size.minH };
+    x += size.w;
+    rowHeight = Math.max(rowHeight, size.h);
+    return item;
+  });
+};

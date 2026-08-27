@@ -1,0 +1,57 @@
+import {
+  AreaChartWidget,
+  BarChartWidget,
+  BulletChartWidget,
+  BumpChartWidget,
+  CalendarHeatmapWidget,
+  ChecklistWidget,
+  CumulativeFlowWidget,
+  DataTableWidget,
+  DonutChartWidget,
+  GanttSummaryWidget,
+  HorizontalBarChartWidget,
+  HeatmapWidget,
+  LineChartWidget,
+  ParetoWidget,
+  PieChartWidget,
+  RadarChartWidget,
+  ProgressListWidget,
+  SlopeChartWidget,
+  SparklineWidget,
+  StackedBarChartWidget,
+  StatCardWidget,
+  StatusFlowWidget,
+  TreemapWidget,
+  UnsupportedWidget,
+} from '@/features/widgets/renderers';
+import type { WidgetRenderer } from '@/features/widgets/widget-types';
+import type { WidgetTemplate } from '@/types/api';
+
+export const widgetRenderers: Record<WidgetTemplate, WidgetRenderer> = {
+  STAT_CARD: StatCardWidget,
+  BAR_CHART: BarChartWidget,
+  LINE_CHART: LineChartWidget,
+  PIE_CHART: PieChartWidget,
+  PROGRESS_LIST: ProgressListWidget,
+  DATA_TABLE: DataTableWidget,
+  CHECKLIST: ChecklistWidget,
+  GANTT_SUMMARY: GanttSummaryWidget,
+  STATUS_FLOW: StatusFlowWidget,
+  HEATMAP: HeatmapWidget,
+  AREA_CHART: AreaChartWidget,
+  STACKED_BAR_CHART: StackedBarChartWidget,
+  HORIZONTAL_BAR_CHART: HorizontalBarChartWidget,
+  DONUT_CHART: DonutChartWidget,
+  RADAR_CHART: RadarChartWidget,
+  CUMULATIVE_FLOW: CumulativeFlowWidget,
+  PARETO: ParetoWidget,
+  TREEMAP: TreemapWidget,
+  SLOPE_CHART: SlopeChartWidget,
+  BUMP_CHART: BumpChartWidget,
+  SPARKLINE: SparklineWidget,
+  BULLET_CHART: BulletChartWidget,
+  CALENDAR_HEATMAP: CalendarHeatmapWidget,
+};
+
+export const resolveWidgetRenderer = (template: string): WidgetRenderer =>
+  widgetRenderers[template as WidgetTemplate] ?? UnsupportedWidget;
