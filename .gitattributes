@@ -1,0 +1,53 @@
+# 줄바꿈·바이너리 처리 규칙
+#
+# 이 저장소는 커밋 diff 자체가 진척 데이터다. 줄바꿈이 기계마다 달라지면
+# 내용이 안 바뀐 파일이 전체 변경으로 잡혀 진척 지표가 오염된다.
+# 개인 git 설정(core.autocrlf)에 맡기지 않고 여기서 못박는다.
+
+# 기본 — 저장소에는 LF 로 저장한다
+* text=auto eol=lf
+
+# Windows 전용 스크립트는 CRLF 여야 실행된다
+*.bat  text eol=crlf
+*.cmd  text eol=crlf
+*.ps1  text eol=crlf
+
+# Gradle 래퍼 — LF 가 아니면 Linux/CI 에서 실행되지 않는다
+gradlew        text eol=lf
+gradlew.bat    text eol=crlf
+*.sh           text eol=lf
+
+# ── 바이너리 ────────────────────────────────────────────────
+# 텍스트로 오인되어 변환되면 파일이 깨진다.
+# 특히 산출물 문서는 SWFR.CON.007(문서 추출) 시험의 입력이므로,
+# 깨진 파일로 시험이 실패하면 파서 문제로 오진하게 된다.
+
+*.hwp   binary
+*.hwpx  binary
+*.docx  binary
+*.doc   binary
+*.xlsx  binary
+*.xls   binary
+*.pptx  binary
+*.ppt   binary
+*.pdf   binary
+
+*.png   binary
+*.jpg   binary
+*.jpeg  binary
+*.gif   binary
+*.ico   binary
+*.webp  binary
+*.woff  binary
+*.woff2 binary
+*.ttf   binary
+*.otf   binary
+
+*.jar   binary
+*.zip   binary
+*.gz    binary
+
+# ── 산출물 문서 ─────────────────────────────────────────────
+# GitHub 이 언어 통계에서 제외하도록 표시한다. 코드 비율이 왜곡되지 않는다.
+docs/**       linguist-documentation
+docs/90-pilot/** linguist-vendored
