@@ -1,0 +1,61 @@
+name: axlink
+
+services:
+  # 표준 데이터 모델 + 임베딩 벡터 저장소
+  postgres:
+    image: pgvector/pgvector:pg16
+    container_name: axlink-postgres
+    environment:
+      POSTGRES_USER: axlink
+      POSTGRES_PASSWORD: axlink
+      POSTGRES_DB: axlink
+    ports: ["5432:5432"]
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+      - ./initdb:/docker-entrypoint-initdb.d:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U axlink -d axlink"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+
+  # 프로젝트 관리 도구 (샘플 원천 + 폐쇄망 온프레미스 서사에 부합)
+  redmine-db:
+    image: postgres:16
+    container_name: axlink-redmine-db
+    environment:
+      POSTGRES_USER: redmine
+      POSTGRES_PASSWORD: redmine
+      POSTGRES_DB: redmine
+    volumes:
+      - redminedb:/var/lib/postgresql/data
+
+  redmine:
+    image: redmine:6
+    container_name: axlink-redmine
+    depends_on: [redmine-db]
+    environment:
+      REDMINE_DB_POSTGRES: redmine-db
+      REDMINE_DB_USERNAME: redmine
+      REDMINE_DB_PASSWORD: redmine
+      REDMINE_DB_DATABASE: redmine
+      REDMINE_SECRET_KEY_BASE: change-me-in-local-env
+    ports: ["3000:3000"]
+    volumes:
+      - redminefiles:/usr/src/redmine/files
+
+  # 온프레미스 LLM 1단계 (경량 모델 기능구조 선행검증)
+  # GPU 전환 시 deploy.resources.reservations.devices 로 교체
+  ollama:
+    image: ollama/ollama:latest
+    container_name: axlink-ollama
+    ports: ["11434:11434"]
+    volumes:
+      - ollama:/root/.ollama
+    profiles: ["llm"]
+
+volumes:
+  pgdata:
+  redminedb:
+  redminefiles:
+  ollama:

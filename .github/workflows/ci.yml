@@ -1,0 +1,23 @@
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+jobs:
+  conventions:
+    name: 규약 검사 (커밋 추적 ID)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with: { fetch-depth: 0 }
+      - uses: actions/setup-python@v5
+        with: { python-version: "3.11" }
+      - name: 커밋 메시지 규약 검사
+        run: python scripts/build_traceability.py --check
+      - name: 추적표 갱신 확인
+        run: |
+          python scripts/build_traceability.py
+          git diff --exit-code docs/traceability.csv \
+            || echo "::warning::traceability.csv 가 최신이 아닙니다. 재생성 후 커밋하세요."
