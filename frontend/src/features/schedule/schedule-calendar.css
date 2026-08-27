@@ -1,0 +1,107 @@
+/* FullCalendar 의 기본 색을 ax-link 토큰으로 덮는다. (ax-pms schedule-calendar.css 와 동일) */
+.schedule-calendar {
+  --fc-border-color: var(--color-accent);
+  --fc-page-bg-color: transparent;
+  --fc-neutral-bg-color: var(--color-muted);
+  --fc-today-bg-color: var(--color-primary-muted);
+  --fc-more-link-bg-color: transparent;
+  --fc-more-link-text-color: var(--color-muted-foreground);
+  font-family: inherit;
+}
+
+.schedule-calendar .fc {
+  font-size: var(--text-sm);
+}
+
+.schedule-calendar .fc-theme-standard td,
+.schedule-calendar .fc-theme-standard th {
+  border-color: var(--color-accent);
+}
+
+.schedule-calendar .fc-theme-standard .fc-scrollgrid {
+  border: 0;
+}
+
+.schedule-calendar .fc-col-header {
+  background: var(--color-muted);
+}
+
+.schedule-calendar .fc-col-header-cell {
+  border-bottom-color: var(--color-border);
+  padding: 8px 0;
+}
+
+.schedule-calendar .fc-col-header-cell-cushion {
+  color: var(--color-muted-foreground);
+  font-size: var(--text-xs font-semibold tracking-wide);
+  padding: 0;
+}
+
+/* 활동은 며칠씩 이어지므로 칸이 높을 필요가 없다 — 낮춰야 한 달이 한눈에 들어온다. */
+.schedule-calendar .fc-daygrid-day-frame {
+  min-height: 84px;
+  padding: 6px;
+}
+
+.schedule-calendar .fc-daygrid-day.fc-day-other {
+  background: color-mix(in srgb, var(--color-muted) 45%, transparent);
+}
+
+/* 오늘 칸은 배경 대신 위쪽 선으로 짚는다 — 배경을 칠하면 그 위 띠의 색이 흐려진다. */
+.schedule-calendar .fc-daygrid-day.fc-day-today {
+  background: transparent;
+  box-shadow: inset 0 2px 0 0 var(--color-primary);
+}
+
+.schedule-calendar .fc-daygrid-day-top {
+  flex-direction: row;
+}
+
+.schedule-calendar .fc-daygrid-day-number {
+  padding: 0;
+}
+
+.schedule-calendar .fc-daygrid-day-events {
+  margin-top: 4px;
+}
+
+.schedule-calendar .fc-daygrid-event-harness {
+  margin-bottom: 3px;
+}
+
+.schedule-calendar .fc-daygrid-event {
+  background: transparent;
+  border: 0;
+  border-radius: 0;
+  box-shadow: none;
+  margin: 0;
+  padding: 0;
+}
+
+.schedule-calendar .fc-daygrid-event:focus::after,
+.schedule-calendar .fc-daygrid-event:hover {
+  background: transparent;
+}
+
+.schedule-calendar .fc-daygrid-more-link {
+  color: var(--color-muted-foreground);
+  font-size: var(--text-xs font-semibold tracking-wide);
+  padding: 0 8px;
+}
+
+.schedule-calendar .fc-popover {
+  background: var(--color-card);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-float);
+}
+
+.schedule-calendar .fc-popover-header {
+  background: var(--color-muted);
+  color: var(--color-foreground);
+  font-size: var(--text-xs font-semibold tracking-wide);
+}
+
+.schedule-calendar .fc-h-event .fc-event-main {
+  color: inherit;
+}

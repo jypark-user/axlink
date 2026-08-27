@@ -1,0 +1,13 @@
+package kr.co.axlink.rag.domain;
+
+public enum DocSourceType {
+  WORK_PRODUCT,
+  REQUIREMENT,
+  ISSUE,
+  RISK,
+  CHANGE_REQUEST,
+  CORRECTION_ACTION,
+  MEETING_RECORD,
+  PROGRESS_RECORD,
+  DOCUMENT_UPLOAD
+}

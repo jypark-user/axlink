@@ -1,0 +1,43 @@
+/* gantt-task-react 의 기본 색을 ax-link 토큰으로 덮는다. (ax-pms schedule-gantt.css 와 동일) */
+.schedule-gantt {
+  font-family: inherit;
+}
+
+.schedule-gantt g.bar text {
+  display: none;
+}
+
+.schedule-gantt g.rows rect {
+  fill: var(--color-card);
+}
+
+.schedule-gantt g.rows rect:nth-child(even) {
+  fill: var(--color-muted);
+}
+
+.schedule-gantt g.rowLines line,
+.schedule-gantt g.ticks line {
+  stroke: var(--color-accent);
+}
+
+.schedule-gantt g.calendar rect {
+  fill: var(--color-card);
+  stroke: var(--color-border);
+}
+
+.schedule-gantt g.calendar text {
+  fill: var(--color-muted-foreground);
+}
+
+.schedule-gantt g.calendarTop line {
+  stroke: var(--color-border);
+}
+
+.schedule-gantt g.calendarTop text {
+  fill: var(--color-foreground);
+  font-weight: 600;
+}
+
+.schedule-gantt g.today rect {
+  opacity: 0.7;
+}

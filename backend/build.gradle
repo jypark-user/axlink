@@ -1,0 +1,59 @@
+plugins {
+  id 'java'
+  id 'org.springframework.boot' version '3.3.5'
+  id 'io.spring.dependency-management' version '1.1.6'
+  id 'com.diffplug.spotless' version '6.25.0'
+}
+
+group = 'kr.co.axlink'
+version = '0.1.0'
+
+java {
+  toolchain {
+    languageVersion = JavaLanguageVersion.of(17)
+  }
+}
+
+repositories {
+  mavenCentral()
+}
+
+dependencies {
+  implementation 'org.springframework.boot:spring-boot-starter-web'
+  implementation 'org.springframework.boot:spring-boot-starter-validation'
+  implementation 'org.springframework.boot:spring-boot-starter-security'
+  implementation 'org.springframework.boot:spring-boot-starter-jdbc'
+  implementation 'org.flywaydb:flyway-core'
+  implementation 'org.flywaydb:flyway-database-postgresql'
+  implementation 'org.apache.tika:tika-core:2.9.2'
+  implementation 'org.apache.tika:tika-parsers-standard-package:2.9.2'
+  implementation 'kr.dogfoot:hwplib:1.1.4'
+  implementation 'kr.dogfoot:hwpxlib:1.0.5'
+  runtimeOnly 'org.postgresql:postgresql'
+  testImplementation 'org.springframework.boot:spring-boot-starter-test'
+  testImplementation 'org.springframework.security:spring-security-test'
+}
+
+tasks.named('test') {
+  useJUnitPlatform()
+}
+
+/*
+ * 코드 스타일을 사람 손이 아니라 도구가 지킨다.
+ * 기존 코드가 이미 Google Java Style(2칸 들여쓰기, 100칸)이라 그 규격을 그대로 쓴다.
+ */
+spotless {
+  java {
+    /*
+     * 전면 재포맷(googleJavaFormat)은 일부러 뺐다.
+     * 이 저장소는 jdbcClient.sql("""…""") 같은 fluent 체인 + 텍스트 블록이 코드의 큰 몫인데,
+     * 재줄바꿈이 그걸 return jdbcClient / .sql( / """ 로 갈라 놔 읽기 나빠진다.
+     * 기존 코드는 이미 2칸 들여쓰기·100칸으로 일관돼 있다. 여기서는 사람이 안 지키는 것만 강제한다.
+     */
+    // 기존 코드는 이미 그룹 없는 단일 알파벳 블록이다 — 인자 없는 importOrder 가 그 규격이다.
+    importOrder()
+    removeUnusedImports()
+    trimTrailingWhitespace()
+    endWithNewline()
+  }
+}
