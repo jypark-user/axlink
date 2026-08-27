@@ -1,0 +1,10 @@
+# <type>(<scope>): <제목>  [REQ-000]
+#
+# type  : feat fix docs test refactor chore perf
+# scope : connectors pipeline ai templates web infra docs
+# 제목  : 한국어, 명령형, 마침표 없음, 50자 이내
+#
+# --- 본문: 왜 이렇게 했는지 (무엇을 했는지는 diff가 말한다) ---
+#
+#
+# Refs: #
