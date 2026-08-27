@@ -1,0 +1,12 @@
+blank_issues_enabled: false
+contact_links:
+  - name: 요구사항 (SWFR / SER / QUR)
+    url: https://github.com/jypark-user/axlink/blob/main/docs/10-requirements/IM-001-요구사항정의서.md
+    about: >
+      요구사항 이슈는 손으로 만들지 않는다. 요구사항정의서를 고친 뒤
+      scripts/github/gen_bootstrap.py 를 다시 실행하면 새 이슈가 생성된다.
+  - name: 리스크 (RSK) · 결함 (DEF)
+    url: https://github.com/jypark-user/axlink/blob/main/CLAUDE.md
+    about: >
+      리스크와 결함은 Redmine 트래커에서 관리한다. 여기에 등록하지 않는다.
+      GitHub 은 코드 · 커밋 · PR · 요구사항 이슈 · 마일스톤 · WBS 파일을 맡는다.
