@@ -1,6 +1,6 @@
-name: 작업
+name: Task 작업
 description: 구현 · 조사 · 정비 작업 (요구사항 이슈는 이 템플릿을 쓰지 않는다)
-title: "작업 — "
+title: "[TASK] "
 labels: ["유형: 작업"]
 body:
   - type: markdown
@@ -9,42 +9,40 @@ body:
         **요구사항 이슈는 여기서 만들지 않는다.**
         요구사항은 `docs/10-requirements/IM-001-요구사항정의서.md` 에서
         `scripts/github/gen_bootstrap.py` 가 생성한다. 문서를 먼저 고친다.
-
   - type: input
     id: reqref
     attributes:
-      label: 관련 요구사항 ID
+      label: "REQ ID — 관련 요구사항"
       description: 해당 없으면 비워 둔다
       placeholder: SWFR.PIP.010
-
   - type: dropdown
     id: module
     attributes:
-      label: 모듈
+      label: "Module — 모듈"
       options:
-        - "CON — Ⅱ.1 도구 연동·수집"
-        - "PIP — Ⅱ.2 데이터 집계 파이프라인"
-        - "WEB — Ⅱ.3 통합 현황 대시보드"
-        - "RAG — Ⅱ.4 온프레미스 LLM 질의"
-        - "DEM — Ⅱ.5 PoC 데모 시스템"
-        - "SEC — Ⅲ.2 보안"
-        - "해당 없음 (문서·인프라·조사)"
-    validations: { required: true }
-
+        - "CON - 도구 연동·수집"
+        - "PIP - 데이터 집계 파이프라인"
+        - "WEB - 통합 현황 대시보드"
+        - "RAG - 온프레미스 LLM 질의"
+        - "DEM - PoC 데모 시스템"
+        - "SEC - 보안"
+        - "ETC - 문서·인프라·조사"
+    validations:
+      required: true
   - type: textarea
     id: detail
     attributes:
-      label: 작업 내용
-      description: 왜 필요한지까지 쓴다. 무엇을 했는지는 diff가 말한다.
-    validations: { required: true }
-
+      label: "Detail — 작업 내용"
+      description: 왜 필요한지까지 쓴다. 무엇을 했는지는 diff 가 말한다.
+    validations:
+      required: true
   - type: textarea
     id: done
     attributes:
-      label: 완료 조건
-      description: 검증 가능한 형태로. "동작한다"가 아니라 "무엇을 하면 무엇이 보인다".
-    validations: { required: true }
-
+      label: "Done — 완료 조건"
+      description: 검증 가능한 형태로. "동작한다" 가 아니라 "무엇을 하면 무엇이 보인다".
+    validations:
+      required: true
   - type: markdown
     attributes:
       value: |
