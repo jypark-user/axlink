@@ -35,6 +35,18 @@ const TOOL_OPTIONS: { value: ToolKind; label: string }[] = [
   { value: 'REDMINE', label: 'Redmine' },
 ];
 
+/**
+ * 도구별 베이스 URL 기본값. GitHub는 저장소가 몇 개든 api.github.com 하나라 자동으로 채운다.
+ * Redmine은 사내 설치마다 주소가 달라 기본값이 없다(직접 입력).
+ * 사내 GitHub Enterprise면 https://<host>/api/v3 로 바꾸면 된다.
+ */
+const DEFAULT_BASE_URL: Record<ToolKind, string> = {
+  GITHUB: 'https://api.github.com',
+  REDMINE: '',
+};
+
+const AUTO_FILLED = new Set(Object.values(DEFAULT_BASE_URL).filter(Boolean));
+
 /** 도구별 입력 예시. 박PM이 무엇을 넣는지 필드에서 바로 알게 한다. */
 const TOOL_HINTS: Record<ToolKind, { name: string; baseUrl: string; resource: string; token: string }> = {
   GITHUB: {
@@ -73,7 +85,9 @@ export function ConnectionFormDialog({
   const { toast } = useToast();
   const [tool, setTool] = useState<ToolKind>(connection?.tool ?? 'GITHUB');
   const [name, setName] = useState(connection?.name ?? '');
-  const [baseUrl, setBaseUrl] = useState(connection?.baseUrl ?? '');
+  const [baseUrl, setBaseUrl] = useState(
+    connection?.baseUrl ?? DEFAULT_BASE_URL[connection?.tool ?? 'GITHUB'],
+  );
   const [targetResource, setTargetResource] = useState(connection?.targetResource ?? '');
   const [token, setToken] = useState('');
   const [pending, setPending] = useState(false);
@@ -162,7 +176,10 @@ export function ConnectionFormDialog({
             <Select
               value={tool}
               onValueChange={(v) => {
-                setTool(v as ToolKind);
+                const next = v as ToolKind;
+                setTool(next);
+                // 사용자가 직접 넣은 주소는 지키고, 비었거나 자동으로 채운 값만 새 도구 기본값으로 바꾼다.
+                setBaseUrl((prev) => (prev === '' || AUTO_FILLED.has(prev) ? DEFAULT_BASE_URL[next] : prev));
                 setToken('');
                 setTestResult(null);
               }}
