@@ -28,6 +28,21 @@ class Settings(BaseSettings):
     # 커넥터가 원천 도구 REST 를 부를 때의 타임아웃(초)
     connector_timeout: float = 10.0
 
+    # AI 포트 구현체 선택 단일 지점. ollama | fake
+    # fake 는 결정적 벡터를 만들어 모델 없이도 테스트가 돌게 한다.
+    embedding_provider: str = "ollama"
+    ollama_base_url: str = "http://localhost:11434"
+    embedding_model: str = "bge-m3"
+    embedding_dimension: int = 1024  # doc_chunk.embedding 컬럼 차원과 반드시 같아야 한다
+    embedding_batch: int = 32
+    embedding_timeout: float = 120.0  # 배치 임베딩은 커넥터 호출보다 오래 걸린다
+
+    # 청킹 파라미터 (파일럿 설계 03-physical-backend §6.1)
+    chunk_target_tokens: int = 800
+    chunk_min_tokens: int = 200
+    chunk_max_tokens: int = 1000
+    chunk_overlap_ratio: float = 0.15
+
     @property
     def access_ttl(self) -> timedelta:
         return timedelta(seconds=self.access_ttl_seconds)
