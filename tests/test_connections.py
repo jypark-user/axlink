@@ -6,6 +6,7 @@ GitHub 실호출은 monkeypatch 로 대체해 결정론적으로 돌린다. 실�
 
 import pytest
 
+from app.db import tx
 from app.integration import github
 from tests.conftest import requires_db
 
@@ -31,6 +32,33 @@ def _cleanup_project_connections(client, token: str) -> None:
     if existing.status_code == 200:
         for c in existing.json():
             client.delete(f"/api/connections/{c['id']}", headers=_auth(token))
+    _cleanup_promoted_rows()
+
+
+def _cleanup_promoted_rows() -> None:
+    """승격된 표준 모델 행과 청크까지 지운다.
+
+    연결을 지워도 표준 모델은 남는다(FK 가 ON DELETE SET NULL — 수집 이력을 연결 삭제로
+    날리지 않는 게 스키마 의도다). 그래서 테스트가 치우지 않으면 tool_connection_id 가
+    null 인 채로 쌓이고, 부분 유니크 인덱스가 적용되지 않아 같은 행이 중복된다.
+    """
+    with tx() as cur:
+        cur.execute(
+            """
+            delete from doc_chunk
+             where project_id = %s
+               and source_id in (
+                     select id from requirement where project_id = %s and source_kind = 'TOOL'
+                     union all
+                     select id from issue where project_id = %s and source_kind = 'TOOL')
+            """,
+            (PID, PID, PID),
+        )
+        for table in ("requirement", "issue", "code_change"):
+            cur.execute(
+                f"delete from {table} where project_id = %s and source_kind = 'TOOL'",  # noqa: S608
+                (PID,),
+            )
 
 
 @pytest.fixture
@@ -194,7 +222,13 @@ def test_backfill_ingests_raw_artifacts(client, as_pm, monkeypatch):
             yield "issue:1", {"number": 1, "title": "첫 이슈"}
             yield "issue:2", {"number": 2, "title": "둘째 이슈"}
         elif kind == "commit":
-            yield "commit:abc", {"sha": "abc", "commit": {"message": "초기 커밋"}}
+            yield "commit:abc", {
+                "sha": "abc",
+                "commit": {
+                    "message": "초기 커밋",
+                    "author": {"name": "박PM", "date": "2026-08-20T00:00:00Z"},
+                },
+            }
         # pull_request 는 없음
 
     monkeypatch.setattr(github, "fetch_items", fake_fetch)
@@ -210,16 +244,18 @@ def test_backfill_ingests_raw_artifacts(client, as_pm, monkeypatch):
     job = res.json()
     assert job["status"] == "SUCCEEDED"
     assert job["stats"]["fetched"] == 3
-    assert job["stats"]["upserted"] == 3
+    assert job["stats"]["upserted"] == 3  # 이슈 2 + 커밋 1 이 표준 모델로 올라간다
+    assert job["stats"]["unmapped"] == 0
+    assert job["stats"]["indexed"] == 2  # 색인은 사람이 쓴 문장이 있는 이슈만
 
     # 연결 카드에 ingestedCount 가 반영된다
     conns = client.get(f"/api/projects/{PID}/connections", headers=_auth(token)).json()
     assert next(c for c in conns if c["id"] == cid)["ingestedCount"] == 3
 
-    # 다시 수집하면 내용이 같아 건너뛴다(멱등)
+    # 다시 수집하면 원본이 같아 적재를 건너뛰고, 본문이 그대로라 재색인도 하지 않는다(멱등)
     again = client.post(f"/api/connections/{cid}/sync", headers=_auth(token)).json()
     assert again["stats"]["skippedUnchanged"] == 3
-    assert again["stats"]["upserted"] == 0
+    assert again["stats"]["indexed"] == 0
 
 
 @requires_db
