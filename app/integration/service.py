@@ -10,9 +10,12 @@ from typing import Any
 from app.auth import repository as auth_repo
 from app.auth.models import AuthPrincipal
 from app.common import crypto, errors
-from app.integration import github, repository
+from app.common.paging import PageQuery, PageResponse
+from app.integration import github, repository, sync
 from app.integration.models import (
     TOOLS,
+    SyncJobResponse,
+    SyncJobStats,
     ToolConnectionCreateRequest,
     ToolConnectionResponse,
     ToolConnectionTestResponse,
@@ -38,7 +41,7 @@ def _require_tool(tool: str) -> None:
         raise errors.validation_failed(f"지원하지 않는 도구입니다: {tool}")
 
 
-def _probe(tool: str, base_url: str, target: str, token: str) -> tuple[str, list[str]]:
+def _probe(tool: str, base_url: str, target: str, token: str) -> github.ProbeResult:
     _require_tool(tool)
     if tool == "GITHUB":
         return github.verify(base_url, target, token)
@@ -46,17 +49,21 @@ def _probe(tool: str, base_url: str, target: str, token: str) -> tuple[str, list
     raise errors.ApiError(501, "NOT_IMPLEMENTED", "Redmine 연결은 아직 준비 중입니다.")
 
 
+def _to_test_response(probe: github.ProbeResult) -> ToolConnectionTestResponse:
+    return ToolConnectionTestResponse(
+        reachable=True,
+        resourceName=probe.name,
+        detectedItemTypes=probe.readable,
+        deniedItemTypes=probe.denied,
+        checkedAt=datetime.now(UTC).isoformat().replace("+00:00", "Z"),
+    )
+
+
 def test_unsaved(
     cur: Any, principal: AuthPrincipal, tool: str, base_url: str, target: str, token: str
 ) -> ToolConnectionTestResponse:
     _require_https(base_url)
-    name, detected = _probe(tool, base_url, target, token)
-    return ToolConnectionTestResponse(
-        reachable=True,
-        resourceName=name,
-        detectedItemTypes=detected,
-        checkedAt=datetime.now(UTC).isoformat().replace("+00:00", "Z"),
-    )
+    return _to_test_response(_probe(tool, base_url, target, token))
 
 
 def test_saved(
@@ -67,14 +74,10 @@ def test_saved(
         raise errors.not_found("connection", connection_id)
     _require_project(cur, principal, str(conn["project_id"]))
     token = crypto.decrypt(conn["auth_encrypted"])
-    name, detected = _probe(conn["tool"], conn["base_url"], conn["target_resource"], token)
+    probe = _probe(conn["tool"], conn["base_url"], conn["target_resource"], token)
+    # 저장소에 닿았으면 검증됨으로 올린다. 일부 항목 권한이 빠져도 연결 자체는 유효하다.
     repository.mark_verified(cur, connection_id, datetime.now(UTC))
-    return ToolConnectionTestResponse(
-        reachable=True,
-        resourceName=name,
-        detectedItemTypes=detected,
-        checkedAt=datetime.now(UTC).isoformat().replace("+00:00", "Z"),
-    )
+    return _to_test_response(probe)
 
 
 def create(
@@ -124,6 +127,46 @@ def delete(cur: Any, principal: AuthPrincipal, connection_id: str) -> None:
         raise errors.not_found("connection", connection_id)
     _require_project(cur, principal, str(conn["project_id"]))
     repository.delete(cur, connection_id)
+
+
+def trigger_sync(cur: Any, principal: AuthPrincipal, connection_id: str) -> SyncJobResponse:
+    conn = repository.find_by_id(cur, connection_id)
+    if conn is None:
+        raise errors.not_found("connection", connection_id)
+    _require_project(cur, principal, str(conn["project_id"]))
+    if conn["status"] not in ("VERIFIED", "ACTIVE", "PAUSED", "FAILED"):
+        raise errors.validation_failed("먼저 연결 테스트로 검증한 뒤 수집할 수 있습니다.")
+    job_id = sync.run_backfill(cur, conn)
+    job = repository.find_sync_job(cur, job_id)
+    return _to_job_response(job, conn)
+
+
+def list_jobs(
+    cur: Any, principal: AuthPrincipal, project_id: str, page: PageQuery
+) -> PageResponse[SyncJobResponse]:
+    _require_project(cur, principal, project_id)
+    total = repository.count_sync_jobs(cur, project_id)
+    rows = repository.list_sync_jobs(cur, project_id, page.size, page.offset)
+    content = [_to_job_response(r, r) for r in rows]
+    return PageResponse.of(content, page, total)
+
+
+def _to_job_response(job: dict[str, Any], conn: dict[str, Any]) -> SyncJobResponse:
+    stats = job.get("stats_json") or {}
+    return SyncJobResponse(
+        id=str(job["id"]),
+        connectionId=str(job["tool_connection_id"]),
+        connectionName=conn.get("connection_name") or conn.get("name") or "",
+        projectId=str(conn["project_id"]),
+        tool=conn["tool"],
+        kind=job["kind"],
+        status=job["status"],
+        startedAt=_iso(job.get("started_at")),
+        finishedAt=_iso(job.get("finished_at")),
+        stats=SyncJobStats(**stats),
+        error=job.get("error"),
+        retryable=job["status"] == "FAILED",
+    )
 
 
 def _iso(value: Any) -> str | None:

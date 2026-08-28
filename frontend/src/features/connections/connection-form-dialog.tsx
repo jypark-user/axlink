@@ -118,11 +118,15 @@ export function ConnectionFormDialog({
         credential,
       });
       const items = res.detectedItemTypes.map((t) => ITEM_LABELS[t] ?? t).join(' · ');
+      const denied = (res.deniedItemTypes ?? []).map((t) => ITEM_LABELS[t] ?? t).join(' · ');
       const detail = items ? `\n읽을 수 있는 항목: ${items}` : '';
+      const warn = denied
+        ? `\n⚠ 권한 없음: ${denied} — 이 항목은 수집되지 않습니다`
+        : '';
       setTestResult({
         ok: res.reachable,
         text: res.reachable
-          ? `✓ 연결 성공 — ${res.resourceName}${detail}`
+          ? `✓ 연결 성공 — ${res.resourceName}${detail}${warn}`
           : res.resourceName,
       });
     } catch (err) {

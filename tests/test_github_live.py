@@ -21,9 +21,19 @@ live = pytest.mark.skipif(not _TOKEN, reason="AXLINK_GH_TOKEN 이 있어야 실�
 
 @live
 def test_real_repo_reachable():
-    name, detected = github.verify("https://api.github.com", _REPO, _TOKEN)
-    assert name  # 저장소 full_name
-    assert "commit" in detected
+    probe = github.verify("https://api.github.com", _REPO, _TOKEN)
+    assert probe.name  # 저장소 full_name
+    assert "commit" in probe.readable or "commit" in probe.denied
+
+
+@live
+def test_real_fetch_commits():
+    """실제 저장소에서 커밋 한 페이지를 가져온다 — 전체수집의 핵심 경로."""
+    got = list(github.fetch_items("https://api.github.com", _REPO, _TOKEN, "commit", 5, 1))
+    assert got, "커밋이 하나는 있어야 한다"
+    external_id, payload = got[0]
+    assert external_id.startswith("commit:")
+    assert "sha" in payload
 
 
 def test_invalid_token_maps_to_401():

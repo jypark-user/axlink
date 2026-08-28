@@ -20,6 +20,7 @@ class ToolConnectionTestResponse(BaseModel):
     reachable: bool
     resourceName: str  # noqa: N815
     detectedItemTypes: list[str]  # noqa: N815
+    deniedItemTypes: list[str] = []  # noqa: N815 — 토큰에 권한이 빠진 항목
     checkedAt: str  # noqa: N815
 
 
@@ -33,6 +34,29 @@ class ToolConnectionCreateRequest(BaseModel):
 
 class ToolConnectionStatusUpdateRequest(BaseModel):
     status: str  # ACTIVE | PAUSED
+
+
+class SyncJobStats(BaseModel):
+    fetched: int = 0
+    upserted: int = 0
+    unmapped: int = 0
+    indexed: int = 0
+    skippedUnchanged: int = 0  # noqa: N815
+
+
+class SyncJobResponse(BaseModel):
+    id: str
+    connectionId: str  # noqa: N815
+    connectionName: str  # noqa: N815
+    projectId: str  # noqa: N815
+    tool: str
+    kind: str
+    status: str
+    startedAt: str | None  # noqa: N815
+    finishedAt: str | None  # noqa: N815
+    stats: SyncJobStats
+    error: str | None
+    retryable: bool
 
 
 class ToolConnectionResponse(BaseModel):

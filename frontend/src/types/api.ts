@@ -405,6 +405,8 @@ export interface ToolConnectionTestResponse {
   reachable: boolean;
   resourceName: string;
   detectedItemTypes: string[];
+  /** 토큰에 권한이 빠져 읽지 못하는 항목. 연결은 되지만 이 항목은 수집되지 않는다. */
+  deniedItemTypes?: string[];
   checkedAt: string;
 }
 

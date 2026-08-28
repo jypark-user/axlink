@@ -3,12 +3,14 @@
 경로가 /projects/{id}/connections 와 /connections/{id} 두 갈래라 라우터를 하나로 둔다.
 """
 
-from fastapi import APIRouter, Response
+from fastapi import APIRouter, Query, Response
 
 from app.auth.deps import Principal
+from app.common.paging import PageQuery, PageResponse
 from app.db import tx
 from app.integration import service
 from app.integration.models import (
+    SyncJobResponse,
     ToolConnectionCreateRequest,
     ToolConnectionResponse,
     ToolConnectionStatusUpdateRequest,
@@ -64,3 +66,20 @@ def delete_connection(connection_id: str, principal: Principal) -> Response:
     with tx() as cur:
         service.delete(cur, principal, connection_id)
     return Response(status_code=204)
+
+
+@router.post("/connections/{connection_id}/sync", response_model=SyncJobResponse, status_code=202)
+def trigger_sync(connection_id: str, principal: Principal) -> SyncJobResponse:
+    with tx() as cur:
+        return service.trigger_sync(cur, principal, connection_id)
+
+
+@router.get("/sync-jobs", response_model=PageResponse[SyncJobResponse])
+def list_sync_jobs(
+    principal: Principal,
+    projectId: str,  # noqa: N803 — 프런트 쿼리 파라미터명
+    page: int = Query(default=0, ge=0),
+    size: int = Query(default=20, ge=1, le=100),
+) -> PageResponse[SyncJobResponse]:
+    with tx() as cur:
+        return service.list_jobs(cur, principal, projectId, PageQuery(page=page, size=size))
