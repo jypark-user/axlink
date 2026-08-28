@@ -12,6 +12,7 @@ from fastapi import FastAPI
 from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
 
+from app.ai.embedding import embedding_port
 from app.auth.router import router as auth_router
 from app.common.errors import (
     ApiError,
@@ -20,14 +21,19 @@ from app.common.errors import (
     validation_error_handler,
 )
 from app.config import settings
-from app.db import close_pool, pool
+from app.db import close_pool, pool, tx
 from app.integration.router import router as integration_router
 from app.project.router import router as project_router
+from app.rag.indexing import verify_dimension
 
 
 @asynccontextmanager
 async def lifespan(_: FastAPI) -> AsyncIterator[None]:
     pool()
+    # 임베딩 차원이 컬럼과 어긋난 채 뜨면 색인은 되는데 검색이 조용히 망가진다.
+    # 기동 때 막는 편이 낫다.
+    with tx() as cur:
+        verify_dimension(cur, embedding_port())
     try:
         yield
     finally:
