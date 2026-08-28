@@ -35,6 +35,22 @@ const TOOL_OPTIONS: { value: ToolKind; label: string }[] = [
   { value: 'REDMINE', label: 'Redmine' },
 ];
 
+/** 도구별 입력 예시. 박PM이 무엇을 넣는지 필드에서 바로 알게 한다. */
+const TOOL_HINTS: Record<ToolKind, { name: string; baseUrl: string; resource: string; token: string }> = {
+  GITHUB: {
+    name: '예: 백엔드 저장소',
+    baseUrl: 'https://api.github.com',
+    resource: 'owner/repo — 예: jypark-user/axlink',
+    token: 'ghp_ 로 시작하는 Personal Access Token',
+  },
+  REDMINE: {
+    name: '예: 사업 관리 Redmine',
+    baseUrl: 'https://redmine.example.com',
+    resource: '프로젝트 식별자 — 예: b-project',
+    token: '내 계정 → API 액세스 키',
+  },
+};
+
 /** GitHub(Personal Access Token) · Redmine(API Key) 둘 다 토큰 하나만 쓴다. */
 export function buildCredential(token: string): ToolCredentialRequest | null {
   const trimmed = token.trim();
@@ -65,6 +81,7 @@ export function ConnectionFormDialog({
   const [testResult, setTestResult] = useState<{ ok: boolean; text: string } | null>(null);
 
   const credential = buildCredential(token);
+  const hint = TOOL_HINTS[tool];
   const canTest =
     credential !== null && baseUrl.trim() !== '' && targetResource.trim() !== '' && !testing;
 
@@ -169,13 +186,20 @@ export function ConnectionFormDialog({
           </div>
           <div className={FIELD}>
             <Label htmlFor="connName">이름</Label>
-            <Input id="connName" required value={name} onChange={(e) => setName(e.target.value)} />
+            <Input
+              id="connName"
+              required
+              placeholder={hint.name}
+              value={name}
+              onChange={(e) => setName(e.target.value)}
+            />
           </div>
           <div className={FIELD}>
             <Label htmlFor="connBaseUrl">베이스 URL</Label>
             <Input
               id="connBaseUrl"
               required
+              placeholder={hint.baseUrl}
               value={baseUrl}
               onChange={(e) => {
                 setBaseUrl(e.target.value);
@@ -188,6 +212,7 @@ export function ConnectionFormDialog({
             <Input
               id="connResource"
               required
+              placeholder={hint.resource}
               value={targetResource}
               onChange={(e) => {
                 setTargetResource(e.target.value);
@@ -201,7 +226,7 @@ export function ConnectionFormDialog({
               id="connToken"
               type="password"
               autoComplete="new-password"
-              placeholder={connection?.credentialMasked}
+              placeholder={connection?.credentialMasked ?? hint.token}
               value={token}
               onChange={(e) => {
                 setToken(e.target.value);
