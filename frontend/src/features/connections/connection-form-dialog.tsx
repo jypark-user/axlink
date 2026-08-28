@@ -47,6 +47,13 @@ const DEFAULT_BASE_URL: Record<ToolKind, string> = {
 
 const AUTO_FILLED = new Set(Object.values(DEFAULT_BASE_URL).filter(Boolean));
 
+/** 커넥터가 돌려주는 항목 종류를 발주기관 어휘로 옮긴다. */
+const ITEM_LABELS: Record<string, string> = {
+  issue: '이슈',
+  pull_request: '풀 리퀘스트(PR)',
+  commit: '커밋',
+};
+
 /** 도구별 입력 예시. 박PM이 무엇을 넣는지 필드에서 바로 알게 한다. */
 const TOOL_HINTS: Record<ToolKind, { name: string; baseUrl: string; resource: string; token: string }> = {
   GITHUB: {
@@ -110,11 +117,13 @@ export function ConnectionFormDialog({
         targetResource: targetResource.trim(),
         credential,
       });
-      const types =
-        res.detectedItemTypes.length > 0 ? ` · ${res.detectedItemTypes.join(', ')}` : '';
+      const items = res.detectedItemTypes.map((t) => ITEM_LABELS[t] ?? t).join(' · ');
+      const detail = items ? `\n읽을 수 있는 항목: ${items}` : '';
       setTestResult({
         ok: res.reachable,
-        text: res.reachable ? `${res.resourceName}${types}` : res.resourceName,
+        text: res.reachable
+          ? `✓ 연결 성공 — ${res.resourceName}${detail}`
+          : res.resourceName,
       });
     } catch (err) {
       setTestResult({ ok: false, text: isApiError(err) ? err.message : String(err) });
