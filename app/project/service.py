@@ -4,9 +4,51 @@ from typing import Any
 
 from app.auth import repository as auth_repository
 from app.auth.models import AuthPrincipal
+from app.common import errors
 from app.common.paging import PageQuery, PageResponse
 from app.project import repository
-from app.project.models import ProjectSummaryResponse
+from app.project.models import (
+    ProjectDetailResponse,
+    ProjectMetrics,
+    ProjectSummaryResponse,
+)
+
+
+def _iso(value: Any) -> str | None:
+    return value.isoformat() if value is not None else None
+
+
+def get_detail(
+    cur: Any, principal: AuthPrincipal, project_id: str
+) -> ProjectDetailResponse:
+    allowed = auth_repository.allowed_project_ids(
+        cur, principal.role, principal.org_id, principal.user_id
+    )
+    if project_id not in allowed:
+        raise errors.project_access_denied()
+    row = repository.find_by_id(cur, project_id)
+    if row is None:
+        raise errors.not_found("project", project_id)
+
+    m = repository.full_metrics(cur, project_id)
+    return ProjectDetailResponse(
+        id=str(row["id"]),
+        name=row["name"],
+        description=row["description"],
+        contractorName=row["contractor_name"],
+        status=row["status"],
+        startDate=row["start_date"].isoformat(),
+        endDate=row["end_date"].isoformat(),
+        currentSiPhase=row["current_si_phase"],
+        clientOrgId=str(row["client_org_id"]),
+        clientOrgName=row["client_org_name"],
+        assignmentCount=repository.assignment_count(cur, project_id),
+        connectionCount=repository.connection_count(cur, project_id),
+        defaultDashboardId=repository.default_dashboard_id(cur, project_id),
+        metrics=ProjectMetrics(**{**m, "lastSyncedAt": _iso(m["lastSyncedAt"])}),
+        createdAt=row["created_at"].isoformat(),
+        updatedAt=row["updated_at"].isoformat(),
+    )
 
 
 def list_projects(
