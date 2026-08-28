@@ -163,7 +163,8 @@ export function ConnectionFormDialog({
               </SelectContent>
             </Select>
             <p className="text-xs text-muted-foreground">
-              커넥터 구현 전이라 등록·수정만 되고 연결 테스트·동기화는 아직 동작하지 않습니다.
+              읽기 전용으로 연결합니다. AX Link는 저장소에 아무것도 쓰지 않습니다 — 커밋·이슈·PR 조회만 합니다.
+              수집(동기화)은 다음 단계에서 열립니다.
             </p>
           </div>
           <div className={FIELD}>
