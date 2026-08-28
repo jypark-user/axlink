@@ -68,6 +68,114 @@ def search_projects(
     return fetch_all(cur, sql, [*params, page.size, page.offset])
 
 
+def find_by_id(cur: Any, project_id: str) -> dict[str, Any] | None:
+    return fetch_one(
+        cur,
+        """
+        select p.id, p.client_org_id, p.name, p.description, p.contractor_name,
+               p.status, p.start_date, p.end_date, p.current_si_phase,
+               p.created_at, p.updated_at, o.name as client_org_name
+          from project p
+          join organization o on o.id = p.client_org_id
+         where p.id = %s
+        """,
+        (project_id,),
+    )
+
+
+def full_metrics(cur: Any, project_id: str) -> dict[str, Any]:
+    """단일 사업의 전체 지표. 전부 SQL 집계다 — 절대 규칙 1."""
+    req = fetch_one(
+        cur,
+        """
+        select count(*) as total,
+               count(*) filter (where status in ('VERIFIED','ACCEPTED')) as accepted
+          from requirement where project_id = %s
+        """,
+        (project_id,),
+    )
+    issue = fetch_one(
+        cur,
+        "select count(*) filter (where status in ('OPEN','IN_PROGRESS')) as open_count "
+        "from issue where project_id = %s",
+        (project_id,),
+    )
+    wp = fetch_one(
+        cur,
+        """
+        select count(*) filter (where status = 'APPROVED') as approved, count(*) as total
+          from work_product where project_id = %s
+        """,
+        (project_id,),
+    )
+    risk = fetch_one(
+        cur,
+        "select count(*) as cnt from risk where project_id = %s and status <> 'CLOSED'",
+        (project_id,),
+    )
+    coverage = fetch_one(
+        cur,
+        """
+        with total as (
+          select count(distinct id) as n from requirement where project_id = %s
+        ),
+        traced as (
+          select count(distinct r.id) as n
+            from requirement r
+            join trace_link tl on tl.to_type = 'REQUIREMENT' and tl.to_id = r.id
+             and tl.link_kind = 'TESTS' and tl.status = 'ACTIVE'
+           where r.project_id = %s
+        )
+        select case when (select n from total) = 0 then 0
+                    else round(100.0 * (select n from traced) / (select n from total))::int
+               end as coverage
+        """,
+        (project_id, project_id),
+    )
+    synced = fetch_one(
+        cur,
+        "select max(last_synced_at) as last_synced from tool_connection where project_id = %s",
+        (project_id,),
+    )
+    return {
+        "requirementTotal": int(req["total"]),
+        "requirementAccepted": int(req["accepted"]),
+        "issueOpen": int(issue["open_count"]),
+        "riskOpen": int(risk["cnt"]),
+        "workProductApproved": int(wp["approved"]),
+        "workProductTotal": int(wp["total"]),
+        "traceabilityCoverage": int(coverage["coverage"]),
+        "lastSyncedAt": synced["last_synced"],
+    }
+
+
+def assignment_count(cur: Any, project_id: str) -> int:
+    row = fetch_one(
+        cur,
+        "select count(*) as cnt from project_assignment "
+        "where project_id = %s and status = 'ACTIVE'",
+        (project_id,),
+    )
+    return int(row["cnt"]) if row else 0
+
+
+def connection_count(cur: Any, project_id: str) -> int:
+    row = fetch_one(
+        cur, "select count(*) as cnt from tool_connection where project_id = %s", (project_id,)
+    )
+    return int(row["cnt"]) if row else 0
+
+
+def default_dashboard_id(cur: Any, project_id: str) -> str | None:
+    row = fetch_one(
+        cur,
+        "select id from dashboard where project_id = %s and is_default and status = 'ACTIVE' "
+        "order by created_at limit 1",
+        (project_id,),
+    )
+    return str(row["id"]) if row else None
+
+
 def approved_work_products(cur: Any, project_ids: list[str]) -> dict[str, int]:
     rows = fetch_all(
         cur,

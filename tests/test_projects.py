@@ -33,6 +33,36 @@ def test_admin_sees_at_least_as_many_as_client(client, client_token):
 
 
 @requires_db
+def test_project_detail_returns_metrics(client, client_token):
+    token = client_token("r2@admin.com")
+    listed = client.get(
+        "/api/projects", headers={"Authorization": f"Bearer {token}"}
+    ).json()["content"]
+    assert listed, "시드 사업이 있어야 한다"
+    pid = listed[0]["id"]
+
+    res = client.get(f"/api/projects/{pid}", headers={"Authorization": f"Bearer {token}"})
+    assert res.status_code == 200
+    body = res.json()
+    assert body["id"] == pid
+    assert body["metrics"]["workProductTotal"] == 22  # 29110 산출물 22종
+    assert set(body["metrics"]) >= {
+        "requirementTotal", "issueOpen", "riskOpen", "traceabilityCoverage", "lastSyncedAt"
+    }
+
+
+@requires_db
+def test_project_detail_denies_foreign_project(client, client_token):
+    token = client_token("r2@admin.com")
+    # 존재하지 않거나 접근 불가한 사업 → 403/404
+    res = client.get(
+        "/api/projects/00000000-0000-4000-8000-000000000000",
+        headers={"Authorization": f"Bearer {token}"},
+    )
+    assert res.status_code in (403, 404)
+
+
+@requires_db
 def test_search_filters_by_name(client, client_token):
     token = client_token("r1@admin.com")
     res = client.get(

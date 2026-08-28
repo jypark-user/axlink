@@ -6,7 +6,7 @@ from app.auth.deps import Principal
 from app.common.paging import PageQuery, PageResponse
 from app.db import tx
 from app.project import service
-from app.project.models import ProjectSummaryResponse
+from app.project.models import ProjectDetailResponse, ProjectSummaryResponse
 
 router = APIRouter(prefix="/api/projects", tags=["projects"])
 
@@ -24,3 +24,9 @@ def list_projects(
         return service.list_projects(
             cur, principal, status, q, PageQuery(page=page, size=size, sort=sort)
         )
+
+
+@router.get("/{project_id}", response_model=ProjectDetailResponse)
+def get_project(project_id: str, principal: Principal) -> ProjectDetailResponse:
+    with tx() as cur:
+        return service.get_detail(cur, principal, project_id)
