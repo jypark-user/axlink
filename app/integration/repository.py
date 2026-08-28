@@ -1,8 +1,11 @@
 """tool_connection CRUD. SQL 은 여기서만 쓴다."""
 
+import hashlib
 import json
 from datetime import datetime
 from typing import Any
+
+from psycopg.types.json import Jsonb
 
 from app.db import fetch_all, fetch_one
 
@@ -96,6 +99,135 @@ def last_sync_status(cur: Any, connection_id: str) -> str | None:
         (connection_id,),
     )
     return row["status"] if row else None
+
+
+# --- 수집(BACKFILL) ---------------------------------------------------------
+
+def insert_sync_job(
+    cur: Any, connection_id: str, kind: str, cursor_from: Any, now: datetime
+) -> str:
+    row = fetch_one(
+        cur,
+        """
+        insert into sync_job (tool_connection_id, kind, status, cursor_from, started_at)
+        values (%s, %s, 'RUNNING', %s, %s)
+        returning id
+        """,
+        (connection_id, kind, cursor_from, now),
+    )
+    return str(row["id"])
+
+
+def finish_sync_job(
+    cur: Any,
+    job_id: str,
+    status: str,
+    stats: dict[str, int],
+    cursor_to: datetime,
+    now: datetime,
+    error: str | None = None,
+    error_code: str | None = None,
+) -> None:
+    cur.execute(
+        """
+        update sync_job
+           set status = %s, stats_json = %s, cursor_to = %s, finished_at = %s,
+               error = %s, error_code = %s, updated_at = %s
+         where id = %s
+        """,
+        (status, Jsonb(stats), cursor_to, now, error, error_code, now, job_id),
+    )
+
+
+def find_sync_job(cur: Any, job_id: str) -> dict[str, Any] | None:
+    return fetch_one(
+        cur,
+        """
+        select id, tool_connection_id, kind, status, started_at, finished_at,
+               stats_json, error, error_code
+          from sync_job where id = %s
+        """,
+        (job_id,),
+    )
+
+
+def list_sync_jobs(cur: Any, project_id: str, limit: int, offset: int) -> list[dict[str, Any]]:
+    return fetch_all(
+        cur,
+        """
+        select j.id, j.tool_connection_id, j.kind, j.status, j.started_at, j.finished_at,
+               j.stats_json, j.error, j.error_code, c.name as connection_name,
+               c.tool, c.project_id
+          from sync_job j
+          join tool_connection c on c.id = j.tool_connection_id
+         where c.project_id = %s
+         order by j.started_at desc nulls last, j.created_at desc
+         limit %s offset %s
+        """,
+        (project_id, limit, offset),
+    )
+
+
+def count_sync_jobs(cur: Any, project_id: str) -> int:
+    row = fetch_one(
+        cur,
+        """
+        select count(*) as cnt from sync_job j
+          join tool_connection c on c.id = j.tool_connection_id
+         where c.project_id = %s
+        """,
+        (project_id,),
+    )
+    return int(row["cnt"]) if row else 0
+
+
+def upsert_raw_artifact(
+    cur: Any, connection_id: str, external_id: str, object_kind: str, payload: dict, job_id: str
+) -> bool:
+    """원본을 적재한다. 내용이 바뀌었으면 True(적재/갱신), 같으면 False(건너뜀).
+
+    출처 보존이 원칙이라 원본 payload 를 그대로 둔다(SWFR.PIP.002).
+    """
+    content_hash = hashlib.sha256(
+        json.dumps(payload, sort_keys=True, ensure_ascii=False).encode("utf-8")
+    ).hexdigest()
+    existing = fetch_one(
+        cur,
+        "select content_hash from raw_artifact "
+        "where tool_connection_id = %s and external_id = %s",
+        (connection_id, external_id),
+    )
+    if existing is None:
+        cur.execute(
+            """
+            insert into raw_artifact
+              (tool_connection_id, external_id, object_kind, payload_jsonb,
+               content_hash, sync_job_id)
+            values (%s, %s, %s, %s, %s, %s)
+            """,
+            (connection_id, external_id, object_kind, Jsonb(payload), content_hash, job_id),
+        )
+        return True
+    if existing["content_hash"] != content_hash:
+        cur.execute(
+            """
+            update raw_artifact
+               set object_kind = %s, payload_jsonb = %s, content_hash = %s,
+                   fetched_at = now(), sync_job_id = %s
+             where tool_connection_id = %s and external_id = %s
+            """,
+            (object_kind, Jsonb(payload), content_hash, job_id, connection_id, external_id),
+        )
+        return True
+    return False
+
+
+def mark_synced(cur: Any, connection_id: str, now: datetime, error: str | None) -> None:
+    cur.execute(
+        "update tool_connection set last_synced_at = %s, last_error = %s, updated_at = %s "
+        "where id = %s",
+        (now, error, now, connection_id),
+    )
 
 
 def mapping_rule_count(mapping_rules_json: Any) -> int:

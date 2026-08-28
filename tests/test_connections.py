@@ -26,14 +26,21 @@ def _create_body(name: str = "백엔드 저장소") -> dict:
     }
 
 
+def _cleanup_project_connections(client, token: str) -> None:
+    existing = client.get(f"/api/projects/{PID}/connections", headers=_auth(token))
+    if existing.status_code == 200:
+        for c in existing.json():
+            client.delete(f"/api/connections/{c['id']}", headers=_auth(token))
+
+
 @pytest.fixture
 def as_pm(client, client_token):
-    """박PM(용역사 r3) 토큰 + 생성한 연결을 테스트 끝에 청소한다."""
+    """박PM(용역사 r3) 토큰. 앞뒤로 이 사업의 연결을 비워 남은 데이터가 테스트를 깨지 않게 한다."""
     token = client_token("r3@admin.com")
+    _cleanup_project_connections(client, token)
     created: list[str] = []
     yield token, created
-    for cid in created:
-        client.delete(f"/api/connections/{cid}", headers=_auth(token))
+    _cleanup_project_connections(client, token)
 
 
 @requires_db
@@ -71,7 +78,9 @@ def test_create_rejects_non_https(client, as_pm):
 def test_test_unsaved_reaches_github(client, as_pm, monkeypatch):
     token, _ = as_pm
     monkeypatch.setattr(
-        github, "verify", lambda base, target, tok: ("jypark-user/axlink", ["issue", "commit"])
+        github,
+        "verify",
+        lambda base, target, tok: github.ProbeResult("jypark-user/axlink", ["issue", "commit"], []),
     )
     res = client.post(
         "/api/connections/test",
@@ -94,7 +103,9 @@ def test_test_unsaved_reaches_github(client, as_pm, monkeypatch):
 def test_saved_test_marks_verified_then_activates(client, as_pm, monkeypatch):
     token, created = as_pm
     monkeypatch.setattr(
-        github, "verify", lambda base, target, tok: ("jypark-user/axlink", ["issue"])
+        github,
+        "verify",
+        lambda base, target, tok: github.ProbeResult("jypark-user/axlink", ["issue"], []),
     )
     created_res = client.post(
         f"/api/projects/{PID}/connections", json=_create_body(), headers=_auth(token)
@@ -139,6 +150,108 @@ def test_github_auth_error_maps_to_401(client, as_pm, monkeypatch):
     res = client.post(f"/api/connections/{cid}/test", headers=_auth(token))
     assert res.status_code == 401
     assert res.json()["code"] == "TOOL_AUTH"
+
+
+@requires_db
+def test_test_reports_denied_permissions(client, as_pm, monkeypatch):
+    """토큰에 이슈 권한이 빠지면 연결 테스트가 그걸 denied 로 알려준다."""
+    token, _ = as_pm
+    monkeypatch.setattr(
+        github,
+        "verify",
+        lambda base, target, tok: github.ProbeResult(
+            "jypark-user/axlink", ["commit", "pull_request"], ["issue"]
+        ),
+    )
+    res = client.post(
+        "/api/connections/test",
+        json={
+            "tool": "GITHUB",
+            "baseUrl": "https://api.github.com",
+            "targetResource": "jypark-user/axlink",
+            "credential": {"accessToken": "ghp_x"},
+        },
+        headers=_auth(token),
+    )
+    assert res.status_code == 200
+    body = res.json()
+    assert body["detectedItemTypes"] == ["commit", "pull_request"]
+    assert body["deniedItemTypes"] == ["issue"]
+
+
+@requires_db
+def test_backfill_ingests_raw_artifacts(client, as_pm, monkeypatch):
+    """전체수집: 이슈·커밋을 가져와 raw_artifact 에 적재하고 ingestedCount 가 오른다."""
+    token, created = as_pm
+    monkeypatch.setattr(
+        github,
+        "verify",
+        lambda base, target, tok: github.ProbeResult("jypark-user/axlink", ["issue", "commit"], []),
+    )
+
+    def fake_fetch(base, target, tok, kind, per_page, max_pages):
+        if kind == "issue":
+            yield "issue:1", {"number": 1, "title": "첫 이슈"}
+            yield "issue:2", {"number": 2, "title": "둘째 이슈"}
+        elif kind == "commit":
+            yield "commit:abc", {"sha": "abc", "commit": {"message": "초기 커밋"}}
+        # pull_request 는 없음
+
+    monkeypatch.setattr(github, "fetch_items", fake_fetch)
+
+    cid = client.post(
+        f"/api/projects/{PID}/connections", json=_create_body(), headers=_auth(token)
+    ).json()["id"]
+    created.append(cid)
+    client.post(f"/api/connections/{cid}/test", headers=_auth(token))  # 검증(VERIFIED)
+
+    res = client.post(f"/api/connections/{cid}/sync", headers=_auth(token))
+    assert res.status_code == 202, res.text
+    job = res.json()
+    assert job["status"] == "SUCCEEDED"
+    assert job["stats"]["fetched"] == 3
+    assert job["stats"]["upserted"] == 3
+
+    # 연결 카드에 ingestedCount 가 반영된다
+    conns = client.get(f"/api/projects/{PID}/connections", headers=_auth(token)).json()
+    assert next(c for c in conns if c["id"] == cid)["ingestedCount"] == 3
+
+    # 다시 수집하면 내용이 같아 건너뛴다(멱등)
+    again = client.post(f"/api/connections/{cid}/sync", headers=_auth(token)).json()
+    assert again["stats"]["skippedUnchanged"] == 3
+    assert again["stats"]["upserted"] == 0
+
+
+@requires_db
+def test_backfill_tolerates_missing_permission(client, as_pm, monkeypatch):
+    """한 항목종류의 권한이 빠져도 통째로 실패하지 않고 그 종류만 건너뛴다."""
+    token, created = as_pm
+    monkeypatch.setattr(
+        github,
+        "verify",
+        lambda base, target, tok: github.ProbeResult("jypark-user/axlink", ["commit"], ["issue"]),
+    )
+
+    def fetch_with_denied(base, target, tok, kind, per_page, max_pages):
+        from app.common import errors
+
+        if kind == "issue":
+            raise errors.ApiError(403, "TOOL_AUTH", "issue 읽기 권한이 없습니다.")
+        if kind == "commit":
+            yield "commit:abc", {"sha": "abc", "commit": {"message": "커밋"}}
+
+    monkeypatch.setattr(github, "fetch_items", fetch_with_denied)
+
+    cid = client.post(
+        f"/api/projects/{PID}/connections", json=_create_body(), headers=_auth(token)
+    ).json()["id"]
+    created.append(cid)
+    client.post(f"/api/connections/{cid}/test", headers=_auth(token))  # 검증(VERIFIED)
+
+    job = client.post(f"/api/connections/{cid}/sync", headers=_auth(token)).json()
+    assert job["status"] == "SUCCEEDED"  # 부분 성공
+    assert job["stats"]["fetched"] == 1  # 커밋만
+    assert "issue" in (job["error"] or "")  # 건너뛴 항목을 정직하게 남긴다
 
 
 @requires_db
