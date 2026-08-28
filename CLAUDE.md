@@ -31,7 +31,8 @@
 ## 1. 아키텍처 계층 (디렉토리와 1:1 대응)
 
 **백엔드는 Python(FastAPI), 프런트엔드는 React/Vite 단일 저장소**다.
-파일럿 `ax-link-ui-base`의 Java 백엔드는 **참조 구현으로만 보존**한다(실행하지 않는다).
+파일럿 `ax-link-ui-base`의 Java 백엔드는 **저장소에서 제거**했다. 참조가 필요하면
+저장소 밖 `D:\axlink-java-reference\`(깃 미포함)를 본다.
 근거와 대가는 [`docs/20-design/ARC-001-백엔드-언어-파이썬-전환.md`](docs/20-design/ARC-001-백엔드-언어-파이썬-전환.md).
 
 모듈 경로는 파이썬판 물리설계서에서 확정한다(ARC-001 §9-4). 계층의 **책임 구분은 유지**한다.
@@ -48,7 +49,6 @@
 | 인프라 | `infra/` | docker-compose (PostgreSQL+pgvector, Redmine, Ollama, Flyway) |
 | 산출물 | `docs/` | 납품 산출물이자 **RAG 코퍼스** (이중 목적) |
 | 파일럿 원본 문서 | `docs/90-pilot/` | PRD · HANDOFF · 설계 문서. **참고자료이며 납품 산출물이 아니다** |
-| **참조 구현** | `backend/` (Java) | **실행하지 않는다.** 요구사항 25건분의 동작하는 설계 근거로만 참조 |
 
 기술 제약 — **ORM 금지**(psycopg 3 + SQL 직접 작성. SQLAlchemy ORM 도 금지) · 스키마는
 Flyway(Docker 이미지로 실행, `V1~V19` 승계) · 벡터는 pgvector · 임베딩은 로컬 `bge-m3`(1024차원)
@@ -72,13 +72,14 @@ Flyway(Docker 이미지로 실행, `V1~V19` 승계) · 벡터는 pgvector · 임
 
 ### 파일럿에서 승계하는 것 (2026.08 확보 · ARC-001 로 범위 축소)
 
-**백엔드 구현은 승계하지 않는다.** 파이썬 전환(ARC-001)으로 Java 코드는 참조 구현이 되었다.
+**백엔드 구현은 승계하지 않는다.** 파이썬 전환(ARC-001)으로 Java 코드는 **저장소에서 제거**했다.
+참조가 필요하면 저장소 밖 `D:\axlink-java-reference\`(깃 미포함, 색인 README 동봉)를 본다.
 
 승계하는 것은 **언어에 종속되지 않는 자산**이다.
 
 | 승계 | 폐기 |
 |---|---|
-| 프런트엔드 전체 (React/Vite) | 백엔드 Java 354파일 → 참조용 보존 |
+| 프런트엔드 전체 (React/Vite) | 백엔드 Java 354파일 → 저장소 밖 참조본으로 이관 |
 | DB 스키마 `V1~V19` | `build.gradle` · Gradle 래퍼 |
 | UI/UX·디자인 체계·위젯 템플릿 23종·인포 템플릿 | `03-physical-backend.md` → 파이썬판 재작성 |
 | 시맨틱 카탈로그 정의·API 계약·데이터 모델·enum | |
