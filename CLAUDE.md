@@ -162,7 +162,8 @@ Refs: GH-23, RM-204
 ```
 
 - `type`: `feat` `fix` `docs` `test` `refactor` `chore` `perf`
-- `scope`: `integration` `standard` `dashboard` `rag` `document` `ai` `semantic` `frontend` `infra` `docs`
+- `scope`: `auth` `org` `project` `integration` `standard` `dashboard` `rag` `document` `ai` `semantic` `frontend` `infra` `docs`
+  (`auth`·`org`·`project`은 파일럿 패키지 구조에 1급으로 있는 기반 계층이다 — 아키텍처 표의 [2]~[6] 어디에도 안 들어가서 별도로 둔다)
 - **대괄호 추적 ID는 필수**다. 해당 없으면 `[chore]`를 쓴다. 파서가 이걸 읽는다.
 - 제목은 한국어, 명령형, 마침표 없음, 50자 이내.
 
