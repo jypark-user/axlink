@@ -11,6 +11,8 @@ dependencies = [
   "pydantic-settings>=2.6",
   "pyjwt>=2.9",
   "bcrypt>=4.2",
+  "httpx>=0.27",           # 커넥터가 원천 도구 REST 를 호출한다
+  "cryptography>=43",      # 인증정보 AES-256-GCM 저장 (SecretCipher 대체)
   # 문서 추출 (ARC-001 6절 · RSK-010/011 로 검증). Tika(Java) 대체.
   "hwp-hwpx-parser>=1.0",
   "pypdf>=6.0",

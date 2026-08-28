@@ -21,6 +21,7 @@ from app.common.errors import (
 )
 from app.config import settings
 from app.db import close_pool, pool
+from app.integration.router import router as integration_router
 from app.project.router import router as project_router
 
 
@@ -49,6 +50,7 @@ app.add_exception_handler(Exception, unhandled_error_handler)
 
 app.include_router(auth_router)
 app.include_router(project_router)
+app.include_router(integration_router)
 
 
 @app.get("/api/health", tags=["health"])

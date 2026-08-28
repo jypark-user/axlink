@@ -21,6 +21,13 @@ class Settings(BaseSettings):
 
     cors_origins: str = "http://localhost:5173"
 
+    # 인증정보 암호화 마스터 키(base64 32바이트). 없으면 일회용 키를 만들어 쓰되,
+    # 재기동하면 기존 암호문을 못 푼다 — 운영에서는 AXLINK_SECRET_KEY 를 반드시 준다.
+    secret_key: str = ""
+
+    # 커넥터가 원천 도구 REST 를 부를 때의 타임아웃(초)
+    connector_timeout: float = 10.0
+
     @property
     def access_ttl(self) -> timedelta:
         return timedelta(seconds=self.access_ttl_seconds)
