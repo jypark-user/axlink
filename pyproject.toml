@@ -11,6 +11,11 @@ dependencies = [
   "pydantic-settings>=2.6",
   "pyjwt>=2.9",
   "bcrypt>=4.2",
+  # 문서 추출 (ARC-001 6절 · RSK-010/011 로 검증). Tika(Java) 대체.
+  "hwp-hwpx-parser>=1.0",
+  "pypdf>=6.0",
+  "python-docx>=1.1",
+  "openpyxl>=3.1",
 ]
 
 [project.optional-dependencies]
