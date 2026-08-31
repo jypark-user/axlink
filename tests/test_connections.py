@@ -64,7 +64,7 @@ def _cleanup_promoted_rows() -> None:
 @pytest.fixture
 def as_pm(client, client_token):
     """박PM(용역사 r3) 토큰. 앞뒤로 이 사업의 연결을 비워 남은 데이터가 테스트를 깨지 않게 한다."""
-    token = client_token("r3@admin.com")
+    token = client_token("r3")
     _cleanup_project_connections(client, token)
     created: list[str] = []
     yield token, created

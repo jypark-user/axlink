@@ -6,15 +6,15 @@ from typing import Any
 from app.db import fetch_all, fetch_one
 
 
-def find_user_by_email(cur: Any, email: str) -> dict[str, Any] | None:
+def find_user_by_username(cur: Any, username: str) -> dict[str, Any] | None:
     return fetch_one(
         cur,
         """
-        select id, organization_id, email, name, password_hash, role, status
+        select id, organization_id, username, name, password_hash, role, status
           from app_user
-         where lower(email) = lower(%s)
+         where lower(username) = lower(%s)
         """,
-        (email,),
+        (username,),
     )
 
 
@@ -22,7 +22,7 @@ def find_user_by_id(cur: Any, user_id: str) -> dict[str, Any] | None:
     return fetch_one(
         cur,
         """
-        select id, organization_id, email, name, password_hash, role, status
+        select id, organization_id, username, name, password_hash, role, status
           from app_user
          where id = %s
         """,

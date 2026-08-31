@@ -27,7 +27,7 @@ def _verify_password(raw: str, stored_hash: str | None) -> bool:
 
 
 def login(cur: Any, req: LoginRequest, user_agent: str | None) -> LoginResponse:
-    user = repository.find_user_by_email(cur, req.email)
+    user = repository.find_user_by_username(cur, req.username)
     if user is None or not _verify_password(req.password, user["password_hash"]):
         raise errors.credentials_invalid()
     if user["status"] != "ACTIVE":
@@ -94,7 +94,7 @@ def _to_me(cur: Any, user: dict[str, Any], org: dict[str, Any]) -> MeResponse:
     )
     return MeResponse(
         userId=str(user["id"]),
-        email=user["email"],
+        username=user["username"],
         name=user["name"],
         role=user["role"],
         organizationId=str(org["id"]),

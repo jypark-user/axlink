@@ -10,7 +10,7 @@ def test_projects_requires_auth(client):
 
 @requires_db
 def test_client_sees_own_org_projects(client, client_token):
-    token = client_token("r2@admin.com")
+    token = client_token("r2")
     res = client.get("/api/projects", headers={"Authorization": f"Bearer {token}"})
     assert res.status_code == 200
     body = res.json()
@@ -24,17 +24,17 @@ def test_client_sees_own_org_projects(client, client_token):
 @requires_db
 def test_admin_sees_at_least_as_many_as_client(client, client_token):
     admin = client.get(
-        "/api/projects", headers={"Authorization": f"Bearer {client_token('r1@admin.com')}"}
+        "/api/projects", headers={"Authorization": f"Bearer {client_token('r1')}"}
     ).json()
     cli = client.get(
-        "/api/projects", headers={"Authorization": f"Bearer {client_token('r2@admin.com')}"}
+        "/api/projects", headers={"Authorization": f"Bearer {client_token('r2')}"}
     ).json()
     assert admin["totalElements"] >= cli["totalElements"]
 
 
 @requires_db
 def test_project_detail_returns_metrics(client, client_token):
-    token = client_token("r2@admin.com")
+    token = client_token("r2")
     listed = client.get(
         "/api/projects", headers={"Authorization": f"Bearer {token}"}
     ).json()["content"]
@@ -53,7 +53,7 @@ def test_project_detail_returns_metrics(client, client_token):
 
 @requires_db
 def test_project_detail_denies_foreign_project(client, client_token):
-    token = client_token("r2@admin.com")
+    token = client_token("r2")
     # 존재하지 않거나 접근 불가한 사업 → 403/404
     res = client.get(
         "/api/projects/00000000-0000-4000-8000-000000000000",
@@ -64,7 +64,7 @@ def test_project_detail_denies_foreign_project(client, client_token):
 
 @requires_db
 def test_search_filters_by_name(client, client_token):
-    token = client_token("r1@admin.com")
+    token = client_token("r1")
     res = client.get(
         "/api/projects", params={"q": "존재하지않는사업명zzz"},
         headers={"Authorization": f"Bearer {token}"},

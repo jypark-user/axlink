@@ -64,7 +64,7 @@ function AccountSection() {
   if (!me) return null;
   const rows: Array<[string, string]> = [
     ['이름', me.name],
-    ['이메일', me.email],
+    ['아이디', me.username],
     ['소속', me.organizationName],
     ['역할', ROLE_LABEL[me.role]],
     ['접근 가능 프로젝트', `${me.allowedProjectIds.length}건`],
