@@ -1,10 +1,11 @@
 """인증 DTO. 필드명은 프런트 types/api.ts 와 1:1 이어야 한다 — camelCase 그대로 쓴다."""
 
-from pydantic import BaseModel, EmailStr, Field
+from pydantic import BaseModel, Field
 
 
 class LoginRequest(BaseModel):
-    email: EmailStr
+    # 형식을 강요하지 않는다. 이메일 주소를 아이디로 쓰는 것도 그대로 된다.
+    username: str = Field(min_length=1, max_length=254)
     password: str = Field(min_length=1)
 
 
@@ -14,7 +15,7 @@ class RefreshTokenRequest(BaseModel):
 
 class MeResponse(BaseModel):
     userId: str  # noqa: N815
-    email: str
+    username: str
     name: str
     role: str
     organizationId: str  # noqa: N815

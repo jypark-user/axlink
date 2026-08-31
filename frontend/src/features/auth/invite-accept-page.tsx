@@ -23,7 +23,7 @@ export function InviteAcceptPage(): ReactNode {
 
   const [orgName, setOrgName] = useState('');
   const [name, setName] = useState('');
-  const [email, setEmail] = useState('');
+  const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
   const [confirm, setConfirm] = useState('');
   const [formError, setFormError] = useState<string | null>(null);
@@ -58,7 +58,7 @@ export function InviteAcceptPage(): ReactNode {
   const validate = (): string | null => {
     if (isNewAccount && !orgName.trim()) return '회사명을 입력하세요.';
     if (isNewAccount && !name.trim()) return '이름을 입력하세요.';
-    if (isNewAccount && !email.trim()) return '이메일을 입력하세요.';
+    if (isNewAccount && !username.trim()) return '아이디를 입력하세요.';
     if (password.length < 8) return '비밀번호는 8자 이상이어야 합니다.';
     if (!/[A-Za-z]/.test(password) || !/\d/.test(password))
       return '영문과 숫자를 모두 포함해야 합니다.';
@@ -81,7 +81,7 @@ export function InviteAcceptPage(): ReactNode {
           ? {
               token,
               contractorOrgName: orgName.trim(),
-              email: email.trim(),
+              username: username.trim(),
               name: name.trim(),
               password,
             }
@@ -129,7 +129,7 @@ export function InviteAcceptPage(): ReactNode {
               <p className="text-muted-foreground">
                 {isNewAccount
                   ? '이 사업에 용역사로 참여합니다.'
-                  : `${preview?.email} · ${preview?.organizationName}`}
+                  : `${preview?.username} · ${preview?.organizationName}`}
               </p>
             </div>
             {formError && (
@@ -158,13 +158,13 @@ export function InviteAcceptPage(): ReactNode {
                   />
                 </div>
                 <div className="flex flex-col gap-1.5">
-                  <Label htmlFor="email">이메일</Label>
+                  <Label htmlFor="username">아이디</Label>
                   <Input
-                    id="email"
-                    type="email"
-                    autoComplete="email"
-                    value={email}
-                    onChange={(e) => setEmail(e.target.value)}
+                    id="username"
+                    type="text"
+                    autoComplete="username"
+                    value={username}
+                    onChange={(e) => setUsername(e.target.value)}
                   />
                 </div>
               </>

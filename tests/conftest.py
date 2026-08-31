@@ -40,8 +40,8 @@ def client() -> TestClient:
 
 @pytest.fixture
 def client_token(client: TestClient):
-    def _login(email: str, password: str = "admin") -> str:
-        res = client.post("/api/auth/login", json={"email": email, "password": password})
+    def _login(username: str, password: str = "admin") -> str:
+        res = client.post("/api/auth/login", json={"username": username, "password": password})
         assert res.status_code == 200, res.text
         return res.json()["accessToken"]
 
