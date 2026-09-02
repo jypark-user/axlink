@@ -35,6 +35,41 @@ const TOOL_OPTIONS: { value: ToolKind; label: string }[] = [
   { value: 'REDMINE', label: 'Redmine' },
 ];
 
+/**
+ * 도구별 베이스 URL 기본값. GitHub는 저장소가 몇 개든 api.github.com 하나라 자동으로 채운다.
+ * Redmine은 사내 설치마다 주소가 달라 기본값이 없다(직접 입력).
+ * 사내 GitHub Enterprise면 https://<host>/api/v3 로 바꾸면 된다.
+ */
+const DEFAULT_BASE_URL: Record<ToolKind, string> = {
+  GITHUB: 'https://api.github.com',
+  REDMINE: '',
+};
+
+const AUTO_FILLED = new Set(Object.values(DEFAULT_BASE_URL).filter(Boolean));
+
+/** 커넥터가 돌려주는 항목 종류를 발주기관 어휘로 옮긴다. */
+const ITEM_LABELS: Record<string, string> = {
+  issue: '이슈',
+  pull_request: '풀 리퀘스트(PR)',
+  commit: '커밋',
+};
+
+/** 도구별 입력 예시. 박PM이 무엇을 넣는지 필드에서 바로 알게 한다. */
+const TOOL_HINTS: Record<ToolKind, { name: string; baseUrl: string; resource: string; token: string }> = {
+  GITHUB: {
+    name: '예: 백엔드 저장소',
+    baseUrl: 'https://api.github.com',
+    resource: 'owner/repo — 예: jypark-user/axlink',
+    token: 'ghp_ 로 시작하는 Personal Access Token',
+  },
+  REDMINE: {
+    name: '예: 사업 관리 Redmine',
+    baseUrl: 'https://redmine.example.com',
+    resource: '프로젝트 식별자 — 예: b-project',
+    token: '내 계정 → API 액세스 키',
+  },
+};
+
 /** GitHub(Personal Access Token) · Redmine(API Key) 둘 다 토큰 하나만 쓴다. */
 export function buildCredential(token: string): ToolCredentialRequest | null {
   const trimmed = token.trim();
@@ -57,7 +92,9 @@ export function ConnectionFormDialog({
   const { toast } = useToast();
   const [tool, setTool] = useState<ToolKind>(connection?.tool ?? 'GITHUB');
   const [name, setName] = useState(connection?.name ?? '');
-  const [baseUrl, setBaseUrl] = useState(connection?.baseUrl ?? '');
+  const [baseUrl, setBaseUrl] = useState(
+    connection?.baseUrl ?? DEFAULT_BASE_URL[connection?.tool ?? 'GITHUB'],
+  );
   const [targetResource, setTargetResource] = useState(connection?.targetResource ?? '');
   const [token, setToken] = useState('');
   const [pending, setPending] = useState(false);
@@ -65,6 +102,7 @@ export function ConnectionFormDialog({
   const [testResult, setTestResult] = useState<{ ok: boolean; text: string } | null>(null);
 
   const credential = buildCredential(token);
+  const hint = TOOL_HINTS[tool];
   const canTest =
     credential !== null && baseUrl.trim() !== '' && targetResource.trim() !== '' && !testing;
 
@@ -79,11 +117,17 @@ export function ConnectionFormDialog({
         targetResource: targetResource.trim(),
         credential,
       });
-      const types =
-        res.detectedItemTypes.length > 0 ? ` · ${res.detectedItemTypes.join(', ')}` : '';
+      const items = res.detectedItemTypes.map((t) => ITEM_LABELS[t] ?? t).join(' · ');
+      const denied = (res.deniedItemTypes ?? []).map((t) => ITEM_LABELS[t] ?? t).join(' · ');
+      const detail = items ? `\n읽을 수 있는 항목: ${items}` : '';
+      const warn = denied
+        ? `\n⚠ 권한 없음: ${denied} — 이 항목은 수집되지 않습니다`
+        : '';
       setTestResult({
         ok: res.reachable,
-        text: res.reachable ? `${res.resourceName}${types}` : res.resourceName,
+        text: res.reachable
+          ? `✓ 연결 성공 — ${res.resourceName}${detail}${warn}`
+          : res.resourceName,
       });
     } catch (err) {
       setTestResult({ ok: false, text: isApiError(err) ? err.message : String(err) });
@@ -145,7 +189,10 @@ export function ConnectionFormDialog({
             <Select
               value={tool}
               onValueChange={(v) => {
-                setTool(v as ToolKind);
+                const next = v as ToolKind;
+                setTool(next);
+                // 사용자가 직접 넣은 주소는 지키고, 비었거나 자동으로 채운 값만 새 도구 기본값으로 바꾼다.
+                setBaseUrl((prev) => (prev === '' || AUTO_FILLED.has(prev) ? DEFAULT_BASE_URL[next] : prev));
                 setToken('');
                 setTestResult(null);
               }}
@@ -163,18 +210,26 @@ export function ConnectionFormDialog({
               </SelectContent>
             </Select>
             <p className="text-xs text-muted-foreground">
-              커넥터 구현 전이라 등록·수정만 되고 연결 테스트·동기화는 아직 동작하지 않습니다.
+              읽기 전용으로 연결합니다. AX Link는 저장소에 아무것도 쓰지 않습니다 — 커밋·이슈·PR 조회만 합니다.
+              수집(동기화)은 다음 단계에서 열립니다.
             </p>
           </div>
           <div className={FIELD}>
             <Label htmlFor="connName">이름</Label>
-            <Input id="connName" required value={name} onChange={(e) => setName(e.target.value)} />
+            <Input
+              id="connName"
+              required
+              placeholder={hint.name}
+              value={name}
+              onChange={(e) => setName(e.target.value)}
+            />
           </div>
           <div className={FIELD}>
             <Label htmlFor="connBaseUrl">베이스 URL</Label>
             <Input
               id="connBaseUrl"
               required
+              placeholder={hint.baseUrl}
               value={baseUrl}
               onChange={(e) => {
                 setBaseUrl(e.target.value);
@@ -187,6 +242,7 @@ export function ConnectionFormDialog({
             <Input
               id="connResource"
               required
+              placeholder={hint.resource}
               value={targetResource}
               onChange={(e) => {
                 setTargetResource(e.target.value);
@@ -200,7 +256,7 @@ export function ConnectionFormDialog({
               id="connToken"
               type="password"
               autoComplete="new-password"
-              placeholder={connection?.credentialMasked}
+              placeholder={connection?.credentialMasked ?? hint.token}
               value={token}
               onChange={(e) => {
                 setToken(e.target.value);

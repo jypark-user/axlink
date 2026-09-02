@@ -20,7 +20,7 @@ export function LoginPage(): ReactNode {
   const navigate = useNavigate();
   const location = useLocation();
   const from = (location.state as { from?: string } | null)?.from;
-  const [email, setEmail] = useState('');
+  const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState<string | null>(null);
   const [pending, setPending] = useState(false);
@@ -30,7 +30,7 @@ export function LoginPage(): ReactNode {
     setError(null);
     setPending(true);
     try {
-      const user = await login({ email: email.trim(), password });
+      const user = await login({ username: username.trim(), password });
       const dest = from ?? DEFAULT_PATH[user.role] ?? '/projects';
       void navigate(dest, { replace: true });
     } catch (err) {
@@ -58,14 +58,14 @@ export function LoginPage(): ReactNode {
             </Alert>
           )}
           <div className="flex flex-col gap-1.5">
-            <Label htmlFor="email">이메일</Label>
+            <Label htmlFor="username">아이디</Label>
             <Input
-              id="email"
-              type="email"
-              autoComplete="email"
+              id="username"
+              type="text"
+              autoComplete="username"
               required
-              value={email}
-              onChange={(e) => setEmail(e.target.value)}
+              value={username}
+              onChange={(e) => setUsername(e.target.value)}
             />
           </div>
           <div className="flex flex-col gap-1.5">

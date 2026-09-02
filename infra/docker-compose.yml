@@ -9,7 +9,9 @@ services:
       POSTGRES_USER: axlink
       POSTGRES_PASSWORD: axlink
       POSTGRES_DB: axlink
-    ports: ["5432:5432"]
+    # 호스트에 로컬 PostgreSQL 이 5432·5433 을 이미 쓰는 경우가 있어 15432 로 노출한다.
+    # 컨테이너 내부는 그대로 5432 다 (flyway·앱이 컨테이너망에서 붙을 때 영향 없음).
+    ports: ["15432:5432"]
     volumes:
       - pgdata:/var/lib/postgresql/data
       - ./initdb:/docker-entrypoint-initdb.d:ro
@@ -18,6 +20,23 @@ services:
       interval: 10s
       timeout: 5s
       retries: 10
+
+  # 스키마 마이그레이션. 앱이 파이썬으로 바뀌어도 V1~V19 를 재작성하지 않는다 (ARC-001 6절).
+  # 컨테이너로만 돌리므로 앱에 JVM 이 들어가지 않는다.
+  flyway:
+    image: flyway/flyway:10
+    container_name: axlink-flyway
+    depends_on:
+      postgres:
+        condition: service_healthy
+    command: >
+      -url=jdbc:postgresql://postgres:5432/axlink
+      -user=axlink -password=axlink
+      -locations=filesystem:/flyway/sql
+      -connectRetries=10
+      migrate
+    volumes:
+      - ../db/migration:/flyway/sql:ro
 
   # 프로젝트 관리 도구 (샘플 원천 + 폐쇄망 온프레미스 서사에 부합)
   redmine-db:

@@ -32,9 +32,12 @@ ID_RE = re.compile(r"\b(REQ|ARC|DSN|TST|RSK|DEF)-(\d{3})\b")
 # 맨 "#17"은 규약 위반 — 도구 구분이 안 되고, Redmine이 자기 이슈로 오인한다.
 ISSUE_RE = re.compile(r"\b(GH|RM)-(\d+)\b")
 BARE_ISSUE_RE = re.compile(r"(?:Refs|Closes|Fixes):?\s*#\d+", re.IGNORECASE)
+# scope 목록은 CLAUDE.md 3절이 기준이다. 파일럿 시절 파서(connectors/pipeline/templates/web)가
+# 헌법과 어긋나 있어 맞춘다.
 SUBJECT_RE = re.compile(
     r"^(feat|fix|docs|test|refactor|chore|perf)"
-    r"\((connectors|pipeline|ai|templates|web|infra|docs)\):\s+.+"
+    r"\((auth|org|project|integration|standard|dashboard|rag|document"
+    r"|ai|semantic|frontend|infra|docs)\):\s+.+"
 )
 FIELDS = [
     "req_id", "req_title", "task_item", "design_id", "test_id",
