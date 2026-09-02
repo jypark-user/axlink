@@ -137,7 +137,7 @@ export interface FieldError {
 }
 
 export interface LoginRequest {
-  email: string;
+  username: string;
   password: string;
 }
 
@@ -161,7 +161,7 @@ export interface LoginResponse {
 
 export interface MeResponse {
   userId: string;
-  email: string;
+  username: string;
   name: string;
   role: Role;
   organizationId: string;
@@ -176,16 +176,16 @@ export interface InvitationPreviewResponse {
   kind: InviteKind;
   projectName: string | null;
   organizationName: string;
-  email: string | null;
+  username: string | null;
   name: string | null;
   expiresAt: string;
 }
 
-/** contractorOrgName·email·name은 PROJECT 초대에만 필요하다. */
+/** contractorOrgName·username·name은 PROJECT 초대에만 필요하다. */
 export interface AcceptInvitationRequest {
   token: string;
   contractorOrgName?: string;
-  email?: string;
+  username?: string;
   name?: string;
   password: string;
 }
@@ -228,7 +228,7 @@ export interface OrganizationResponse {
 
 export interface UserCreateRequest {
   organizationId: string;
-  email: string;
+  username: string;
   name: string;
   role: Role;
 }
@@ -243,7 +243,7 @@ export interface UserResponse {
   id: string;
   organizationId: string;
   organizationName: string;
-  email: string;
+  username: string;
   name: string;
   role: Role;
   status: UserStatus;
@@ -405,6 +405,8 @@ export interface ToolConnectionTestResponse {
   reachable: boolean;
   resourceName: string;
   detectedItemTypes: string[];
+  /** 토큰에 권한이 빠져 읽지 못하는 항목. 연결은 되지만 이 항목은 수집되지 않는다. */
+  deniedItemTypes?: string[];
   checkedAt: string;
 }
 

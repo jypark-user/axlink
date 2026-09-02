@@ -69,7 +69,7 @@ export function UserMenu() {
           <DropdownMenuContent side={collapsed ? 'right' : 'top'} align="start" className="w-56">
             <DropdownMenuLabel className="flex flex-col gap-0.5">
               <span>{me.name}</span>
-              <span className="text-muted-foreground text-xs font-normal">{me.email}</span>
+              <span className="text-muted-foreground text-xs font-normal">{me.username}</span>
               <span className="text-muted-foreground text-xs font-normal">
                 {me.organizationName} · {ROLE_LABEL[me.role]}
               </span>

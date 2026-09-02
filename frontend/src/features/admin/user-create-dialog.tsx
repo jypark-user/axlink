@@ -42,7 +42,7 @@ export function UserCreateDialog({
 }): ReactNode {
   const { toast } = useToast();
   const [organizationId, setOrganizationId] = useState('');
-  const [email, setEmail] = useState('');
+  const [username, setUsername] = useState('');
   const [name, setName] = useState('');
   const [pending, setPending] = useState(false);
 
@@ -58,12 +58,12 @@ export function UserCreateDialog({
     try {
       await api.post<UserResponse>('/users', {
         organizationId: targetOrgId,
-        email: email.trim(),
+        username: username.trim(),
         name: name.trim(),
         role,
       });
       toast({ title: '계정을 생성하고 초대를 보냈습니다.', variant: 'success' });
-      setEmail('');
+      setUsername('');
       setName('');
       onOpenChange(false);
       onCreated();
@@ -105,13 +105,14 @@ export function UserCreateDialog({
             </div>
           )}
           <div className="flex flex-col gap-1.5">
-            <Label htmlFor="userEmail">이메일</Label>
+            <Label htmlFor="userName_login">아이디</Label>
             <Input
-              id="userEmail"
-              type="email"
+              id="userName_login"
+              type="text"
+              autoComplete="username"
               required
-              value={email}
-              onChange={(e) => setEmail(e.target.value)}
+              value={username}
+              onChange={(e) => setUsername(e.target.value)}
             />
           </div>
           <div className="flex flex-col gap-1.5">

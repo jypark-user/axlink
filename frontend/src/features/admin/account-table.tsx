@@ -67,8 +67,8 @@ function buildColumns(
       header: ({ column }) => <SortableHeader column={column}>이름</SortableHeader>,
     },
     {
-      accessorKey: 'email',
-      header: ({ column }) => <SortableHeader column={column}>이메일</SortableHeader>,
+      accessorKey: 'username',
+      header: ({ column }) => <SortableHeader column={column}>아이디</SortableHeader>,
     },
   ];
 

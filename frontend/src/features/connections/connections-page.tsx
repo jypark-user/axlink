@@ -34,6 +34,7 @@ export function ConnectionsPage(): ReactNode {
   const [formOpen, setFormOpen] = useState(false);
   const [editing, setEditing] = useState<ToolConnectionResponse | null>(null);
   const [deleting, setDeleting] = useState<ToolConnectionResponse | null>(null);
+  const [syncingId, setSyncingId] = useState<string | null>(null);
 
   const act = async (fn: () => Promise<unknown>, done: string) => {
     try {
@@ -46,6 +47,36 @@ export function ConnectionsPage(): ReactNode {
         description: isApiError(e) ? e.message : undefined,
         variant: 'error',
       });
+    }
+  };
+
+  const runSync = async (c: ToolConnectionResponse) => {
+    setSyncingId(c.id);
+    try {
+      const job = await api.post<SyncJobResponse>(`/connections/${c.id}/sync`, {
+        kind: 'BACKFILL',
+      });
+      const s = job.stats;
+      const summary = `가져옴 ${s.fetched.toLocaleString('ko-KR')}건 · 신규·갱신 ${s.upserted} · 변경없음 ${s.skippedUnchanged}`;
+      if (job.status === 'FAILED') {
+        toast({ title: '수집 실패', description: job.error ?? summary, variant: 'error' });
+      } else {
+        toast({
+          title: `수집 완료 — ${s.fetched.toLocaleString('ko-KR')}건`,
+          // job.error 는 실패가 아니라 "권한 없어 건너뛴 항목" 같은 부분성공 안내다.
+          description: job.error ? `${summary}\n${job.error}` : summary,
+          variant: 'success',
+        });
+      }
+    } catch (e) {
+      toast({
+        title: '수집 요청에 실패했습니다.',
+        description: isApiError(e) ? e.message : undefined,
+        variant: 'error',
+      });
+    } finally {
+      setSyncingId(null);
+      state.reload();
     }
   };
 
@@ -109,19 +140,8 @@ export function ConnectionsPage(): ReactNode {
                       >
                         연결 테스트
                       </Button>
-                      <Button
-                        size="sm"
-                        onClick={() =>
-                          act(
-                            () =>
-                              api.post<SyncJobResponse>(`/connections/${c.id}/sync`, {
-                                kind: 'BACKFILL',
-                              }),
-                            '동기화를 시작했습니다.',
-                          )
-                        }
-                      >
-                        전체 수집
+                      <Button size="sm" disabled={syncingId === c.id} onClick={() => runSync(c)}>
+                        {syncingId === c.id ? '수집 중…' : '전체 수집'}
                       </Button>
                       {(c.status === 'ACTIVE' ||
                         c.status === 'PAUSED' ||

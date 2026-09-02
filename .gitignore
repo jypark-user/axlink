@@ -19,5 +19,9 @@ Thumbs.db
 _to_delete/
 bin/
 .gradle/
-backend/axlink-storage/
 *.tsbuildinfo
+
+# 파이썬 빌드 산출물
+*.egg-info/
+.pytest_cache/
+.ruff_cache/
