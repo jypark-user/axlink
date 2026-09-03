@@ -11,10 +11,14 @@ from dataclasses import dataclass, field
 from typing import Any
 
 from app.ai.port import EmbeddingPort
+from app.auth import repository as auth_repo
+from app.auth.models import AuthPrincipal
 from app.common import errors
+from app.common.paging import PageQuery, PageResponse
 from app.db import fetch_all
 from app.rag import indexing
 from app.standard import mapping, repository
+from app.standard.models import RequirementResponse, SourceRef
 
 
 @dataclass
@@ -93,3 +97,47 @@ def _raw_artifacts(cur: Any, connection_id: str) -> list[dict[str, Any]]:
         """,
         (connection_id,),
     )
+
+
+# --- 조회 ---------------------------------------------------------------
+
+
+def _source_ref(row: dict[str, Any]) -> SourceRef:
+    """원천 표기. 도구에서 온 것이면 도구 이름을, 아니면 업로드·수기로 구분한다."""
+    tool = row["tool_name"] or ("UPLOAD" if row["source_kind"] == "DOCUMENT" else "MANUAL")
+    return SourceRef(
+        tool=tool,
+        connectionId=str(row["tool_connection_id"]) if row["tool_connection_id"] else None,
+        externalId=row["external_id"],
+        externalUrl=row["external_url"],
+    )
+
+
+def list_requirements(
+    cur: Any, principal: AuthPrincipal, project_id: str, q: str | None, page: PageQuery
+) -> PageResponse[RequirementResponse]:
+    allowed = auth_repo.allowed_project_ids(
+        cur, principal.role, principal.org_id, principal.user_id
+    )
+    if project_id not in allowed:
+        raise errors.project_access_denied()
+
+    total = repository.count_requirements(cur, project_id, q)
+    rows = repository.search_requirements(cur, project_id, q, page)
+    content = [
+        RequirementResponse(
+            id=str(r["id"]),
+            projectId=str(r["project_id"]),
+            # 코드가 없는 요구사항도 있다. 화면이 빈 칸을 못 그리므로 하이픈으로 채운다.
+            code=r["code"] or "—",
+            title=r["title"],
+            priority=r["priority"],
+            status=r["status"],
+            assignee=r["assignee"],
+            source=_source_ref(r),
+            traceComplete=r["trace_complete"],
+            updatedAt=r["updated_at"].isoformat(),
+        )
+        for r in rows
+    ]
+    return PageResponse.of(content, page, total)
