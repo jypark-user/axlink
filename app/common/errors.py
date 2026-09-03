@@ -11,6 +11,7 @@ from typing import Any
 from fastapi import Request
 from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse
+from starlette.exceptions import HTTPException as StarletteHTTPException
 
 _DEFAULT_MESSAGES = {
     "CREDENTIALS_INVALID": "이메일 또는 비밀번호가 올바르지 않습니다.",
@@ -19,6 +20,7 @@ _DEFAULT_MESSAGES = {
     "PROJECT_ACCESS_DENIED": "해당 사업에 접근할 수 없습니다.",
     "NOT_FOUND": "대상을 찾을 수 없습니다.",
     "VALIDATION_FAILED": "요청 값이 올바르지 않습니다.",
+    "METHOD_NOT_ALLOWED": "허용되지 않은 요청 방식입니다.",
     "INTERNAL": "서버 오류가 발생했습니다.",
 }
 
@@ -96,6 +98,20 @@ async def validation_error_handler(
             {"fields": fields},
             request.url.path,
         ),
+    )
+
+
+async def http_error_handler(request: Request, exc: StarletteHTTPException) -> JSONResponse:
+    """라우팅 단계에서 나는 404·405 를 우리 봉투로 바꾼다.
+
+    기본 응답은 {"detail": "Not Found"} 라 프런트가 code 를 못 찾고 INTERNAL 로 떨어뜨린다.
+    없는 API 가 서버 오류로 둔갑하면 진단이 어려워진다.
+    """
+    code = {404: "NOT_FOUND", 405: "METHOD_NOT_ALLOWED"}.get(exc.status_code, "INTERNAL")
+    message = _DEFAULT_MESSAGES.get(code, str(exc.detail))
+    return JSONResponse(
+        status_code=exc.status_code,
+        content=_envelope(code, message, None, request.url.path),
     )
 
 

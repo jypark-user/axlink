@@ -6,7 +6,8 @@ ORM 을 쓰지 않는 이유 중 하나다(CLAUDE.md 1절).
 
 from typing import Any
 
-from app.db import fetch_one
+from app.common.paging import PageQuery
+from app.db import fetch_all, fetch_one
 
 _SOURCE_CONFLICT = """
     on conflict (tool_connection_id, external_id)
@@ -99,3 +100,60 @@ def upsert_code_change(
         ),
     )
     return str(row["id"])
+
+
+# --- 조회 ---------------------------------------------------------------
+
+_REQUIREMENT_COLUMNS = """
+    r.id, r.project_id, r.code, r.title, r.priority, r.status, r.assignee,
+    r.tool_connection_id, r.external_id, r.external_url, r.source_kind, r.updated_at,
+    c.tool as tool_name,
+    exists (
+      select 1 from trace_link tl
+       where tl.to_type = 'REQUIREMENT' and tl.to_id = r.id
+         and tl.link_kind = 'TESTS' and tl.status = 'ACTIVE'
+    ) as trace_complete
+"""
+_REQUIREMENT_FROM = """
+    from requirement r
+    left join tool_connection c on c.id = r.tool_connection_id
+"""
+
+
+def _search(q: str | None) -> tuple[str, list[Any]]:
+    """코드·제목 어느 쪽으로 찾아도 걸리게 한다.
+
+    조건을 SQL 안에서 "%s is null" 로 처리하면 파라미터 타입을 못 정해 실패한다.
+    없을 때는 조건 자체를 빼는 편이 낫다.
+    """
+    if not q or not q.strip():
+        return "", []
+    like = f"%{q.strip()}%"
+    return " and (r.code ilike %s or r.title ilike %s)", [like, like]
+
+
+def count_requirements(cur: Any, project_id: str, q: str | None) -> int:
+    where, params = _search(q)
+    row = fetch_one(
+        cur,
+        f"select count(*) as n from requirement r where r.project_id = %s {where}",
+        (project_id, *params),
+    )
+    return int(row["n"]) if row else 0
+
+
+
+def search_requirements(
+    cur: Any, project_id: str, q: str | None, page: PageQuery
+) -> list[dict[str, Any]]:
+    where, params = _search(q)
+    return fetch_all(
+        cur,
+        f"""
+        select {_REQUIREMENT_COLUMNS} {_REQUIREMENT_FROM}
+         where r.project_id = %s {where}
+         order by r.code nulls last, r.created_at
+         limit %s offset %s
+        """,
+        (project_id, *params, page.size, page.offset),
+    )
