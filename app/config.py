@@ -37,6 +37,10 @@ class Settings(BaseSettings):
     embedding_batch: int = 32
     embedding_timeout: float = 120.0  # 배치 임베딩은 커넥터 호출보다 오래 걸린다
 
+    # 업로드 문서 원본 보관 위치. 폐쇄망 온프레미스라 오브젝트 스토리지를 전제하지 않는다.
+    # 운영에서는 NAS 마운트 경로를 AXLINK_DOCUMENT_ROOT 로 준다.
+    document_root: str = "var/documents"
+
     # 청킹 파라미터 (파일럿 설계 03-physical-backend §6.1)
     chunk_target_tokens: int = 800
     chunk_min_tokens: int = 200

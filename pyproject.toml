@@ -13,6 +13,7 @@ dependencies = [
   "bcrypt>=4.2",
   "httpx>=0.27",           # 커넥터가 원천 도구 REST 를 호출한다
   "cryptography>=43",      # 인증정보 AES-256-GCM 저장 (SecretCipher 대체)
+  "python-multipart>=0.0.9",  # 문서 업로드(multipart/form-data)
   # 문서 추출 (ARC-001 6절 · RSK-010/011 로 검증). Tika(Java) 대체.
   "hwp-hwpx-parser>=1.0",
   "pypdf>=6.0",
@@ -40,6 +41,10 @@ target-version = "py312"
 
 [tool.ruff.lint]
 select = ["E", "F", "I", "UP", "B", "SIM"]
+
+[tool.ruff.lint.per-file-ignores]
+# WBS 는 한 줄이 한 작업인 데이터 표다. 줄을 접으면 오히려 읽기 어렵다.
+"scripts/build_wbs.py" = ["E501"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

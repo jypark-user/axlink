@@ -25,3 +25,6 @@ bin/
 *.egg-info/
 .pytest_cache/
 .ruff_cache/
+
+# 업로드 문서 원본 보관 위치 (AXLINK_DOCUMENT_ROOT)
+var/
