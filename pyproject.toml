@@ -10,7 +10,9 @@ dependencies = [
   "pydantic[email]>=2.9",
   "pydantic-settings>=2.6",
   "pyjwt>=2.9",
-  "bcrypt>=4.2",
+  # 5.0.0 은 checkpw 가 맞는 비밀번호를 1% 가량 거부한다(Windows·py3.13 실측).
+  # 틀린 비밀번호가 통과하지는 않으므로 보안 구멍은 아니고, 무작위 로그인 실패로 나타난다.
+  "bcrypt>=4.2,<5",
   "httpx>=0.27",           # 커넥터가 원천 도구 REST 를 호출한다
   "cryptography>=43",      # 인증정보 AES-256-GCM 저장 (SecretCipher 대체)
   "python-multipart>=0.0.9",  # 문서 업로드(multipart/form-data)
