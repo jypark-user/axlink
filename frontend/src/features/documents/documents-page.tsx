@@ -69,7 +69,9 @@ const documentColumns = (projectId: string): ColumnDef<DocumentUploadResponse, u
   },
 ];
 
-const PENDING: string[] = ['UPLOADED', 'EXTRACTED'];
+// 추출까지가 지금의 종착점이다. 정형화(STRUCTURED)가 붙기 전까지 EXTRACTED 를
+// 진행 중으로 보면 목록이 2초마다 영원히 다시 부른다.
+const PENDING: string[] = ['UPLOADED'];
 
 export function DocumentsPage(): ReactNode {
   const { project } = useProjectContext();

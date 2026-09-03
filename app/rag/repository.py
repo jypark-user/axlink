@@ -95,3 +95,29 @@ def hashes_by_source(
     for row in rows:
         found.setdefault(row["source_id"], []).append(row["content_hash"])
     return found
+
+
+def count_chunks(cur: Any, source_type: str, source_id: str) -> int:
+    row = fetch_one(
+        cur,
+        "select count(*) as n from doc_chunk where source_type = %s and source_id = %s",
+        (source_type, source_id),
+    )
+    return int(row["n"]) if row else 0
+
+
+def list_chunks(
+    cur: Any, source_type: str, source_id: str, limit: int, offset: int
+) -> list[dict[str, Any]]:
+    """본문 열람용. 청크를 순서대로 이어 붙이면 원문이 된다."""
+    return fetch_all(
+        cur,
+        """
+        select chunk_index, content
+          from doc_chunk
+         where source_type = %s and source_id = %s
+         order by chunk_index
+         limit %s offset %s
+        """,
+        (source_type, source_id, limit, offset),
+    )
