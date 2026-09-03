@@ -67,3 +67,14 @@ def test_refresh_rotates_token(client):
     # 회전됐으므로 옛 토큰은 더 못 쓴다.
     reuse = client.post("/api/auth/refresh", json={"refreshToken": rt})
     assert reuse.status_code == 401
+
+
+def test_password_check_is_deterministic():
+    """bcrypt 5.0.0 은 맞는 비밀번호를 1% 가량 거부했다. 버전이 바뀌어도 다시 겪지 않게 고정한다."""
+    import bcrypt
+
+    from app.auth.service import _verify_password
+
+    stored = bcrypt.hashpw(b"admin", bcrypt.gensalt(rounds=4)).decode()
+    assert all(_verify_password("admin", stored) for _ in range(200))
+    assert not any(_verify_password("nope", stored) for _ in range(200))
