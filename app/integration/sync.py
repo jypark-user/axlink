@@ -13,6 +13,7 @@ from typing import Any
 
 from app.ai.embedding import embedding_port
 from app.common import crypto, errors
+from app.config import settings
 from app.integration import github, repository
 from app.standard import service as standard
 
@@ -68,6 +69,8 @@ def run_backfill(cur: Any, connection: dict[str, Any]) -> str:
         repository.mark_synced(cur, cid, finished, exc.message)
         return job_id
 
+    denied += _collect_files(cur, cid, base, target, token, job_id, stats)
+
     promoted = standard.promote_connection(cur, connection, embedding_port())
     stats["upserted"] = promoted.upserted
     stats["unmapped"] = promoted.unmapped
@@ -85,3 +88,39 @@ def run_backfill(cur: Any, connection: dict[str, Any]) -> str:
     )
     repository.mark_synced(cur, cid, finished, note)
     return job_id
+
+
+def _collect_files(
+    cur: Any,
+    connection_id: str,
+    base: str,
+    target: str,
+    token: str,
+    job_id: str,
+    stats: dict[str, int],
+) -> list[str]:
+    """설정에 적힌 저장소 파일을 함께 가져온다.
+
+    WBS 는 이 경로로 들어온다. 없으면 조용히 넘어간다 — 아직 안 올렸을 수 있고,
+    그건 수집 실패가 아니다. 파일이 없다는 사실 자체는 산출물 현황이 말해 준다.
+    """
+    skipped: list[str] = []
+    for path in settings.collect_file_map:
+        try:
+            payload = github.fetch_file(
+                base, target, token, path, settings.collect_ref or None
+            )
+        except errors.ApiError as exc:
+            # 토큰에 파일 읽기 권한이 없는 경우다. 이슈·커밋은 되는데 파일만 막힐 수 있다.
+            if exc.code not in ("TOOL_AUTH", "TOOL_NOT_FOUND"):
+                raise
+            skipped.append(path)
+            continue
+        if payload is None:
+            continue
+        stats["fetched"] += 1
+        if not repository.upsert_raw_artifact(
+            cur, connection_id, f"file:{path}", "file", payload, job_id
+        ):
+            stats["skippedUnchanged"] += 1
+    return skipped

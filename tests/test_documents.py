@@ -71,6 +71,11 @@ def _purge(client, token: str) -> None:
     from app.db import tx
 
     with tx() as cur:
+        # 청크까지 지운다. 업로드만 지우면 색인이 남아 다음 시험의 셈을 흐린다.
+        cur.execute(
+            "delete from doc_chunk where project_id = %s and source_type = 'DOCUMENT_UPLOAD'",
+            (PID,),
+        )
         cur.execute("delete from document_upload where project_id = %s", (PID,))
 
 
