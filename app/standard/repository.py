@@ -102,6 +102,55 @@ def upsert_code_change(
     return str(row["id"])
 
 
+def upsert_work_product(
+    cur: Any, project_id: str, connection_id: str, external_id: str, rec: dict[str, Any]
+) -> str | None:
+    """같은 유형의 현행 산출물 자리를 채운다. 자리가 없으면 새로 만든다.
+
+    uq_work_product__current (project_id, type) where is_current 때문에 무턱대고
+    insert 하면 안 된다. 산출물 목록은 미리 정의된 자리이고 수집은 그걸 채우는 일이다.
+    """
+    row = fetch_one(
+        cur,
+        "select id from work_product where project_id = %s and type = %s and is_current",
+        (project_id, rec["type"]),
+    )
+    if row is not None:
+        fetch_one(
+            cur,
+            """
+            update work_product
+               set title = %s, version = %s, file_uri = %s, external_url = %s,
+                   tool_connection_id = %s, external_id = %s, source_kind = 'TOOL',
+                   status = case when status = 'NONE' then 'SUBMITTED' else status end,
+                   submitted_at = coalesce(submitted_at, now()), updated_at = now()
+             where id = %s
+            returning id
+            """,
+            (
+                rec["title"], rec["version"], rec["file_uri"], rec["external_url"],
+                connection_id, external_id, row["id"],
+            ),
+        )
+        return str(row["id"])
+
+    created = fetch_one(
+        cur,
+        """
+        insert into work_product
+          (project_id, type, version, title, status, pm_activity, file_uri, external_url,
+           tool_connection_id, external_id, source_kind, submitted_at)
+        values (%s, %s, %s, %s, 'SUBMITTED', 'PM_1', %s, %s, %s, %s, 'TOOL', now())
+        returning id
+        """,
+        (
+            project_id, rec["type"], rec["version"], rec["title"],
+            rec["file_uri"], rec["external_url"], connection_id, external_id,
+        ),
+    )
+    return str(created["id"])
+
+
 # --- 조회 ---------------------------------------------------------------
 
 _REQUIREMENT_COLUMNS = """
@@ -156,4 +205,22 @@ def search_requirements(
          limit %s offset %s
         """,
         (project_id, *params, page.size, page.offset),
+    )
+
+
+def list_work_products(cur: Any, project_id: str) -> list[dict[str, Any]]:
+    """현행 산출물 22종. 아직 안 낸 것도 자리로 나와야 제출 현황이 성립한다."""
+    return fetch_all(
+        cur,
+        """
+        select w.id, w.project_id, w.type, w.version, w.title, w.status,
+               w.pm_activity, w.si_activity, w.applicable, w.due_date,
+               w.file_uri, w.external_url, w.approved_at, w.updated_at,
+               u.name as approved_by
+          from work_product w
+          left join app_user u on u.id = w.approved_by_user_id
+         where w.project_id = %s and w.is_current
+         order by w.pm_activity nulls last, w.si_activity nulls last, w.type
+        """,
+        (project_id,),
     )

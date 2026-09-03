@@ -7,7 +7,9 @@
 커밋 메시지 한 줄이라 검색 근거로 쓸 게 없고, 데이터모델도 색인 대상에서 뺐다.
 """
 
+import base64
 from dataclasses import dataclass, field
+from pathlib import Path
 from typing import Any
 
 from app.ai.port import EmbeddingPort
@@ -15,10 +17,16 @@ from app.auth import repository as auth_repo
 from app.auth.models import AuthPrincipal
 from app.common import errors
 from app.common.paging import PageQuery, PageResponse
+from app.config import settings
 from app.db import fetch_all
 from app.rag import indexing
-from app.standard import mapping, repository
-from app.standard.models import RequirementResponse, SourceRef
+from app.standard import mapping, repository, work_product_type
+from app.standard.models import (
+    RequirementResponse,
+    SourceRef,
+    WorkProductChecklistResponse,
+    WorkProductResponse,
+)
 
 
 @dataclass
@@ -61,6 +69,15 @@ def promote_connection(cur: Any, connection: dict[str, Any], port: EmbeddingPort
                     uri=rec["external_url"],
                 )
             )
+        elif kind == "file":
+            product_type = settings.collect_file_map.get(payload.get("path", ""))
+            rec = mapping.to_work_product(payload, product_type) if product_type else None
+            if rec is None:
+                result.unmapped += 1
+                continue
+            _store_file(project_id, payload)
+            repository.upsert_work_product(cur, project_id, connection_id, external_id, rec)
+            target = "WORK_PRODUCT"
         else:
             rec = mapping.to_code_change(kind, payload)
             if rec is None:
@@ -141,3 +158,63 @@ def list_requirements(
         for r in rows
     ]
     return PageResponse.of(content, page, total)
+
+
+def _store_file(project_id: str, payload: dict[str, Any]) -> None:
+    """수집한 파일 본문을 업로드 문서와 같은 자리에 둔다.
+
+    WBS 파서가 읽을 실체가 있어야 한다. 경로는 sha 로 잡아 같은 내용을 두 번 쓰지 않는다.
+    """
+    encoded = payload.get("content")
+    sha = payload.get("sha")
+    if not encoded or not sha:
+        return
+    suffix = Path(payload.get("path", "")).suffix
+    target = Path(settings.document_root) / project_id / "repo" / f"{sha}{suffix}"
+    if target.exists():
+        return
+    target.parent.mkdir(parents=True, exist_ok=True)
+    target.write_bytes(base64.b64decode(encoded))
+
+
+def _iso(value: Any) -> str | None:
+    return value.isoformat() if value else None
+
+
+def work_product_checklist(
+    cur: Any, principal: AuthPrincipal, project_id: str
+) -> WorkProductChecklistResponse:
+    allowed = auth_repo.allowed_project_ids(
+        cur, principal.role, principal.org_id, principal.user_id
+    )
+    if project_id not in allowed:
+        raise errors.project_access_denied()
+
+    rows = repository.list_work_products(cur, project_id)
+    items = [
+        WorkProductResponse(
+            id=str(r["id"]),
+            projectId=str(r["project_id"]),
+            type=r["type"],
+            displayName=work_product_type.display_name(r["type"]),
+            title=r["title"],
+            version=r["version"],
+            status=r["status"],
+            pmActivity=r["pm_activity"],
+            siActivity=r["si_activity"],
+            applicable=r["applicable"],
+            dueDate=_iso(r["due_date"]),
+            fileUri=r["file_uri"],
+            externalUrl=r["external_url"],
+            approvedBy=r["approved_by"],
+            approvedAt=_iso(r["approved_at"]),
+            updatedAt=r["updated_at"].isoformat(),
+        )
+        for r in rows
+    ]
+    return WorkProductChecklistResponse(
+        projectId=project_id,
+        approvedCount=sum(1 for i in items if i.status == "APPROVED"),
+        totalCount=len(items),
+        items=items,
+    )

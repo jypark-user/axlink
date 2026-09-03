@@ -97,3 +97,25 @@ def test_merged_pull_request_state():
 
 def test_commit_without_time_is_dropped():
     assert mapping.to_code_change("commit", {"sha": "x", "commit": {}}) is None
+
+
+def test_repo_file_becomes_work_product():
+    """저장소에서 가져온 파일이 산출물 자리를 채운다 — 아무도 업로드하지 않았다."""
+    rec = mapping.to_work_product(
+        {
+            "path": "docs/00-management/WBS.xlsx",
+            "sha": "28b2a04c385a1f9d0c",
+            "size": 7000,
+            "htmlUrl": "https://github.com/o/r/blob/main/docs/00-management/WBS.xlsx",
+        },
+        "PROJECT_PLAN",
+    )
+    assert rec["type"] == "PROJECT_PLAN"
+    assert rec["title"] == "WBS.xlsx"
+    assert rec["file_uri"] == "docs/00-management/WBS.xlsx"
+    # 버전은 blob sha 앞자리다 — 사람이 손으로 올리지 않아도 내용이 바뀌면 달라진다.
+    assert rec["version"] == "28b2a04c385a"
+
+
+def test_file_without_path_is_dropped():
+    assert mapping.to_work_product({"sha": "abc"}, "PROJECT_PLAN") is None

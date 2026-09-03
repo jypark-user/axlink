@@ -23,3 +23,31 @@ class RequirementResponse(BaseModel):
     source: SourceRef
     traceComplete: bool  # noqa: N815
     updatedAt: str  # noqa: N815
+
+
+class WorkProductResponse(BaseModel):
+    id: str
+    projectId: str  # noqa: N815
+    type: str
+    displayName: str  # noqa: N815 — 유형의 한글 이름. 화면에 코드가 노출되지 않게 서버가 준다
+    title: str | None
+    version: str | None
+    status: str
+    pmActivity: str | None  # noqa: N815
+    siActivity: str | None  # noqa: N815
+    applicable: bool
+    dueDate: str | None  # noqa: N815
+    fileUri: str | None  # noqa: N815
+    externalUrl: str | None  # noqa: N815
+    approvedBy: str | None  # noqa: N815
+    approvedAt: str | None  # noqa: N815
+    updatedAt: str  # noqa: N815
+
+
+class WorkProductChecklistResponse(BaseModel):
+    """산출물 체크리스트. 22종 자리가 미리 있고 수집·업로드가 그 자리를 채운다."""
+
+    projectId: str  # noqa: N815
+    approvedCount: int  # noqa: N815
+    totalCount: int  # noqa: N815
+    items: list[WorkProductResponse]
