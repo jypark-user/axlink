@@ -2,7 +2,7 @@
 """
 docs/traceability.csv 생성기.
 
-git 커밋 메시지의 [REQ-###] 태그와 docs/ 산출물 헤딩의 ID를 파싱해
+git 커밋 메시지의 [SWFR.CON.001] 태그와 docs/ 산출물의 ID를 파싱해
 요구사항 -> 설계 -> 시험 -> 이슈 -> 커밋 추적표를 만든다.
 
 자기참조(dogfooding)의 핵심 도구다. 이 스크립트가 빈 표를 뱉으면
@@ -25,20 +25,28 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parent.parent
 DOCS = ROOT / "docs"
 OUT = DOCS / "traceability.csv"
+REQUIREMENTS = DOCS / "10-requirements" / "IM-001-요구사항정의서.md"
+# 파일럿 원본은 참고자료지 납품 산출물이 아니다(CLAUDE.md 1절). 추적표에 섞지 않는다.
+EXCLUDED = {"90-pilot"}
 
-# 설계 접두는 CLAUDE.md §2 가 정한 ARC 다. DSN 은 파일럿 시절 표기라 읽기만 하고 새로 쓰지 않는다.
-ID_RE = re.compile(r"\b(REQ|ARC|DSN|TST|RSK|DEF)-(\d{3})\b")
+# 요구사항 축은 IM-001 의 코드 체계를 쓴다. 근거는 ARC-002.
+#   SWFR = 소프트웨어 / QUR = 품질 / SER = 보안·기타 / SFR = 상위 과업 항목
+REQ_RE = re.compile(r"\b((?:SWFR|QUR|SER)\.[A-Z]{3}\.\d{3})\b")
+TASK_RE = re.compile(r"\b(SFR\.[A-Z]{3}\.\d{3})\b")
+# 설계·시험 축. DSN 은 파일럿 시절 표기라 읽기만 하고 새로 쓰지 않는다.
+ARTIFACT_RE = re.compile(r"\b((?:ARC|DSN|TST|RSK|DEF)-\d{3})\b")
 # 도구별 접두 필수: GH-23 (GitHub) / RM-204 (Redmine).
 # 맨 "#17"은 규약 위반 — 도구 구분이 안 되고, Redmine이 자기 이슈로 오인한다.
 ISSUE_RE = re.compile(r"\b(GH|RM)-(\d+)\b")
 BARE_ISSUE_RE = re.compile(r"(?:Refs|Closes|Fixes):?\s*#\d+", re.IGNORECASE)
-# scope 목록은 CLAUDE.md 3절이 기준이다. 파일럿 시절 파서(connectors/pipeline/templates/web)가
-# 헌법과 어긋나 있어 맞춘다.
+# scope 목록은 CLAUDE.md 3절이 기준이다.
 SUBJECT_RE = re.compile(
     r"^(feat|fix|docs|test|refactor|chore|perf)"
     r"\((auth|org|project|integration|standard|dashboard|rag|document"
     r"|ai|semantic|frontend|infra|docs)\):\s+.+"
 )
+# IM-001 요구사항 표의 행. | SWFR.CON.001 | 커넥터는 ... | 필수 | R·D | S2-2 |
+ROW_RE = re.compile(r"^\|\s*((?:SWFR|QUR|SER)\.[A-Z]{3}\.\d{3})\s*\|\s*(.+?)\s*\|")
 FIELDS = [
     "req_id", "req_title", "task_item", "design_id", "test_id",
     "issue_no", "commit_sha", "status", "updated_at",
@@ -46,13 +54,51 @@ FIELDS = [
 
 
 def git(*args: str) -> str:
-    return subprocess.run(
-        ["git", *args], cwd=ROOT, capture_output=True, text=True, check=False
-    ).stdout
+    """git 출력을 UTF-8 로 읽는다. 로캘에 맡기면 Windows(cp949)에서 깨진다."""
+    proc = subprocess.run(
+        ["git", *args],
+        cwd=ROOT,
+        capture_output=True,
+        check=False,
+        encoding="utf-8",
+        errors="replace",
+    )
+    return proc.stdout or ""
 
 
-def scan_commits() -> tuple[dict[str, set], dict[str, set], list[str]]:
-    """커밋을 훑어 REQ별 커밋/이슈를 모으고 규약 위반을 수집한다."""
+def markdown_files() -> list[Path]:
+    return sorted(
+        md for md in DOCS.rglob("*.md")
+        if not EXCLUDED.intersection(md.relative_to(DOCS).parts)
+    )
+
+
+def scan_requirements() -> tuple[dict[str, str], dict[str, str]]:
+    """요구사항정의서에서 요구사항 제목과 상위 과업 항목을 읽는다."""
+    titles: dict[str, str] = {}
+    tasks: dict[str, str] = {}
+    if not REQUIREMENTS.exists():
+        return titles, tasks
+
+    current_task = ""
+    for line in REQUIREMENTS.read_text(encoding="utf-8").splitlines():
+        if line.lstrip().startswith("#"):
+            found = TASK_RE.search(line)
+            if found:
+                current_task = found.group(1)
+            continue
+        row = ROW_RE.match(line.strip())
+        if not row:
+            continue
+        rid, title = row.group(1), row.group(2)
+        titles[rid] = title.replace("**", "").strip()
+        tasks[rid] = current_task
+
+    return titles, tasks
+
+
+def scan_commits(known: set[str]) -> tuple[dict[str, set], dict[str, set], list[str]]:
+    """커밋을 훑어 요구사항별 커밋·이슈를 모으고 규약 위반을 수집한다."""
     raw = git("log", "--no-merges", "--pretty=format:%H%x1f%s%x1f%b%x1e")
     by_req_commit: dict[str, set] = defaultdict(set)
     by_req_issue: dict[str, set] = defaultdict(set)
@@ -67,9 +113,15 @@ def scan_commits() -> tuple[dict[str, set], dict[str, set], list[str]]:
         if not SUBJECT_RE.match(subject):
             violations.append(f"{sha[:8]} 커밋 제목 규약 위반: {subject}")
 
-        ids = ID_RE.findall(subject)
-        if not ids and "[chore]" not in subject:
+        reqs = REQ_RE.findall(subject)
+        artifacts = ARTIFACT_RE.findall(subject)
+        if not reqs and not artifacts and "[chore]" not in subject:
             violations.append(f"{sha[:8]} 추적 ID 누락: {subject}")
+
+        # 요구사항정의서에 없는 코드는 오타다. 조용히 넘기면 추적표에 유령 행이 생긴다.
+        for rid in reqs:
+            if known and rid not in known:
+                violations.append(f"{sha[:8]} 정의되지 않은 요구사항 ID {rid}: {subject}")
 
         full = f"{subject}\n{body}"
         if BARE_ISSUE_RE.search(full):
@@ -78,49 +130,63 @@ def scan_commits() -> tuple[dict[str, set], dict[str, set], list[str]]:
             )
 
         issues = {f"{p}-{n}" for p, n in ISSUE_RE.findall(full)}
-        for prefix, num in ids:
-            if prefix != "REQ":
-                continue
-            key = f"REQ-{num}"
-            by_req_commit[key].add(sha[:8])
-            by_req_issue[key].update(issues)
+        for rid in reqs:
+            by_req_commit[rid].add(sha[:8])
+            by_req_issue[rid].update(issues)
 
     return by_req_commit, by_req_issue, violations
 
 
-def scan_docs() -> tuple[dict[str, str], dict[str, set], dict[str, set]]:
-    """docs/ 마크다운에서 REQ 제목과 REQ<->DSN/TST 연결을 읽는다."""
-    titles: dict[str, str] = {}
+def scan_docs(known: set[str]) -> tuple[dict[str, set], dict[str, set], list[str]]:
+    """docs/ 마크다운에서 요구사항 <-> 설계·시험 연결을 읽는다.
+
+    문서가 자기 ID를 첫 헤딩에 달고 있으면(ARC-002 같은 설계 결정 기록) 그 문서가
+    언급한 요구사항 전부에 연결한다. 그 외에는 같은 줄에 함께 나온 것만 연결한다 —
+    한 문서에 있다는 이유만으로 엮으면 근거 없는 추적관계가 된다(QUR.PIP.001).
+    """
     designs: dict[str, set] = defaultdict(set)
     tests: dict[str, set] = defaultdict(set)
+    violations: list[str] = []
 
-    for md in sorted(DOCS.rglob("*.md")):
-        current_req: str | None = None
-        for line in md.read_text(encoding="utf-8", errors="ignore").splitlines():
-            found = ID_RE.findall(line)
-            if not found:
+    def link(rid: str, ids: set[str]) -> None:
+        designs[rid].update(i for i in ids if i.startswith(("ARC-", "DSN-")))
+        tests[rid].update(i for i in ids if i.startswith("TST-"))
+
+    for md in markdown_files():
+        lines = md.read_text(encoding="utf-8", errors="ignore").splitlines()
+        heading = next((ln for ln in lines if ln.startswith("# ")), "")
+        own = set(ARTIFACT_RE.findall(heading))
+
+        rel = md.relative_to(ROOT).as_posix()
+        for no, line in enumerate(lines, 1):
+            reqs = set(REQ_RE.findall(line))
+            if not reqs:
                 continue
-            reqs = [f"REQ-{n}" for p, n in found if p == "REQ"]
-            if reqs:
-                current_req = reqs[0]
-                if line.lstrip().startswith("#"):
-                    titles[current_req] = re.sub(
-                        r"^#+\s*|\bREQ-\d{3}\b[\s:.-]*", "", line
-                    ).strip()
-            if current_req:
-                designs[current_req].update(f"DSN-{n}" for p, n in found if p == "DSN")
-                tests[current_req].update(f"TST-{n}" for p, n in found if p == "TST")
+            inline = set(ARTIFACT_RE.findall(line))
+            for rid in sorted(reqs):
+                if known and rid not in known:
+                    violations.append(f"{rel}:{no} 정의되지 않은 요구사항 ID {rid}")
+                    continue
+                link(rid, own | inline)
 
-    return titles, designs, tests
+    return designs, tests, violations
 
 
 def main() -> int:
+    # Windows 콘솔은 cp949 라 한글·em dash 출력에서 죽는다.
+    for stream in (sys.stdout, sys.stderr):
+        if hasattr(stream, "reconfigure"):
+            stream.reconfigure(encoding="utf-8", errors="replace")
+
     ap = argparse.ArgumentParser()
     ap.add_argument("--check", action="store_true", help="규약 검사만 수행 (CI)")
     args = ap.parse_args()
 
-    commits, issues, violations = scan_commits()
-    titles, designs, tests = scan_docs()
+    titles, tasks = scan_requirements()
+    known = set(titles)
+    commits, issues, violations = scan_commits(known)
+    designs, tests, doc_violations = scan_docs(known)
+    violations += doc_violations
 
     if args.check:
         for v in violations:
@@ -128,7 +194,7 @@ def main() -> int:
         print(f"검사 완료 — 위반 {len(violations)}건", file=sys.stderr)
         return 1 if violations else 0
 
-    req_ids = sorted(set(commits) | set(titles) | set(designs) | set(tests))
+    req_ids = sorted(set(titles) | set(commits) | set(designs) | set(tests))
     today = date.today().isoformat()
 
     OUT.parent.mkdir(parents=True, exist_ok=True)
@@ -139,7 +205,7 @@ def main() -> int:
             w.writerow({
                 "req_id": rid,
                 "req_title": titles.get(rid, ""),
-                "task_item": "",
+                "task_item": tasks.get(rid, ""),
                 "design_id": " ".join(sorted(designs.get(rid, []))),
                 "test_id": " ".join(sorted(tests.get(rid, []))),
                 "issue_no": " ".join(sorted(issues.get(rid, []))),
@@ -148,7 +214,11 @@ def main() -> int:
                 "updated_at": today,
             })
 
-    print(f"{OUT.relative_to(ROOT)} 생성 — 요구사항 {len(req_ids)}건, 규약위반 {len(violations)}건")
+    covered = sum(1 for rid in req_ids if commits.get(rid))
+    print(
+        f"{OUT.relative_to(ROOT)} 생성 — 요구사항 {len(req_ids)}건 "
+        f"(커밋 연결 {covered}건), 규약위반 {len(violations)}건"
+    )
     for v in violations:
         print(f"  [규약위반] {v}")
     return 0
