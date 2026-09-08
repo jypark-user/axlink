@@ -98,7 +98,9 @@ def test_오타난_요구사항_ID_는_커밋에서도_걸린다(monkeypatch):
 def test_정의되지_않은_ID_는_문서에서도_걸린다(tmp_path, monkeypatch):
     doc = tmp_path / "20-design" / "임시.md"
     doc.parent.mkdir(parents=True)
-    doc.write_text("# 임시 ARC-009\n\n`SWFR.CON.004` 와 `SWFR.CON.099` 를 다룬다.\n", encoding="utf-8")
+    doc.write_text(
+        "# 임시 ARC-009\n\n`SWFR.CON.004` 와 `SWFR.CON.099` 를 다룬다.\n", encoding="utf-8"
+    )
     monkeypatch.setattr(tr, "DOCS", tmp_path)
     monkeypatch.setattr(tr, "ROOT", tmp_path)
 
