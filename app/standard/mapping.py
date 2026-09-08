@@ -146,11 +146,14 @@ def to_work_product(payload: dict[str, Any], product_type: str) -> dict[str, Any
     path = payload.get("path")
     if not path:
         return None
+    sha = payload.get("sha") or "0"
     return {
         "type": product_type,
         "title": path.rsplit("/", 1)[-1],
         "file_uri": path,
         "external_url": payload.get("htmlUrl"),
         # 내용이 바뀌면 sha 가 바뀐다. 버전 표기를 사람이 손대지 않아도 된다.
-        "version": (payload.get("sha") or "0")[:12],
+        "version": sha[:12],
+        # 보관된 원본은 전체 sha 로 이름 지어져 있다. 짧은 표기로는 도달하지 못한다.
+        "source_revision": sha,
     }
