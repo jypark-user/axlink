@@ -13,7 +13,7 @@ jobs:
       - uses: actions/checkout@v4
         with: { fetch-depth: 0 }
       - uses: actions/setup-python@v5
-        with: { python-version: "3.11" }
+        with: { python-version: "3.12" }
       - name: 커밋 메시지 규약 검사
         run: python scripts/build_traceability.py --check
       - name: 추적표 갱신 확인
@@ -21,3 +21,18 @@ jobs:
           python scripts/build_traceability.py
           git diff --exit-code docs/traceability.csv \
             || echo "::warning::traceability.csv 가 최신이 아닙니다. 재생성 후 커밋하세요."
+
+  test:
+    name: 테스트
+    runs-on: ubuntu-latest
+    steps:
+      # 규약 시험이 커밋 이력을 훑으므로 얕은 클론이면 안 된다.
+      - uses: actions/checkout@v4
+        with: { fetch-depth: 0 }
+      - uses: actions/setup-python@v5
+        with: { python-version: "3.12" }
+      - name: 의존성 설치
+        run: pip install -e ".[dev]"
+      - name: pytest
+        # DB·로컬 모델이 필요한 시험은 conftest 가 알아서 skip 한다.
+        run: pytest -q
