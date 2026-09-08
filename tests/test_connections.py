@@ -232,6 +232,8 @@ def test_backfill_ingests_raw_artifacts(client, as_pm, monkeypatch):
         # pull_request 는 없음
 
     monkeypatch.setattr(github, "fetch_items", fake_fetch)
+    # 저장소 파일 수집은 이 시험의 관심사가 아니다 — 실제 GitHub 을 치지 않게 막는다.
+    monkeypatch.setattr(github, "fetch_file", lambda *a, **k: None)
 
     cid = client.post(
         f"/api/projects/{PID}/connections", json=_create_body(), headers=_auth(token)
@@ -277,6 +279,7 @@ def test_backfill_tolerates_missing_permission(client, as_pm, monkeypatch):
             yield "commit:abc", {"sha": "abc", "commit": {"message": "커밋"}}
 
     monkeypatch.setattr(github, "fetch_items", fetch_with_denied)
+    monkeypatch.setattr(github, "fetch_file", lambda *a, **k: None)
 
     cid = client.post(
         f"/api/projects/{PID}/connections", json=_create_body(), headers=_auth(token)

@@ -11,20 +11,24 @@ from contextlib import asynccontextmanager
 from fastapi import FastAPI
 from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
+from starlette.exceptions import HTTPException as StarletteHTTPException
 
 from app.ai.embedding import embedding_port
 from app.auth.router import router as auth_router
 from app.common.errors import (
     ApiError,
     api_error_handler,
+    http_error_handler,
     unhandled_error_handler,
     validation_error_handler,
 )
 from app.config import settings
 from app.db import close_pool, pool, tx
+from app.document.router import router as document_router
 from app.integration.router import router as integration_router
 from app.project.router import router as project_router
 from app.rag.indexing import verify_dimension
+from app.standard.router import router as standard_router
 
 
 @asynccontextmanager
@@ -52,11 +56,14 @@ app.add_middleware(
 
 app.add_exception_handler(ApiError, api_error_handler)
 app.add_exception_handler(RequestValidationError, validation_error_handler)
+app.add_exception_handler(StarletteHTTPException, http_error_handler)
 app.add_exception_handler(Exception, unhandled_error_handler)
 
 app.include_router(auth_router)
 app.include_router(project_router)
 app.include_router(integration_router)
+app.include_router(document_router)
+app.include_router(standard_router)
 
 
 @app.get("/api/health", tags=["health"])

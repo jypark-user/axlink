@@ -1,4 +1,4 @@
-"""환경변수 설정. 시크릿은 코드에 두지 않는다 (CLAUDE.md 4절)."""
+"""환경변수 설정. 시크릿은 코드에 두지 않는다 (작업 규약 §4)."""
 
 from datetime import timedelta
 
@@ -37,6 +37,16 @@ class Settings(BaseSettings):
     embedding_batch: int = 32
     embedding_timeout: float = 120.0  # 배치 임베딩은 커넥터 호출보다 오래 걸린다
 
+    # 저장소에서 함께 수집할 산출물 파일. "경로=산출물유형" 을 쉼표로 잇는다.
+    # WBS 는 도구가 아니라 커밋된 파일로 관리하므로(작업 규약 §2) 여기를 거쳐 들어온다.
+    collect_files: str = "docs/00-management/WBS.xlsx=PROJECT_PLAN"
+    # 파일을 읽을 브랜치. 비우면 저장소 기본 브랜치를 본다.
+    collect_ref: str = ""
+
+    # 업로드 문서 원본 보관 위치. 폐쇄망 온프레미스라 오브젝트 스토리지를 전제하지 않는다.
+    # 운영에서는 NAS 마운트 경로를 AXLINK_DOCUMENT_ROOT 로 준다.
+    document_root: str = "var/documents"
+
     # 청킹 파라미터 (파일럿 설계 03-physical-backend §6.1)
     chunk_target_tokens: int = 800
     chunk_min_tokens: int = 200
@@ -50,6 +60,12 @@ class Settings(BaseSettings):
     @property
     def refresh_ttl(self) -> timedelta:
         return timedelta(days=self.refresh_ttl_days)
+
+    @property
+    def collect_file_map(self) -> dict[str, str]:
+        """{저장소 경로: 산출물 유형}. 빈 설정이면 파일을 수집하지 않는다."""
+        pairs = (item.split("=", 1) for item in self.collect_files.split(",") if "=" in item)
+        return {path.strip(): kind.strip() for path, kind in pairs if path.strip()}
 
     @property
     def cors_origin_list(self) -> list[str]:

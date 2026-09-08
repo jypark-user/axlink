@@ -1,6 +1,6 @@
 """GitHub 원본 → 표준 모델 매핑. 순수 함수만 둔다(DB·네트워크 없음).
 
-우리 저장소는 요구사항 41건을 GitHub 이슈로 관리한다(CLAUDE.md 2절). 그래서 이슈가
+우리 저장소는 요구사항 41건을 GitHub 이슈로 관리한다(작업 규약 §2). 그래서 이슈가
 두 갈래로 갈린다 — 「유형: 요구사항」 라벨이 붙은 것은 requirement, 나머지는 issue.
 GitHub 만 쓰는 용역업체 케이스가 그대로 여기서 성립한다.
 """
@@ -135,3 +135,22 @@ def _login(user: Any) -> str | None:
     if isinstance(user, dict):
         return user.get("login") or user.get("name")
     return None
+
+
+def to_work_product(payload: dict[str, Any], product_type: str) -> dict[str, Any] | None:
+    """저장소에서 가져온 파일을 산출물로 옮긴다.
+
+    산출물 목록에는 자리가 미리 있고(ISO/IEC 29110 관리객체), 수집이 그 자리를 채운다.
+    파일이 실제로 올라와 있다는 것이 곧 제출의 근거다 — SWFR.PIP.009.
+    """
+    path = payload.get("path")
+    if not path:
+        return None
+    return {
+        "type": product_type,
+        "title": path.rsplit("/", 1)[-1],
+        "file_uri": path,
+        "external_url": payload.get("htmlUrl"),
+        # 내용이 바뀌면 sha 가 바뀐다. 버전 표기를 사람이 손대지 않아도 된다.
+        "version": (payload.get("sha") or "0")[:12],
+    }

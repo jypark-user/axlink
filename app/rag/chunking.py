@@ -33,6 +33,23 @@ _KOREAN_HEADING = re.compile(r"^(제\s*\d+\s*([장절]))\s*(.*)$")
 _NUMBERED_HEADING = re.compile(r"^(\d+(?:\.\d+)*)\.?\s+(\S.*)$")
 _SENTENCE_BREAK = re.compile(r"(?<=[.!?。])\s+|\n{2,}")
 
+# "1." "가." "비고  1." 처럼 항목 번호로 끝나는 조각. 공문서는 본문에도 번호를 다는데,
+# 그 마침표에서 끊으면 원문 한 줄이 파편으로 흩어진다. 정규식에 예외를 계속 붙이는
+# 대신, 끊긴 뒤 되붙이는 규칙 하나로 처리한다.
+#
+# 번호 앞이 공백이거나 줄 시작이어야 한다 — 이 조건이 "…한다." 같은 정상 종결을 지킨다
+# ("다" 앞은 "한" 이라 걸리지 않는다).
+_TRAILING_LABEL = re.compile(r"(?:^|\s)(?:\d+|[가-힣]|[a-zA-Z]|[ivxIVX]+)\.$")
+
+# 목차 줄 — "3. 계약사항 <탭> <마커> <탭> 44" 꼴로 페이지 번호가 끝에 붙는다.
+# 본문에 같은 제목이 다시 나오므로 목차를 표제로 삼으면 경로가 둘로 갈리고,
+# 제목 한 줄짜리 빈 청크가 생겨 검색에서 정작 답이 있는 본문을 밀어낸다.
+_TOC_LINE = re.compile(r"[\t.·…]\s*\d{1,4}$")
+
+# 공문서는 본문에도 번호를 단다. 명사형·종결형으로 끝나면 표제가 아니라 문장으로 본다.
+_SENTENCE_TAIL = (".", "다", "요", "함", "음", "됨", "임")
+_MAX_HEADING_CHARS = 60
+
 
 @dataclass
 class ChunkDraft:
@@ -108,7 +125,7 @@ def _split_sections(text: str) -> list[tuple[list[str], str]]:
 
 def _parse_heading(line: str) -> tuple[int, str] | None:
     stripped = line.strip()
-    if not stripped:
+    if not stripped or _TOC_LINE.search(stripped):
         return None
 
     md = _MARKDOWN_HEADING.match(stripped)
@@ -121,8 +138,8 @@ def _parse_heading(line: str) -> tuple[int, str] | None:
         return level, stripped
 
     num = _NUMBERED_HEADING.match(stripped)
-    # "1. 개요" 는 표제지만 "2026. 8. 29 회의" 같은 줄까지 표제로 보면 안 된다.
-    if num and len(stripped) <= 120 and not stripped.endswith((".", "다", "요")):
+    # "1. 개요" 는 표제지만 "2026. 8. 29 회의" 나 "1. … 부과함" 은 표제가 아니다.
+    if num and len(stripped) <= _MAX_HEADING_CHARS and not stripped.endswith(_SENTENCE_TAIL):
         return num.group(1).count(".") + 1, stripped
 
     return None
@@ -135,7 +152,9 @@ def _pack(text: str) -> list[str]:
     minimum = settings.chunk_min_tokens
     overlap = int(target * settings.chunk_overlap_ratio)
 
-    sentences = [s.strip() for s in _SENTENCE_BREAK.split(text) if s and s.strip()]
+    sentences = _rejoin_labels(
+        [s.strip() for s in _SENTENCE_BREAK.split(text) if s and s.strip()]
+    )
     if not sentences:
         return []
 
@@ -156,6 +175,10 @@ def _pack(text: str) -> list[str]:
             chunks.append(current)
             current = _overlap_tail(current, overlap)
             current_tokens = sum(estimate_tokens(s) for s in current)
+            if current_tokens + tokens > maximum:
+                # 꼬리 문장이 커서 오버랩만으로 최대치를 넘길 판이면 꼬리를 버린다.
+                # 문맥을 조금 잃더라도 청크 크기 계약이 먼저다 — 임베딩 품질이 걸려 있다.
+                current, current_tokens = [], 0
         current.append(sentence)
         current_tokens += tokens
 
@@ -163,6 +186,25 @@ def _pack(text: str) -> list[str]:
         chunks.append(current)
 
     return _merge_short_tail(chunks, minimum, maximum)
+
+
+def _rejoin_labels(sentences: list[str]) -> list[str]:
+    """번호만 남은 조각을 다음 문장에 되붙인다.
+
+    "비고  1. 소프트웨어기술자란 …" 이 "비고  1." 과 "소프트웨어기술자란 …" 으로
+    갈리면 원문 한 줄이 파편이 된다. 검색에서도 "1." 만 든 조각은 쓸모가 없다.
+    """
+    out: list[str] = []
+    pending = ""
+    for sentence in sentences:
+        if _TRAILING_LABEL.search(sentence):
+            pending = f"{pending} {sentence}" if pending else sentence
+            continue
+        out.append(f"{pending} {sentence}" if pending else sentence)
+        pending = ""
+    if pending:
+        out.append(pending)
+    return out
 
 
 def _overlap_tail(sentences: list[str], overlap_tokens: int) -> list[str]:

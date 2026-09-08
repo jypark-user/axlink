@@ -5,6 +5,7 @@ verify: 저장소에 닿는지 + 각 항목(커밋·이슈·PR)을 실제로 읽
 fetch:  BACKFILL 이 항목종류별로 페이지를 돌며 원본을 가져온다.
 """
 
+import base64
 from collections.abc import Iterator
 from dataclasses import dataclass, field
 
@@ -132,6 +133,57 @@ def fetch_items(
                 yield _external_id(kind, item), item
             if len(batch) < per_page:
                 return
+
+
+def fetch_file(
+    base_url: str, target_resource: str, token: str, path: str, ref: str | None = None
+) -> dict | None:
+    """저장소의 파일 하나를 가져온다. 없으면 None.
+
+    WBS 는 도구가 아니라 저장소에 커밋된 파일로 관리한다(작업 규약 §2).
+    GitHub 만 쓰는 업체도 파일만 올려 두면 진척 산정이 성립하려면 이 경로가 필요하다.
+
+    돌려주는 dict 는 raw_artifact.payload_jsonb 에 그대로 들어간다 — 바이트는 뺀다.
+    """
+    headers = _headers(token)
+    url = f"{_repo_url(base_url, target_resource)}/contents/{path.lstrip('/')}"
+    # ref 를 안 주면 저장소 기본 브랜치를 본다. 업체가 develop 을 쓰면 여기로 지정한다.
+    params = {"ref": ref} if ref else None
+    with httpx.Client(timeout=settings.connector_timeout) as client:
+        res = _get(client, url, headers, params)
+        if res.status_code == 404:
+            return None  # 아직 안 올렸을 수 있다. 실패가 아니라 없는 것이다.
+        if res.status_code == 403 and res.headers.get("X-RateLimit-Remaining") == "0":
+            raise errors.ApiError(429, "TOOL_RATE_LIMITED", "GitHub 레이트리밋에 걸렸습니다.")
+        if res.status_code >= 400:
+            raise errors.ApiError(502, "TOOL_UNREACHABLE", f"GitHub 오류 {res.status_code}")
+
+        meta = res.json()
+        if meta.get("type") != "file":
+            raise errors.ApiError(400, "TOOL_NOT_FOUND", f"파일이 아닙니다: {path}")
+
+        blob = _file_bytes(client, headers, meta)
+        return {
+            "path": meta.get("path", path),
+            "sha": meta.get("sha"),
+            "size": meta.get("size", len(blob)),
+            "htmlUrl": meta.get("html_url"),
+            "content": base64.b64encode(blob).decode("ascii"),
+        }
+
+
+def _file_bytes(client: httpx.Client, headers: dict[str, str], meta: dict) -> bytes:
+    """1MB 를 넘으면 contents 응답에 본문이 없다. 그때는 download_url 로 받는다."""
+    encoded = meta.get("content")
+    if encoded and meta.get("encoding") == "base64":
+        return base64.b64decode(encoded)
+    url = meta.get("download_url")
+    if not url:
+        raise errors.ApiError(502, "TOOL_UNREACHABLE", "파일 본문을 받을 수 없습니다.")
+    res = _get(client, url, headers)
+    if res.status_code >= 400:
+        raise errors.ApiError(502, "TOOL_UNREACHABLE", f"파일 내려받기 실패 {res.status_code}")
+    return res.content
 
 
 def _external_id(kind: str, item: dict) -> str:

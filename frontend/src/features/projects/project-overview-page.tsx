@@ -186,9 +186,13 @@ export function ProjectOverviewPage(): ReactNode {
 }
 
 /** 아직 읽는 중인 상태 — 하나라도 남아 있으면 목록을 다시 읽는다. */
-const READING: DocumentStatus[] = ['UPLOADED', 'EXTRACTED'];
-/** 색인이 끝나 근거로 쓸 수 있는 상태. */
-const INDEXED: DocumentStatus[] = ['STRUCTURED', 'CONFIRMED'];
+const READING: DocumentStatus[] = ['UPLOADED'];
+/**
+ * 색인이 끝나 근거로 쓸 수 있는 상태.
+ * 업로드 시점에 본문을 읽고 바로 색인하므로 EXTRACTED 부터 원문을 펼 수 있다.
+ * STRUCTURED·CONFIRMED 는 정형화까지 끝난 상태로, 읽기에는 차이가 없다.
+ */
+const INDEXED: DocumentStatus[] = ['EXTRACTED', 'STRUCTURED', 'CONFIRMED'];
 const POLL_MS = 3000;
 /** 한 쪽에 담는 본문 조각 수 — 너무 많으면 읽기 버겁다. */
 /** 본문은 읽는 화면이라 쪽을 넘기지 않고 이어 붙인다 — 한 번에 이만큼씩 더 가져온다. */

@@ -7,8 +7,8 @@ body:
     attributes:
       value: |
         **요구사항 이슈는 여기서 만들지 않는다.**
-        요구사항은 `docs/10-requirements/IM-001-요구사항정의서.md` 에서
-        `scripts/github/gen_bootstrap.py` 가 생성한다. 문서를 먼저 고친다.
+        요구사항의 단일 진실 원천은 `docs/10-requirements/IM-001-요구사항정의서.md` 다.
+        문서를 먼저 고친다.
   - type: input
     id: reqref
     attributes:
