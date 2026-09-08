@@ -46,4 +46,9 @@ select = ["E", "F", "I", "UP", "B", "SIM"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
-filterwarnings = ["error::DeprecationWarning"]
+filterwarnings = [
+  "error::DeprecationWarning",
+  # starlette 가 내부에서 anyio 의 옛 별칭을 쓴다. 우리 코드로는 못 고치고,
+  # 이것 때문에 testclient import 부터 죽는다. 우리 코드의 경고만 오류로 본다.
+  "ignore:The anyio.abc.BlockingPortal alias is deprecated:DeprecationWarning",
+]
