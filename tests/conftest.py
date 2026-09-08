@@ -10,6 +10,8 @@ DB 가 없으면 해당 테스트는 skip 된다 — CI 환경별로 갈리지 �
 들어 있는 DB 라면 AXLINK_DATABASE_URL 로 시험용 DB 를 가리키고 돌린다.
 """
 
+from urllib.parse import urlparse
+
 import psycopg
 import pytest
 from fastapi.testclient import TestClient
@@ -21,6 +23,11 @@ from app.main import app
 settings.embedding_provider = "fake"
 
 
+def _is_test_db() -> bool:
+    """데이터베이스 이름이 _test 로 끝날 때만 시험용으로 인정한다."""
+    return urlparse(settings.database_url).path.rstrip("/").endswith("_test")
+
+
 def _db_reachable() -> bool:
     try:
         psycopg.connect(settings.database_url, connect_timeout=3).close()
@@ -29,7 +36,14 @@ def _db_reachable() -> bool:
         return False
 
 
-requires_db = pytest.mark.skipif(not _db_reachable(), reason="DB(docker compose)가 필요하다")
+# 경고만으로는 두 번 못 막았다 — 08.31 과 09.08 두 번 개발 DB 의 수집분이 지워졌다.
+# 이름이 _test 로 끝나지 않는 DB 에는 아예 붙지 않는다.
+if not _is_test_db():
+    requires_db = pytest.mark.skip(
+        reason="시험용 DB 가 아니다 — AXLINK_DATABASE_URL 이 *_test 를 가리켜야 돈다 (로컬-실행.md)"
+    )
+else:
+    requires_db = pytest.mark.skipif(not _db_reachable(), reason="DB(docker compose)가 필요하다")
 
 
 @pytest.fixture(scope="session")
