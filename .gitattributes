@@ -12,9 +12,6 @@
 *.cmd  text eol=crlf
 *.ps1  text eol=crlf
 
-# Gradle 래퍼 — LF 가 아니면 Linux/CI 에서 실행되지 않는다
-gradlew        text eol=lf
-gradlew.bat    text eol=crlf
 *.sh           text eol=lf
 
 # ── 바이너리 ────────────────────────────────────────────────
@@ -50,4 +47,3 @@ gradlew.bat    text eol=crlf
 # ── 산출물 문서 ─────────────────────────────────────────────
 # GitHub 이 언어 통계에서 제외하도록 표시한다. 코드 비율이 왜곡되지 않는다.
 docs/**       linguist-documentation
-docs/90-pilot/** linguist-vendored

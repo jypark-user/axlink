@@ -1,4 +1,4 @@
-"""환경변수 설정. 시크릿은 코드에 두지 않는다 (CLAUDE.md 4절)."""
+"""환경변수 설정. 시크릿은 코드에 두지 않는다 (작업 규약 §4)."""
 
 from datetime import timedelta
 
@@ -38,7 +38,7 @@ class Settings(BaseSettings):
     embedding_timeout: float = 120.0  # 배치 임베딩은 커넥터 호출보다 오래 걸린다
 
     # 저장소에서 함께 수집할 산출물 파일. "경로=산출물유형" 을 쉼표로 잇는다.
-    # WBS 는 도구가 아니라 커밋된 파일로 관리하므로(CLAUDE.md 2절) 여기를 거쳐 들어온다.
+    # WBS 는 도구가 아니라 커밋된 파일로 관리하므로(작업 규약 §2) 여기를 거쳐 들어온다.
     collect_files: str = "docs/00-management/WBS.xlsx=PROJECT_PLAN"
     # 파일을 읽을 브랜치. 비우면 저장소 기본 브랜치를 본다.
     collect_ref: str = ""

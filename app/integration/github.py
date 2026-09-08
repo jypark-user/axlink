@@ -140,7 +140,7 @@ def fetch_file(
 ) -> dict | None:
     """저장소의 파일 하나를 가져온다. 없으면 None.
 
-    WBS 는 도구가 아니라 저장소에 커밋된 파일로 관리한다(CLAUDE.md 2절).
+    WBS 는 도구가 아니라 저장소에 커밋된 파일로 관리한다(작업 규약 §2).
     GitHub 만 쓰는 업체도 파일만 올려 두면 진척 산정이 성립하려면 이 경로가 필요하다.
 
     돌려주는 dict 는 raw_artifact.payload_jsonb 에 그대로 들어간다 — 바이트는 뺀다.

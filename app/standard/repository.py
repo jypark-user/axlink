@@ -1,7 +1,7 @@
 """표준 모델 upsert. 원천 키는 (tool_connection_id, external_id) 다.
 
 부분 유니크 인덱스라 on conflict 에 where 절을 그대로 붙여야 인덱스가 추론된다 —
-ORM 을 쓰지 않는 이유 중 하나다(CLAUDE.md 1절).
+ORM 을 쓰지 않는 이유 중 하나다(작업 규약 §1).
 """
 
 from typing import Any

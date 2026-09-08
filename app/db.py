@@ -1,6 +1,6 @@
 """psycopg 3 커넥션 풀. ORM 을 쓰지 않으므로 SQL 은 각 repository 가 직접 쓴다.
 
-ORM 금지 사유는 CLAUDE.md 1절에 있다 — 시맨틱 레이어가 카탈로그 조각으로 SQL 을
+ORM 금지 사유는 작업 규약 §1에 있다 — 시맨틱 레이어가 카탈로그 조각으로 SQL 을
 조립하는 것이 본질이고, vector(1024)·tsvector·부분 유니크 on conflict 가 네이티브 SQL 을
 요구한다. 언어가 바뀌어도 같은 이유다.
 """

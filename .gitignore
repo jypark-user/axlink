@@ -28,3 +28,7 @@ bin/
 
 # 업로드 문서 원본 보관 위치 (AXLINK_DOCUMENT_ROOT)
 var/
+
+# 내부 문서 — 발주기관이 저장소를 직접 열어보므로 커밋하지 않는다.
+# 사본과 사유는 D:\axlink-internal\README.md.
+CLAUDE.md

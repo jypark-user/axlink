@@ -11,26 +11,29 @@
 
 **이 저장소가 AX Link의 1번 샘플 프로젝트다.** 여기 남는 이슈·커밋·PR·산출물 문서가
 곧 PoC의 수집 대상이자 시연 데이터다. 그래서 **규약을 어긴 커밋은 그 자체로 데이터 결함**이고,
-나중에 소급 수정할 수 없다. 작업 전 [`CLAUDE.md`](./CLAUDE.md)를 읽는다.
+나중에 소급 수정할 수 없다.
 
 ## 구조
 
 ```
-backend/     Spring Boot · JdbcClient (JPA 금지) · Flyway · pgvector
-  …/integration/   [2] 커넥터 포트 + GitHub·Redmine 어댑터, 증분 수집
-  …/standard/      [3] 표준 데이터 모델 · 추적관계
-  …/dashboard/     [3][5] 지표 집계 · 위젯 템플릿 23종
-  …/semantic/      [5] 시맨틱 레이어 — 화면·답변의 모든 수치가 여기서 나온다
-  …/rag/ ai/ document/  [4] 청킹 · 임베딩 · 검색 · 근거 게이트 · 문서 추출
+app/         FastAPI · psycopg 3 로 SQL 직접 작성 (ORM 금지) · Flyway · pgvector
+  integration/  [2] 커넥터 포트 + GitHub·Redmine 어댑터, 증분 수집
+  standard/     [3] 표준 데이터 모델 · 추적관계 · 산출물 대조
+  dashboard/    [3][5] 지표 집계 · 위젯 템플릿 23종
+  semantic/     [5] 시맨틱 레이어 — 화면·답변의 모든 수치가 여기서 나온다
+  rag/ ai/ document/  [4] 청킹 · 임베딩 · 검색 · 근거 게이트 · 문서 추출
+  auth/ org/ project/ 기반 계층
 frontend/    [6] React + Vite — 발주기관용 읽기 전용 화면 + AI 질의
+db/migration/ Flyway. 스키마 변경은 반드시 새 V##__ 파일로
 docs/        납품 산출물 겸 RAG 코퍼스
-  00-management/  작업계획 · M1 합의서 · WBS
+  00-management/  M1 합의서 · WBS
   10-requirements/ IM-001 요구사항정의서 · E2E 사용자 시나리오
-  20-design/      파일럿 대조표 · 진척률 산정체계 · 인프라 배치방안
-  90-pilot/       파일럿 원본 문서 — 참고자료, 납품 대상 아님
-scripts/     추적표 생성 · GitHub 부트스트랩
+  20-design/      ARC-001 설계 결정 · 진척률 산정체계 · 인프라 배치방안
+scripts/     추적표 생성 · 문서 파서 검증
 infra/       docker-compose (PostgreSQL+pgvector · Redmine · Ollama)
 ```
+
+계층별 책임은 각 패키지의 `__init__.py` 문서 문자열에 요구사항 ID와 함께 적혀 있다.
 
 ## 절대 규칙
 
@@ -46,9 +49,13 @@ infra/       docker-compose (PostgreSQL+pgvector · Redmine · Ollama)
 cp .env.example .env
 docker compose -f infra/docker-compose.yml up -d   # PostgreSQL+pgvector · Redmine · Ollama
 
-cd backend  && ./gradlew bootRun
+python -m venv .venv && .venv/Scripts/pip install -e ".[dev]"
+.venv/Scripts/python -m uvicorn app.main:app --reload --port 8080
+
 cd frontend && npm ci && npm run dev
 ```
+
+절차와 문제 해결은 [`docs/00-management/로컬-실행.md`](docs/00-management/로컬-실행.md).
 
 ## 규약 요약
 
@@ -57,12 +64,11 @@ cd frontend && npm ci && npm run dev
         Refs: GH-23, RM-204          ← 맨 #17 금지 (도구 구분 불가 + Redmine 오인식)
 브랜치  feat/REQ-012-<slug> · main 직접 push 금지 · Squash merge
 추적표  python scripts/build_traceability.py        (--check 로 규약 검증)
-이슈    python scripts/github/gen_bootstrap.py …    → bash scripts/github/bootstrap.sh
+검사    .venv/Scripts/python -m ruff check app tests && python -m pytest
 ```
 
 요구사항 이슈는 손으로 만들지 않는다. **요구사항정의서가 단일 진실 원천**이고,
-생성기가 그것을 GitHub 이슈로 옮긴다. 자세한 절차는
-[`scripts/github/README.md`](./scripts/github/README.md).
+거기서 GitHub 이슈로 옮긴다.
 
 ## 마일스톤
 
