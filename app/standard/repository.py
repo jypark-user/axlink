@@ -105,50 +105,105 @@ def upsert_code_change(
 def upsert_work_product(
     cur: Any, project_id: str, connection_id: str, external_id: str, rec: dict[str, Any]
 ) -> str | None:
-    """같은 유형의 현행 산출물 자리를 채운다. 자리가 없으면 새로 만든다.
+    """산출물 자리에 이번 버전을 올린다. 앞 버전은 지우지 않고 현행 표시만 내린다.
 
-    uq_work_product__current (project_id, type) where is_current 때문에 무턱대고
-    insert 하면 안 된다. 산출물 목록은 미리 정의된 자리이고 수집은 그걸 채우는 일이다.
+    산출물 목록은 미리 정의된 자리(ISO/IEC 29110 관리객체)이고 수집은 그 자리를 채운다.
+    그런데 WBS 처럼 사업 내내 갱신되는 문서는 자리 하나에 여러 버전이 쌓인다.
+    덮어쓰면 "계획을 언제 바꿨는가" 에 답할 수 없다 — 그 질문이 진척 감독의 본체다.
+
+    자리 속성(적용 여부·기한·활동 구분·승인)은 버전이 아니라 자리에 속한다.
+    새 버전이 앞 버전에서 물려받는다. 승인은 물려받지 않는다 — 새 버전은 다시 확인받아야 한다.
     """
-    row = fetch_one(
+    current = fetch_one(
         cur,
-        "select id from work_product where project_id = %s and type = %s and is_current",
+        """
+        select id, version, applicable, due_date, pm_activity, si_activity
+          from work_product
+         where project_id = %s and type = %s and is_current
+        """,
         (project_id, rec["type"]),
     )
-    if row is not None:
+
+    # 같은 버전이 다시 왔다. 내용이 안 바뀐 것이므로 새 행을 만들지 않는다.
+    if current is not None and current["version"] == rec["version"]:
         fetch_one(
             cur,
             """
             update work_product
-               set title = %s, version = %s, file_uri = %s, external_url = %s,
-                   tool_connection_id = %s, external_id = %s, source_kind = 'TOOL',
-                   status = case when status = 'NONE' then 'SUBMITTED' else status end,
-                   submitted_at = coalesce(submitted_at, now()), updated_at = now()
+               set title = %s, file_uri = %s, external_url = %s,
+                   source_revision = %s, updated_at = now()
              where id = %s
             returning id
             """,
             (
-                rec["title"], rec["version"], rec["file_uri"], rec["external_url"],
-                connection_id, external_id, row["id"],
+                rec["title"], rec["file_uri"], rec["external_url"],
+                rec.get("source_revision"), current["id"],
             ),
         )
-        return str(row["id"])
+        return str(current["id"])
+
+    if current is not None:
+        # 부분 유니크 uq_work_product__current 때문에 먼저 내려야 새 현행이 들어간다.
+        cur.execute(
+            "update work_product set is_current = false, updated_at = now() where id = %s",
+            (current["id"],),
+        )
 
     created = fetch_one(
         cur,
         """
         insert into work_product
-          (project_id, type, version, title, status, pm_activity, file_uri, external_url,
-           tool_connection_id, external_id, source_kind, submitted_at)
-        values (%s, %s, %s, %s, 'SUBMITTED', 'PM_1', %s, %s, %s, %s, 'TOOL', now())
+          (project_id, type, version, title, status, applicable, due_date,
+           pm_activity, si_activity, file_uri, external_url,
+           tool_connection_id, external_id, source_revision, source_kind,
+           is_current, submitted_at)
+        values (%s, %s, %s, %s, 'SUBMITTED', %s, %s, %s, %s, %s, %s, %s, %s, %s,
+                'TOOL', true, now())
         returning id
         """,
         (
             project_id, rec["type"], rec["version"], rec["title"],
+            current["applicable"] if current else True,
+            current["due_date"] if current else None,
+            (current["pm_activity"] if current else None) or "PM_1",
+            current["si_activity"] if current else None,
             rec["file_uri"], rec["external_url"], connection_id, external_id,
+            rec.get("source_revision"),
         ),
     )
     return str(created["id"])
+
+
+def list_work_product_versions(
+    cur: Any, project_id: str, product_type: str
+) -> list[dict[str, Any]]:
+    """한 자리의 버전 이력. 최신이 먼저다."""
+    return fetch_all(
+        cur,
+        """
+        select id, version, title, status, is_current, file_uri, external_url,
+               source_revision, submitted_at, updated_at
+          from work_product
+         where project_id = %s and type = %s
+         order by is_current desc, submitted_at desc nulls last, updated_at desc
+        """,
+        (project_id, product_type),
+    )
+
+
+def current_work_product(
+    cur: Any, project_id: str, product_type: str
+) -> dict[str, Any] | None:
+    """현행 산출물 한 건. 진척 산정이 WBS 파일을 찾을 때 쓴다."""
+    return fetch_one(
+        cur,
+        """
+        select id, type, version, title, status, file_uri, source_revision, updated_at
+          from work_product
+         where project_id = %s and type = %s and is_current
+        """,
+        (project_id, product_type),
+    )
 
 
 # --- 조회 ---------------------------------------------------------------

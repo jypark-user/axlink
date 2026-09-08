@@ -4,7 +4,7 @@ import base64
 
 import pytest
 
-from app.db import tx
+from app.db import fetch_one, tx
 from app.integration import github
 from tests.conftest import requires_db
 
@@ -47,19 +47,92 @@ def test_other_project_is_denied(client, client_token):
 
 @pytest.fixture
 def restore_project_plan():
-    """수집이 채운 자리를 원래대로 비운다. 다음 시험이 빈 자리를 전제한다."""
-    yield
+    """수집이 쌓은 버전을 지우고 원래 빈 자리를 되살린다.
+
+    버전이 누적되므로 현행 행 하나만 되돌려서는 부족하다 — 수집이 만든 행을 지워야 한다.
+    """
     with tx() as cur:
-        cur.execute(
+        row = fetch_one(
+            cur,
             """
-            update work_product
-               set title = null, version = '0', file_uri = null, external_url = null,
-                   tool_connection_id = null, external_id = null, source_kind = 'MANUAL',
-                   status = 'NONE', submitted_at = null
+            select id from work_product
              where project_id = %s and type = 'PROJECT_PLAN' and is_current
             """,
             (PID,),
         )
+        original = str(row["id"])
+    yield original
+    with tx() as cur:
+        cur.execute(
+            """
+            delete from work_product
+             where project_id = %s and type = 'PROJECT_PLAN' and id <> %s
+            """,
+            (PID, original),
+        )
+        cur.execute(
+            """
+            update work_product
+               set is_current = true, title = null, version = '0', file_uri = null,
+                   external_url = null, tool_connection_id = null, external_id = null,
+                   source_revision = null, source_kind = 'MANUAL',
+                   status = 'NONE', submitted_at = null
+             where id = %s
+            """,
+            (original,),
+        )
+
+
+def _github_returning(monkeypatch, sha_holder: dict) -> None:
+    """저장소에 WBS 파일 하나만 있는 GitHub 를 흉내낸다. sha 는 호출 시점에 읽는다."""
+    monkeypatch.setattr(
+        github,
+        "verify",
+        lambda base, target, tok: github.ProbeResult("o/r", ["issue", "commit"], []),
+    )
+    monkeypatch.setattr(github, "fetch_items", lambda *a, **k: iter(()))
+    monkeypatch.setattr(
+        github,
+        "fetch_file",
+        lambda base, target, tok, path, ref=None: {
+            "path": path,
+            "sha": sha_holder["sha"],
+            "size": 12,
+            "htmlUrl": f"https://github.com/o/r/blob/main/{path}",
+            "content": base64.b64encode(b"not a real xlsx").decode("ascii"),
+        },
+    )
+
+
+def _connect_and_sync(client, token: str) -> str:
+    created = client.post(
+        f"/api/projects/{PID}/connections",
+        json={
+            "tool": "GITHUB",
+            "name": "WBS 수집용",
+            "baseUrl": "https://api.github.com",
+            "targetResource": "o/r",
+            "credential": {"accessToken": "ghp_fake"},
+        },
+        headers=_auth(token),
+    ).json()
+    client.post(f"/api/connections/{created['id']}/test", headers=_auth(token))
+    job = client.post(f"/api/connections/{created['id']}/sync", headers=_auth(token)).json()
+    assert job["status"] == "SUCCEEDED", job
+    return created["id"]
+
+
+def _versions() -> list[dict]:
+    with tx() as cur:
+        cur.execute(
+            """
+            select version, is_current from work_product
+             where project_id = %s and type = 'PROJECT_PLAN'
+             order by is_current desc, updated_at desc
+            """,
+            (PID,),
+        )
+        return cur.fetchall()
 
 
 @requires_db
@@ -111,3 +184,46 @@ def test_collected_file_fills_the_slot(client, client_token, monkeypatch, restor
     assert after["version"] == "0f1e2d3c4b5a"
 
     client.delete(f"/api/connections/{created['id']}", headers=_auth(token))
+
+
+@requires_db
+def test_new_version_accumulates_and_keeps_the_old_one(
+    client, client_token, monkeypatch, restore_project_plan
+):
+    """WBS 는 사업 내내 갱신된다. 덮어쓰면 "계획을 언제 바꿨는가" 에 답할 수 없다."""
+    token = client_token("r3")
+    sha = {"sha": "aaaa1111bbbb2222"}
+    _github_returning(monkeypatch, sha)
+
+    first = _connect_and_sync(client, token)
+    client.delete(f"/api/connections/{first}", headers=_auth(token))
+
+    sha["sha"] = "cccc3333dddd4444"
+    second = _connect_and_sync(client, token)
+    client.delete(f"/api/connections/{second}", headers=_auth(token))
+
+    rows = _versions()
+    current = [r for r in rows if r["is_current"]]
+    assert len(current) == 1, "현행은 언제나 하나여야 한다"
+    assert current[0]["version"] == "cccc3333dddd"
+
+    kept = {r["version"] for r in rows if not r["is_current"]}
+    assert "aaaa1111bbbb" in kept, "앞 버전이 남아 있어야 이력이 성립한다"
+
+
+@requires_db
+def test_same_version_does_not_pile_up(
+    client, client_token, monkeypatch, restore_project_plan
+):
+    """내용이 그대로면 새 버전이 아니다. 수집할 때마다 행이 늘면 이력이 잡음이 된다."""
+    token = client_token("r3")
+    sha = {"sha": "eeee5555ffff6666"}
+    _github_returning(monkeypatch, sha)
+
+    for _ in range(2):
+        connection = _connect_and_sync(client, token)
+        client.delete(f"/api/connections/{connection}", headers=_auth(token))
+
+    collected = [r for r in _versions() if r["version"] == "eeee5555ffff"]
+    assert len(collected) == 1
+
