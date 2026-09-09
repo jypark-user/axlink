@@ -7,7 +7,7 @@ GitHub 실호출은 monkeypatch 로 대체해 결정론적으로 돌린다. 실�
 import pytest
 
 from app.db import tx
-from app.integration import github
+from app.integration.adapter import github_connector as github
 from tests.conftest import requires_db
 
 PID = "c0000000-0000-4000-8000-000000000001"  # 시드 사업 (박PM 배정)

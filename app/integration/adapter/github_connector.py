@@ -1,4 +1,7 @@
-"""GitHub 커넥터. 읽기 전용이다 — 저장소에 아무것도 쓰지 않는다(QUR.CON.001).
+"""GitHub 어댑터. 읽기 전용이다 — 저장소에 아무것도 쓰지 않는다(QUR.CON.001).
+
+구현은 모듈 함수고 GitHubConnector 는 포트(ToolConnector)에 그 함수들을 입힌 껍데기다.
+시험이 모듈 함수를 갈아끼우는 방식과 클래스 등록을 같이 살리기 위해서다.
 
 verify: 저장소에 닿는지 + 각 항목(커밋·이슈·PR)을 실제로 읽을 수 있는지 항목별로 확인한다.
         토큰에 권한이 빠지면 붙이는 시점에 드러난다(수집 때 조용히 실패하지 않게).
@@ -7,12 +10,13 @@ fetch:  BACKFILL 이 항목종류별로 페이지를 돌며 원본을 가져온�
 
 import base64
 from collections.abc import Iterator
-from dataclasses import dataclass, field
+from typing import Any
 
 import httpx
 
 from app.common import errors
 from app.config import settings
+from app.integration.port import ProbeResult
 
 _API_VERSION = "2022-11-28"
 
@@ -22,13 +26,6 @@ ITEM_PATHS = {
     "pull_request": "/pulls",
     "commit": "/commits",
 }
-
-
-@dataclass
-class ProbeResult:
-    name: str
-    readable: list[str] = field(default_factory=list)
-    denied: list[str] = field(default_factory=list)
 
 
 def _headers(token: str) -> dict[str, str]:
@@ -190,3 +187,24 @@ def _external_id(kind: str, item: dict) -> str:
     if kind == "commit":
         return f"commit:{item.get('sha')}"
     return f"{kind}:{item.get('number')}"
+
+
+class GitHubConnector:
+    """ToolConnector 구현. 상태가 없다 — 자격증명은 호출마다 받는다."""
+
+    tool = "GITHUB"
+    item_kinds = tuple(ITEM_PATHS)
+
+    def verify(self, base_url: str, target: str, secret: str) -> ProbeResult:
+        return verify(base_url, target, secret)
+
+    def fetch_items(
+        self, base_url: str, target: str, secret: str,
+        kind: str, per_page: int, max_pages: int,
+    ) -> Iterator[tuple[str, dict[str, Any]]]:
+        return fetch_items(base_url, target, secret, kind, per_page, max_pages)
+
+    def fetch_file(
+        self, base_url: str, target: str, secret: str, path: str, ref: str | None = None,
+    ) -> dict[str, Any] | None:
+        return fetch_file(base_url, target, secret, path, ref)

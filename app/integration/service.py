@@ -11,7 +11,7 @@ from app.auth import repository as auth_repo
 from app.auth.models import AuthPrincipal
 from app.common import crypto, errors
 from app.common.paging import PageQuery, PageResponse
-from app.integration import github, repository, sync
+from app.integration import port, repository, sync
 from app.integration.models import (
     TOOLS,
     SyncJobResponse,
@@ -41,15 +41,13 @@ def _require_tool(tool: str) -> None:
         raise errors.validation_failed(f"지원하지 않는 도구입니다: {tool}")
 
 
-def _probe(tool: str, base_url: str, target: str, token: str) -> github.ProbeResult:
+def _probe(tool: str, base_url: str, target: str, token: str) -> port.ProbeResult:
     _require_tool(tool)
-    if tool == "GITHUB":
-        return github.verify(base_url, target, token)
-    # Redmine 은 다음 슬라이스. 지금 붙이면 조용히 실패하는 대신 명확히 알린다.
-    raise errors.ApiError(501, "NOT_IMPLEMENTED", "Redmine 연결은 아직 준비 중입니다.")
+    # 등록 안 된 도구는 여기서 501 로 알린다 — 조용히 실패하지 않는다.
+    return port.get_connector(tool).verify(base_url, target, token)
 
 
-def _to_test_response(probe: github.ProbeResult) -> ToolConnectionTestResponse:
+def _to_test_response(probe: port.ProbeResult) -> ToolConnectionTestResponse:
     return ToolConnectionTestResponse(
         reachable=True,
         resourceName=probe.name,

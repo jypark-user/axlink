@@ -5,7 +5,7 @@ import base64
 import pytest
 
 from app.db import fetch_one, tx
-from app.integration import github
+from app.integration.adapter import github_connector as github
 from tests.conftest import requires_db
 
 PID = "c0000000-0000-4000-8000-000000000001"
