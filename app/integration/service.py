@@ -14,12 +14,14 @@ from app.common.paging import PageQuery, PageResponse
 from app.integration import port, repository, sync
 from app.integration.models import (
     TOOLS,
+    MappingRulesUpdateRequest,
     SyncJobResponse,
     SyncJobStats,
     ToolConnectionCreateRequest,
     ToolConnectionResponse,
     ToolConnectionTestResponse,
 )
+from app.standard.mapping_rules import MappingRules
 
 
 def _require_project(cur: Any, principal: AuthPrincipal, project_id: str) -> None:
@@ -90,9 +92,12 @@ def create(
     token = req.credential.accessToken
     encrypted = crypto.encrypt(token)
     hint = crypto.hint(token)
+    # 저장 전에 규칙 형식을 검증한다 — 오타 난 키가 조용히 저장되면 못 찾는다.
+    rules = MappingRules.from_json(req.mappingRules) if req.mappingRules else None
     row = repository.insert(
         cur, project_id, principal.org_id, req.tool, req.name, req.baseUrl,
         req.targetResource, encrypted, hint,
+        rules.to_json() if rules else None,
     )
     return _to_response(cur, row)
 
@@ -119,6 +124,19 @@ def change_status(
     if target not in ("ACTIVE", "PAUSED"):
         raise errors.validation_failed(f"허용되지 않는 상태입니다: {target}")
     repository.update_status(cur, connection_id, target, datetime.now(UTC))
+    return _to_response(cur, repository.find_by_id(cur, connection_id))
+
+
+def update_mapping(
+    cur: Any, principal: AuthPrincipal, connection_id: str, req: MappingRulesUpdateRequest
+) -> ToolConnectionResponse:
+    """매핑 규칙 변경. 기존 수집분에는 다음 수집(재승격) 때 적용된다 — 코드 수정 없이."""
+    conn = repository.find_by_id(cur, connection_id)
+    if conn is None:
+        raise errors.not_found("connection", connection_id)
+    _require_project(cur, principal, str(conn["project_id"]))
+    rules = MappingRules.from_json(req.mappingRules)
+    repository.update_mapping_rules(cur, connection_id, rules.to_json(), datetime.now(UTC))
     return _to_response(cur, repository.find_by_id(cur, connection_id))
 
 

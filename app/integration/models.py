@@ -30,6 +30,12 @@ class ToolConnectionCreateRequest(BaseModel):
     baseUrl: str = Field(min_length=1)  # noqa: N815
     targetResource: str = Field(min_length=1)  # noqa: N815
     credential: ToolCredentialRequest
+    # 판별 이름 설정(SWFR.CON.002). 비우면 기본값 — 표준 용어를 쓰는 저장소라는 뜻이다.
+    mappingRules: dict[str, str] | None = None  # noqa: N815
+
+
+class MappingRulesUpdateRequest(BaseModel):
+    mappingRules: dict[str, str] = Field(default_factory=dict)  # noqa: N815
 
 
 class ToolConnectionStatusUpdateRequest(BaseModel):

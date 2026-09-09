@@ -10,6 +10,7 @@ from app.common.paging import PageQuery, PageResponse
 from app.db import tx
 from app.integration import service
 from app.integration.models import (
+    MappingRulesUpdateRequest,
     SyncJobResponse,
     ToolConnectionCreateRequest,
     ToolConnectionResponse,
@@ -51,6 +52,14 @@ def test_unsaved(
 def test_saved(connection_id: str, principal: Principal) -> ToolConnectionTestResponse:
     with tx() as cur:
         return service.test_saved(cur, principal, connection_id)
+
+
+@router.patch("/connections/{connection_id}/mapping", response_model=ToolConnectionResponse)
+def update_mapping(
+    connection_id: str, req: MappingRulesUpdateRequest, principal: Principal
+) -> ToolConnectionResponse:
+    with tx() as cur:
+        return service.update_mapping(cur, principal, connection_id, req)
 
 
 @router.patch("/connections/{connection_id}/status", response_model=ToolConnectionResponse)

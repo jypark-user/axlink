@@ -26,19 +26,20 @@ def insert(
     target_resource: str,
     auth_encrypted: str,
     auth_hint: str,
+    mapping_rules: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     row = fetch_one(
         cur,
         """
         insert into tool_connection
           (project_id, contractor_org_id, tool, name, base_url, target_resource,
-           auth_encrypted, auth_hint, status)
-        values (%s, %s, %s, %s, %s, %s, %s, %s, 'DRAFT')
+           auth_encrypted, auth_hint, mapping_rules_json, status)
+        values (%s, %s, %s, %s, %s, %s, %s, %s, %s, 'DRAFT')
         returning id
         """,
         (
             project_id, contractor_org_id, tool, name, base_url, target_resource,
-            auth_encrypted, auth_hint,
+            auth_encrypted, auth_hint, Jsonb(mapping_rules or {}),
         ),
     )
     return find_by_id(cur, str(row["id"]))
@@ -55,6 +56,15 @@ def find_by_project(cur: Any, project_id: str) -> list[dict[str, Any]]:
         cur,
         f"select {_COLUMNS} from tool_connection where project_id = %s order by created_at",
         (project_id,),
+    )
+
+
+def update_mapping_rules(
+    cur: Any, connection_id: str, mapping_rules: dict[str, Any], now: datetime
+) -> None:
+    cur.execute(
+        "update tool_connection set mapping_rules_json = %s, updated_at = %s where id = %s",
+        (Jsonb(mapping_rules), now, connection_id),
     )
 
 
@@ -252,4 +262,5 @@ def mapping_rule_count(mapping_rules_json: Any) -> int:
         if isinstance(mapping_rules_json, dict)
         else json.loads(mapping_rules_json)
     )
-    return len(data.get("rules", []))
+    # 파일럿 형식({"rules": [...]})과 현행 평면 dict(SWFR.CON.002) 둘 다 센다.
+    return len(data.get("rules", data))

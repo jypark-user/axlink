@@ -9,7 +9,9 @@
 
 from typing import Any
 
-RISK_TRACKER = "리스크"
+from app.standard.mapping_rules import MappingRules
+
+_DEFAULT_RULES = MappingRules()
 
 _STATUS = {"진행": "IN_PROGRESS", "해결": "RESOLVED"}
 _SEVERITY = {
@@ -24,14 +26,16 @@ def tracker_name(payload: dict[str, Any]) -> str:
     return ((payload.get("tracker") or {}).get("name") or "").strip()
 
 
-def is_risk(payload: dict[str, Any]) -> bool:
-    return tracker_name(payload) == RISK_TRACKER
+def is_risk(payload: dict[str, Any], rules: MappingRules = _DEFAULT_RULES) -> bool:
+    """어떤 트래커가 리스크인지는 연결별 설정이다(SWFR.CON.002)."""
+    return tracker_name(payload) == rules.risk_tracker
 
 
-def req_id(payload: dict[str, Any]) -> str | None:
-    """커스텀 필드 REQ ID — 도구를 가로지르는 접착제(작업 규약 §2). 추적관계의 재료다."""
+def req_id(payload: dict[str, Any], rules: MappingRules = _DEFAULT_RULES) -> str | None:
+    """커스텀 필드 REQ ID — 도구를 가로지르는 접착제(작업 규약 §2). 추적관계의 재료다.
+    업체가 필드를 뭐라 부르는지는 연결별 설정이다(SWFR.CON.002)."""
     for f in payload.get("custom_fields") or []:
-        if f.get("name") == "REQ ID" and f.get("value"):
+        if f.get("name") == rules.req_id_field and f.get("value"):
             return str(f["value"])
     return None
 
