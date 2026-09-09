@@ -8,6 +8,10 @@ GitHub 만 쓰는 용역업체 케이스가 그대로 여기서 성립한다.
 import re
 from typing import Any
 
+from app.standard.mapping_rules import MappingRules
+
+_DEFAULT_RULES = MappingRules()
+
 # "[SWFR.CON.001] 커넥터는 ..." 에서 코드와 제목을 가른다.
 _CODE_IN_TITLE = re.compile(r"^\[([A-Z]{2,5}(?:\.[A-Z]{2,5})+\.\d{3})\]\s*(.*)$")
 _TYPE_LABEL = re.compile(r"^유형:\s*(.+)$")
@@ -29,13 +33,14 @@ def issue_type(payload: dict[str, Any]) -> str | None:
     return None
 
 
-def classify_issue(payload: dict[str, Any]) -> str:
+def classify_issue(payload: dict[str, Any], rules: MappingRules = _DEFAULT_RULES) -> str:
     """이슈 하나가 표준 모델의 어느 테이블로 갈지 정한다.
 
-    라벨이 1차 근거다. 라벨이 없어도 제목이 [SWFR.xxx.001] 꼴이면 요구사항으로 본다 —
+    라벨이 1차 근거고, 어떤 라벨이 요구사항인지는 연결별 설정이다(SWFR.CON.002).
+    라벨이 없어도 제목이 [SWFR.xxx.001] 꼴이면 요구사항으로 본다 —
     라벨 정리가 안 된 저장소에서도 추적 ID 는 제목에 남아 있기 때문이다.
     """
-    if issue_type(payload) == "요구사항":
+    if rules.requirement_label in labels(payload):
         return "REQUIREMENT"
     if _CODE_IN_TITLE.match(payload.get("title") or ""):
         return "REQUIREMENT"

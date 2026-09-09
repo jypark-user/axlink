@@ -21,6 +21,7 @@ from app.config import settings
 from app.db import fetch_all
 from app.rag import indexing
 from app.standard import mapping, mapping_redmine, repository, work_product_type
+from app.standard.mapping_rules import MappingRules
 from app.standard.models import (
     RequirementResponse,
     SourceRef,
@@ -44,17 +45,18 @@ def promote_connection(cur: Any, connection: dict[str, Any], port: EmbeddingPort
     """한 연결이 수집한 원본 전부를 표준 모델로 올리고 색인한다."""
     project_id = str(connection["project_id"])
     connection_id = str(connection["id"])
+    rules = MappingRules.from_json(connection.get("mapping_rules_json"))
     result = PromoteResult()
     sources: list[indexing.IndexSource] = []
 
     if connection["tool"] == "REDMINE":
-        return _promote_redmine(cur, connection, port, result, sources)
+        return _promote_redmine(cur, connection, rules, port, result, sources)
 
     for raw in _raw_artifacts(cur, connection_id):
         payload, kind, external_id = raw["payload_jsonb"], raw["object_kind"], raw["external_id"]
 
         if kind == "issue":
-            target = mapping.classify_issue(payload)
+            target = mapping.classify_issue(payload, rules)
             if target == "REQUIREMENT":
                 rec = mapping.to_requirement(payload)
                 row_id = repository.upsert_requirement(
@@ -99,6 +101,7 @@ def promote_connection(cur: Any, connection: dict[str, Any], port: EmbeddingPort
 def _promote_redmine(
     cur: Any,
     connection: dict[str, Any],
+    rules: MappingRules,
     port: EmbeddingPort,
     result: PromoteResult,
     sources: list[indexing.IndexSource],
@@ -119,7 +122,7 @@ def _promote_redmine(
             result.raw_only += 1
             continue
 
-        if mapping_redmine.is_risk(payload):
+        if mapping_redmine.is_risk(payload, rules):
             rec = mapping_redmine.to_risk(payload, base_url)
             repository.upsert_risk(cur, project_id, connection_id, external_id, rec)
             target = "RISK"
