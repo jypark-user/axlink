@@ -11,7 +11,7 @@ import os
 import pytest
 
 from app.common.errors import ApiError
-from app.integration import github
+from app.integration.adapter import github_connector as github
 
 _TOKEN = os.environ.get("AXLINK_GH_TOKEN")
 _REPO = os.environ.get("AXLINK_GH_REPO", "")

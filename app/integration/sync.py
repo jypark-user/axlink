@@ -14,7 +14,7 @@ from typing import Any
 from app.ai.embedding import embedding_port
 from app.common import crypto, errors
 from app.config import settings
-from app.integration import github, repository
+from app.integration import port, repository
 from app.standard import service as standard
 
 _EPOCH = datetime(1970, 1, 1, tzinfo=UTC)
@@ -40,11 +40,12 @@ def run_backfill(cur: Any, connection: dict[str, Any]) -> str:
 
     stats = {"fetched": 0, "upserted": 0, "unmapped": 0, "indexed": 0, "skippedUnchanged": 0}
     denied: list[str] = []
+    connector = port.get_connector(connection["tool"])
 
     try:
-        for kind in ("issue", "pull_request", "commit"):
+        for kind in connector.item_kinds:
             try:
-                for external_id, payload in github.fetch_items(
+                for external_id, payload in connector.fetch_items(
                     base, target, token, kind, _PER_PAGE, _MAX_PAGES
                 ):
                     stats["fetched"] += 1
@@ -69,7 +70,7 @@ def run_backfill(cur: Any, connection: dict[str, Any]) -> str:
         repository.mark_synced(cur, cid, finished, exc.message)
         return job_id
 
-    denied += _collect_files(cur, cid, base, target, token, job_id, stats)
+    denied += _collect_files(cur, cid, connector, base, target, token, job_id, stats)
 
     promoted = standard.promote_connection(cur, connection, embedding_port())
     stats["upserted"] = promoted.upserted
@@ -93,6 +94,7 @@ def run_backfill(cur: Any, connection: dict[str, Any]) -> str:
 def _collect_files(
     cur: Any,
     connection_id: str,
+    connector: port.ToolConnector,
     base: str,
     target: str,
     token: str,
@@ -107,7 +109,7 @@ def _collect_files(
     skipped: list[str] = []
     for path in settings.collect_file_map:
         try:
-            payload = github.fetch_file(
+            payload = connector.fetch_file(
                 base, target, token, path, settings.collect_ref or None
             )
         except errors.ApiError as exc:
