@@ -31,7 +31,10 @@ def _require_project(cur: Any, principal: AuthPrincipal, project_id: str) -> Non
 
 
 def _require_https(base_url: str) -> None:
-    # api.github.com·온프레미스 GitHub 모두 https 다. 평문 토큰이 http 로 나가지 않게 막는다.
+    # 평문 자격증명이 http 로 나가지 않게 막는다. 루프백만 예외다 —
+    # 로컬 검증용 Redmine(HTTP)이 여기 해당하고, 기계 밖으로 나가지 않는다.
+    if base_url.startswith(("http://localhost", "http://127.0.0.1")):
+        return
     if not base_url.startswith("https://"):
         raise errors.validation_failed("baseUrl 은 https 로 시작해야 합니다.")
 
