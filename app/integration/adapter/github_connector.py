@@ -10,6 +10,7 @@ fetch:  BACKFILL 이 항목종류별로 페이지를 돌며 원본을 가져온�
 
 import base64
 from collections.abc import Iterator
+from datetime import UTC, datetime
 from typing import Any
 
 import httpx
@@ -96,19 +97,34 @@ def verify(base_url: str, target_resource: str, token: str) -> ProbeResult:
     return result
 
 
+def _iso_z(moment: datetime) -> str:
+    return moment.astimezone(UTC).strftime("%Y-%m-%dT%H:%M:%SZ")
+
+
 def fetch_items(
-    base_url: str, target_resource: str, token: str, kind: str, per_page: int, max_pages: int
+    base_url: str, target_resource: str, token: str, kind: str, per_page: int, max_pages: int,
+    since: datetime | None = None,
 ) -> Iterator[tuple[str, dict]]:
     """항목종류 하나를 페이지 단위로 가져온다. (external_id, payload) 를 순서대로 낸다.
 
     denied 는 예외로 올린다 — 호출부가 부분 실패로 기록하고 다음 종류로 넘어간다.
     /issues 는 PR 도 섞여 오므로 pull_request 항목은 제외한다(PR 은 /pulls 로 따로 가져온다).
+
+    증분(since)은 종류마다 수단이 다르다 — 이슈·커밋은 API 의 since 필터,
+    PR 목록에는 그런 필터가 없어 갱신 내림차순으로 받다가 경계에서 끊는다.
     """
     headers = _headers(token)
     base = _repo_url(base_url, target_resource) + ITEM_PATHS[kind]
     params = {"per_page": per_page}
+    stop_before: str | None = None
     if kind in ("issue", "pull_request"):
         params.update(state="all", sort="updated", direction="asc")
+    if since is not None:
+        if kind in ("issue", "commit"):
+            params["since"] = _iso_z(since)
+        else:  # pull_request
+            params["direction"] = "desc"
+            stop_before = _iso_z(since)
 
     with httpx.Client(timeout=settings.connector_timeout) as client:
         for page in range(1, max_pages + 1):
@@ -127,6 +143,8 @@ def fetch_items(
             for item in batch:
                 if kind == "issue" and item.get("pull_request") is not None:
                     continue  # PR 은 /pulls 에서 가져온다
+                if stop_before and (item.get("updated_at") or "") < stop_before:
+                    return  # 경계 이전 갱신분 — 이 뒤로는 전부 이미 가진 것이다
                 yield _external_id(kind, item), item
             if len(batch) < per_page:
                 return
@@ -201,8 +219,9 @@ class GitHubConnector:
     def fetch_items(
         self, base_url: str, target: str, secret: str,
         kind: str, per_page: int, max_pages: int,
+        since: datetime | None = None,
     ) -> Iterator[tuple[str, dict[str, Any]]]:
-        return fetch_items(base_url, target, secret, kind, per_page, max_pages)
+        return fetch_items(base_url, target, secret, kind, per_page, max_pages, since)
 
     def fetch_file(
         self, base_url: str, target: str, secret: str, path: str, ref: str | None = None,

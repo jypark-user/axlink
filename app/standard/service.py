@@ -20,7 +20,7 @@ from app.common.paging import PageQuery, PageResponse
 from app.config import settings
 from app.db import fetch_all
 from app.rag import indexing
-from app.standard import mapping, repository, work_product_type
+from app.standard import mapping, mapping_redmine, repository, work_product_type
 from app.standard.models import (
     RequirementResponse,
     SourceRef,
@@ -33,6 +33,7 @@ from app.standard.models import (
 class PromoteResult:
     upserted: int = 0
     unmapped: int = 0
+    raw_only: int = 0    # 원본 보존이 목적인 종류(버전·트래커). 실패가 아니다
     indexed: int = 0
     unchanged: int = 0
     by_type: dict[str, int] = field(default_factory=dict)
@@ -45,6 +46,9 @@ def promote_connection(cur: Any, connection: dict[str, Any], port: EmbeddingPort
     connection_id = str(connection["id"])
     result = PromoteResult()
     sources: list[indexing.IndexSource] = []
+
+    if connection["tool"] == "REDMINE":
+        return _promote_redmine(cur, connection, port, result, sources)
 
     for raw in _raw_artifacts(cur, connection_id):
         payload, kind, external_id = raw["payload_jsonb"], raw["object_kind"], raw["external_id"]
@@ -89,6 +93,64 @@ def promote_connection(cur: Any, connection: dict[str, Any], port: EmbeddingPort
         result.upserted += 1
         result.by_type[target] = result.by_type.get(target, 0) + 1
 
+    return _finish_indexing(cur, port, result, sources)
+
+
+def _promote_redmine(
+    cur: Any,
+    connection: dict[str, Any],
+    port: EmbeddingPort,
+    result: PromoteResult,
+    sources: list[indexing.IndexSource],
+) -> PromoteResult:
+    """Redmine 원본을 표준 모델로 올린다.
+
+    이슈만 승격한다 — 리스크 트래커는 risk 로, 나머지는 issue 로. 버전·트래커는 원본
+    보존이 목적이라(마일스톤 지표는 SWFR.PIP.007 에서 쓴다) raw_only 로 센다.
+    """
+    project_id = str(connection["project_id"])
+    connection_id = str(connection["id"])
+    base_url = connection["base_url"]
+
+    for raw in _raw_artifacts(cur, connection_id):
+        payload, kind, external_id = raw["payload_jsonb"], raw["object_kind"], raw["external_id"]
+
+        if kind != "issue":
+            result.raw_only += 1
+            continue
+
+        if mapping_redmine.is_risk(payload):
+            rec = mapping_redmine.to_risk(payload, base_url)
+            repository.upsert_risk(cur, project_id, connection_id, external_id, rec)
+            target = "RISK"
+            # 리스크는 색인하지 않는다 — 색인 대상은 requirement 와 issue 다(모듈 머리말)
+        else:
+            rec = mapping_redmine.to_issue(payload, base_url)
+            row_id = repository.upsert_issue(cur, project_id, connection_id, external_id, rec)
+            target = "ISSUE"
+            sources.append(
+                indexing.IndexSource(
+                    source_type="ISSUE",
+                    source_id=row_id,
+                    project_id=project_id,
+                    title=rec["title"],
+                    body=rec["body"],
+                    uri=rec["external_url"],
+                )
+            )
+
+        result.upserted += 1
+        result.by_type[target] = result.by_type.get(target, 0) + 1
+
+    return _finish_indexing(cur, port, result, sources)
+
+
+def _finish_indexing(
+    cur: Any,
+    port: EmbeddingPort,
+    result: PromoteResult,
+    sources: list[indexing.IndexSource],
+) -> PromoteResult:
     # 모델이 죽어 있다고 승격까지 되돌리지 않는다. 표준 모델은 남기고 색인만 못 했다고 적는다.
     try:
         indexed = indexing.reindex(cur, port, sources)

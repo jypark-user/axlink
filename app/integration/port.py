@@ -7,6 +7,7 @@ Bearer 토큰, Redmine 은 API 키, Jira 라면 Basic 쌍. 도구마다 달라 �
 
 from collections.abc import Iterator
 from dataclasses import dataclass, field
+from datetime import datetime
 from typing import Any, Protocol
 
 from app.common import errors
@@ -34,8 +35,13 @@ class ToolConnector(Protocol):
     def fetch_items(
         self, base_url: str, target: str, secret: str,
         kind: str, per_page: int, max_pages: int,
+        since: datetime | None = None,
     ) -> Iterator[tuple[str, dict[str, Any]]]:
-        """(외부 ID, 원본 payload) 를 낸다. 원본은 가공하지 않고 그대로 적재한다."""
+        """(외부 ID, 원본 payload) 를 낸다. 원본은 가공하지 않고 그대로 적재한다.
+
+        since 가 있으면 그 시각 이후 갱신분만 낸다(SWFR.CON.005). 도구가 필터를
+        지원하지 않는 항목종류는 전량을 내도 된다 — 내용해시 적재가 걸러 준다.
+        """
         ...
 
     def fetch_file(

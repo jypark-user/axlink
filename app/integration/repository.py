@@ -181,6 +181,20 @@ def count_sync_jobs(cur: Any, project_id: str) -> int:
     return int(row["cnt"]) if row else 0
 
 
+def last_success_cursor(cur: Any, connection_id: str):
+    """마지막 성공 수집의 커서. 없으면 None — 그때는 전체수집이다."""
+    row = fetch_one(
+        cur,
+        """
+        select max(cursor_to) as cursor_to
+          from sync_job
+         where tool_connection_id = %s and status = 'SUCCEEDED'
+        """,
+        (connection_id,),
+    )
+    return row["cursor_to"] if row else None
+
+
 def upsert_raw_artifact(
     cur: Any, connection_id: str, external_id: str, object_kind: str, payload: dict, job_id: str
 ) -> bool:
