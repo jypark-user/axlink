@@ -30,6 +30,10 @@ class MappingRules:
             return cls()
         if not isinstance(raw, dict):
             raise errors.validation_failed("mappingRules 는 객체여야 합니다.")
+        if isinstance(raw.get("rules"), list):
+            # 파일럿 형식({"version":1,"rules":[]}) — V1 컬럼 기본값으로 남아 있던 행이다.
+            # 규칙을 쓴 적 없다는 뜻이므로 기본값으로 읽는다(V22 가 정규화하지만 안전판).
+            return cls()
         unknown = set(raw) - _KNOWN
         if unknown:
             allowed = ", ".join(sorted(_KNOWN))
