@@ -11,6 +11,7 @@ API 가 지원하지 않아 싣지 않는다 — 경과 기록이 필요해지�
 """
 
 from collections.abc import Iterator
+from datetime import UTC, datetime
 from typing import Any
 
 import httpx
@@ -94,11 +95,19 @@ def verify(base_url: str, target: str, secret: str) -> ProbeResult:
 
 
 def fetch_items(
-    base_url: str, target: str, secret: str, kind: str, per_page: int, max_pages: int
+    base_url: str, target: str, secret: str, kind: str, per_page: int, max_pages: int,
+    since: datetime | None = None,
 ) -> Iterator[tuple[str, dict]]:
-    """항목종류 하나를 offset 페이지로 가져온다. (external_id, payload) 를 낸다."""
+    """항목종류 하나를 offset 페이지로 가져온다. (external_id, payload) 를 낸다.
+
+    증분(since)은 이슈만 updated_on 필터를 쓴다. 버전·트래커에는 갱신 필터가 없어
+    전량을 다시 낸다 — 몇 건 안 되고, 내용해시 적재가 걸러 준다.
+    """
     headers = _headers(secret)
     url, params = _kind_url(_base(base_url), target, kind)
+    if since is not None and kind == "issue":
+        stamp = since.astimezone(UTC).strftime("%Y-%m-%dT%H:%M:%SZ")
+        params["updated_on"] = f">={stamp}"
     key = f"{kind}s"  # issues / versions / trackers — Redmine 목록 응답의 루트 키
 
     with httpx.Client(timeout=settings.connector_timeout) as client:
@@ -139,8 +148,9 @@ class RedmineConnector:
     def fetch_items(
         self, base_url: str, target: str, secret: str,
         kind: str, per_page: int, max_pages: int,
+        since: datetime | None = None,
     ) -> Iterator[tuple[str, dict[str, Any]]]:
-        return fetch_items(base_url, target, secret, kind, per_page, max_pages)
+        return fetch_items(base_url, target, secret, kind, per_page, max_pages, since)
 
     def fetch_file(
         self, base_url: str, target: str, secret: str, path: str, ref: str | None = None,

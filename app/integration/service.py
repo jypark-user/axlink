@@ -137,7 +137,7 @@ def trigger_sync(cur: Any, principal: AuthPrincipal, connection_id: str) -> Sync
     _require_project(cur, principal, str(conn["project_id"]))
     if conn["status"] not in ("VERIFIED", "ACTIVE", "PAUSED", "FAILED"):
         raise errors.validation_failed("먼저 연결 테스트로 검증한 뒤 수집할 수 있습니다.")
-    job_id = sync.run_backfill(cur, conn)
+    job_id = sync.run_sync(cur, conn)
     job = repository.find_sync_job(cur, job_id)
     return _to_job_response(job, conn)
 
