@@ -1,5 +1,5 @@
 req_id,req_title,task_item,design_id,test_id,issue_no,commit_sha,status,updated_at
-QUR.CON.001,커넥터는 원천 도구의 데이터를 변경하지 않아야 한다 (읽기 전용),SFR.CON.002,ARC-003,,,,draft,2026-09-09
+QUR.CON.001,커넥터는 원천 도구의 데이터를 변경하지 않아야 한다 (읽기 전용),SFR.CON.002,ARC-003 ARC-004,,,,draft,2026-09-09
 QUR.PIP.001,근거가 없는 추적관계를 생성하지 않아야 한다,SFR.PIP.002,,,,,draft,2026-09-09
 QUR.RAG.001,외부 클라우드 LLM에 의존하지 않고 외부 인터넷 연결 없이 질의·응답이 동작해야 한다,SFR.RAG.001,ARC-001,,,,draft,2026-09-09
 QUR.RAG.002,"답변에 포함되는 수치는 집계 결과에서만 제공하며, LLM이 수치를 생성하지 않아야 한다",SFR.RAG.003,,,,,draft,2026-09-09
@@ -9,10 +9,10 @@ QUR.WEB.003,"요청과 보고는 AX Link 내부에만 기록하며, 원천 도�
 SER.SEC.001,도구 인증정보(토큰·API Key)를 암호화하여 저장하고 화면·로그에 노출하지 않아야 한다,SFR.SEC.001,,,,,draft,2026-09-09
 SER.SEC.002,"외부 인터넷 접속 없이 설치·구동이 가능해야 하며, 필요한 반입 요소를 문서화해야 한다",SFR.SEC.001,ARC-002,,,,draft,2026-09-09
 SER.SEC.003,"발주기관·용역업체 역할을 구분하고, 용역업체는 자신이 연결된 프로젝트만 조회할 수 있어야 한다",SFR.SEC.001,,,,,draft,2026-09-09
-SWFR.CON.001,"커넥터는 공통 인터페이스를 구현하며, 신규 도구 연동이 커넥터 구현체 추가만으로 가능해야 한다",SFR.CON.001,ARC-002 ARC-003,,,,draft,2026-09-09
+SWFR.CON.001,"커넥터는 공통 인터페이스를 구현하며, 신규 도구 연동이 커넥터 구현체 추가만으로 가능해야 한다",SFR.CON.001,ARC-002 ARC-003 ARC-004,,GH-1,172a6ba2,implemented,2026-09-09
 SWFR.CON.002,연동 대상과 필드 매핑을 코드 수정 없이 설정으로 변경할 수 있어야 한다,SFR.CON.001,,,,,draft,2026-09-09
 SWFR.CON.003,GitHub에서 저장소·커밋·Pull Request·이슈·마일스톤을 수집해야 한다,SFR.CON.002,ARC-003,,,e9935d7e,implemented,2026-09-09
-SWFR.CON.004,Redmine에서 프로젝트·이슈·버전·트래커·이슈관계를 수집해야 한다,SFR.CON.002,ARC-003,,,,draft,2026-09-09
+SWFR.CON.004,Redmine에서 프로젝트·이슈·버전·트래커·이슈관계를 수집해야 한다,SFR.CON.002,ARC-003,,GH-4,969cba57,implemented,2026-09-09
 SWFR.CON.005,"마지막 수집 시점 이후의 변경분만 수집하며, 반복 수집이 재현 가능해야 한다",SFR.CON.002,ARC-003,,,,draft,2026-09-09
 SWFR.CON.006,연동 대상 도구의 인증정보를 등록하고 연결 상태를 확인할 수 있어야 한다,SFR.CON.002,,,,,draft,2026-09-09
 SWFR.CON.007,"PDF·DOCX·XLSX·HWP·HWPX에서 텍스트와 표를 추출하되, 표는 행·열 구조를 유지해야 한다",SFR.CON.003,ARC-001,,GH-8,f8ba3438,implemented,2026-09-09
