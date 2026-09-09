@@ -59,7 +59,8 @@ def upsert_issue(
         {_SOURCE_CONFLICT}
         do update set
            issue_key = excluded.issue_key, title = excluded.title, body = excluded.body,
-           status = excluded.status, assignee = excluded.assignee,
+           status = excluded.status, severity = excluded.severity,
+           assignee = excluded.assignee,
            source_created_at = excluded.source_created_at,
            source_updated_at = excluded.source_updated_at,
            resolved_at = excluded.resolved_at,
@@ -70,6 +71,35 @@ def upsert_issue(
             project_id, rec["issue_key"], rec["title"], rec["body"], rec["status"],
             rec["severity"], rec["assignee"], rec["source_created_at"],
             rec["source_updated_at"], rec["resolved_at"],
+            connection_id, external_id, rec["external_url"],
+        ),
+    )
+    return str(row["id"])
+
+
+def upsert_risk(
+    cur: Any, project_id: str, connection_id: str, external_id: str, rec: dict[str, Any]
+) -> str:
+    row = fetch_one(
+        cur,
+        f"""
+        insert into risk
+          (project_id, title, body, probability, impact, severity, mitigation, owner,
+           status, identified_at, closed_at,
+           tool_connection_id, external_id, external_url, source_kind)
+        values (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, 'TOOL')
+        {_SOURCE_CONFLICT}
+        do update set
+           title = excluded.title, body = excluded.body, severity = excluded.severity,
+           owner = excluded.owner, status = excluded.status,
+           closed_at = excluded.closed_at, external_url = excluded.external_url,
+           updated_at = now()
+        returning id
+        """,
+        (
+            project_id, rec["title"], rec["body"], rec["probability"], rec["impact"],
+            rec["severity"], rec["mitigation"], rec["owner"], rec["status"],
+            rec["identified_at"], rec["closed_at"],
             connection_id, external_id, rec["external_url"],
         ),
     )
