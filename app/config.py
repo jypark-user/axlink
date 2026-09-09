@@ -31,6 +31,10 @@ class Settings(BaseSettings):
     # AI 포트 구현체 선택 단일 지점. ollama | fake
     # fake 는 결정적 벡터를 만들어 모델 없이도 테스트가 돌게 한다.
     embedding_provider: str = "ollama"
+    llm_provider: str = "ollama"          # ollama | fake
+    # 1단계 경량 검증용 잠정값. 모델 확정은 로컬 검증(작업 규약 §5) 결과로 한다.
+    llm_model: str = "qwen3:4b"
+    llm_timeout: float = 120.0
     ollama_base_url: str = "http://localhost:11434"
     embedding_model: str = "bge-m3"
     embedding_dimension: int = 1024  # doc_chunk.embedding 컬럼 차원과 반드시 같아야 한다
