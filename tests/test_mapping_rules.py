@@ -30,6 +30,13 @@ def test_비어_있으면_기본값이고_기본값은_종전과_같다():
     assert rules.req_id_field == "REQ ID"
 
 
+def test_파일럿_형식은_기본값으로_읽는다():
+    """V1 컬럼 기본값({"version":1,"rules":[]})이 남은 행 — 수집이 여기서 죽으면 안 된다.
+    실제로 2026-09-09 검수 중 이 형식 때문에 수집이 실패했다."""
+    rules = MappingRules.from_json({"version": 1, "rules": []})
+    assert rules == MappingRules()
+
+
 def test_모르는_키는_오타로_거절한다():
     with pytest.raises(errors.ApiError):
         MappingRules.from_json({"riskTraker": "위험"})  # 오타
