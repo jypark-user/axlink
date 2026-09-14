@@ -3,7 +3,7 @@
 - OllamaLlm: 실제 모델. 폐쇄망 온프레미스 전제(QUR.RAG.001)라 로컬 엔드포인트만 부른다.
 - FakeLlm:   같은 입력이면 항상 같은 문장. 모델 없이도 상위 흐름을 테스트한다.
 
-구현체는 여기서만 고른다(SWFR.RAG.002). 상위 계층은 llm_port() 만 부른다 —
+구현체는 여기서만 고른다(SWFR.RAG.002). 상위 계층은 llm_port() 만 부른다.
 모델이나 실행환경을 바꿔도 이 파일과 설정 밖은 변하지 않는다.
 """
 
@@ -19,7 +19,7 @@ from app.ai.port import LlmPort, LlmResult
 from app.common import errors
 from app.config import settings
 
-_RETRY_DELAYS = (0.2, 0.4)  # 임베딩과 같은 규칙 — 5xx 만 재시도, 불통은 즉시 실패
+_RETRY_DELAYS = (0.2, 0.4)  # 임베딩과 같은 규칙. 5xx 만 재시도, 불통은 즉시 실패
 
 
 class OllamaLlm:
@@ -78,7 +78,7 @@ class OllamaLlm:
     ) -> Iterator[str]:
         """Ollama 는 스트리밍을 NDJSON 으로 준다. 한 줄이 조각 하나다.
 
-        재시도는 하지 않는다 — 조각이 이미 화면에 나간 뒤 다시 시작하면 답이 두 번 붙는다.
+        재시도는 하지 않는다. 조각이 이미 화면에 나간 뒤 다시 시작하면 답이 두 번 붙는다.
         """
         payload = self._payload(system, user, stream=True, json_schema=json_schema)
         try:
@@ -111,7 +111,7 @@ class OllamaLlm:
 
 
 class FakeLlm:
-    """입력 해시를 박은 고정 문장. 결정성이 핵심이다 — 같은 입력은 항상 같은 답이라야
+    """입력 해시를 박은 고정 문장. 결정성이 핵심이다. 같은 입력은 항상 같은 답이라야
     상위 흐름(프롬프트 조립·응답 처리) 테스트가 성립한다."""
 
     def complete(

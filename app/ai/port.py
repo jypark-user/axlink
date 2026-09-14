@@ -20,16 +20,16 @@ class EmbeddingPort(Protocol):
 @dataclass
 class LlmResult:
     text: str
-    model: str  # 어느 모델이 만든 문장인지 답변에 남긴다 — 감사 가능성
+    model: str  # 어느 모델이 만든 문장인지 답변에 남긴다. 감사 가능성
 
 
 class LlmPort(Protocol):
-    """문장 생성. 이 포트가 만드는 것은 문장뿐이다 — 수치는 시맨틱 레이어의 집계에서,
+    """문장 생성. 이 포트가 만드는 것은 문장뿐이다. 수치는 시맨틱 레이어의 집계에서,
     화면은 템플릿 선택에서 나온다(절대 규칙 1·2). 계약이 그 방어선을 넘지 않게 좁다.
 
     파일럿 계약(complete·stream·callTool) 중 complete 와 stream 을 승계한다. stream 은
     AI 질의 화면이 답변을 조각 단위로 받기 위해 쓴다(SWFR.RAG.001). callTool 은 채택하지
-    않는다 — 데이터 조회는 LLM 도구호출이 아니라 시맨틱 레이어의 몫이다(ARC-003 §4).
+    않는다. 데이터 조회는 LLM 도구호출이 아니라 시맨틱 레이어의 몫이다(ARC-003 4절).
 
     json_schema 를 주면 출력이 그 스키마의 JSON 객체 하나로 제한된다. 경량 모델은 자유
     출력이면 답 대신 생각을 늘어놓는데, 형식을 못 박으면 그 길로 못 샌다. 값의 뜻을
