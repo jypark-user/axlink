@@ -2,7 +2,7 @@
 
 from collections.abc import Iterator
 from dataclasses import dataclass
-from typing import Protocol
+from typing import Any, Protocol
 
 
 class EmbeddingPort(Protocol):
@@ -30,17 +30,20 @@ class LlmPort(Protocol):
     파일럿 계약(complete·stream·callTool) 중 complete 와 stream 을 승계한다. stream 은
     AI 질의 화면이 답변을 조각 단위로 받기 위해 쓴다(SWFR.RAG.001). callTool 은 채택하지
     않는다 — 데이터 조회는 LLM 도구호출이 아니라 시맨틱 레이어의 몫이다(ARC-003 §4).
+
+    json_schema 를 주면 출력이 그 스키마의 JSON 객체 하나로 제한된다. 경량 모델은 자유
+    출력이면 답 대신 생각을 늘어놓는데, 형식을 못 박으면 그 길로 못 샌다. 값의 뜻을
+    해석하는 것은 호출부다. 포트는 형식만 안다.
     """
 
-    def complete(self, system: str, user: str, *, json_object: bool = False) -> LlmResult:
-        """system 지시와 user 입력으로 응답 문장을 만든다. 결정은 호출부가 한다.
-
-        json_object 면 출력이 JSON 객체 하나여야 한다. 카탈로그에서 키를 고르는 자리에서
-        쓴다. 경량 모델은 자유 출력이면 답 대신 생각을 늘어놓는데, 형식을 못 박으면
-        그 길로 못 샌다.
-        """
+    def complete(
+        self, system: str, user: str, *, json_schema: dict[str, Any] | None = None
+    ) -> LlmResult:
+        """system 지시와 user 입력으로 응답 문장을 만든다. 결정은 호출부가 한다."""
         ...
 
-    def stream(self, system: str, user: str) -> Iterator[str]:
+    def stream(
+        self, system: str, user: str, *, json_schema: dict[str, Any] | None = None
+    ) -> Iterator[str]:
         """같은 입력으로 문장을 조각내어 돌려준다. 이어 붙이면 complete 의 text 와 같은 뜻이다."""
         ...
