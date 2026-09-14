@@ -34,13 +34,17 @@ _ERROR_CODE = {
 }
 
 
-def run_sync(cur: Any, connection: dict[str, Any]) -> str:
-    """수집을 실행하고 sync_job id 를 돌려준다. 첫 회는 전체, 이후는 증분이다."""
+def run_sync(cur: Any, connection: dict[str, Any], retry_of: str | None = None) -> str:
+    """수집을 실행하고 sync_job id 를 돌려준다. 첫 회는 전체, 이후는 증분이다.
+
+    재시도도 새 잡이다. 실패한 잡은 그대로 두고 retry_of 로 잇는다. 커서는 마지막
+    성공 잡 기준이라 실패한 회차의 범위를 자연히 다시 읽는다.
+    """
     now = datetime.now(UTC)
     cid = str(connection["id"])
     since = repository.last_success_cursor(cur, cid)
     job_id = repository.insert_sync_job(
-        cur, cid, "POLL" if since else "BACKFILL", since or _EPOCH, now
+        cur, cid, "POLL" if since else "BACKFILL", since or _EPOCH, now, retry_of
     )
     token = crypto.decrypt(connection["auth_encrypted"])
     base, target = connection["base_url"], connection["target_resource"]

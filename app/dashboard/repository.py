@@ -1,6 +1,6 @@
 """진척 집계 SQL. 세 갈래의 분자·분모를 각각 센다.
 
-분모가 셋 다 다르다. WBS 는 가중치 합, 이슈는 전체 이슈 수, 산출물은 적용 대상 자리 수다.
+분모가 셋 다 다르다. WBS 는 가중치 합, 이슈는 전체 이슈 수, 산출물은 적용 대상 항목 수다.
 값만 나란히 두면 "왜 다르냐" 는 질문에 답할 수 없으므로 분모를 함께 돌려준다.
 """
 
@@ -25,9 +25,9 @@ def issue_resolution(cur: Any, project_id: str) -> tuple[int, int]:
 
 
 def work_product_submission(cur: Any, project_id: str) -> tuple[int, int]:
-    """산출물 제출률. 낸 것 / 내야 할 자리.
+    """산출물 제출률. 낸 것 / 내야 할 항목.
 
-    적용 대상이 아닌 자리(applicable = false)는 분모에서 뺀다. 사업마다 해당 없는
+    적용 대상이 아닌 항목(applicable = false)은 분모에서 뺀다. 사업마다 해당 없는
     관리객체가 있는데 그걸 분모에 두면 아무리 잘해도 100% 가 안 나온다.
     """
     row = fetch_one(
