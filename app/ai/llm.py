@@ -8,7 +8,9 @@
 """
 
 import hashlib
+import json
 import time
+from collections.abc import Iterator
 
 import httpx
 
@@ -25,15 +27,29 @@ class OllamaLlm:
         self._model = model
         self._timeout = timeout
 
-    def complete(self, system: str, user: str) -> LlmResult:
+    def _payload(self, system: str, user: str, stream: bool, json_object: bool = False) -> dict:
         payload = {
             "model": self._model,
             "messages": [
                 {"role": "system", "content": system},
                 {"role": "user", "content": user},
             ],
-            "stream": False,
+            "stream": stream,
+            # qwen3 계열의 생각 블록을 끈다. 켜 두면 4b 모델도 답 한 줄에 수십 초를 쓰고,
+            # 스트리밍에서는 생각이 본문보다 먼저 흘러 화면에 섞인다.
+            "think": False,
+            # 기본 문맥(4096)은 근거 청크 5개를 못 담는다. 넘치면 Ollama 가 앞을 조용히 자른다.
+            "options": {"num_ctx": settings.llm_num_ctx},
         }
+        if json_object:
+            # 09.14 실측: 형식을 안 박으면 qwen3:4b 가 영어로 생각을 늘어놓다 120초를 넘겼고,
+            # 박으면 같은 질문에 5초 안에 JSON 만 냈다.
+            payload["format"] = "json"
+            payload["options"]["temperature"] = 0
+        return payload
+
+    def complete(self, system: str, user: str, *, json_object: bool = False) -> LlmResult:
+        payload = self._payload(system, user, stream=False, json_object=json_object)
         last: httpx.Response | None = None
         with httpx.Client(timeout=self._timeout) as client:
             for attempt in range(len(_RETRY_DELAYS) + 1):
@@ -53,6 +69,33 @@ class OllamaLlm:
         detail = f"Ollama 오류 {last.status_code}" if last is not None else "Ollama 오류"
         raise errors.ApiError(503, "AI_UNAVAILABLE", detail)
 
+    def stream(self, system: str, user: str) -> Iterator[str]:
+        """Ollama 는 스트리밍을 NDJSON 으로 준다. 한 줄이 조각 하나다.
+
+        재시도는 하지 않는다 — 조각이 이미 화면에 나간 뒤 다시 시작하면 답이 두 번 붙는다.
+        """
+        payload = self._payload(system, user, stream=True)
+        try:
+            with (
+                httpx.Client(timeout=self._timeout) as client,
+                client.stream("POST", self._url, json=payload) as res,
+            ):
+                if res.status_code >= 400:
+                    raise errors.ApiError(503, "AI_UNAVAILABLE", f"Ollama 오류 {res.status_code}")
+                for line in res.iter_lines():
+                    if not line.strip():
+                        continue
+                    body = json.loads(line)
+                    if body.get("error"):
+                        raise errors.ApiError(503, "AI_UNAVAILABLE", str(body["error"]))
+                    piece = (body.get("message") or {}).get("content") or ""
+                    if piece:
+                        yield piece
+                    if body.get("done"):
+                        return
+        except httpx.RequestError as exc:
+            raise errors.ApiError(503, "AI_UNAVAILABLE", f"LLM 에 닿지 못했습니다: {exc}") from exc
+
     def _result(self, body: dict) -> LlmResult:
         text = ((body.get("message") or {}).get("content") or "").strip()
         if not text:
@@ -65,9 +108,16 @@ class FakeLlm:
     """입력 해시를 박은 고정 문장. 결정성이 핵심이다 — 같은 입력은 항상 같은 답이라야
     상위 흐름(프롬프트 조립·응답 처리) 테스트가 성립한다."""
 
-    def complete(self, system: str, user: str) -> LlmResult:
+    def complete(self, system: str, user: str, *, json_object: bool = False) -> LlmResult:
         digest = hashlib.sha256(f"{system}\x1f{user}".encode()).hexdigest()[:12]
         return LlmResult(text=f"[fake:{digest}] {user[:80]}", model="fake")
+
+    def stream(self, system: str, user: str) -> Iterator[str]:
+        """complete 와 같은 문장을 어절 단위로 쪼개 준다. 조각을 이어 붙이는 경로가 시험된다."""
+        text = self.complete(system, user).text
+        words = text.split(" ")
+        for i, word in enumerate(words):
+            yield word if i == len(words) - 1 else word + " "
 
 
 def llm_port() -> LlmPort:

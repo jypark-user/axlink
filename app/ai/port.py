@@ -1,5 +1,6 @@
 """AI 포트 정의. 상위 계층은 이 프로토콜만 알고 어댑터를 모른다."""
 
+from collections.abc import Iterator
 from dataclasses import dataclass
 from typing import Protocol
 
@@ -26,11 +27,20 @@ class LlmPort(Protocol):
     """문장 생성. 이 포트가 만드는 것은 문장뿐이다 — 수치는 시맨틱 레이어의 집계에서,
     화면은 템플릿 선택에서 나온다(절대 규칙 1·2). 계약이 그 방어선을 넘지 않게 좁다.
 
-    파일럿 계약(complete·stream·callTool) 중 complete 만 승계한다. stream 은 화면
-    요구가 생기는 M4 에서 판단하고, callTool 은 채택하지 않는다 — 데이터 조회는
-    LLM 도구호출이 아니라 시맨틱 레이어의 몫이다(ARC-003 §4).
+    파일럿 계약(complete·stream·callTool) 중 complete 와 stream 을 승계한다. stream 은
+    AI 질의 화면이 답변을 조각 단위로 받기 위해 쓴다(SWFR.RAG.001). callTool 은 채택하지
+    않는다 — 데이터 조회는 LLM 도구호출이 아니라 시맨틱 레이어의 몫이다(ARC-003 §4).
     """
 
-    def complete(self, system: str, user: str) -> LlmResult:
-        """system 지시와 user 입력으로 응답 문장을 만든다. 결정은 호출부가 한다."""
+    def complete(self, system: str, user: str, *, json_object: bool = False) -> LlmResult:
+        """system 지시와 user 입력으로 응답 문장을 만든다. 결정은 호출부가 한다.
+
+        json_object 면 출력이 JSON 객체 하나여야 한다. 카탈로그에서 키를 고르는 자리에서
+        쓴다. 경량 모델은 자유 출력이면 답 대신 생각을 늘어놓는데, 형식을 못 박으면
+        그 길로 못 샌다.
+        """
+        ...
+
+    def stream(self, system: str, user: str) -> Iterator[str]:
+        """같은 입력으로 문장을 조각내어 돌려준다. 이어 붙이면 complete 의 text 와 같은 뜻이다."""
         ...
