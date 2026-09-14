@@ -10,7 +10,7 @@ import { isApiError } from '@/lib/api-error';
 import type { Role } from '@/types/api';
 
 const DEFAULT_PATH: Record<Role, string> = {
-  SUPER_ADMIN: '/admin/organizations',
+  SUPER_ADMIN: '/projects',
   CLIENT: '/projects',
   CONTRACTOR: '/projects',
 };
