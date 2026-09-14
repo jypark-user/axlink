@@ -25,6 +25,21 @@ class RequirementResponse(BaseModel):
     updatedAt: str  # noqa: N815
 
 
+class IssueResponse(BaseModel):
+    """작업·결함 한 건. 도구가 달라도 같은 모양이다(GitHub 이슈, Redmine 작업·결함)."""
+
+    id: str
+    projectId: str  # noqa: N815
+    key: str
+    title: str
+    status: str
+    severity: str | None
+    assignee: str | None
+    resolvedAt: str | None  # noqa: N815
+    source: SourceRef
+    updatedAt: str  # noqa: N815
+
+
 class WorkProductResponse(BaseModel):
     id: str
     projectId: str  # noqa: N815
