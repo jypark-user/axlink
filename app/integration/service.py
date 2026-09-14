@@ -20,6 +20,7 @@ from app.integration.models import (
     ToolConnectionCreateRequest,
     ToolConnectionResponse,
     ToolConnectionTestResponse,
+    ToolConnectionUpdateRequest,
 )
 from app.standard.mapping_rules import MappingRules
 
@@ -140,6 +141,44 @@ def update_mapping(
     return _to_response(cur, repository.find_by_id(cur, connection_id))
 
 
+def update(
+    cur: Any, principal: AuthPrincipal, connection_id: str, req: ToolConnectionUpdateRequest
+) -> ToolConnectionResponse:
+    """이름은 그냥 바꾼다. 주소·대상·인증정보가 바뀌면 검증이 무효라 DRAFT 로 돌린다.
+
+    다시 연결 테스트를 받아야 활성화된다. 검증된 채로 두면 엉뚱한 저장소를 읽는다.
+    """
+    conn = repository.find_by_id(cur, connection_id)
+    if conn is None:
+        raise errors.not_found("connection", connection_id)
+    _require_project(cur, principal, str(conn["project_id"]))
+    if req.name is not None and not req.name.strip():
+        raise errors.validation_failed("이름은 비울 수 없습니다.")
+    if req.baseUrl is not None:
+        if not req.baseUrl.strip():
+            raise errors.validation_failed("baseUrl 은 비울 수 없습니다.")
+        _require_https(req.baseUrl)
+    if req.targetResource is not None and not req.targetResource.strip():
+        raise errors.validation_failed("targetResource 는 비울 수 없습니다.")
+
+    encrypted = hint = None
+    if req.credential is not None:
+        encrypted = crypto.encrypt(req.credential.accessToken)
+        hint = crypto.hint(req.credential.accessToken)
+
+    changed_target = any(
+        value is not None and value != conn[column]
+        for value, column in ((req.baseUrl, "base_url"), (req.targetResource, "target_resource"))
+    )
+    repository.update_connection(
+        cur, connection_id, datetime.now(UTC),
+        name=req.name, base_url=req.baseUrl, target_resource=req.targetResource,
+        auth_encrypted=encrypted, auth_hint=hint,
+        reset_status=changed_target or req.credential is not None,
+    )
+    return _to_response(cur, repository.find_by_id(cur, connection_id))
+
+
 def delete(cur: Any, principal: AuthPrincipal, connection_id: str) -> None:
     conn = repository.find_by_id(cur, connection_id)
     if conn is None:
@@ -158,6 +197,21 @@ def trigger_sync(cur: Any, principal: AuthPrincipal, connection_id: str) -> Sync
     job_id = sync.run_sync(cur, conn)
     job = repository.find_sync_job(cur, job_id)
     return _to_job_response(job, conn)
+
+
+def retry_job(cur: Any, principal: AuthPrincipal, job_id: str) -> SyncJobResponse:
+    """실패한 잡만 다시 돈다. 성공한 잡을 또 돌리는 건 그냥 새 수집이다."""
+    job = repository.find_sync_job(cur, job_id)
+    if job is None:
+        raise errors.not_found("sync job", job_id)
+    conn = repository.find_by_id(cur, str(job["tool_connection_id"]))
+    if conn is None:
+        raise errors.not_found("connection", str(job["tool_connection_id"]))
+    _require_project(cur, principal, str(conn["project_id"]))
+    if job["status"] != "FAILED":
+        raise errors.validation_failed("실패한 수집만 다시 시도할 수 있습니다.")
+    new_id = sync.run_sync(cur, conn, retry_of=job_id)
+    return _to_job_response(repository.find_sync_job(cur, new_id), conn)
 
 
 def list_jobs(

@@ -23,6 +23,7 @@ from app.rag import indexing
 from app.standard import mapping, mapping_redmine, repository, work_product_type
 from app.standard.mapping_rules import MappingRules
 from app.standard.models import (
+    IssueResponse,
     RequirementResponse,
     SourceRef,
     WorkProductChecklistResponse,
@@ -219,6 +220,40 @@ def list_requirements(
             source=_source_ref(r),
             traceComplete=r["trace_complete"],
             updatedAt=r["updated_at"].isoformat(),
+        )
+        for r in rows
+    ]
+    return PageResponse.of(content, page, total)
+
+
+def list_issues(
+    cur: Any,
+    principal: AuthPrincipal,
+    project_id: str,
+    q: str | None,
+    status: str | None,
+    page: PageQuery,
+) -> PageResponse[IssueResponse]:
+    allowed = auth_repo.allowed_project_ids(
+        cur, principal.role, principal.org_id, principal.user_id
+    )
+    if project_id not in allowed:
+        raise errors.project_access_denied()
+
+    total = repository.count_issues(cur, project_id, q, status)
+    rows = repository.search_issues(cur, project_id, q, status, page)
+    content = [
+        IssueResponse(
+            id=str(r["id"]),
+            projectId=str(r["project_id"]),
+            key=r["issue_key"] or "",
+            title=r["title"],
+            status=r["status"],
+            severity=r["severity"],
+            assignee=r["assignee"],
+            resolvedAt=r["resolved_at"].isoformat() if r["resolved_at"] else None,
+            source=_source_ref(r),
+            updatedAt=(r["source_updated_at"] or r["updated_at"]).isoformat(),
         )
         for r in rows
     ]

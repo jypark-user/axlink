@@ -300,3 +300,111 @@ def test_other_contractor_cannot_touch_connection(client, client_token, as_pm, m
     # 사업 목록 자체는 박PM 것만 보이므로, 여기서는 미인증 접근을 확인한다
     res = client.get(f"/api/projects/{PID}/connections")
     assert res.status_code == 401
+
+
+def _verified_connection(client, token: str, created: list[str], monkeypatch) -> str:
+    """검증(VERIFIED)까지 끝난 연결 하나. 수정·재시도 시험의 출발점이다."""
+    monkeypatch.setattr(
+        github,
+        "verify",
+        lambda base, target, tok: github.ProbeResult("o/r", ["issue", "commit"], []),
+    )
+    cid = client.post(
+        f"/api/projects/{PID}/connections", json=_create_body(), headers=_auth(token)
+    ).json()["id"]
+    created.append(cid)
+    client.post(f"/api/connections/{cid}/test", headers=_auth(token))
+    return cid
+
+
+@requires_db
+def test_update_name_keeps_verification(client, as_pm, monkeypatch):
+    """이름만 바꾸는 건 검증과 무관하다. 상태가 내려가면 매번 다시 테스트해야 해서 귀찮다."""
+    token, created = as_pm
+    cid = _verified_connection(client, token, created, monkeypatch)
+
+    res = client.patch(
+        f"/api/connections/{cid}", json={"name": "이름만 바꿈"}, headers=_auth(token)
+    )
+    assert res.status_code == 200, res.text
+    assert res.json()["name"] == "이름만 바꿈"
+    assert res.json()["status"] == "VERIFIED"
+
+
+@requires_db
+def test_update_credential_resets_to_draft(client, as_pm, monkeypatch):
+    """토큰이 바뀌면 검증은 무효다. 새 토큰으로 다시 테스트를 받아야 한다."""
+    token, created = as_pm
+    cid = _verified_connection(client, token, created, monkeypatch)
+    before = client.get(f"/api/projects/{PID}/connections", headers=_auth(token)).json()
+    masked_before = next(c for c in before if c["id"] == cid)["credentialMasked"]
+
+    res = client.patch(
+        f"/api/connections/{cid}",
+        json={"credential": {"accessToken": "ghp_newToken9876"}},
+        headers=_auth(token),
+    )
+    assert res.status_code == 200, res.text
+    body = res.json()
+    assert body["status"] == "DRAFT"
+    assert body["credentialMasked"] != masked_before
+    assert "ghp_newToken9876" not in body["credentialMasked"]
+
+
+@requires_db
+def test_update_target_resets_to_draft(client, as_pm, monkeypatch):
+    token, created = as_pm
+    cid = _verified_connection(client, token, created, monkeypatch)
+    res = client.patch(
+        f"/api/connections/{cid}", json={"targetResource": "o/other"}, headers=_auth(token)
+    )
+    assert res.status_code == 200, res.text
+    assert res.json()["targetResource"] == "o/other"
+    assert res.json()["status"] == "DRAFT"
+
+
+@requires_db
+def test_update_rejects_http_base_url(client, as_pm, monkeypatch):
+    token, created = as_pm
+    cid = _verified_connection(client, token, created, monkeypatch)
+    res = client.patch(
+        f"/api/connections/{cid}", json={"baseUrl": "http://insecure.example"}, headers=_auth(token)
+    )
+    assert res.status_code == 400
+    assert res.json()["code"] == "VALIDATION_FAILED"
+
+
+@requires_db
+def test_retry_links_new_job_to_failed_one(client, as_pm, monkeypatch):
+    """실패한 수집을 다시 돌리면 새 잡이 생기고 원래 잡을 가리킨다. 실패 기록은 남는다."""
+    token, created = as_pm
+    from app.common import errors
+
+    cid = _verified_connection(client, token, created, monkeypatch)
+    monkeypatch.setattr(github, "fetch_file", lambda *a, **k: None)
+
+    def unreachable(*a, **k):
+        raise errors.ApiError(503, "TOOL_UNREACHABLE", "GitHub 에 닿지 못했습니다.")
+
+    monkeypatch.setattr(github, "fetch_items", unreachable)
+    failed = client.post(f"/api/connections/{cid}/sync", headers=_auth(token)).json()
+    assert failed["status"] == "FAILED"
+    assert failed["retryable"] is True
+
+    monkeypatch.setattr(github, "fetch_items", lambda *a, **k: iter(()))
+    res = client.post(f"/api/sync-jobs/{failed['id']}/retry", headers=_auth(token))
+    assert res.status_code == 202, res.text
+    retried = res.json()
+    assert retried["id"] != failed["id"]
+    assert retried["status"] == "SUCCEEDED"
+
+    with tx() as cur:
+        cur.execute("select retry_of_job_id, status from sync_job where id = %s", (retried["id"],))
+        row = cur.fetchone()
+        assert str(row["retry_of_job_id"]) == failed["id"]
+        cur.execute("select status from sync_job where id = %s", (failed["id"],))
+        assert cur.fetchone()["status"] == "FAILED"  # 실패 기록은 지우지 않는다
+
+    # 성공한 잡은 재시도 대상이 아니다
+    again = client.post(f"/api/sync-jobs/{retried['id']}/retry", headers=_auth(token))
+    assert again.status_code == 400
