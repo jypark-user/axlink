@@ -66,3 +66,60 @@ class WorkProductChecklistResponse(BaseModel):
     approvedCount: int  # noqa: N815
     totalCount: int  # noqa: N815
     items: list[WorkProductResponse]
+
+
+class TraceLinkResponse(BaseModel):
+    """추적관계 하나. externalUrl 은 근거가 적힌 원문의 위치다(SWFR.PIP.004)."""
+
+    id: str
+    projectId: str  # noqa: N815
+    fromType: str  # noqa: N815
+    fromId: str  # noqa: N815
+    fromLabel: str  # noqa: N815
+    toType: str  # noqa: N815
+    toId: str  # noqa: N815
+    toLabel: str  # noqa: N815
+    linkKind: str  # noqa: N815
+    origin: str  # AUTO | MANUAL
+    status: str  # ACTIVE | BROKEN
+    evidenceKind: str | None  # noqa: N815
+    evidenceText: str | None  # noqa: N815
+    externalUrl: str | None  # noqa: N815
+    createdAt: str  # noqa: N815
+
+
+class TraceCell(BaseModel):
+    targetId: str  # noqa: N815
+    label: str
+    externalUrl: str | None  # noqa: N815
+
+
+class TraceabilityRowResponse(BaseModel):
+    """추적표 한 줄. 요구사항 하나에 설계·구현·시험 칸이 붙는다."""
+
+    requirementId: str  # noqa: N815
+    requirementCode: str  # noqa: N815
+    requirementTitle: str  # noqa: N815
+    requirementStatus: str  # noqa: N815
+    designs: list[TraceCell]
+    implementsList: list[TraceCell]  # noqa: N815 — implements 는 예약어라 프런트가 이렇게 부른다
+    tests: list[TraceCell]
+    brokenAt: list[str]  # noqa: N815
+
+
+class EntityHistoryResponse(BaseModel):
+    id: str
+    entityType: str  # noqa: N815
+    entityId: str  # noqa: N815
+    field: str
+    fromValue: str | None  # noqa: N815
+    toValue: str | None  # noqa: N815
+    actor: str
+    actorName: str | None  # noqa: N815
+    changedAt: str  # noqa: N815
+
+
+class RequirementDetailResponse(RequirementResponse):
+    body: str
+    traceLinks: list[TraceLinkResponse]  # noqa: N815
+    history: list[EntityHistoryResponse]

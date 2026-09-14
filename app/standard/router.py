@@ -8,14 +8,39 @@ from fastapi import APIRouter, Query
 from app.auth.deps import Principal
 from app.common.paging import PageQuery, PageResponse
 from app.db import tx
-from app.standard import service
+from app.standard import service, trace_service
 from app.standard.models import (
     IssueResponse,
+    RequirementDetailResponse,
     RequirementResponse,
+    TraceabilityRowResponse,
     WorkProductChecklistResponse,
 )
 
 router = APIRouter(prefix="/api/projects", tags=["requirements"])
+
+
+@router.get("/{project_id}/traceability", response_model=PageResponse[TraceabilityRowResponse])
+def traceability(
+    project_id: str,
+    principal: Principal,
+    page: int = Query(default=0, ge=0),
+    size: int = Query(default=20, ge=1, le=200),
+) -> PageResponse[TraceabilityRowResponse]:
+    """추적표. 요구사항마다 이슈·커밋·산출물이 어느 칸에 걸려 있는지(SWFR.WEB.002)."""
+    with tx() as cur:
+        return trace_service.traceability_rows(
+            cur, principal, project_id, PageQuery(page=page, size=size)
+        )
+
+
+@router.get("/{project_id}/requirements/{requirement_id}", response_model=RequirementDetailResponse)
+def requirement_detail(
+    project_id: str, requirement_id: str, principal: Principal
+) -> RequirementDetailResponse:
+    """요구사항 하나와 걸린 링크 전부. 링크마다 근거 원문과 위치가 붙는다."""
+    with tx() as cur:
+        return trace_service.requirement_detail(cur, principal, project_id, requirement_id)
 
 
 @router.get("/{project_id}/requirements", response_model=PageResponse[RequirementResponse])
