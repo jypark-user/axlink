@@ -143,10 +143,17 @@ function projectColumns(role: Role | undefined): ColumnDef<ProjectSummaryRespons
     id: 'alerts',
     header: '이슈',
     cell: ({ row }) => {
-      const { openCorrectionActionCount: ca, openRiskCount: risk } = row.original;
-      if (ca === 0 && risk === 0) return <span className="text-muted-foreground">-</span>;
+      const {
+        openCorrectionActionCount: ca,
+        openRiskCount: risk,
+        openReviewRequestCount: req,
+      } = row.original;
+      if (ca === 0 && risk === 0 && req === 0) {
+        return <span className="text-muted-foreground">-</span>;
+      }
       return (
         <div className="flex flex-wrap gap-1.5">
+          {req > 0 && <Badge variant="primary">요청 {req}</Badge>}
           {ca > 0 && <Badge variant="destructive">시정 {ca}</Badge>}
           {risk > 0 && <Badge variant="warning">리스크 {risk}</Badge>}
         </div>
