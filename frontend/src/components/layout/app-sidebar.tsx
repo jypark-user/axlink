@@ -1,10 +1,8 @@
 import { Link, NavLink, useLocation, useNavigate } from 'react-router-dom';
 import type { LucideIcon } from 'lucide-react';
 import {
-  Building2,
   CalendarRange,
   CircleDot,
-  ClipboardCheck,
   FileDiff,
   FileText,
   FolderKanban,
@@ -18,7 +16,6 @@ import {
   Pencil,
   Pin,
   RefreshCw,
-  ScrollText,
   Trash2,
   Upload,
   Waypoints,
@@ -77,14 +74,6 @@ const GLOBAL_GROUPS: NavGroup[] = [
     label: null,
     items: [{ to: '/projects', label: '사업 목록', icon: FolderKanban }],
   },
-  {
-    label: '관리',
-    items: [
-      { to: '/admin/organizations', label: '발주사', icon: Building2, roles: ['SUPER_ADMIN'] },
-      { to: '/admin/contractors', label: '용역사 계정', icon: HardHat, roles: ['SUPER_ADMIN'] },
-      { to: '/admin/audit', label: '감사 로그', icon: ScrollText, roles: ['SUPER_ADMIN'] },
-    ],
-  },
 ];
 
 /**
@@ -123,7 +112,6 @@ const projectGroups = (base: string): NavGroup[] => [
       { to: `${base}/assignments`, label: '용역사 할당', icon: HardHat, roles: ['CLIENT'] },
       { to: `${base}/connections`, label: '도구 연동', icon: Link2 },
       { to: `${base}/collection`, label: '동기화 이력', icon: RefreshCw },
-      { to: `${base}/acceptance`, label: '검수', icon: ClipboardCheck, roles: ['CLIENT'] },
     ],
   },
 ];
