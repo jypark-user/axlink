@@ -42,12 +42,15 @@ def project_progress(
     )
     if project_id not in allowed:
         raise errors.project_access_denied()
+    return compute(cur, project_id, at or date.today())
 
-    at = at or date.today()
+
+def compute(cur: Any, project_id: str, at: date) -> ProgressResponse:
+    """접근 검사 없는 산정. 화면(위)과 일별 스냅샷이 같은 함수를 쓴다."""
     warnings: list[str] = []
 
     plan_row = standard_repo.current_work_product(cur, project_id, PLAN_TYPE)
-    wbs_progress, plan_warning = _read_plan(project_id, plan_row)
+    wbs_progress, plan_warning = _read_plan(project_id, plan_row, at)
     if plan_warning:
         warnings.append(plan_warning)
     if wbs_progress is not None:
