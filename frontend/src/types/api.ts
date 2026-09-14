@@ -288,6 +288,8 @@ export interface ProjectSummaryResponse {
   requiredWorkProductTotal: number;
   openCorrectionActionCount: number;
   openRiskCount: number;
+  /** 미처리 확인 요청. 확인완료가 아닌 것 (SWFR.WEB.006). */
+  openReviewRequestCount: number;
   updatedAt: string;
 }
 
@@ -316,6 +318,7 @@ export interface ProjectDetailResponse {
   assignmentCount: number;
   connectionCount: number;
   defaultDashboardId: string;
+  openReviewRequestCount: number;
   metrics: ProjectMetrics;
   createdAt: string;
   updatedAt: string;
@@ -669,6 +672,71 @@ export interface AcceptanceRecordResponse {
   documentUri: string | null;
   status: AcceptanceRecordStatus;
   createdAt: string;
+}
+
+/** 확인 요청 · 조치 보고 (SWFR.WEB.004~006). AX Link 안에만 기록한다. */
+export type ReviewTargetType = 'WBS_ITEM' | 'WORK_PRODUCT' | 'ISSUE' | 'RISK' | 'METRIC';
+export type ReviewRequestStatus = 'REQUESTED' | 'REPORTED' | 'CONFIRMED';
+export type ReviewEventKind = 'REQUESTED' | 'REPORTED' | 'CONFIRMED' | 'REREQUESTED';
+
+export interface ReviewTargetOption {
+  key: string;
+  label: string;
+}
+
+export interface ReviewRequestCreateRequest {
+  targetType: ReviewTargetType;
+  targetKey: string;
+  title: string;
+  body: string;
+}
+
+export interface ReviewBodyRequest {
+  body: string;
+}
+
+/** 요청 시점과 지금의 값 차이. 시스템이 계산한다. */
+export interface ReviewStateChange {
+  field: string;
+  label: string;
+  before: unknown;
+  after: unknown;
+}
+
+export interface ReviewRequestEventResponse {
+  id: string;
+  kind: ReviewEventKind;
+  body: string | null;
+  actorName: string;
+  snapshot: Record<string, unknown>;
+  createdAt: string;
+}
+
+export interface ReviewRequestResponse {
+  id: string;
+  projectId: string;
+  targetType: ReviewTargetType;
+  targetKey: string;
+  targetLabel: string;
+  title: string;
+  body: string;
+  status: ReviewRequestStatus;
+  requestedByName: string;
+  requestedAt: string;
+  reportBody: string | null;
+  reportedByName: string | null;
+  reportedAt: string | null;
+  confirmedByName: string | null;
+  confirmedAt: string | null;
+  rerequestCount: number;
+  updatedAt: string;
+}
+
+export interface ReviewRequestDetailResponse extends ReviewRequestResponse {
+  snapshot: Record<string, unknown>;
+  currentState: Record<string, unknown>;
+  changes: ReviewStateChange[];
+  events: ReviewRequestEventResponse[];
 }
 
 export interface GridItem {

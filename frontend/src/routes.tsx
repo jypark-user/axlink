@@ -61,8 +61,10 @@ const IssuesPage = lazy(() =>
 const SchedulePage = lazy(() =>
   import('@/features/schedule/schedule-page').then((m) => ({ default: m.SchedulePage })),
 );
-const ChangesPage = lazy(() =>
-  import('@/features/changes/changes-page').then((m) => ({ default: m.ChangesPage })),
+const ReviewRequestsPage = lazy(() =>
+  import('@/features/review-requests/review-requests-page').then((m) => ({
+    default: m.ReviewRequestsPage,
+  })),
 );
 const AskPage = lazy(() =>
   import('@/features/ax-query/ask-page').then((m) => ({ default: m.AskPage })),
@@ -207,6 +209,15 @@ export function AppRoutes(): ReactNode {
               </SuspenseShell>
             }
           />
+          {/* 확인 요청은 양쪽이 다 본다. 발주기관이 요청하고 용역사가 보고한다 */}
+          <Route
+            path="reviews"
+            element={
+              <SuspenseShell>
+                <ReviewRequestsPage />
+              </SuspenseShell>
+            }
+          />
 
           <Route element={<RequireRole allow={EXCEPT_CONTRACTOR} />}>
             <Route
@@ -262,22 +273,6 @@ export function AppRoutes(): ReactNode {
               element={
                 <SuspenseShell>
                   <IssuesPage />
-                </SuspenseShell>
-              }
-            />
-            <Route
-              path="changes"
-              element={
-                <SuspenseShell>
-                  <ChangesPage tab="CR" />
-                </SuspenseShell>
-              }
-            />
-            <Route
-              path="corrections"
-              element={
-                <SuspenseShell>
-                  <ChangesPage tab="CA" />
                 </SuspenseShell>
               }
             />
