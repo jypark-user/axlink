@@ -293,6 +293,58 @@ def search_requirements(
     )
 
 
+_ISSUE_COLUMNS = """
+    i.id, i.project_id, i.issue_key, i.title, i.status, i.severity, i.assignee,
+    i.resolved_at, i.source_updated_at, i.updated_at,
+    i.tool_connection_id, i.external_id, i.external_url, i.source_kind,
+    c.tool as tool_name
+"""
+_ISSUE_FROM = """
+    from issue i
+    left join tool_connection c on c.id = i.tool_connection_id
+"""
+
+
+def _issue_filter(q: str | None, status: str | None) -> tuple[str, list[Any]]:
+    where, params = "", []
+    if q and q.strip():
+        like = f"%{q.strip()}%"
+        where += " and (i.issue_key ilike %s or i.title ilike %s)"
+        params += [like, like]
+    if status:
+        where += " and i.status = %s"
+        params.append(status)
+    return where, params
+
+
+def count_issues(cur: Any, project_id: str, q: str | None, status: str | None) -> int:
+    where, params = _issue_filter(q, status)
+    row = fetch_one(
+        cur,
+        f"select count(*) as n from issue i where i.project_id = %s {where}",
+        (project_id, *params),
+    )
+    return int(row["n"]) if row else 0
+
+
+def search_issues(
+    cur: Any, project_id: str, q: str | None, status: str | None, page: PageQuery
+) -> list[dict[str, Any]]:
+    """열린 것이 위로, 그 안에서는 원천에서 최근 움직인 순서다. 감독이 볼 순서가 그렇다."""
+    where, params = _issue_filter(q, status)
+    return fetch_all(
+        cur,
+        f"""
+        select {_ISSUE_COLUMNS} {_ISSUE_FROM}
+         where i.project_id = %s {where}
+         order by (i.status in ('RESOLVED', 'CLOSED')), i.source_updated_at desc nulls last,
+                  i.updated_at desc
+         limit %s offset %s
+        """,
+        (project_id, *params, page.size, page.offset),
+    )
+
+
 def list_work_products(cur: Any, project_id: str) -> list[dict[str, Any]]:
     """현행 산출물 22종. 아직 안 낸 것도 자리로 나와야 제출 현황이 성립한다."""
     return fetch_all(

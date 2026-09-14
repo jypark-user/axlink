@@ -9,7 +9,11 @@ from app.auth.deps import Principal
 from app.common.paging import PageQuery, PageResponse
 from app.db import tx
 from app.standard import service
-from app.standard.models import RequirementResponse, WorkProductChecklistResponse
+from app.standard.models import (
+    IssueResponse,
+    RequirementResponse,
+    WorkProductChecklistResponse,
+)
 
 router = APIRouter(prefix="/api/projects", tags=["requirements"])
 
@@ -25,6 +29,22 @@ def list_requirements(
     with tx() as cur:
         return service.list_requirements(
             cur, principal, project_id, q, PageQuery(page=page, size=size)
+        )
+
+
+@router.get("/{project_id}/issues", response_model=PageResponse[IssueResponse])
+def list_issues(
+    project_id: str,
+    principal: Principal,
+    q: str | None = None,
+    status: str | None = None,
+    page: int = Query(default=0, ge=0),
+    size: int = Query(default=20, ge=1, le=200),
+) -> PageResponse[IssueResponse]:
+    """이슈·위험 화면. 도구에서 승격된 작업·결함이 여기로 나온다."""
+    with tx() as cur:
+        return service.list_issues(
+            cur, principal, project_id, q, status, PageQuery(page=page, size=size)
         )
 
 
