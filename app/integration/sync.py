@@ -20,6 +20,7 @@ from app.common import crypto, errors
 from app.config import settings
 from app.integration import port, repository
 from app.standard import service as standard
+from app.standard import trace_service
 
 _EPOCH = datetime(1970, 1, 1, tzinfo=UTC)
 _PER_PAGE = 50
@@ -83,6 +84,8 @@ def run_sync(cur: Any, connection: dict[str, Any]) -> str:
     stats["upserted"] = promoted.upserted
     stats["unmapped"] = promoted.unmapped
     stats["indexed"] = promoted.indexed
+    # 승격이 끝나야 링크의 양 끝이 있다. 다른 연결의 원본까지 같이 보므로 사업 단위로 돈다.
+    trace_service.build_project_links(cur, str(connection["project_id"]))
 
     notes = []
     if denied:
