@@ -1,6 +1,55 @@
 """사업 DTO. 프런트 types/api.ts 의 ProjectSummaryResponse 와 필드가 1:1 이다."""
 
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
+
+
+class ProjectCreateRequest(BaseModel):
+    name: str = Field(min_length=1, max_length=200)
+    startDate: str  # noqa: N815 — 프런트 계약 필드명
+    endDate: str  # noqa: N815
+    description: str = Field(min_length=1)
+    contractorName: str = ""  # noqa: N815
+    # 지울 때 맞춰야 하는 비밀번호. 서버는 해시로만 갖고 있는다.
+    deletePassword: str = Field(min_length=4)  # noqa: N815
+
+
+class ProjectUpdateRequest(BaseModel):
+    name: str | None = None
+    startDate: str | None = None  # noqa: N815
+    endDate: str | None = None  # noqa: N815
+    description: str | None = None
+    contractorName: str | None = None  # noqa: N815
+    currentSiPhase: str | None = None  # noqa: N815
+
+
+class ProjectDeleteRequest(BaseModel):
+    password: str
+
+
+class AssignmentCreateRequest(BaseModel):
+    contractorOrgId: str  # noqa: N815
+    userIds: list[str]  # noqa: N815
+
+
+class AssignmentResponse(BaseModel):
+    id: str
+    projectId: str  # noqa: N815
+    contractorOrgId: str  # noqa: N815
+    contractorOrgName: str  # noqa: N815
+    userId: str  # noqa: N815
+    userName: str  # noqa: N815
+    userEmail: str  # noqa: N815 — 로그인 아이디를 보여 준다(V20 이후 이메일이 아닐 수 있다)
+    status: str
+    assignedAt: str  # noqa: N815
+
+
+class ProjectInviteResponse(BaseModel):
+    id: str
+    projectId: str  # noqa: N815
+    expiresAt: str  # noqa: N815
+    revokedAt: str | None  # noqa: N815
+    createdAt: str  # noqa: N815
+    token: str | None  # 생성 응답에만 담긴다. 저장은 해시로만 한다.
 
 
 class ProjectMetrics(BaseModel):

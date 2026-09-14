@@ -4,7 +4,14 @@ from fastapi import APIRouter, Header, Response
 
 from app.auth import service
 from app.auth.deps import Principal
-from app.auth.models import LoginRequest, LoginResponse, MeResponse, RefreshTokenRequest
+from app.auth.models import (
+    AcceptInvitationRequest,
+    InvitationPreviewResponse,
+    LoginRequest,
+    LoginResponse,
+    MeResponse,
+    RefreshTokenRequest,
+)
 from app.db import tx
 
 router = APIRouter(prefix="/api/auth", tags=["auth"])
@@ -35,3 +42,18 @@ def logout(principal: Principal, req: RefreshTokenRequest | None = None) -> Resp
 def me(principal: Principal) -> MeResponse:
     with tx() as cur:
         return service.me(cur, principal)
+
+
+@router.get("/invitations/{token}", response_model=InvitationPreviewResponse)
+def preview_invitation(token: str) -> InvitationPreviewResponse:
+    """로그인 전에 부른다. 토큰만으로 어느 사업 초대인지 보여 준다."""
+    with tx() as cur:
+        return service.preview_invitation(cur, token)
+
+
+@router.post("/invitations/accept", response_model=LoginResponse)
+def accept_invitation(
+    req: AcceptInvitationRequest, user_agent: str | None = Header(default=None)
+) -> LoginResponse:
+    with tx() as cur:
+        return service.accept_invitation(cur, req, user_agent)

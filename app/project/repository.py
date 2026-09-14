@@ -3,6 +3,7 @@
 지표는 전부 SQL 집계다. LLM 이 수치를 만들지 않는다는 절대 규칙 1 이 여기서부터 지켜진다.
 """
 
+from datetime import datetime
 from typing import Any
 
 from app.common.paging import PageQuery
@@ -66,6 +67,216 @@ def search_projects(
          limit %s offset %s
     """
     return fetch_all(cur, sql, [*params, page.size, page.offset])
+
+
+def insert_project(
+    cur: Any,
+    client_org_id: str,
+    name: str,
+    start_date: Any,
+    end_date: Any,
+    description: str,
+    contractor_name: str | None,
+    delete_password_hash: str,
+) -> str:
+    row = fetch_one(
+        cur,
+        """
+        insert into project
+          (client_org_id, name, start_date, end_date, description, contractor_name,
+           delete_password_hash, status, current_si_phase)
+        values (%s, %s, %s, %s, %s, %s, %s, 'PLANNING', 'SI_1')
+        returning id
+        """,
+        (client_org_id, name, start_date, end_date, description, contractor_name,
+         delete_password_hash),
+    )
+    return str(row["id"])
+
+
+_UPDATABLE = {
+    "name": "name",
+    "start_date": "start_date",
+    "end_date": "end_date",
+    "description": "description",
+    "contractor_name": "contractor_name",
+    "current_si_phase": "current_si_phase",
+}
+
+
+def update_project(cur: Any, project_id: str, fields: dict[str, Any]) -> None:
+    """준 컬럼만 바꾼다. 컬럼 이름은 화이트리스트로만 받는다."""
+    sets, params = ["updated_at = now()"], []
+    for key, value in fields.items():
+        column = _UPDATABLE[key]
+        sets.append(f"{column} = %s")
+        params.append(value)
+    cur.execute(
+        f"update project set {', '.join(sets)} where id = %s", (*params, project_id)
+    )
+
+
+def find_delete_hash(cur: Any, project_id: str) -> str | None:
+    row = fetch_one(cur, "select delete_password_hash from project where id = %s", (project_id,))
+    return row["delete_password_hash"] if row else None
+
+
+def delete_project(cur: Any, project_id: str) -> None:
+    # 하위 테이블은 전부 on delete cascade 다. 사업이 사라지면 수집분도 같이 사라진다.
+    cur.execute("delete from project where id = %s", (project_id,))
+
+
+def insert_default_dashboard(cur: Any, project_id: str, owner_user_id: str) -> str:
+    row = fetch_one(
+        cur,
+        """
+        insert into dashboard (project_id, owner_user_id, name, is_default)
+        values (%s, %s, '사업 현황', true)
+        returning id
+        """,
+        (project_id, owner_user_id),
+    )
+    return str(row["id"])
+
+
+# --- 할당 -----------------------------------------------------------------
+
+_ASSIGNMENT_SELECT = """
+    select a.id, a.project_id, a.contractor_org_id, o.name as contractor_org_name,
+           a.user_id, u.name as user_name, u.username, a.status, a.created_at
+      from project_assignment a
+      join app_user u on u.id = a.user_id
+      join organization o on o.id = a.contractor_org_id
+"""
+
+
+def list_assignments(cur: Any, project_id: str) -> list[dict[str, Any]]:
+    return fetch_all(
+        cur,
+        _ASSIGNMENT_SELECT
+        + " where a.project_id = %s and a.status = 'ACTIVE' order by a.created_at",
+        (project_id,),
+    )
+
+
+def find_assignment(cur: Any, project_id: str, user_id: str) -> dict[str, Any] | None:
+    return fetch_one(
+        cur,
+        _ASSIGNMENT_SELECT + " where a.project_id = %s and a.user_id = %s"
+        " order by a.created_at desc limit 1",
+        (project_id, user_id),
+    )
+
+
+def find_assignment_by_id(cur: Any, assignment_id: str) -> dict[str, Any] | None:
+    return fetch_one(cur, _ASSIGNMENT_SELECT + " where a.id = %s", (assignment_id,))
+
+
+def insert_assignment(
+    cur: Any, project_id: str, contractor_org_id: str, user_id: str, assigned_by: str
+) -> str:
+    row = fetch_one(
+        cur,
+        """
+        insert into project_assignment
+          (project_id, contractor_org_id, user_id, assigned_by_user_id, status)
+        values (%s, %s, %s, %s, 'ACTIVE')
+        returning id
+        """,
+        (project_id, contractor_org_id, user_id, assigned_by),
+    )
+    return str(row["id"])
+
+
+def reactivate_assignment(cur: Any, assignment_id: str) -> None:
+    cur.execute(
+        "update project_assignment set status = 'ACTIVE', revoked_at = null, updated_at = now()"
+        " where id = %s",
+        (assignment_id,),
+    )
+
+
+def revoke_assignment(cur: Any, assignment_id: str, now: datetime) -> None:
+    cur.execute(
+        "update project_assignment set status = 'REVOKED', revoked_at = %s, updated_at = %s"
+        " where id = %s",
+        (now, now, assignment_id),
+    )
+
+
+def find_user_in_org(cur: Any, user_id: str, org_id: str) -> dict[str, Any] | None:
+    return fetch_one(
+        cur,
+        "select id, role, status, name from app_user where id = %s and organization_id = %s",
+        (user_id, org_id),
+    )
+
+
+def find_organization(cur: Any, org_id: str) -> dict[str, Any] | None:
+    return fetch_one(
+        cur, "select id, name, type, status from organization where id = %s", (org_id,)
+    )
+
+
+def find_organization_by_name(cur: Any, name: str) -> dict[str, Any] | None:
+    return fetch_one(
+        cur, "select id, name, type, status from organization where name = %s", (name,)
+    )
+
+
+def insert_organization(cur: Any, name: str, org_type: str) -> str:
+    row = fetch_one(
+        cur,
+        "insert into organization (name, type, status) values (%s, %s, 'ACTIVE') returning id",
+        (name, org_type),
+    )
+    return str(row["id"])
+
+
+def insert_user(
+    cur: Any, org_id: str, username: str, name: str, password_hash: str, role: str
+) -> str:
+    row = fetch_one(
+        cur,
+        """
+        insert into app_user (organization_id, username, name, password_hash, role, status)
+        values (%s, %s, %s, %s, %s, 'ACTIVE')
+        returning id
+        """,
+        (org_id, username, name, password_hash, role),
+    )
+    return str(row["id"])
+
+
+# --- 초대 -----------------------------------------------------------------
+
+def insert_invite(
+    cur: Any, project_id: str, token_hash: str, expires_at: datetime, created_by: str
+) -> dict[str, Any]:
+    return fetch_one(
+        cur,
+        """
+        insert into project_invite (project_id, token_hash, expires_at, created_by_user_id)
+        values (%s, %s, %s, %s)
+        returning id, project_id, expires_at, revoked_at, created_at
+        """,
+        (project_id, token_hash, expires_at, created_by),
+    )
+
+
+def find_invite_by_hash(cur: Any, token_hash: str) -> dict[str, Any] | None:
+    return fetch_one(
+        cur,
+        """
+        select i.id, i.project_id, i.expires_at, i.revoked_at, i.created_by_user_id,
+               p.name as project_name, o.name as client_org_name
+          from project_invite i
+          join project p on p.id = i.project_id
+          join organization o on o.id = p.client_org_id
+         where i.token_hash = %s
+        """,
+        (token_hash,),
+    )
 
 
 def find_by_id(cur: Any, project_id: str) -> dict[str, Any] | None:

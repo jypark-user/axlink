@@ -27,6 +27,7 @@ from app.dashboard.router import router as dashboard_router
 from app.db import close_pool, pool, tx
 from app.document.router import router as document_router
 from app.integration.router import router as integration_router
+from app.org.router import router as org_router
 from app.project.router import router as project_router
 from app.rag.indexing import verify_dimension
 from app.standard.router import router as standard_router
@@ -62,6 +63,7 @@ app.add_exception_handler(Exception, unhandled_error_handler)
 
 app.include_router(auth_router)
 app.include_router(project_router)
+app.include_router(org_router)
 app.include_router(integration_router)
 app.include_router(document_router)
 app.include_router(standard_router)

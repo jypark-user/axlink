@@ -10,10 +10,18 @@ from typing import Any
 import bcrypt
 
 from app.auth import jwt_codec, repository
-from app.auth.models import AuthPrincipal, LoginRequest, LoginResponse, MeResponse
+from app.auth.models import (
+    AcceptInvitationRequest,
+    AuthPrincipal,
+    InvitationPreviewResponse,
+    LoginRequest,
+    LoginResponse,
+    MeResponse,
+)
 from app.common import errors
 from app.common.hashes import random_token, sha256_hex
 from app.config import settings
+from app.project import repository as project_repository
 
 
 def _verify_password(raw: str, stored_hash: str | None) -> bool:
@@ -66,6 +74,63 @@ def me(cur: Any, principal: AuthPrincipal) -> MeResponse:
     if user is None:
         raise errors.token_invalid()
     return _to_me(cur, user, _organization(cur, user))
+
+
+def _valid_invite(cur: Any, token: str, now: datetime) -> dict[str, Any]:
+    invite = project_repository.find_invite_by_hash(cur, sha256_hex(token))
+    if invite is None or invite["revoked_at"] is not None or invite["expires_at"] <= now:
+        raise errors.ApiError(404, "NOT_FOUND", "초대 링크가 유효하지 않거나 만료되었습니다.")
+    return invite
+
+
+def preview_invitation(cur: Any, token: str) -> InvitationPreviewResponse:
+    """로그인 전에 부른다. 어느 사업의 초대인지만 보여 주고 다른 것은 내지 않는다."""
+    invite = _valid_invite(cur, token, datetime.now(UTC))
+    return InvitationPreviewResponse(
+        kind="PROJECT",
+        projectName=invite["project_name"],
+        organizationName=invite["client_org_name"],
+        username=None,
+        name=None,
+        expiresAt=invite["expires_at"].isoformat(),
+    )
+
+
+def accept_invitation(
+    cur: Any, req: AcceptInvitationRequest, user_agent: str | None
+) -> LoginResponse:
+    """용역사가 직접 계정을 만들고 그 사업에 붙는다(S2-1). 링크는 소진되지 않는다.
+
+    회사명이 이미 있으면 그 조직에 넣는다. 발주사 이름을 적으면 거절한다.
+    """
+    now = datetime.now(UTC)
+    invite = _valid_invite(cur, req.token, now)
+    org_name = (req.contractorOrgName or "").strip()
+    username = (req.username or "").strip()
+    name = (req.name or "").strip()
+    if not org_name or not username or not name:
+        raise errors.validation_failed("회사명·아이디·이름을 모두 입력하세요.")
+    if repository.find_user_by_username(cur, username) is not None:
+        raise errors.validation_failed("이미 쓰고 있는 아이디입니다.")
+
+    org = project_repository.find_organization_by_name(cur, org_name)
+    if org is None:
+        org_id = project_repository.insert_organization(cur, org_name, "CONTRACTOR")
+    elif org["type"] != "CONTRACTOR":
+        raise errors.validation_failed("용역사 회사명이 아닙니다.")
+    else:
+        org_id = str(org["id"])
+
+    password_hash = bcrypt.hashpw(req.password.encode("utf-8"), bcrypt.gensalt()).decode()
+    user_id = project_repository.insert_user(
+        cur, org_id, username, name, password_hash, "CONTRACTOR"
+    )
+    project_repository.insert_assignment(
+        cur, str(invite["project_id"]), org_id, user_id, str(invite["created_by_user_id"])
+    )
+    user = repository.find_user_by_id(cur, user_id)
+    repository.touch_last_login(cur, user["id"], now)
+    return _issue(cur, user, now, user_agent)
 
 
 def _issue(cur: Any, user: dict[str, Any], now: datetime, user_agent: str | None) -> LoginResponse:

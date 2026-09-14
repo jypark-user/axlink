@@ -8,6 +8,7 @@ from typing import Any
 
 from app.common.paging import PageQuery
 from app.db import fetch_all, fetch_one
+from app.standard import work_product_type
 
 _SOURCE_CONFLICT = """
     on conflict (tool_connection_id, external_id)
@@ -291,6 +292,28 @@ def search_requirements(
         """,
         (project_id, *params, page.size, page.offset),
     )
+
+
+def create_checklist(cur: Any, project_id: str) -> int:
+    """사업의 산출물 목록 22개 항목을 만든다. 이미 있는 유형은 건드리지 않는다.
+
+    사업 생성 때 부른다. 수집이 먼저 닿아 항목을 즉석에서 만들면 활동 구분이 기본값으로
+    들어가므로, 목록이 수집보다 먼저 있어야 한다(ARC-005).
+    """
+    created = 0
+    for product_type, (pm, si) in work_product_type.ACTIVITIES.items():
+        cur.execute(
+            """
+            insert into work_product (project_id, type, pm_activity, si_activity)
+            select %s, %s, %s, %s
+             where not exists (
+               select 1 from work_product where project_id = %s and type = %s
+             )
+            """,
+            (project_id, product_type, pm, si, project_id, product_type),
+        )
+        created += cur.rowcount
+    return created
 
 
 _ISSUE_COLUMNS = """

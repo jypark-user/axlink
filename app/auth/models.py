@@ -31,6 +31,24 @@ class LoginResponse(BaseModel):
     user: MeResponse
 
 
+class InvitationPreviewResponse(BaseModel):
+    kind: str  # PROJECT | USER
+    projectName: str | None  # noqa: N815
+    organizationName: str  # noqa: N815
+    username: str | None
+    name: str | None
+    expiresAt: str  # noqa: N815
+
+
+class AcceptInvitationRequest(BaseModel):
+    token: str = Field(min_length=1)
+    # 아래 셋은 PROJECT 초대(새 계정)에만 쓴다.
+    contractorOrgName: str | None = None  # noqa: N815
+    username: str | None = None
+    name: str | None = None
+    password: str = Field(min_length=8)
+
+
 class AuthPrincipal(BaseModel):
     user_id: str
     org_id: str
