@@ -4,7 +4,6 @@ import {
   CalendarRange,
   CircleDot,
   ClipboardList,
-  ClipboardCheck,
   FileText,
   FolderKanban,
   HardHat,
