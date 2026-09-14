@@ -1,4 +1,4 @@
-"""산출물 체크리스트. 22종 자리가 미리 있고 수집·업로드가 그 자리를 채운다."""
+"""산출물 체크리스트. 22종 항목이 미리 있고 수집·업로드가 그 항목을 채운다."""
 
 import base64
 
@@ -47,7 +47,7 @@ def test_other_project_is_denied(client, client_token):
 
 @pytest.fixture
 def restore_project_plan():
-    """수집이 쌓은 버전을 지우고 원래 빈 자리를 되살린다.
+    """수집이 쌓은 버전을 지우고 원래 빈 항목을 되살린다.
 
     버전이 누적되므로 현행 행 하나만 되돌려서는 부족하다 — 수집이 만든 행을 지워야 한다.
     """
@@ -137,7 +137,7 @@ def _versions() -> list[dict]:
 
 @requires_db
 def test_collected_file_fills_the_slot(client, client_token, monkeypatch, restore_project_plan):
-    """저장소에 커밋된 WBS 를 수집하면 사업수행계획서 자리가 채워진다.
+    """저장소에 커밋된 WBS 를 수집하면 사업수행계획서 항목이 채워진다.
 
     GitHub 만 쓰는 업체도 파일만 올려 두면 진척 산정이 성립한다는 전제가 이것이다.
     """

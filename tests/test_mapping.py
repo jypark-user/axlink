@@ -100,7 +100,7 @@ def test_commit_without_time_is_dropped():
 
 
 def test_repo_file_becomes_work_product():
-    """저장소에서 가져온 파일이 산출물 자리를 채운다 — 아무도 업로드하지 않았다."""
+    """저장소에서 가져온 파일이 산출물 항목을 채운다. 아무도 업로드하지 않았다."""
     rec = mapping.to_work_product(
         {
             "path": "docs/00-management/WBS.xlsx",
