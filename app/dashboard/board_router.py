@@ -4,12 +4,15 @@ from fastapi import APIRouter, Response, status
 
 from app.auth.deps import Principal
 from app.dashboard import board_service as service
+from app.dashboard import generation
 from app.dashboard.models import (
     DashboardDetailResponse,
     DashboardLayoutUpdateRequest,
     DashboardSummaryResponse,
     WidgetCreateRequest,
     WidgetDataRequest,
+    WidgetGenerateRequest,
+    WidgetGenerateResponse,
     WidgetPreviewRequest,
     WidgetResponse,
     WidgetUpdateRequest,
@@ -80,3 +83,10 @@ def widget_data(
 def preview(req: WidgetPreviewRequest, principal: Principal) -> WidgetDataResponse:
     with tx() as cur:
         return service.preview(cur, principal, req.spec)
+
+
+@router.post("/widgets/generate", response_model=WidgetGenerateResponse)
+def generate(req: WidgetGenerateRequest, principal: Principal) -> WidgetGenerateResponse:
+    """자연어 → 위젯 명세. LLM 은 지표·차원·템플릿을 고르기만 하고 값은 만들지 않는다."""
+    with tx() as cur:
+        return generation.generate(cur, principal, req)
