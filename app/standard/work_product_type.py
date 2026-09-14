@@ -31,6 +31,34 @@ DISPLAY_NAMES: dict[str, str] = {
 }
 
 
+# 활동 구분. V1 시드가 데모 사업에 넣은 표와 같다. 사업을 새로 만들 때 이 표로
+# 22개 항목을 먼저 만든다(ARC-005 4절). 항목 없이 수집이 먼저 닿으면 PM_1 기본값이 들어간다.
+ACTIVITIES: dict[str, tuple[str | None, str | None]] = {
+    "STATEMENT_OF_WORK": ("PM_1", None),
+    "PROJECT_PLAN": ("PM_1", None),
+    "PROGRESS_STATUS_RECORD": ("PM_2", None),
+    "MEETING_RECORD": ("PM_2", None),
+    "CHANGE_REQUEST": ("PM_2", None),
+    "CORRECTION_REGISTER": ("PM_3", None),
+    "ACCEPTANCE_RECORD": ("PM_4", None),
+    "PROJECT_REPOSITORY": ("PM_1", None),
+    "REPOSITORY_BACKUP": ("PM_2", None),
+    "VERIFICATION_RESULTS": ("PM_3", None),
+    "VALIDATION_RESULTS": ("PM_4", None),
+    "REQUIREMENTS_SPEC": (None, "SI_2"),
+    "TRACEABILITY_RECORD": (None, "SI_2"),
+    "SOFTWARE_DESIGN": (None, "SI_3"),
+    "TEST_CASES_PROCEDURES": (None, "SI_3"),
+    "SOFTWARE_COMPONENT": (None, "SI_4"),
+    "SOFTWARE": (None, "SI_5"),
+    "TEST_REPORT": (None, "SI_5"),
+    "PRODUCT_OPERATION_GUIDE": (None, "SI_5"),
+    "SOFTWARE_USER_DOC": (None, "SI_5"),
+    "SOFTWARE_CONFIGURATION": (None, "SI_6"),
+    "MAINTENANCE_DOC": (None, "SI_6"),
+}
+
+
 def display_name(product_type: str) -> str:
     """모르는 유형이 와도 화면이 비지 않게 코드를 그대로 돌려준다."""
     return DISPLAY_NAMES.get(product_type, product_type)
