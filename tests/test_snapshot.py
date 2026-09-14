@@ -117,7 +117,8 @@ def test_스냅샷이_추이_위젯의_점이_된다(client, client_token, seede
     assert latest["unit"] == "%"
 
 
-# 진척 세 갈래(SWFR.PIP.006~009)가 카탈로그 지표로 위젯이 되는지. 하나라도 안 돌면 추이 화면이 죽는다.
+# 진척 세 갈래(SWFR.PIP.006~009)가 카탈로그 지표로 위젯이 되는지.
+# 하나라도 안 돌면 추이 화면이 죽는다.
 PROGRESS_WIDGETS = [
     ("STAT_CARD", "progress_representative_pct", []),
     ("LINE_CHART", "progress_wbs_pct", ["period_day"]),
