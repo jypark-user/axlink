@@ -17,6 +17,7 @@ from app.integration.models import (
     ToolConnectionStatusUpdateRequest,
     ToolConnectionTestRequest,
     ToolConnectionTestResponse,
+    ToolConnectionUpdateRequest,
 )
 
 router = APIRouter(prefix="/api", tags=["connections"])
@@ -54,6 +55,14 @@ def test_saved(connection_id: str, principal: Principal) -> ToolConnectionTestRe
         return service.test_saved(cur, principal, connection_id)
 
 
+@router.patch("/connections/{connection_id}", response_model=ToolConnectionResponse)
+def update_connection(
+    connection_id: str, req: ToolConnectionUpdateRequest, principal: Principal
+) -> ToolConnectionResponse:
+    with tx() as cur:
+        return service.update(cur, principal, connection_id, req)
+
+
 @router.patch("/connections/{connection_id}/mapping", response_model=ToolConnectionResponse)
 def update_mapping(
     connection_id: str, req: MappingRulesUpdateRequest, principal: Principal
@@ -81,6 +90,12 @@ def delete_connection(connection_id: str, principal: Principal) -> Response:
 def trigger_sync(connection_id: str, principal: Principal) -> SyncJobResponse:
     with tx() as cur:
         return service.trigger_sync(cur, principal, connection_id)
+
+
+@router.post("/sync-jobs/{job_id}/retry", response_model=SyncJobResponse, status_code=202)
+def retry_sync_job(job_id: str, principal: Principal) -> SyncJobResponse:
+    with tx() as cur:
+        return service.retry_job(cur, principal, job_id)
 
 
 @router.get("/sync-jobs", response_model=PageResponse[SyncJobResponse])
