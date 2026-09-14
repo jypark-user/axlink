@@ -34,3 +34,45 @@ class DocumentChunkResponse(BaseModel):
 
     index: int
     content: str
+
+
+class DraftRequirement(BaseModel):
+    """초안 요구사항 한 건. 화면이 고쳐서 그대로 돌려보내므로 요청·응답이 같은 모양이다."""
+
+    index: int
+    code: str | None
+    title: str
+    body: str
+    priority: str
+
+
+class StructuringDraftResponse(BaseModel):
+    documentId: str  # noqa: N815
+    status: str
+    suggestedType: str | None  # noqa: N815
+    rejectedTypeRaw: str | None  # noqa: N815
+    confidence: float
+    title: str | None
+    version: str | None
+    authoredDate: str | None  # noqa: N815
+    pmActivity: str | None  # noqa: N815
+    siActivity: str | None  # noqa: N815
+    requirements: list[DraftRequirement]
+    createdAt: str  # noqa: N815
+
+
+class StructuringConfirmRequest(BaseModel):
+    type: str
+    title: str
+    version: str
+    authoredDate: str | None = None  # noqa: N815
+    pmActivity: str | None = None  # noqa: N815
+    siActivity: str | None = None  # noqa: N815
+    requirements: list[DraftRequirement] = []
+    workProductStatus: str = "DRAFT"  # noqa: N815
+
+
+class StructuringConfirmResponse(BaseModel):
+    workProductId: str  # noqa: N815
+    createdRequirementIds: list[str]  # noqa: N815
+    indexedChunkCount: int  # noqa: N815

@@ -11,11 +11,14 @@ from fastapi.responses import FileResponse
 from app.auth.deps import Principal
 from app.common.paging import PageQuery, PageResponse
 from app.db import tx
-from app.document import service
+from app.document import draft_service, service
 from app.document.models import (
     DocumentChunkResponse,
     DocumentTextResponse,
     DocumentUploadResponse,
+    StructuringConfirmRequest,
+    StructuringConfirmResponse,
+    StructuringDraftResponse,
 )
 
 router = APIRouter(prefix="/api", tags=["documents"])
@@ -83,4 +86,31 @@ def download_document(document_id: str, principal: Principal) -> FileResponse:
 def delete_document(document_id: str, principal: Principal) -> Response:
     with tx() as cur:
         service.delete(cur, principal, document_id)
+    return Response(status_code=204)
+
+
+@router.get("/documents/{document_id}/draft", response_model=StructuringDraftResponse)
+def get_structuring_draft(document_id: str, principal: Principal) -> StructuringDraftResponse:
+    """문서에서 뽑은 산출물 유형·요구사항 초안. structuring-draft-page.tsx 가 편집 대상으로 연다."""
+    with tx() as cur:
+        return draft_service.get(cur, principal, document_id)
+
+
+@router.post(
+    "/documents/{document_id}/draft/confirm", response_model=StructuringConfirmResponse
+)
+def confirm_structuring_draft(
+    document_id: str, principal: Principal, req: StructuringConfirmRequest
+) -> StructuringConfirmResponse:
+    """사람이 고친 초안을 산출물 항목·요구사항으로 올린다."""
+    with tx() as cur:
+        return draft_service.confirm(cur, principal, document_id, req)
+
+
+@router.post(
+    "/documents/{document_id}/draft/reject", status_code=204, response_class=Response
+)
+def reject_structuring_draft(document_id: str, principal: Principal) -> Response:
+    with tx() as cur:
+        draft_service.reject(cur, principal, document_id)
     return Response(status_code=204)

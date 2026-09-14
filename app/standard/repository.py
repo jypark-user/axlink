@@ -204,6 +204,121 @@ def upsert_work_product(
     return str(created["id"])
 
 
+def place_document_work_product(
+    cur: Any, project_id: str, document_id: str, user_id: str, rec: dict[str, Any]
+) -> str:
+    """올린 문서를 산출물 자리의 한 버전으로 올린다. 규칙은 upsert_work_product 와 같다.
+
+    다른 점은 원천이다. 도구 수집은 (연결, 외부 ID) 로 원본을 잇지만 문서는
+    document_upload_id 로 잇고 source_kind 는 DOCUMENT 다. 같은 버전 표기가 이미
+    있으면 그 행을 고쳐 쓴다. 버전 유일 제약(uq_work_product__version) 때문이기도
+    하고, 같은 버전을 다시 올린 것은 내용을 바로잡은 것이지 새 버전이 아니다.
+    """
+    current = fetch_one(
+        cur,
+        """
+        select id, version, pm_activity, si_activity
+          from work_product
+         where project_id = %s and type = %s and is_current
+        """,
+        (project_id, rec["type"]),
+    )
+    same_version = fetch_one(
+        cur,
+        "select id from work_product where project_id = %s and type = %s and version = %s",
+        (project_id, rec["type"], rec["version"]),
+    )
+
+    pm_activity = rec.get("pm_activity") or (current["pm_activity"] if current else None)
+    si_activity = rec.get("si_activity") or (current["si_activity"] if current else None)
+    if pm_activity is None and si_activity is None:
+        pm_activity = "PM_1"
+    approved = rec["status"] == "APPROVED"
+
+    if current is not None and (same_version is None or same_version["id"] != current["id"]):
+        # 부분 유니크 uq_work_product__current 때문에 먼저 내려야 새 현행이 들어간다.
+        cur.execute(
+            "update work_product set is_current = false, updated_at = now() where id = %s",
+            (current["id"],),
+        )
+
+    if same_version is not None:
+        row = fetch_one(
+            cur,
+            """
+            update work_product
+               set title = %s, status = %s, pm_activity = %s, si_activity = %s,
+                   document_upload_id = %s, file_uri = %s, authored_at = %s,
+                   tool_connection_id = null, external_id = null, external_url = null,
+                   source_revision = null, source_kind = 'DOCUMENT', is_current = true,
+                   submitted_at = now(),
+                   approved_by_user_id = %s, approved_at = case when %s then now() end,
+                   reject_reason = null, updated_at = now()
+             where id = %s
+            returning id
+            """,
+            (
+                rec["title"], rec["status"], pm_activity, si_activity,
+                document_id, rec["file_uri"], rec["authored_at"],
+                user_id if approved else None, approved, same_version["id"],
+            ),
+        )
+        return str(row["id"])
+
+    row = fetch_one(
+        cur,
+        """
+        insert into work_product
+          (project_id, type, version, title, status, pm_activity, si_activity,
+           document_upload_id, file_uri, authored_at, source_kind, is_current,
+           submitted_at, approved_by_user_id, approved_at)
+        values (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, 'DOCUMENT', true, now(),
+                %s, case when %s then now() end)
+        returning id
+        """,
+        (
+            project_id, rec["type"], rec["version"], rec["title"], rec["status"],
+            pm_activity, si_activity, document_id, rec["file_uri"], rec["authored_at"],
+            user_id if approved else None, approved,
+        ),
+    )
+    return str(row["id"])
+
+
+def upsert_document_requirement(
+    cur: Any, project_id: str, document_id: str, work_product_id: str, rec: dict[str, Any]
+) -> str:
+    """문서에서 확정한 요구사항. 같은 코드가 이미 있으면 글만 갱신한다.
+
+    도구(GitHub 이슈)에서 온 같은 코드의 요구사항이면 도구 연결은 그대로 둔다.
+    문서는 정의를, 이슈는 이행 추적을 맡는 것이라 둘을 한 행으로 합쳐야 추적이 산다.
+    코드가 없는 요구사항은 늘 새 행이다. 견줄 열쇠가 없다.
+    """
+    row = fetch_one(
+        cur,
+        """
+        insert into requirement
+          (project_id, code, title, body, priority, status,
+           work_product_id, document_upload_id, source_kind)
+        values (%s, %s, %s, %s, %s, 'DEFINED', %s, %s, 'DOCUMENT')
+        on conflict (project_id, code) where code is not null
+        do update set
+           title = excluded.title, body = excluded.body, priority = excluded.priority,
+           work_product_id = excluded.work_product_id,
+           document_upload_id = excluded.document_upload_id,
+           source_kind = case when requirement.tool_connection_id is null
+                              then 'DOCUMENT' else requirement.source_kind end,
+           updated_at = now()
+        returning id
+        """,
+        (
+            project_id, rec["code"], rec["title"], rec["body"], rec["priority"],
+            work_product_id, document_id,
+        ),
+    )
+    return str(row["id"])
+
+
 def list_work_product_versions(
     cur: Any, project_id: str, product_type: str
 ) -> list[dict[str, Any]]:
