@@ -13,12 +13,12 @@ from pathlib import Path
 from typing import Any
 
 from app.ai.embedding import embedding_port
-from app.auth import repository as auth_repo
 from app.auth.models import AuthPrincipal
 from app.common import errors
 from app.common.paging import PageQuery, PageResponse
 from app.config import settings
-from app.document import extractor, repository
+from app.document import draft_service, extractor, repository
+from app.document.access import require_project as _require_project
 from app.document.models import (
     DocumentChunkResponse,
     DocumentTextResponse,
@@ -28,14 +28,6 @@ from app.rag import indexing
 from app.rag import repository as rag_repo
 
 MAX_BYTES = 50 * 1024 * 1024  # 프런트 features/documents/upload.ts 와 같은 한도
-
-
-def _require_project(cur: Any, principal: AuthPrincipal, project_id: str) -> None:
-    allowed = auth_repo.allowed_project_ids(
-        cur, principal.role, principal.org_id, principal.user_id
-    )
-    if project_id not in allowed:
-        raise errors.project_access_denied()
 
 
 def _to_response(row: dict[str, Any]) -> DocumentUploadResponse:
@@ -49,9 +41,11 @@ def _to_response(row: dict[str, Any]) -> DocumentUploadResponse:
         uploadedBy=row["uploaded_by"],
         uploadedAt=row["created_at"].isoformat(),
         extractedCharCount=row["extracted_chars"],
-        # 정형화 초안은 다음 슬라이스다. 지금은 늘 없다.
-        draftAvailable=False,
-        workProductId=None,
+        # 초안이 사람의 판단을 기다리는 동안만 "초안 확인" 이 뜬다.
+        draftAvailable=row["draft_status"] == "PROPOSED",
+        workProductId=(
+            str(row["draft_work_product_id"]) if row["draft_work_product_id"] else None
+        ),
         error=row["error"],
     )
 
@@ -107,6 +101,10 @@ def upload(
                 cur, document_id, result.text, result.page_count, result.warning
             )
             _index(cur, project_id, document_id, filename.strip(), result.text, stored_path)
+            # 읽은 김에 초안까지 만든다. 사람이 확인할 것이 생겨야 업로드가 끝난 것이다.
+            draft_service.propose_for_upload(
+                cur, document_id, project_id, filename.strip(), result.text
+            )
         else:
             repository.mark_failed(
                 cur, document_id, result.warning or "본문을 읽지 못했습니다."

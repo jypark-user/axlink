@@ -9,9 +9,14 @@ _COLUMNS = """
     d.id, d.project_id, d.original_filename, d.stored_path, d.content_type, d.file_ext,
     d.size_bytes, d.file_hash, d.page_count, d.status, d.error, d.created_at,
     length(d.extracted_text) as extracted_chars,
-    u.name as uploaded_by
+    u.name as uploaded_by,
+    s.status as draft_status, s.work_product_id as draft_work_product_id
 """
-_FROM = "from document_upload d join app_user u on u.id = d.uploaded_by_user_id"
+_FROM = """
+    from document_upload d
+    join app_user u on u.id = d.uploaded_by_user_id
+    left join structuring_draft s on s.document_upload_id = d.id
+"""
 
 
 def find_by_hash(cur: Any, project_id: str, file_hash: str) -> dict[str, Any] | None:
