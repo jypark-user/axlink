@@ -32,8 +32,8 @@ from app.org.router import router as org_router
 from app.project.router import router as project_router
 from app.rag.indexing import verify_dimension
 from app.rag.router import router as ask_router
-from app.semantic.router import router as semantic_router
 from app.review.router import router as review_router
+from app.semantic.router import router as semantic_router
 from app.standard.router import router as standard_router
 
 
