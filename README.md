@@ -20,10 +20,10 @@ app/         FastAPI · psycopg 3 로 SQL 직접 작성 (ORM 금지) · Flyway �
   integration/  [2] 커넥터 포트 + GitHub·Redmine 어댑터, 증분 수집
   standard/     [3] 표준 데이터 모델 · 추적관계 · 산출물 대조
   dashboard/    [3][5] 지표 집계 · 위젯 템플릿 23종
-  semantic/     [5] 시맨틱 레이어 — 화면·답변의 모든 수치가 여기서 나온다
+  semantic/     [5] 시맨틱 레이어. 화면·답변의 모든 수치가 여기서 나온다
   rag/ ai/ document/  [4] 청킹 · 임베딩 · 검색 · 근거 게이트 · 문서 추출
   auth/ org/ project/ 기반 계층
-frontend/    [6] React + Vite — 발주기관용 읽기 전용 화면 + AI 질의
+frontend/    [6] React + Vite. 발주기관용 읽기 전용 화면 + AI 질의
 db/migration/ Flyway. 스키마 변경은 반드시 새 V##__ 파일로
 docs/        납품 산출물 겸 RAG 코퍼스
   00-management/  M1 합의서 · WBS

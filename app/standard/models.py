@@ -45,7 +45,7 @@ class WorkProductResponse(BaseModel):
 
 
 class WorkProductChecklistResponse(BaseModel):
-    """산출물 체크리스트. 22종 자리가 미리 있고 수집·업로드가 그 자리를 채운다."""
+    """산출물 체크리스트. 22종 항목이 미리 있고 수집·업로드가 그 항목을 채운다."""
 
     projectId: str  # noqa: N815
     approvedCount: int  # noqa: N815

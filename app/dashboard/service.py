@@ -28,7 +28,7 @@ from app.dashboard import repository, wbs
 from app.dashboard.models import OBSERVED, SELF_REPORTED, ProgressMeasure, ProgressResponse
 from app.standard import repository as standard_repo
 
-# WBS 가 들어오는 산출물 자리. 저장소에 커밋된 계획 파일이 여기로 승격된다.
+# WBS 가 들어오는 산출물 항목. 저장소에 커밋된 계획 파일이 여기로 승격된다.
 PLAN_TYPE = "PROJECT_PLAN"
 
 _NONE = "NONE"
@@ -83,7 +83,7 @@ def project_progress(
         label="산출물 제출률",
         unit="건",
         kind=OBSERVED,
-        note=None if product_total else "산출물 자리가 아직 만들어지지 않았다",
+        note=None if product_total else "산출물 목록이 아직 만들어지지 않았다",
     )
 
     level, basis, representative = _representative(
@@ -119,7 +119,7 @@ def _read_plan(
 
     path = _plan_path(project_id, plan_row)
     if path is None:
-        return None, "WBS 자리는 채워졌으나 보관된 원본을 찾지 못했다. 다시 수집이 필요하다"
+        return None, "WBS 항목은 채워졌으나 보관된 원본을 찾지 못했다. 다시 수집이 필요하다"
 
     try:
         plan = wbs.parse(path.read_bytes())

@@ -135,14 +135,14 @@ def upsert_code_change(
 def upsert_work_product(
     cur: Any, project_id: str, connection_id: str, external_id: str, rec: dict[str, Any]
 ) -> str | None:
-    """산출물 자리에 이번 버전을 올린다. 앞 버전은 지우지 않고 현행 표시만 내린다.
+    """산출물 항목에 이번 버전을 올린다. 앞 버전은 지우지 않고 현행 표시만 내린다.
 
-    산출물 목록은 미리 정의된 자리(ISO/IEC 29110 관리객체)이고 수집은 그 자리를 채운다.
-    그런데 WBS 처럼 사업 내내 갱신되는 문서는 자리 하나에 여러 버전이 쌓인다.
-    덮어쓰면 "계획을 언제 바꿨는가" 에 답할 수 없다 — 그 질문이 진척 감독의 본체다.
+    산출물 목록은 미리 정의된 항목(ISO/IEC 29110 관리객체)이고 수집은 그 항목을 채운다.
+    그런데 WBS 처럼 사업 내내 갱신되는 문서는 항목 하나에 여러 버전이 쌓인다.
+    덮어쓰면 "계획을 언제 바꿨는가" 에 답할 수 없다. 그 질문이 진척 감독의 본체다.
 
-    자리 속성(적용 여부·기한·활동 구분·승인)은 버전이 아니라 자리에 속한다.
-    새 버전이 앞 버전에서 물려받는다. 승인은 물려받지 않는다 — 새 버전은 다시 확인받아야 한다.
+    항목 속성(적용 여부·기한·활동 구분·승인)은 버전이 아니라 항목에 속한다.
+    새 버전이 앞 버전에서 물려받는다. 승인은 물려받지 않는다. 새 버전은 다시 확인받아야 한다.
     """
     current = fetch_one(
         cur,
@@ -207,7 +207,7 @@ def upsert_work_product(
 def list_work_product_versions(
     cur: Any, project_id: str, product_type: str
 ) -> list[dict[str, Any]]:
-    """한 자리의 버전 이력. 최신이 먼저다."""
+    """한 항목의 버전 이력. 최신이 먼저다."""
     return fetch_all(
         cur,
         """
@@ -294,7 +294,7 @@ def search_requirements(
 
 
 def list_work_products(cur: Any, project_id: str) -> list[dict[str, Any]]:
-    """현행 산출물 22종. 아직 안 낸 것도 자리로 나와야 제출 현황이 성립한다."""
+    """현행 산출물 22종. 아직 안 낸 것도 항목으로 나와야 제출 현황이 성립한다."""
     return fetch_all(
         cur,
         """

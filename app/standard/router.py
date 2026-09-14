@@ -32,6 +32,6 @@ def list_requirements(
 def list_work_products(
     project_id: str, principal: Principal
 ) -> WorkProductChecklistResponse:
-    """산출물 체크리스트. 저장소에서 수집한 파일도 여기 자리를 채운다."""
+    """산출물 체크리스트. 저장소에서 수집한 파일도 여기 항목을 채운다."""
     with tx() as cur:
         return service.work_product_checklist(cur, principal, project_id)
