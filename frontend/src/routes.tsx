@@ -6,7 +6,6 @@ import { ProjectShell } from '@/components/layout/project-shell';
 import { RequireAuth, RequireProject, RequireRole } from '@/features/auth/guards';
 import { ForbiddenPage } from '@/components/common/forbidden-page';
 import { NotFoundPage } from '@/components/common/not-found-page';
-import { ComingSoon } from '@/components/common/coming-soon';
 import { DevWidgetSizes } from '@/features/dashboard/dev-widget-sizes';
 import { Skeleton } from '@/components/ui/skeleton';
 import type { Role } from '@/types/api';
@@ -69,15 +68,6 @@ const ReviewRequestsPage = lazy(() =>
 const AskPage = lazy(() =>
   import('@/features/ax-query/ask-page').then((m) => ({ default: m.AskPage })),
 );
-const OrganizationsPage = lazy(() =>
-  import('@/features/admin/organizations-page').then((m) => ({ default: m.OrganizationsPage })),
-);
-const ContractorsPage = lazy(() =>
-  import('@/features/admin/contractors-page').then((m) => ({ default: m.ContractorsPage })),
-);
-const AuditPage = lazy(() =>
-  import('@/features/admin/audit-page').then((m) => ({ default: m.AuditPage })),
-);
 
 /** 용역사(CONTRACTOR)는 사업 정보·연동·동기화 이력만 본다. 나머지 화면은 이 목록으로 막는다. */
 const EXCEPT_CONTRACTOR: Role[] = ['SUPER_ADMIN', 'CLIENT'];
@@ -139,36 +129,6 @@ export function AppRoutes(): ReactNode {
             <RequireRole allow={['CLIENT']}>
               <SuspenseShell>
                 <DashboardPage />
-              </SuspenseShell>
-            </RequireRole>
-          }
-        />
-        <Route
-          path="/admin/organizations"
-          element={
-            <RequireRole allow={['SUPER_ADMIN', 'CLIENT']}>
-              <SuspenseShell>
-                <OrganizationsPage />
-              </SuspenseShell>
-            </RequireRole>
-          }
-        />
-        <Route
-          path="/admin/contractors"
-          element={
-            <RequireRole allow={['SUPER_ADMIN']}>
-              <SuspenseShell>
-                <ContractorsPage />
-              </SuspenseShell>
-            </RequireRole>
-          }
-        />
-        <Route
-          path="/admin/audit"
-          element={
-            <RequireRole allow={['SUPER_ADMIN', 'CLIENT']}>
-              <SuspenseShell>
-                <AuditPage />
               </SuspenseShell>
             </RequireRole>
           }
@@ -295,7 +255,6 @@ export function AppRoutes(): ReactNode {
                 </SuspenseShell>
               }
             />
-            <Route path="acceptance" element={<ComingSoon title="검수" />} />
           </Route>
         </Route>
       </Route>

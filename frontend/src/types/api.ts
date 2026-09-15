@@ -501,6 +501,11 @@ export interface TraceLinkResponse {
   linkKind: TraceLinkKind;
   origin: TraceLinkOrigin;
   status: TraceLinkStatus;
+  /** 근거 유형. 자동 생성 링크에는 반드시 있다. 수기 링크는 null */
+  evidenceKind: string | null;
+  /** 근거가 적힌 원문 한 줄 */
+  evidenceText: string | null;
+  /** 근거 원문의 위치(커밋·이슈 링크) */
   externalUrl: string | null;
   createdAt: string;
 }

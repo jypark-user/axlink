@@ -28,7 +28,7 @@ from app.dashboard import repository, wbs
 from app.dashboard.models import OBSERVED, SELF_REPORTED, ProgressMeasure, ProgressResponse
 from app.standard import repository as standard_repo
 
-# WBS 가 들어오는 산출물 자리. 저장소에 커밋된 계획 파일이 여기로 승격된다.
+# WBS 가 들어오는 산출물 항목. 저장소에 커밋된 계획 파일이 여기로 승격된다.
 PLAN_TYPE = "PROJECT_PLAN"
 
 _NONE = "NONE"
@@ -42,12 +42,15 @@ def project_progress(
     )
     if project_id not in allowed:
         raise errors.project_access_denied()
+    return compute(cur, project_id, at or date.today())
 
-    at = at or date.today()
+
+def compute(cur: Any, project_id: str, at: date) -> ProgressResponse:
+    """접근 검사 없는 산정. 화면(위)과 일별 스냅샷이 같은 함수를 쓴다."""
     warnings: list[str] = []
 
     plan_row = standard_repo.current_work_product(cur, project_id, PLAN_TYPE)
-    wbs_progress, plan_warning = _read_plan(project_id, plan_row)
+    wbs_progress, plan_warning = _read_plan(project_id, plan_row, at)
     if plan_warning:
         warnings.append(plan_warning)
     if wbs_progress is not None:
@@ -83,7 +86,7 @@ def project_progress(
         label="산출물 제출률",
         unit="건",
         kind=OBSERVED,
-        note=None if product_total else "산출물 자리가 아직 만들어지지 않았다",
+        note=None if product_total else "산출물 목록이 아직 만들어지지 않았다",
     )
 
     level, basis, representative = _representative(
@@ -133,7 +136,7 @@ def _read_plan(
 
     path = _plan_path(project_id, plan_row)
     if path is None:
-        return None, "WBS 자리는 채워졌으나 보관된 원본을 찾지 못했다. 다시 수집이 필요하다"
+        return None, "WBS 항목은 채워졌으나 보관된 원본을 찾지 못했다. 다시 수집이 필요하다"
 
     try:
         plan = wbs.parse(path.read_bytes())

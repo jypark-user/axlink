@@ -20,6 +20,7 @@ from app.common import crypto, errors
 from app.config import settings
 from app.integration import port, repository
 from app.standard import service as standard
+from app.standard import trace_service
 
 _EPOCH = datetime(1970, 1, 1, tzinfo=UTC)
 _PER_PAGE = 50
@@ -34,13 +35,17 @@ _ERROR_CODE = {
 }
 
 
-def run_sync(cur: Any, connection: dict[str, Any]) -> str:
-    """수집을 실행하고 sync_job id 를 돌려준다. 첫 회는 전체, 이후는 증분이다."""
+def run_sync(cur: Any, connection: dict[str, Any], retry_of: str | None = None) -> str:
+    """수집을 실행하고 sync_job id 를 돌려준다. 첫 회는 전체, 이후는 증분이다.
+
+    재시도도 새 잡이다. 실패한 잡은 그대로 두고 retry_of 로 잇는다. 커서는 마지막
+    성공 잡 기준이라 실패한 회차의 범위를 자연히 다시 읽는다.
+    """
     now = datetime.now(UTC)
     cid = str(connection["id"])
     since = repository.last_success_cursor(cur, cid)
     job_id = repository.insert_sync_job(
-        cur, cid, "POLL" if since else "BACKFILL", since or _EPOCH, now
+        cur, cid, "POLL" if since else "BACKFILL", since or _EPOCH, now, retry_of
     )
     token = crypto.decrypt(connection["auth_encrypted"])
     base, target = connection["base_url"], connection["target_resource"]
@@ -83,6 +88,8 @@ def run_sync(cur: Any, connection: dict[str, Any]) -> str:
     stats["upserted"] = promoted.upserted
     stats["unmapped"] = promoted.unmapped
     stats["indexed"] = promoted.indexed
+    # 승격이 끝나야 링크의 양 끝이 있다. 다른 연결의 원본까지 같이 보므로 사업 단위로 돈다.
+    trace_service.build_project_links(cur, str(connection["project_id"]))
 
     notes = []
     if denied:

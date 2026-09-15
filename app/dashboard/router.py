@@ -10,8 +10,8 @@ from typing import Annotated
 from fastapi import APIRouter, Query
 
 from app.auth.deps import Principal
-from app.dashboard import service
-from app.dashboard.models import ProgressResponse
+from app.dashboard import service, snapshot
+from app.dashboard.models import ProgressResponse, ProgressSnapshotResponse
 from app.db import tx
 
 router = APIRouter(prefix="/api/projects", tags=["progress"])
@@ -30,3 +30,15 @@ def project_progress(
     """
     with tx() as cur:
         return service.project_progress(cur, principal, project_id, at)
+
+
+@router.post("/{project_id}/snapshots", response_model=ProgressSnapshotResponse)
+def take_snapshot(
+    project_id: str, principal: Principal, at: BaseDate = None
+) -> ProgressSnapshotResponse:
+    """일별 스냅샷을 찍는다(SWFR.PIP.005). 같은 날 다시 찍으면 덮어쓴다.
+
+    스케줄러는 없다. 운영에서는 이 경로를 하루 한 번 부른다.
+    """
+    with tx() as cur:
+        return snapshot.take(cur, principal, project_id, at)

@@ -8,6 +8,7 @@ from typing import Any
 
 from app.common.paging import PageQuery
 from app.db import fetch_all, fetch_one
+from app.standard import work_product_type
 
 _SOURCE_CONFLICT = """
     on conflict (tool_connection_id, external_id)
@@ -135,14 +136,14 @@ def upsert_code_change(
 def upsert_work_product(
     cur: Any, project_id: str, connection_id: str, external_id: str, rec: dict[str, Any]
 ) -> str | None:
-    """산출물 자리에 이번 버전을 올린다. 앞 버전은 지우지 않고 현행 표시만 내린다.
+    """산출물 항목에 이번 버전을 올린다. 앞 버전은 지우지 않고 현행 표시만 내린다.
 
-    산출물 목록은 미리 정의된 자리(ISO/IEC 29110 관리객체)이고 수집은 그 자리를 채운다.
-    그런데 WBS 처럼 사업 내내 갱신되는 문서는 자리 하나에 여러 버전이 쌓인다.
-    덮어쓰면 "계획을 언제 바꿨는가" 에 답할 수 없다 — 그 질문이 진척 감독의 본체다.
+    산출물 목록은 미리 정의된 항목(ISO/IEC 29110 관리객체)이고 수집은 그 항목을 채운다.
+    그런데 WBS 처럼 사업 내내 갱신되는 문서는 항목 하나에 여러 버전이 쌓인다.
+    덮어쓰면 "계획을 언제 바꿨는가" 에 답할 수 없다. 그 질문이 진척 감독의 본체다.
 
-    자리 속성(적용 여부·기한·활동 구분·승인)은 버전이 아니라 자리에 속한다.
-    새 버전이 앞 버전에서 물려받는다. 승인은 물려받지 않는다 — 새 버전은 다시 확인받아야 한다.
+    항목 속성(적용 여부·기한·활동 구분·승인)은 버전이 아니라 항목에 속한다.
+    새 버전이 앞 버전에서 물려받는다. 승인은 물려받지 않는다. 새 버전은 다시 확인받아야 한다.
     """
     current = fetch_one(
         cur,
@@ -207,7 +208,7 @@ def upsert_work_product(
 def list_work_product_versions(
     cur: Any, project_id: str, product_type: str
 ) -> list[dict[str, Any]]:
-    """한 자리의 버전 이력. 최신이 먼저다."""
+    """한 항목의 버전 이력. 최신이 먼저다."""
     return fetch_all(
         cur,
         """
@@ -293,8 +294,82 @@ def search_requirements(
     )
 
 
+def create_checklist(cur: Any, project_id: str) -> int:
+    """사업의 산출물 목록 22개 항목을 만든다. 이미 있는 유형은 건드리지 않는다.
+
+    사업 생성 때 부른다. 수집이 먼저 닿아 항목을 즉석에서 만들면 활동 구분이 기본값으로
+    들어가므로, 목록이 수집보다 먼저 있어야 한다(ARC-005).
+    """
+    created = 0
+    for product_type, (pm, si) in work_product_type.ACTIVITIES.items():
+        cur.execute(
+            """
+            insert into work_product (project_id, type, pm_activity, si_activity)
+            select %s, %s, %s, %s
+             where not exists (
+               select 1 from work_product where project_id = %s and type = %s
+             )
+            """,
+            (project_id, product_type, pm, si, project_id, product_type),
+        )
+        created += cur.rowcount
+    return created
+
+
+_ISSUE_COLUMNS = """
+    i.id, i.project_id, i.issue_key, i.title, i.status, i.severity, i.assignee,
+    i.resolved_at, i.source_updated_at, i.updated_at,
+    i.tool_connection_id, i.external_id, i.external_url, i.source_kind,
+    c.tool as tool_name
+"""
+_ISSUE_FROM = """
+    from issue i
+    left join tool_connection c on c.id = i.tool_connection_id
+"""
+
+
+def _issue_filter(q: str | None, status: str | None) -> tuple[str, list[Any]]:
+    where, params = "", []
+    if q and q.strip():
+        like = f"%{q.strip()}%"
+        where += " and (i.issue_key ilike %s or i.title ilike %s)"
+        params += [like, like]
+    if status:
+        where += " and i.status = %s"
+        params.append(status)
+    return where, params
+
+
+def count_issues(cur: Any, project_id: str, q: str | None, status: str | None) -> int:
+    where, params = _issue_filter(q, status)
+    row = fetch_one(
+        cur,
+        f"select count(*) as n from issue i where i.project_id = %s {where}",
+        (project_id, *params),
+    )
+    return int(row["n"]) if row else 0
+
+
+def search_issues(
+    cur: Any, project_id: str, q: str | None, status: str | None, page: PageQuery
+) -> list[dict[str, Any]]:
+    """열린 것이 위로, 그 안에서는 원천에서 최근 움직인 순서다. 감독이 볼 순서가 그렇다."""
+    where, params = _issue_filter(q, status)
+    return fetch_all(
+        cur,
+        f"""
+        select {_ISSUE_COLUMNS} {_ISSUE_FROM}
+         where i.project_id = %s {where}
+         order by (i.status in ('RESOLVED', 'CLOSED')), i.source_updated_at desc nulls last,
+                  i.updated_at desc
+         limit %s offset %s
+        """,
+        (project_id, *params, page.size, page.offset),
+    )
+
+
 def list_work_products(cur: Any, project_id: str) -> list[dict[str, Any]]:
-    """현행 산출물 22종. 아직 안 낸 것도 자리로 나와야 제출 현황이 성립한다."""
+    """현행 산출물 22종. 아직 안 낸 것도 항목으로 나와야 제출 현황이 성립한다."""
     return fetch_all(
         cur,
         """
@@ -308,4 +383,235 @@ def list_work_products(cur: Any, project_id: str) -> list[dict[str, Any]]:
          order by w.pm_activity nulls last, w.si_activity nulls last, w.type
         """,
         (project_id,),
+    )
+
+
+# --- 추적관계 -------------------------------------------------------------
+
+_ENTITY_TABLE = {
+    "REQUIREMENT": "requirement",
+    "ISSUE": "issue",
+    "RISK": "risk",
+    "CODE_CHANGE": "code_change",
+    "WORK_PRODUCT": "work_product",
+}
+
+
+def requirement_codes(cur: Any, project_id: str) -> dict[str, str]:
+    """{코드: id}. 코드 없는 요구사항은 본문에서 가리킬 방법이 없으니 뺀다."""
+    rows = fetch_all(
+        cur,
+        "select id, code from requirement where project_id = %s and code is not null",
+        (project_id,),
+    )
+    return {r["code"]: str(r["id"]) for r in rows}
+
+
+def tool_entity_index(cur: Any, project_id: str) -> dict[tuple[str, str], tuple[str, str]]:
+    """{(연결 id, 외부 id): (엔터티 유형, id)}. GH-n / RM-n 참조를 표준 모델로 푸는 표다."""
+    rows = fetch_all(
+        cur,
+        """
+        select 'REQUIREMENT' as entity_type, id, tool_connection_id, external_id
+          from requirement where project_id = %s and tool_connection_id is not null
+        union all
+        select 'ISSUE', id, tool_connection_id, external_id
+          from issue where project_id = %s and tool_connection_id is not null
+        union all
+        select 'RISK', id, tool_connection_id, external_id
+          from risk where project_id = %s and tool_connection_id is not null
+        """,
+        (project_id, project_id, project_id),
+    )
+    return {
+        (str(r["tool_connection_id"]), r["external_id"]): (r["entity_type"], str(r["id"]))
+        for r in rows
+    }
+
+
+def current_work_product_paths(cur: Any, project_id: str) -> dict[str, tuple[str, str]]:
+    """{파일 경로: (id, 유형)}. 현행 버전만 잇는다."""
+    rows = fetch_all(
+        cur,
+        """
+        select id, type, file_uri from work_product
+         where project_id = %s and is_current and file_uri is not null
+        """,
+        (project_id,),
+    )
+    return {r["file_uri"]: (str(r["id"]), r["type"]) for r in rows}
+
+
+def project_connections(cur: Any, project_id: str) -> list[dict[str, Any]]:
+    return fetch_all(
+        cur,
+        "select id, tool, base_url, mapping_rules_json from tool_connection "
+        "where project_id = %s order by created_at",
+        (project_id,),
+    )
+
+
+def raw_artifacts_with_entities(cur: Any, connection_id: str) -> list[dict[str, Any]]:
+    """원본과 그 원본이 승격된 표준 엔터티를 나란히 놓는다.
+
+    커밋 본문·이슈 본문·Redmine 커스텀 필드는 표준 모델에 없고 원본에만 있다.
+    근거는 원본에서 읽고, 링크의 양 끝은 표준 모델의 id 로 적는다.
+    """
+    return fetch_all(
+        cur,
+        """
+        select ra.external_id, ra.object_kind, ra.payload_jsonb,
+               r.id as requirement_id, i.id as issue_id, k.id as risk_id,
+               c.id as code_change_id,
+               coalesce(r.external_url, i.external_url, k.external_url, c.external_url)
+                 as external_url
+          from raw_artifact ra
+          left join requirement r
+            on r.tool_connection_id = ra.tool_connection_id and r.external_id = ra.external_id
+          left join issue i
+            on i.tool_connection_id = ra.tool_connection_id and i.external_id = ra.external_id
+          left join risk k
+            on k.tool_connection_id = ra.tool_connection_id and k.external_id = ra.external_id
+          left join code_change c
+            on c.tool_connection_id = ra.tool_connection_id and c.external_id = ra.external_id
+         where ra.tool_connection_id = %s
+         order by ra.object_kind, ra.external_id
+        """,
+        (connection_id,),
+    )
+
+
+def upsert_auto_trace_link(
+    cur: Any, project_id: str, from_type: str, from_id: str, to_type: str, to_id: str,
+    link_kind: str, evidence_kind: str, evidence_text: str, evidence_url: str | None,
+) -> str | None:
+    """같은 변이 있으면 근거만 갱신하고 살린다. 사람이 만든 링크는 건드리지 않는다."""
+    row = fetch_one(
+        cur,
+        """
+        insert into trace_link
+          (project_id, from_type, from_id, to_type, to_id, link_kind,
+           origin, status, evidence_kind, evidence_text, evidence_url)
+        values (%s, %s, %s, %s, %s, %s, 'AUTO', 'ACTIVE', %s, %s, %s)
+        on conflict on constraint uq_trace_link__edge do update set
+           status = 'ACTIVE',
+           evidence_kind = excluded.evidence_kind,
+           evidence_text = excluded.evidence_text,
+           evidence_url = excluded.evidence_url,
+           updated_at = now()
+         where trace_link.origin = 'AUTO'
+        returning id
+        """,
+        (
+            project_id, from_type, from_id, to_type, to_id, link_kind,
+            evidence_kind, evidence_text, evidence_url,
+        ),
+    )
+    return str(row["id"]) if row else None
+
+
+def break_stale_auto_links(cur: Any, project_id: str, keep_ids: list[str]) -> int:
+    """이번 생성에서 근거가 다시 확인되지 않은 자동 링크는 끊긴 것으로 표시한다.
+
+    지우지 않는다. 언제 근거가 사라졌는지가 남아야 감독 기록이 된다.
+    """
+    cur.execute(
+        """
+        update trace_link
+           set status = 'BROKEN', updated_at = now()
+         where project_id = %s and origin = 'AUTO' and status = 'ACTIVE'
+           and not (id = any(%s::uuid[]))
+        """,
+        (project_id, keep_ids),
+    )
+    return cur.rowcount
+
+
+_LINK_COLUMNS = """
+    tl.id, tl.project_id, tl.from_type, tl.from_id, tl.to_type, tl.to_id, tl.link_kind,
+    tl.origin, tl.status, tl.evidence_kind, tl.evidence_text, tl.evidence_url, tl.created_at
+"""
+
+
+def links_to_requirements(cur: Any, requirement_ids: list[str]) -> list[dict[str, Any]]:
+    if not requirement_ids:
+        return []
+    return fetch_all(
+        cur,
+        f"""
+        select {_LINK_COLUMNS} from trace_link tl
+         where tl.to_type = 'REQUIREMENT' and tl.to_id = any(%s::uuid[])
+         order by tl.link_kind, tl.created_at
+        """,
+        (requirement_ids,),
+    )
+
+
+def links_touching(cur: Any, entity_type: str, entity_id: str) -> list[dict[str, Any]]:
+    """한 엔터티가 출발점이든 도착점이든 걸려 있는 링크 전부."""
+    return fetch_all(
+        cur,
+        f"""
+        select {_LINK_COLUMNS} from trace_link tl
+         where (tl.from_type = %s and tl.from_id = %s) or (tl.to_type = %s and tl.to_id = %s)
+         order by tl.link_kind, tl.created_at
+        """,
+        (entity_type, entity_id, entity_type, entity_id),
+    )
+
+
+def entity_labels(
+    cur: Any, refs: set[tuple[str, str]]
+) -> dict[tuple[str, str], tuple[str, str | None]]:
+    """{(유형, id): (표시 이름, 원문 링크)}. 화면 셀과 상세 목록이 같이 쓴다."""
+    out: dict[tuple[str, str], tuple[str, str | None]] = {}
+    by_type: dict[str, list[str]] = {}
+    for entity_type, entity_id in refs:
+        by_type.setdefault(entity_type, []).append(entity_id)
+
+    label_sql = {
+        "REQUIREMENT": "coalesce(code, title)",
+        "ISSUE": "coalesce(issue_key, title)",
+        "RISK": "title",
+        "CODE_CHANGE": (
+            "case when kind = 'COMMIT' then left(ref_name, 7) || ' ' || title else title end"
+        ),
+        "WORK_PRODUCT": "coalesce(title, type)",
+    }
+    for entity_type, ids in by_type.items():
+        table = _ENTITY_TABLE.get(entity_type)
+        if table is None:
+            continue
+        rows = fetch_all(
+            cur,
+            f"select id, {label_sql[entity_type]} as label, external_url from {table} "
+            f"where id = any(%s::uuid[])",
+            (ids,),
+        )
+        for r in rows:
+            out[(entity_type, str(r["id"]))] = (r["label"], r["external_url"])
+    return out
+
+
+def get_requirement(cur: Any, project_id: str, requirement_id: str) -> dict[str, Any] | None:
+    return fetch_one(
+        cur,
+        f"""
+        select {_REQUIREMENT_COLUMNS}, r.body {_REQUIREMENT_FROM}
+         where r.project_id = %s and r.id = %s
+        """,
+        (project_id, requirement_id),
+    )
+
+
+def entity_history(cur: Any, entity_type: str, entity_id: str) -> list[dict[str, Any]]:
+    return fetch_all(
+        cur,
+        """
+        select id, entity_type, entity_id, field, from_value, to_value, actor, changed_at
+          from entity_history
+         where entity_type = %s and entity_id = %s
+         order by changed_at desc
+        """,
+        (entity_type, entity_id),
     )

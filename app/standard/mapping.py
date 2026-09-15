@@ -145,7 +145,7 @@ def _login(user: Any) -> str | None:
 def to_work_product(payload: dict[str, Any], product_type: str) -> dict[str, Any] | None:
     """저장소에서 가져온 파일을 산출물로 옮긴다.
 
-    산출물 목록에는 자리가 미리 있고(ISO/IEC 29110 관리객체), 수집이 그 자리를 채운다.
+    산출물 목록에는 항목이 미리 있고(ISO/IEC 29110 관리객체), 수집이 그 항목을 채운다.
     파일이 실제로 올라와 있다는 것이 곧 제출의 근거다 — SWFR.PIP.009.
     """
     path = payload.get("path")

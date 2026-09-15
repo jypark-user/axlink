@@ -75,6 +75,40 @@ def update_status(cur: Any, connection_id: str, status: str, now: datetime) -> N
     )
 
 
+def update_connection(
+    cur: Any,
+    connection_id: str,
+    now: datetime,
+    *,
+    name: str | None = None,
+    base_url: str | None = None,
+    target_resource: str | None = None,
+    auth_encrypted: str | None = None,
+    auth_hint: str | None = None,
+    reset_status: bool = False,
+) -> None:
+    """준 값만 바꾼다. reset_status 면 검증이 무효가 됐다는 뜻이라 DRAFT 로 되돌린다."""
+    sets = ["updated_at = %s"]
+    params: list[Any] = [now]
+    for column, value in (
+        ("name", name),
+        ("base_url", base_url),
+        ("target_resource", target_resource),
+        ("auth_encrypted", auth_encrypted),
+        ("auth_hint", auth_hint),
+    ):
+        if value is not None:
+            sets.append(f"{column} = %s")
+            params.append(value)
+    if reset_status:
+        sets.append("status = 'DRAFT'")
+        sets.append("last_error = null")
+    cur.execute(
+        f"update tool_connection set {', '.join(sets)} where id = %s",
+        (*params, connection_id),
+    )
+
+
 def mark_verified(cur: Any, connection_id: str, now: datetime) -> None:
     cur.execute(
         """
@@ -114,16 +148,22 @@ def last_sync_status(cur: Any, connection_id: str) -> str | None:
 # --- 수집(BACKFILL) ---------------------------------------------------------
 
 def insert_sync_job(
-    cur: Any, connection_id: str, kind: str, cursor_from: Any, now: datetime
+    cur: Any,
+    connection_id: str,
+    kind: str,
+    cursor_from: Any,
+    now: datetime,
+    retry_of: str | None = None,
 ) -> str:
     row = fetch_one(
         cur,
         """
-        insert into sync_job (tool_connection_id, kind, status, cursor_from, started_at)
-        values (%s, %s, 'RUNNING', %s, %s)
+        insert into sync_job
+          (tool_connection_id, kind, status, cursor_from, started_at, retry_of_job_id)
+        values (%s, %s, 'RUNNING', %s, %s, %s)
         returning id
         """,
-        (connection_id, kind, cursor_from, now),
+        (connection_id, kind, cursor_from, now, retry_of),
     )
     return str(row["id"])
 
@@ -153,9 +193,12 @@ def find_sync_job(cur: Any, job_id: str) -> dict[str, Any] | None:
     return fetch_one(
         cur,
         """
-        select id, tool_connection_id, kind, status, started_at, finished_at,
-               stats_json, error, error_code
-          from sync_job where id = %s
+        select j.id, j.tool_connection_id, j.kind, j.status, j.started_at, j.finished_at,
+               j.stats_json, j.error, j.error_code, j.retry_of_job_id,
+               c.name as connection_name, c.tool, c.project_id
+          from sync_job j
+          join tool_connection c on c.id = j.tool_connection_id
+         where j.id = %s
         """,
         (job_id,),
     )

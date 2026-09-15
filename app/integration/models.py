@@ -34,6 +34,15 @@ class ToolConnectionCreateRequest(BaseModel):
     mappingRules: dict[str, str] | None = None  # noqa: N815
 
 
+class ToolConnectionUpdateRequest(BaseModel):
+    """부분 갱신. null 인 필드는 건드리지 않는다 (프런트 계약)."""
+
+    name: str | None = None
+    baseUrl: str | None = None  # noqa: N815
+    targetResource: str | None = None  # noqa: N815
+    credential: ToolCredentialRequest | None = None
+
+
 class MappingRulesUpdateRequest(BaseModel):
     mappingRules: dict[str, str] = Field(default_factory=dict)  # noqa: N815
 
