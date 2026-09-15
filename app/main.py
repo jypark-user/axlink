@@ -31,6 +31,7 @@ from app.integration.router import router as integration_router
 from app.org.router import router as org_router
 from app.project.router import router as project_router
 from app.rag.indexing import verify_dimension
+from app.review.router import router as review_router
 from app.semantic.router import router as semantic_router
 from app.standard.router import router as standard_router
 
@@ -72,6 +73,7 @@ app.include_router(standard_router)
 app.include_router(dashboard_router)
 app.include_router(board_router)
 app.include_router(semantic_router)
+app.include_router(review_router)
 
 
 @app.get("/api/health", tags=["health"])

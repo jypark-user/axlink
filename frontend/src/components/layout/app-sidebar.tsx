@@ -3,7 +3,7 @@ import type { LucideIcon } from 'lucide-react';
 import {
   CalendarRange,
   CircleDot,
-  FileDiff,
+  ClipboardList,
   FileText,
   FolderKanban,
   HardHat,
@@ -19,7 +19,6 @@ import {
   Trash2,
   Upload,
   Waypoints,
-  Wrench,
 } from 'lucide-react';
 import {
   DropdownMenu,
@@ -94,8 +93,7 @@ const projectGroups = (base: string): NavGroup[] => [
       { to: `${base}/schedule`, label: '일정', icon: CalendarRange, roles: EXCEPT_CONTRACTOR },
       { to: `${base}/issues`, label: '이슈 · 위험', icon: CircleDot, roles: EXCEPT_CONTRACTOR },
       { to: `${base}/traceability`, label: '요구사항', icon: Waypoints, roles: EXCEPT_CONTRACTOR },
-      { to: `${base}/changes`, label: '변경 요청', icon: FileDiff, roles: EXCEPT_CONTRACTOR },
-      { to: `${base}/corrections`, label: '시정조치', icon: Wrench, roles: EXCEPT_CONTRACTOR },
+      { to: `${base}/reviews`, label: '확인 요청', icon: ClipboardList },
     ],
   },
   {

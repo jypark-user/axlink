@@ -77,6 +77,7 @@ class ProjectDetailResponse(BaseModel):
     assignmentCount: int  # noqa: N815
     connectionCount: int  # noqa: N815
     defaultDashboardId: str | None  # noqa: N815
+    openReviewRequestCount: int  # noqa: N815
     metrics: ProjectMetrics
     createdAt: str  # noqa: N815
     updatedAt: str  # noqa: N815
@@ -96,4 +97,5 @@ class ProjectSummaryResponse(BaseModel):
     requiredWorkProductTotal: int  # noqa: N815
     openCorrectionActionCount: int  # noqa: N815
     openRiskCount: int  # noqa: N815
+    openReviewRequestCount: int  # noqa: N815 — 미처리 확인 요청 (SWFR.WEB.006)
     updatedAt: str  # noqa: N815

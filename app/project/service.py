@@ -26,6 +26,7 @@ from app.project.models import (
     ProjectSummaryResponse,
     ProjectUpdateRequest,
 )
+from app.review import repository as review_repository
 from app.standard import repository as standard_repository
 
 _SI_PHASES = ("SI_1", "SI_2", "SI_3", "SI_4", "SI_5", "SI_6")
@@ -241,6 +242,7 @@ def get_detail(
         assignmentCount=repository.assignment_count(cur, project_id),
         connectionCount=repository.connection_count(cur, project_id),
         defaultDashboardId=repository.default_dashboard_id(cur, project_id),
+        openReviewRequestCount=review_repository.open_counts(cur, [project_id]).get(project_id, 0),
         metrics=ProjectMetrics(**{**m, "lastSyncedAt": _iso(m["lastSyncedAt"])}),
         createdAt=row["created_at"].isoformat(),
         updatedAt=row["updated_at"].isoformat(),
@@ -265,6 +267,7 @@ def list_projects(
     approved = repository.approved_work_products(cur, ids)
     risks = repository.open_risks(cur, ids)
     corrections = repository.open_correction_actions(cur, ids)
+    reviews = review_repository.open_counts(cur, ids)
 
     content = [
         ProjectSummaryResponse(
@@ -281,6 +284,7 @@ def list_projects(
             requiredWorkProductTotal=repository.REQUIRED_WORK_PRODUCT_TOTAL,
             openCorrectionActionCount=corrections.get(str(r["id"]), 0),
             openRiskCount=risks.get(str(r["id"]), 0),
+            openReviewRequestCount=reviews.get(str(r["id"]), 0),
             updatedAt=r["updated_at"].isoformat(),
         )
         for r in rows

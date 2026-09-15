@@ -113,6 +113,20 @@ def compute(cur: Any, project_id: str, at: date) -> ProgressResponse:
     )
 
 
+def current_wbs_rows(cur: Any, project_id: str) -> list[wbs.WbsRow]:
+    """현행 WBS 의 행. 파일이 없거나 못 읽으면 빈 목록이다. 확인 요청이 항목을 고를 때 쓴다."""
+    plan_row = standard_repo.current_work_product(cur, project_id, PLAN_TYPE)
+    if plan_row is None:
+        return []
+    path = _plan_path(project_id, plan_row)
+    if path is None:
+        return []
+    try:
+        return wbs.parse(path.read_bytes()).rows
+    except (wbs.WbsParseError, OSError):
+        return []
+
+
 def _read_plan(
     project_id: str, plan_row: dict[str, Any] | None, at: date | None = None
 ) -> tuple[wbs.WbsProgress | None, str | None]:
