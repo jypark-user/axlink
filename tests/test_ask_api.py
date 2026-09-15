@@ -413,3 +413,81 @@ def test_피드백은_내_대화의_답변에만_남는다(client, client_token,
     other = _auth(client_token("r3"))
     res = client.post(f"/api/messages/{assistant_id}/feedback", json=up, headers=other)
     assert res.status_code == 404
+
+
+# ---------------------------------------------------------------- 목록 질문
+
+
+@pytest.fixture
+def indexed_entities():
+    """이슈 둘·요구사항 하나. 목록 질문은 종류로 고르므로 다른 종류가 섞여 있어야 시험이 된다."""
+    sids = [str(uuid.uuid4()) for _ in range(3)]
+    specs = [
+        ("ISSUE", "커넥터 시험 — Redmine 증분 수집", "updated_on 필터로 100건씩 받는다."),
+        ("ISSUE", "근거 게이트 임계값 결정", "실측 분포를 보고 0.55 로 둔다."),
+        ("REQUIREMENT", "커넥터는 공통 인터페이스를 구현한다", "신규 도구는 구현체 추가만으로."),
+    ]
+    with tx() as cur:
+        cur.execute("delete from doc_chunk where project_id = %s", (PID,))
+        indexing.reindex(
+            cur,
+            FakeEmbedding(1024),
+            [
+                indexing.IndexSource(
+                    source_type=kind, source_id=sid, project_id=PID, title=title, body=body,
+                    uri=None,
+                )
+                for sid, (kind, title, body) in zip(sids, specs, strict=True)
+            ],
+        )
+    yield sids
+    with tx() as cur:
+        cur.execute("delete from doc_chunk where source_id = any(%s::uuid[])", (sids,))
+
+
+@requires_db
+def test_목록_질문은_종류_전체를_근거로_답한다(client, conversation, indexed_entities, monkeypatch):
+    scripted = ScriptedLlm(
+        {"route": "DOCUMENT", "list": "ISSUE", "query": "이슈 목록"},
+        "이슈는 총 2건이다. 커넥터 시험[1]과 근거 게이트 임계값 결정[2]이다.",
+    )
+    monkeypatch.setattr(ask_service, "llm_port", lambda: scripted)
+    # 문턱은 기본값 그대로 둔다. 목록은 유사도가 아니라 종류로 통과해야 한다.
+
+    conversation_id, token = conversation()
+    events = _ask(client, token, conversation_id, "이슈 목록 조회")
+    names = [e for e, _ in events]
+    assert names[0] == "start" and names[-1] == "done"
+
+    start = events[0][1]
+    assert start["routing"]["type"] == "DOCUMENT"
+    assert start["routing"]["listing"] == "ISSUE"
+    assert start["retrievedChunkCount"] == 2  # 요구사항은 섞이지 않는다
+
+    sources = next(d for e, d in events if e == "sources")["sources"]
+    assert [s["sourceType"] for s in sources] == ["ISSUE", "ISSUE"]
+    assert [s["footnoteNo"] for s in sources] == [1, 2]
+    # 제목 순 — 근거 번호가 실행마다 바뀌지 않는다
+    labels = [s["sourceLabel"] for s in sources]
+    assert labels == ["근거 게이트 임계값 결정", "커넥터 시험 — Redmine 증분 수집"]
+
+    text = "".join(d["text"] for e, d in events if e == "delta")
+    assert "※" not in text  # 총 2건은 목록 범위 줄에 있으므로 지어낸 숫자가 아니다
+    assert "## 목록 범위" in scripted.prompts[0] and "전체 2건" in scripted.prompts[0]
+    assert events[-1][1]["finishReason"] == "STOP"
+
+
+@requires_db
+def test_목록_종류가_비어_있으면_모델을_부르지_않는다(
+    client, conversation, indexed_entities, monkeypatch
+):
+    route = {"route": "DOCUMENT", "list": "RISK", "query": "리스크 목록"}
+    scripted = ScriptedLlm(route, "안 불려야 한다")
+    monkeypatch.setattr(ask_service, "llm_port", lambda: scripted)
+
+    conversation_id, token = conversation()
+    events = _ask(client, token, conversation_id, "리스크 목록")
+    text = "".join(d["text"] for e, d in events if e == "delta")
+    assert "리스크" in text and "없어" in text
+    assert events[-1][1]["finishReason"] == "NO_EVIDENCE"
+    assert scripted.stream_calls == 0

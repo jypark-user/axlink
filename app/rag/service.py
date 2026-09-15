@@ -26,6 +26,7 @@ from app.auth import repository as auth_repo
 from app.auth.models import AuthPrincipal
 from app.common import errors
 from app.common.paging import PageQuery, PageResponse
+from app.config import settings
 from app.db import tx
 from app.rag import answer, routing, search
 from app.rag import conversation_repository as repo
@@ -191,7 +192,16 @@ def stream(p: Prepared) -> Iterator[bytes]:
         query_vec = embedding_port().embed([p.question])[0]
 
         with tx() as cur:
-            found = search.search_with_vector(cur, query_vec, query_text, p.scope)
+            if decision.type == routing.DOCUMENT and decision.listing:
+                found = search.list_by_source(
+                    cur,
+                    decision.listing,
+                    p.scope,
+                    settings.rag_list_limit,
+                    settings.rag_list_chars,
+                )
+            else:
+                found = search.search_with_vector(cur, query_vec, query_text, p.scope)
             aggregate: answer.AggregateContext | None = None
             infographic: InfographicEvent | None = None
             if decision.type == routing.AGGREGATE:
@@ -210,6 +220,7 @@ def stream(p: Prepared) -> Iterator[bytes]:
                 measureKey=decision.measure.key if decision.measure else None,
                 dimensions=list(decision.dimensions),
                 viz=infographic.template if infographic else None,
+                listing=decision.listing,
             )
             assistant_id = repo.insert_message(
                 cur,
@@ -241,18 +252,28 @@ def stream(p: Prepared) -> Iterator[bytes]:
 
         if decision.type == routing.DOCUMENT and not gate_ok:
             # 근거 게이트(SWFR.RAG.007). 모델을 부르지 않는다.
-            text = answer.insufficient_evidence(found.max_similarity, found.candidate_count)
+            if decision.listing:
+                text = answer.empty_listing(routing.LISTABLE[decision.listing])
+            else:
+                text = answer.insufficient_evidence(found.max_similarity, found.candidate_count)
             pieces.append(text)
             yield _sse("delta", SseDeltaEvent(text=text))
             finish_reason = "NO_EVIDENCE"
         else:
-            prompt = answer.user_prompt(p.question, chunks, aggregate)
+            scope_line = None
+            if decision.listing and decision.type == routing.DOCUMENT:
+                scope_line = answer.listing_scope(
+                    routing.LISTABLE[decision.listing], len(chunks), found.candidate_count
+                )
+            prompt = answer.user_prompt(p.question, chunks, aggregate, scope_line)
             raw = llm.stream(answer.SYSTEM_PROMPT, prompt, json_schema=answer.ANSWER_SCHEMA)
             for piece in answer.decode_answer(answer.strip_think(raw)):
                 pieces.append(piece)
                 yield _sse("delta", SseDeltaEvent(text=piece))
             finish_reason = "STOP"
             grounds = [p.question, *(c.content for c in chunks)]
+            if scope_line:
+                grounds.append(scope_line)
             if aggregate is not None:
                 grounds.extend(aggregate.lines)
             bad = answer.ungrounded_numbers("".join(pieces), grounds)

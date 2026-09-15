@@ -43,6 +43,7 @@ class QueryRouting(BaseModel):
     measureKey: str | None  # noqa: N815
     dimensions: list[str]
     viz: str | None
+    listing: str | None = None  # 문서 경로에서 종류 전체를 나열한 경우 그 source_type
 
 
 class InfographicEvent(BaseModel):

@@ -17,6 +17,14 @@ DOCUMENT = "DOCUMENT"
 AGGREGATE = "AGGREGATE"
 MIXED = "MIXED"
 
+# 목록으로 물을 수 있는 색인 종류. 모델이 이 밖의 값을 주면 보통 문서 검색으로 간다.
+LISTABLE: dict[str, str] = {
+    "ISSUE": "이슈",
+    "REQUIREMENT": "요구사항",
+    "RISK": "리스크",
+    "DOCUMENT_UPLOAD": "산출물 문서",
+}
+
 # 모델 출력을 JSON 객체 하나로 묶는다. 키 목록은 프롬프트가 말하고, 값의 검증(키가
 # 카탈로그에 있는지)은 from_choice 가 한다. 속성을 일일이 적은 스키마는 쓰지 않는다.
 # 09.14 실측에서 route·query 만 필수로 둔 스키마를 주자 qwen3:4b 가 선택 속성을 통째로
@@ -32,6 +40,7 @@ class RouteDecision:
     dimensions: list[str] = field(default_factory=list)
     template: str | None = None
     title: str = ""
+    listing: str | None = None  # 문서 경로에서 종류 전체를 나열하는 질문이면 그 source_type
 
 
 def decide(catalog: Catalog, llm: LlmPort, question: str) -> RouteDecision:
@@ -50,7 +59,10 @@ def from_choice(catalog: Catalog, choice: dict[str, Any] | None) -> RouteDecisio
     route = str(choice.get("route") or "").strip().upper()
     measure_key = choice.get("measure")
     if route != AGGREGATE or not measure_key:
-        return RouteDecision(type=DOCUMENT, rewritten=rewritten)
+        listing = str(choice.get("list") or "").strip().upper() or None
+        if listing not in LISTABLE:
+            listing = None
+        return RouteDecision(type=DOCUMENT, rewritten=rewritten, listing=listing)
     measure = catalog.measure(str(measure_key))
     if measure is None:
         return RouteDecision(type=DOCUMENT, rewritten=rewritten)
@@ -86,6 +98,11 @@ def system_prompt(catalog: Catalog) -> str:
         '집계: {"route": "AGGREGATE", "measure": "<지표 key>", "dimensions": ["<차원 key>"], '
         '"template": "<템플릿>", "title": "<한국어 제목>", "query": "<검색용 핵심어>"}\n'
         '문서: {"route": "DOCUMENT", "query": "<검색용 핵심어>"}\n'
+        '목록: {"route": "DOCUMENT", "list": "<종류>", "query": "<검색용 핵심어>"}\n'
+        "목록은 이슈·요구사항·리스크·산출물 문서 같은 종류 전체를 나열하거나 현황을 묻는 질문"
+        '("이슈 목록", "요구사항 뭐가 있어", "등록된 리스크")에만 쓴다. 종류는 '
+        + ", ".join(f"{k}({v})" for k, v in LISTABLE.items())
+        + " 중 하나다. 특정 항목의 내용을 묻는 질문에는 list 를 붙이지 않는다.\n"
         "지표 key 는 카탈로그에 있는 것만 쓴다. 맞는 지표가 없으면 DOCUMENT 다. "
         "차원은 0~2개이고 지표의 허용 차원에서만 고른다. 추이를 물으면 period_ 차원을 쓴다.\n\n"
         f"## 지표\n{measures}\n\n## 차원\n{dimensions}\n\n"
