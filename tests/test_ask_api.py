@@ -81,6 +81,9 @@ def _events(res) -> list[tuple[str, dict]]:
 def indexed_document():
     sid = str(uuid.uuid4())
     with tx() as cur:
+        # 다른 시험(수집·추적관계)이 같은 시드 사업에 청크를 남긴다. Fake 벡터는 텍스트별로
+        # 결정적이라 청크 집합만 고정되면 근거 순서도 고정된다 — 그래서 사업을 먼저 비운다.
+        cur.execute("delete from doc_chunk where project_id = %s", (PID,))
         indexing.reindex(
             cur,
             FakeEmbedding(1024),
