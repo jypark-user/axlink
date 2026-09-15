@@ -25,7 +25,18 @@ from app.auth.deps import AuthPrincipal
 from app.common import errors
 from app.config import settings
 from app.dashboard import repository, wbs
-from app.dashboard.models import OBSERVED, SELF_REPORTED, ProgressMeasure, ProgressResponse
+from app.dashboard.models import (
+    OBSERVED,
+    SELF_REPORTED,
+    WBS_SOURCE_FILE,
+    WBS_SOURCE_NONE,
+    WBS_SOURCE_REDMINE,
+    ProgressMeasure,
+    ProgressResponse,
+    WbsItemResponse,
+    WbsScheduleResponse,
+)
+from app.integration import repository as integration_repo
 from app.standard import repository as standard_repo
 
 # WBS 가 들어오는 산출물 항목. 저장소에 커밋된 계획 파일이 여기로 승격된다.
@@ -111,6 +122,210 @@ def compute(cur: Any, project_id: str, at: date) -> ProgressResponse:
         planVersion=None if plan_row is None else plan_row["version"],
         planUpdatedAt=None if plan_row is None else plan_row["updated_at"].isoformat(),
     )
+
+
+# ---------------------------------------------------------------- 일정 (WBS)
+
+_NO_WBS_NOTICE = (
+    "일정과 진척률 산정의 핵심 입력인 WBS 가 없습니다. 용역사의 WBS 파일(사업수행계획서)을 "
+    "저장소에 두거나 산출물로 올리거나, Redmine 이슈에 시작일·종료일을 채우면 여기에 나타납니다. "
+    "그전까지 진척률은 이슈·산출물 기준의 추정치입니다."
+)
+
+
+def wbs_schedule(
+    cur: Any, principal: AuthPrincipal, project_id: str, at: date | None = None
+) -> WbsScheduleResponse:
+    """일정 화면의 작업 줄. 표준 산출물 목록으로 흉내 내지 않는다 — 실제 WBS 가 있으면
+    그것, 없으면 Redmine 이슈의 일정, 둘 다 없으면 빈 목록과 고지문이다."""
+    allowed = auth_repo.allowed_project_ids(
+        cur, principal.role, principal.org_id, principal.user_id
+    )
+    if project_id not in allowed:
+        raise errors.project_access_denied()
+    return schedule(cur, project_id, at or date.today())
+
+
+def schedule(cur: Any, project_id: str, at: date) -> WbsScheduleResponse:
+    warnings: list[str] = []
+    plan_row = standard_repo.current_work_product(cur, project_id, PLAN_TYPE)
+    plan, plan_warning = _load_plan(project_id, plan_row)
+    if plan_warning:
+        warnings.append(plan_warning)
+    if plan is not None:
+        assert plan_row is not None
+        return WbsScheduleResponse(
+            source=WBS_SOURCE_FILE,
+            sourceLabel=f"용역사 WBS ({plan_row.get('file_uri') or '사업수행계획서'})",
+            sourceUrl=plan_row.get("external_url"),
+            baseDate=at.isoformat(),
+            planVersion=plan_row["version"],
+            planUpdatedAt=plan_row["updated_at"].isoformat(),
+            items=_items_from_plan(plan, at),
+            warnings=[*warnings, *plan.warnings],
+            notice=None,
+        )
+
+    issues = integration_repo.redmine_issue_payloads(cur, project_id)
+    items = _items_from_redmine(issues, at)
+    if items:
+        warnings.append(
+            "WBS 파일이 없어 Redmine 이슈의 시작일·종료일을 일정으로 씁니다. 가중치가 없으므로 "
+            "진척률 산정의 기준선(L1)은 아닙니다."
+        )
+        return WbsScheduleResponse(
+            source=WBS_SOURCE_REDMINE,
+            sourceLabel="Redmine 이슈 일정",
+            sourceUrl=None,
+            baseDate=at.isoformat(),
+            planVersion=None,
+            planUpdatedAt=None,
+            items=items,
+            warnings=warnings,
+            notice=None,
+        )
+
+    return WbsScheduleResponse(
+        source=WBS_SOURCE_NONE,
+        sourceLabel="WBS 없음",
+        sourceUrl=None,
+        baseDate=at.isoformat(),
+        planVersion=None,
+        planUpdatedAt=None,
+        items=[],
+        warnings=warnings,
+        notice=_NO_WBS_NOTICE,
+    )
+
+
+def _load_plan(
+    project_id: str, plan_row: dict[str, Any] | None
+) -> tuple[wbs.WbsPlan | None, str | None]:
+    if plan_row is None:
+        return None, None
+    path = _plan_path(project_id, plan_row)
+    if path is None:
+        return None, "WBS 항목은 채워졌으나 보관된 원본을 찾지 못했다. 다시 수집이 필요하다"
+    try:
+        return wbs.parse(path.read_bytes()), None
+    except wbs.WbsParseError as exc:
+        return None, f"WBS 를 읽지 못했다 — {exc}"
+    except OSError as exc:
+        return None, f"WBS 원본을 열지 못했다 — {exc}"
+
+
+def _level_of(wbs_id: str) -> int:
+    """'1' → 0, '1.2' → 1, '1.2.3' → 2. 번호가 없으면 말단으로 본다."""
+    parts = [p for p in wbs_id.replace("-", ".").split(".") if p]
+    return max(0, len(parts) - 1) if parts else 1
+
+
+def _sort_key(wbs_id: str) -> tuple:
+    out: list[tuple[int, int | str]] = []
+    for part in wbs_id.replace("-", ".").split("."):
+        out.append((0, int(part)) if part.isdigit() else (1, part))
+    return tuple(out)
+
+
+def _items_from_plan(plan: wbs.WbsPlan, at: date) -> list[WbsItemResponse]:
+    """상위 항목은 하위 말단의 가중 평균으로 진척을 낸다. 말단은 파일의 실적 그대로다."""
+    items: list[WbsItemResponse] = []
+    leaves = plan.rows
+    for group in plan.groups:
+        prefix = group.wbs_id.rstrip(".") + "."
+        under = [r for r in leaves if r.wbs_id.startswith(prefix)]
+        total = sum(r.weight for r in under)
+        actual = sum(r.weight * r.actual for r in under) / total if total else 0.0
+        planned = sum(r.weight * r.planned_at(at) for r in under) / total if total else 0.0
+        start = group.start or min((r.start for r in under if r.start), default=None)
+        end = group.end or max((r.end for r in under if r.end), default=None)
+        items.append(
+            WbsItemResponse(
+                wbsId=group.wbs_id,
+                name=group.name,
+                level=_level_of(group.wbs_id),
+                owner="",
+                deliverable=None,
+                startDate=start.isoformat() if start else None,
+                endDate=end.isoformat() if end else None,
+                weight=round(total, 4) if total else None,
+                progress=_pct(actual),
+                planned=_pct(planned),
+                externalUrl=None,
+            )
+        )
+    for row in leaves:
+        items.append(
+            WbsItemResponse(
+                wbsId=row.wbs_id,
+                name=row.name,
+                level=_level_of(row.wbs_id),
+                owner="",
+                deliverable=row.deliverable,
+                startDate=row.start.isoformat() if row.start else None,
+                endDate=row.end.isoformat() if row.end else None,
+                weight=row.weight,
+                progress=_pct(row.actual),
+                planned=_pct(row.planned_at(at)),
+                externalUrl=None,
+            )
+        )
+    items.sort(key=lambda i: _sort_key(i.wbsId))
+    return items
+
+
+def _items_from_redmine(issues: list[dict[str, Any]], at: date) -> list[WbsItemResponse]:
+    """시작일이나 종료일이 있는 이슈만 일정이다. 둘 다 없으면 일정이 아니라 목록이다."""
+    items: list[WbsItemResponse] = []
+    for issue in issues:
+        start = _iso_date(issue.get("start_date"))
+        end = _iso_date(issue.get("due_date"))
+        if start is None and end is None:
+            continue
+        parent = issue.get("parent") or {}
+        assignee = issue.get("assigned_to") or {}
+        done = issue.get("done_ratio")
+        row = wbs.WbsRow(
+            wbs_id=str(issue.get("id", "")),
+            name=str(issue.get("subject") or "").strip(),
+            deliverable=None,
+            start=start,
+            end=end,
+            weight=1.0,
+            actual=(float(done) / 100.0) if isinstance(done, int | float) else 0.0,
+            declared_planned=None,
+        )
+        base = (issue.get("_base_url") or "").rstrip("/")
+        items.append(
+            WbsItemResponse(
+                wbsId=f"#{row.wbs_id}",
+                name=row.name,
+                level=1 if parent.get("id") else 0,
+                owner=str(assignee.get("name") or ""),
+                deliverable=None,
+                startDate=start.isoformat() if start else None,
+                endDate=end.isoformat() if end else None,
+                weight=None,
+                progress=_pct(row.actual),
+                planned=_pct(row.planned_at(at)) if start and end else 0,
+                externalUrl=f"{base}/issues/{row.wbs_id}" if base and row.wbs_id else None,
+            )
+        )
+    items.sort(key=lambda i: (i.startDate or "9999", i.wbsId))
+    return items
+
+
+def _iso_date(value: Any) -> date | None:
+    if not value:
+        return None
+    try:
+        return date.fromisoformat(str(value)[:10])
+    except ValueError:
+        return None
+
+
+def _pct(ratio: float) -> int:
+    return max(0, min(100, round(ratio * 100)))
 
 
 def current_wbs_rows(cur: Any, project_id: str) -> list[wbs.WbsRow]:

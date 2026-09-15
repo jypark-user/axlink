@@ -159,3 +159,40 @@ class ProgressSnapshotResponse(BaseModel):
     workProductApprovedCount: int  # noqa: N815
     workProductTotalCount: int  # noqa: N815
     createdAt: str  # noqa: N815
+
+
+# ---------------------------------------------------------------- 일정 (WBS)
+
+# 일정 화면의 원천. 화면은 이 값으로 제목과 고지문을 바꾼다.
+WBS_SOURCE_FILE = "WBS_FILE"  # 용역사가 낸 WBS 파일 (사업수행계획서)
+WBS_SOURCE_REDMINE = "REDMINE"  # Redmine 이슈의 시작일·종료일·진척률
+WBS_SOURCE_NONE = "NONE"  # 둘 다 없다. 작업 줄을 만들지 않는다
+
+
+class WbsItemResponse(BaseModel):
+    """일정 화면의 작업 한 줄. 프런트 ScheduleTask 와 1:1 이다."""
+
+    wbsId: str  # noqa: N815
+    name: str
+    level: int  # 들여쓰기 깊이. 0 이 최상위
+    owner: str
+    deliverable: str | None
+    startDate: str | None  # noqa: N815
+    endDate: str | None  # noqa: N815
+    weight: float | None  # 상위 항목·Redmine 이슈는 없다
+    progress: int  # 0~100
+    planned: int  # 기준일의 계획 진척. 0~100
+    externalUrl: str | None  # noqa: N815
+
+
+class WbsScheduleResponse(BaseModel):
+    source: str  # WBS_FILE | REDMINE | NONE
+    sourceLabel: str  # noqa: N815
+    sourceUrl: str | None  # noqa: N815
+    baseDate: str  # noqa: N815
+    planVersion: str | None  # noqa: N815
+    planUpdatedAt: str | None  # noqa: N815
+    items: list[WbsItemResponse]
+    warnings: list[str]
+    # 원천이 없을 때만 채운다. 진척률 산정의 핵심 입력이 빠졌음을 화면이 그대로 보인다.
+    notice: str | None

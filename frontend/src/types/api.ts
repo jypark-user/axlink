@@ -1117,3 +1117,39 @@ export interface StructuringConfirmResponse {
   createdRequirementIds: string[];
   indexedChunkCount: number;
 }
+
+// ---------------------------------------------------------------- 일정 (WBS)
+
+/** 일정 화면의 원천. 화면은 이 값으로 설명문과 고지문을 바꾼다. */
+export type WbsSource = 'WBS_FILE' | 'REDMINE' | 'NONE';
+
+export interface WbsItemResponse {
+  wbsId: string;
+  name: string;
+  /** 들여쓰기 깊이. 0 이 최상위. */
+  level: number;
+  owner: string;
+  deliverable: string | null;
+  startDate: string | null;
+  endDate: string | null;
+  /** 상위 항목·Redmine 이슈는 없다. */
+  weight: number | null;
+  /** 0~100 */
+  progress: number;
+  /** 기준일의 계획 진척. 0~100 */
+  planned: number;
+  externalUrl: string | null;
+}
+
+export interface WbsScheduleResponse {
+  source: WbsSource;
+  sourceLabel: string;
+  sourceUrl: string | null;
+  baseDate: string;
+  planVersion: string | null;
+  planUpdatedAt: string | null;
+  items: WbsItemResponse[];
+  warnings: string[];
+  /** 원천이 없을 때만. 진척률 산정의 핵심 입력이 빠졌음을 그대로 보인다. */
+  notice: string | null;
+}

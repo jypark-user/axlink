@@ -11,7 +11,11 @@ from fastapi import APIRouter, Query
 
 from app.auth.deps import Principal
 from app.dashboard import service, snapshot
-from app.dashboard.models import ProgressResponse, ProgressSnapshotResponse
+from app.dashboard.models import (
+    ProgressResponse,
+    ProgressSnapshotResponse,
+    WbsScheduleResponse,
+)
 from app.db import tx
 
 router = APIRouter(prefix="/api/projects", tags=["progress"])
@@ -42,3 +46,12 @@ def take_snapshot(
     """
     with tx() as cur:
         return snapshot.take(cur, principal, project_id, at)
+
+
+@router.get("/{project_id}/wbs", response_model=WbsScheduleResponse)
+def project_wbs(project_id: str, principal: Principal, at: BaseDate = None) -> WbsScheduleResponse:
+    """일정 화면의 작업 줄. 용역사 WBS 파일 → Redmine 이슈 일정 → 없음(고지) 순이다.
+    표준 산출물 목록으로 WBS 를 흉내 내지 않는다 — WBS 는 사업마다 다르다.
+    """
+    with tx() as cur:
+        return service.wbs_schedule(cur, principal, project_id, at)

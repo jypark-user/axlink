@@ -307,3 +307,20 @@ def mapping_rule_count(mapping_rules_json: Any) -> int:
     )
     # 파일럿 형식({"rules": [...]})과 현행 평면 dict(SWFR.CON.002) 둘 다 센다.
     return len(data.get("rules", data))
+
+
+def redmine_issue_payloads(cur: Any, project_id: str) -> list[dict[str, Any]]:
+    """사업에 연결된 Redmine 의 이슈 원시본. 일정 화면이 WBS 파일 없을 때 대체 원천으로 쓴다.
+    표준 모델의 issue 에는 시작일·종료일이 없고 원시본에는 그대로 있다."""
+    rows = fetch_all(
+        cur,
+        """
+        select ra.payload_jsonb as payload, tc.base_url
+          from raw_artifact ra
+          join tool_connection tc on tc.id = ra.tool_connection_id
+         where tc.project_id = %s and tc.tool = 'REDMINE' and ra.object_kind = 'issue'
+         order by ra.external_id
+        """,
+        (project_id,),
+    )
+    return [{**(r["payload"] or {}), "_base_url": r["base_url"]} for r in rows]
