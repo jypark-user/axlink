@@ -26,11 +26,11 @@ from app.project.models import (
     ProjectSummaryResponse,
     ProjectUpdateRequest,
 )
+from app.review import repository as review_repository
 from app.standard import repository as standard_repository
 
 _SI_PHASES = ("SI_1", "SI_2", "SI_3", "SI_4", "SI_5", "SI_6")
 _INVITE_TTL = timedelta(days=7)
-from app.review import repository as review_repository
 
 
 def _iso(value: Any) -> str | None:
