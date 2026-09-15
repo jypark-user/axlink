@@ -96,9 +96,14 @@ def format_value(value: object) -> str:
 
 
 def user_prompt(
-    question: str, chunks: list[RetrievedChunk], aggregate: AggregateContext | None
+    question: str,
+    chunks: list[RetrievedChunk],
+    aggregate: AggregateContext | None,
+    listing: str | None = None,
 ) -> str:
     parts = [f"## 질문\n{question}"]
+    if listing:
+        parts.append("## 목록 범위\n" + listing)
     if aggregate is not None:
         scope = len(aggregate.data.appliedProjectIds)
         stamp = aggregate.data.generatedAt[:10]
@@ -181,6 +186,23 @@ def guard_note(numbers: list[str]) -> str:
 
 
 # ---------------------------------------------------------------- 문안
+
+
+def listing_scope(label: str, shown: int, total: int) -> str:
+    """목록 질문의 근거가 전체인지 일부인지. 이 줄의 숫자는 근거로 친다."""
+    if shown >= total:
+        return f"사업 범위 안의 {label} 전체 {total}건이 아래 근거다. 빠짐없이 나열해도 된다."
+    return (
+        f"사업 범위 안의 {label}은 총 {total}건이고 그중 앞 {shown}건만 아래 근거다. "
+        "나머지는 모른다고 한다."
+    )
+
+
+def empty_listing(label: str) -> str:
+    return (
+        f"사업 범위 안에 색인된 {label}이(가) 없어 답변을 만들지 않았습니다. "
+        "수집이나 사업 범위를 확인해 보십시오."
+    )
 
 
 def insufficient_evidence(max_similarity: float, candidate_count: int) -> str:

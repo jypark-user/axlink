@@ -68,6 +68,11 @@ class Settings(BaseSettings):
     # 0.38~0.51 이었다. 08.31 실측의 정답 1순위는 0.719. 근거는 ARC-010.
     rag_min_similarity: float = 0.55
     rag_snippet_chars: int = 300
+    # 목록 질문("이슈 목록", "요구사항 뭐가 있어")은 어떤 청크 내용과도 닮지 않아 유사도로는
+    # 못 찾는다(09.15 실측: 이슈 청크 안에서도 0.38, 무관 질문은 0.47). 종류로 골라 소스당
+    # 한 청크씩 앞부분만 넣는다. 41건 × 160자 ≈ 3천 토큰이라 8192 문맥에 든다.
+    rag_list_limit: int = 60
+    rag_list_chars: int = 160
 
     @property
     def access_ttl(self) -> timedelta:
