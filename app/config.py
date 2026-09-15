@@ -35,6 +35,8 @@ class Settings(BaseSettings):
     # 1단계 경량 검증용 잠정값. 모델 확정은 로컬 검증(작업 규약 §5) 결과로 한다.
     llm_model: str = "qwen3:4b"
     llm_timeout: float = 120.0
+    # 생성 문맥 길이. 근거 청크 5개(각 최대 1000토큰)와 지시가 들어가야 한다.
+    llm_num_ctx: int = 8192
     ollama_base_url: str = "http://localhost:11434"
     embedding_model: str = "bge-m3"
     embedding_dimension: int = 1024  # doc_chunk.embedding 컬럼 차원과 반드시 같아야 한다
@@ -56,6 +58,16 @@ class Settings(BaseSettings):
     chunk_min_tokens: int = 200
     chunk_max_tokens: int = 1000
     chunk_overlap_ratio: float = 0.15
+
+    # AI 질의 검색과 근거 게이트 (ARC-010)
+    rag_candidates: int = 20  # 벡터·어휘 검색이 각각 내는 후보 수
+    rag_top_k: int = 5  # 프롬프트에 넣는 근거 청크 수
+    rag_rrf_k: int = 60  # RRF 상수. 순위 융합에서 1위와 2위의 차이를 완만하게 한다
+    # 최고 코사인 유사도가 이 값 미만이면 LLM 을 부르지 않고 "근거 부족"으로 답한다.
+    # 09.14 실측(bge-m3, 저장소 문서 5건): 답이 있는 질문은 0.55~0.68, 관계없는 질문은
+    # 0.38~0.51 이었다. 08.31 실측의 정답 1순위는 0.719. 근거는 ARC-010.
+    rag_min_similarity: float = 0.55
+    rag_snippet_chars: int = 300
 
     @property
     def access_ttl(self) -> timedelta:
