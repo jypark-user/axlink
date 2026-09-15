@@ -5,6 +5,7 @@ services:
   postgres:
     image: pgvector/pgvector:pg16
     container_name: axlink-postgres
+    restart: unless-stopped
     environment:
       POSTGRES_USER: axlink
       POSTGRES_PASSWORD: axlink
@@ -42,6 +43,7 @@ services:
   redmine-db:
     image: postgres:16
     container_name: axlink-redmine-db
+    restart: unless-stopped
     environment:
       POSTGRES_USER: redmine
       POSTGRES_PASSWORD: redmine
@@ -52,6 +54,7 @@ services:
   redmine:
     image: redmine:6
     container_name: axlink-redmine
+    restart: unless-stopped
     depends_on: [redmine-db]
     environment:
       REDMINE_DB_POSTGRES: redmine-db
@@ -64,10 +67,13 @@ services:
       - redminefiles:/usr/src/redmine/files
 
   # 온프레미스 LLM 1단계 (경량 모델 기능구조 선행검증)
-  # GPU 전환 시 deploy.resources.reservations.devices 로 교체
+  # GPU 전환 시 deploy.resources.reservations.devices 로 교체.
+  # 단 09.15 실측: WSL2 컨테이너에 RTX 3070 을 붙이면 bge-m3 러너가 배치 임베딩에서
+  # 세그폴트로 죽는다. 임베딩만 쓰는 구성이면 CPU 로 두는 편이 안정적이다.
   ollama:
     image: ollama/ollama:latest
     container_name: axlink-ollama
+    restart: unless-stopped
     ports: ["11434:11434"]
     volumes:
       - ollama:/root/.ollama
