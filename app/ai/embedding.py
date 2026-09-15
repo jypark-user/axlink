@@ -31,6 +31,9 @@ class OllamaEmbedding:
     def dimension(self) -> int:
         return self._dim
 
+    def model_name(self) -> str:
+        return self._model
+
     def embed(self, texts: list[str]) -> list[list[float]]:
         if not texts:
             return []
@@ -87,6 +90,11 @@ class FakeEmbedding:
 
     def dimension(self) -> int:
         return self._dim
+
+    def model_name(self) -> str:
+        # 실제 모델 이름을 적으면 가짜 벡터가 진짜 행세를 한다. 09.15 에 그렇게 들어간
+        # 벡터가 재수집으로도 안 지워져 검색이 통째로 망가졌다.
+        return "fake"
 
     def embed(self, texts: list[str]) -> list[list[float]]:
         return [self._one(t) for t in texts]

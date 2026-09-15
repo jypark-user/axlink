@@ -105,6 +105,40 @@ def test_indexed_chunk_carries_source_location(source_id):
     assert row["source_uri"] == "https://example.invalid/doc"
     assert row["meta_json"]["headingPath"] == ["1장 개요"]
     assert row["token_count"] > 0
+    # 어떤 모델이 만든 벡터인지는 포트가 말한 대로 남는다. 가짜는 가짜라고 적힌다.
+    assert row["embedding_model"] == "fake"
+
+
+class NamedEmbedding(FakeEmbedding):
+    def __init__(self, name: str) -> None:
+        super().__init__(1024)
+        self._name = name
+
+    def model_name(self) -> str:
+        return self._name
+
+
+@requires_db
+def test_reindex_refreshes_when_embedding_model_differs(source_id):
+    """본문이 같아도 다른 모델이 만든 벡터는 버리고 다시 만든다.
+    가짜 벡터가 실제 모델 이름을 달고 들어간 뒤 재수집으로도 안 지워졌던 사고의 재발 방지다."""
+    with tx() as cur:
+        indexing.reindex(cur, NamedEmbedding("fake"), [_source(source_id, _LONG_BODY)])
+
+    port = NamedEmbedding("bge-m3")
+    with tx() as cur:
+        again = indexing.reindex(cur, port, [_source(source_id, _LONG_BODY)])
+        models = cur.execute(
+            "select distinct embedding_model from doc_chunk where source_id = %s", (source_id,)
+        ).fetchall()
+    assert again.unchanged == 0
+    assert again.chunks > 1
+    assert [m["embedding_model"] for m in models] == ["bge-m3"]
+
+    # 같은 모델로 한 번 더 — 이제는 건너뛴다.
+    with tx() as cur:
+        third = indexing.reindex(cur, port, [_source(source_id, _LONG_BODY)])
+    assert third.unchanged == 1
 
 
 @requires_db

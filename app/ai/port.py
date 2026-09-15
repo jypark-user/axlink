@@ -15,6 +15,11 @@ class EmbeddingPort(Protocol):
         """벡터 차원. doc_chunk.embedding 컬럼과 맞는지 기동 때 검사한다."""
         ...
 
+    def model_name(self) -> str:
+        """벡터를 만든 모델 이름. doc_chunk.embedding_model 에 그대로 남긴다.
+        같은 본문이라도 다른 모델이 만든 벡터는 검색에 못 쓰므로 재색인 판단의 일부다."""
+        ...
+
 
 @dataclass
 class LlmResult:

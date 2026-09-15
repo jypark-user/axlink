@@ -77,23 +77,27 @@ def count_by_source_type(cur: Any, project_id: str) -> list[dict[str, Any]]:
 
 def hashes_by_source(
     cur: Any, source_type: str, source_ids: list[str]
-) -> dict[str, list[str]]:
-    """소스별 청크 해시를 chunk_index 순으로 돌려준다. 재색인 생략 판단에 쓴다."""
+) -> dict[str, list[tuple[str, str]]]:
+    """소스별 (청크 해시, 임베딩 모델) 을 chunk_index 순으로 돌려준다. 재색인 생략 판단에 쓴다.
+    모델을 같이 보는 이유: 본문이 그대로여도 다른 모델이 만든 벡터는 지금 모델의 질의
+    벡터와 비교할 수 없다."""
     if not source_ids:
         return {}
     rows = fetch_all(
         cur,
         """
-        select source_id::text as source_id, content_hash
+        select source_id::text as source_id, content_hash, embedding_model
           from doc_chunk
          where source_type = %s and source_id = any(%s::uuid[])
          order by source_id, chunk_index
         """,
         (source_type, source_ids),
     )
-    found: dict[str, list[str]] = {}
+    found: dict[str, list[tuple[str, str]]] = {}
     for row in rows:
-        found.setdefault(row["source_id"], []).append(row["content_hash"])
+        found.setdefault(row["source_id"], []).append(
+            (row["content_hash"], row["embedding_model"])
+        )
     return found
 
 
