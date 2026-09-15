@@ -19,8 +19,9 @@ from fastapi.testclient import TestClient
 from app.config import settings
 from app.main import app
 
-# 테스트는 모델 없이 돈다. 실제 bge-m3 검증은 tests/test_embedding_live.py 가 따로 한다.
+# 테스트는 모델 없이 돈다. 실제 모델 검증은 tests/test_*_live.py 가 따로 한다.
 settings.embedding_provider = "fake"
+settings.llm_provider = "fake"
 
 
 def _is_test_db() -> bool:

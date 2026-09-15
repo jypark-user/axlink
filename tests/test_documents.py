@@ -94,7 +94,9 @@ def test_xlsx_upload_is_parsed_and_stored(client, as_pm):
     body = res.json()
 
     assert body["fileName"] == "WBS.xlsx"
-    assert body["status"] == "EXTRACTED"
+    # 읽고 나면 바로 초안까지 만든다. 사람이 확인할 초안이 생긴 상태가 STRUCTURED 다.
+    assert body["status"] == "STRUCTURED"
+    assert body["draftAvailable"] is True
     assert body["extractedCharCount"] > 0
     assert body["error"] is None
     assert body["uploadedBy"]  # 올린 사람 이름이 붙는다
@@ -244,4 +246,4 @@ def test_delete_allows_reupload_of_same_file(client, as_pm):
 
     again = _upload(client, as_pm, "재업로드.xlsx", data)
     assert again.status_code == 201
-    assert again.json()["status"] == "EXTRACTED"
+    assert again.json()["status"] == "STRUCTURED"
