@@ -13,7 +13,6 @@ from typing import Any
 
 from app.ai.port import EmbeddingPort
 from app.common import errors
-from app.config import settings
 from app.rag import chunking, repository, vector
 
 
@@ -65,7 +64,7 @@ def reindex(cur: Any, port: EmbeddingPort, sources: list[IndexSource]) -> IndexR
     if not plan:
         return result
 
-    plan = _drop_unchanged(cur, plan, result)
+    plan = _drop_unchanged(cur, plan, result, port.model_name())
     if not plan:
         return result
 
@@ -91,7 +90,7 @@ def reindex(cur: Any, port: EmbeddingPort, sources: list[IndexSource]) -> IndexR
                     "chunk_index": draft.chunk_index,
                     "content": draft.content,
                     "embedding": vector.to_literal(vectors[cursor]),
-                    "embedding_model": settings.embedding_model,
+                    "embedding_model": port.model_name(),
                     "token_count": draft.token_count,
                     "source_title": source.title[:500],
                     "source_uri": source.uri,
@@ -110,6 +109,7 @@ def _drop_unchanged(
     cur: Any,
     plan: list[tuple[IndexSource, list[chunking.ChunkDraft]]],
     result: IndexResult,
+    model: str,
 ) -> list[tuple[IndexSource, list[chunking.ChunkDraft]]]:
     by_type: dict[str, list[str]] = {}
     for source, _ in plan:
@@ -122,7 +122,7 @@ def _drop_unchanged(
 
     keep: list[tuple[IndexSource, list[chunking.ChunkDraft]]] = []
     for source, drafts in plan:
-        fresh = [_hash(d.content) for d in drafts]
+        fresh = [(_hash(d.content), model) for d in drafts]
         if existing.get((source.source_type, source.source_id)) == fresh:
             result.unchanged += 1
             continue
