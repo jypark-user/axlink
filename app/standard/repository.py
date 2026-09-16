@@ -344,7 +344,8 @@ def current_work_product(
     return fetch_one(
         cur,
         """
-        select id, type, version, title, status, file_uri, source_revision, updated_at
+        select id, type, version, title, status, file_uri, source_revision, external_url,
+               updated_at
           from work_product
          where project_id = %s and type = %s and is_current
         """,

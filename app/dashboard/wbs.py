@@ -61,10 +61,21 @@ class WbsRow:
 
 
 @dataclass
+class WbsGroup:
+    """가중치가 없는 상위 항목. 진척 계산에는 안 들어가고 일정 화면의 묶음으로만 쓴다."""
+
+    wbs_id: str
+    name: str
+    start: date | None
+    end: date | None
+
+
+@dataclass
 class WbsPlan:
     rows: list[WbsRow]
     weight_total: float
     warnings: list[str] = field(default_factory=list)
+    groups: list[WbsGroup] = field(default_factory=list)
 
     @property
     def leaf_count(self) -> int:
@@ -116,10 +127,15 @@ def parse(data: bytes) -> WbsPlan:
             warnings.append(f"「{_COLUMNS[key][0]}」 열이 없다")
 
     rows: list[WbsRow] = []
+    groups: list[WbsGroup] = []
     for index, raw in enumerate(grid[header_row + 1 :], start=header_row + 2):
         row = _read_row(raw, columns, index, warnings)
         if row is not None:
             rows.append(row)
+            continue
+        group = _read_group(raw, columns)
+        if group is not None:
+            groups.append(group)
 
     if not rows:
         raise WbsParseError("가중치가 있는 말단 작업을 한 건도 찾지 못했다")
@@ -128,7 +144,7 @@ def parse(data: bytes) -> WbsPlan:
     if abs(total - 1.0) > 0.005:
         warnings.append(f"가중치 합이 1.00 이 아니다 ({total:.3f}). 합으로 나눠 정규화했다")
 
-    return WbsPlan(rows=rows, weight_total=total, warnings=warnings)
+    return WbsPlan(rows=rows, weight_total=total, warnings=warnings, groups=groups)
 
 
 def progress(plan: WbsPlan, at: date | None = None) -> WbsProgress:
@@ -224,6 +240,19 @@ def _read_row(
         actual=actual,
         declared_planned=_ratio(_cell(raw, columns.get("planned"))),
     )
+
+
+def _read_group(raw: list, columns: dict[str, int]) -> WbsGroup | None:
+    """가중치 없는 행 가운데 번호와 이름이 있는 것. 표지·빈 줄·합계 줄은 걸러진다."""
+    wbs_id = str(_cell(raw, columns.get("wbs_id")) or "").strip()
+    name = str(_cell(raw, columns.get("name")) or "").strip()
+    if not wbs_id or not name:
+        return None
+    start = _date(_cell(raw, columns.get("start")))
+    end = _date(_cell(raw, columns.get("end")))
+    if start and end and end < start:
+        start, end = None, None
+    return WbsGroup(wbs_id=wbs_id, name=name, start=start, end=end)
 
 
 def _cell(raw: list, position: int | None):
