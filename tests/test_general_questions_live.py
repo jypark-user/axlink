@@ -124,8 +124,13 @@ def _answerable(cur, catalog, llm, question: str) -> dict:
     d = routed.decision
     route_ms = int((time.time() - t0) * 1000)
     if d.type == routing.OFF_TOPIC:
-        return {"route": "OFF_TOPIC", "measure": "", "blocks": 0, "gate": False, "sim": 0.0,
-                "ok": False, "route_ms": route_ms, "cached": routed.cached}
+        # 서비스와 같은 규칙. 문서 근거가 있으면 무관이 아니다
+        vec = embedding_port().embed([question])[0]
+        found = search.search_with_vector(cur, vec, d.rewritten or question, [PID])
+        return {"route": "OFF_TOPIC→DOCUMENT" if found.passes_gate() else "OFF_TOPIC",
+                "measure": "", "blocks": 0, "gate": found.passes_gate(),
+                "sim": round(found.max_similarity, 2), "ok": found.passes_gate(),
+                "route_ms": route_ms, "cached": routed.cached}
     blocks = 0
     if d.type == routing.AGGREGATE:
         blocks += 1

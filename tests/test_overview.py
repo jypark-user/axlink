@@ -164,6 +164,26 @@ def test_무관한_질문은_현황으로_내려가지_않는다(client, convers
 
 
 @requires_db
+def test_무관_판정이어도_근거가_있으면_문서로_답한다(client, conversation, monkeypatch):
+    """모델이 "인수 조건이 뭐야" 를 무관으로 봤다. 근거가 있으면 근거가 판정을 이긴다."""
+    scripted = _Scripted({"route": "OFF_TOPIC"}, "근거대로 답합니다[1].")
+    monkeypatch.setattr(ask_service, "llm_port", lambda: scripted)
+    monkeypatch.setattr(settings, "rag_min_similarity", 0.0)  # 청크만 있으면 통과
+
+    with tx() as cur:
+        has_chunks = cur.execute(
+            "select count(*) as n from doc_chunk where project_id = %s", (PID,)
+        ).fetchone()["n"] > 0
+    if not has_chunks:
+        pytest.skip("시드 사업에 색인이 없다")
+    cid, token = conversation
+    events = _ask(client, token, cid, "인수 조건이 뭐야?")
+    assert events[0][1]["routing"]["type"] == "DOCUMENT"
+    assert events[-1][1]["finishReason"] == "STOP"
+    assert scripted.prompts  # 모델이 본문을 썼다
+
+
+@requires_db
 def test_현황_그림도_없으면_예전처럼_막는다(client, conversation, monkeypatch):
     scripted = _Scripted({"route": "DOCUMENT", "query": "x"}, "안 불려야 한다")
     monkeypatch.setattr(ask_service, "llm_port", lambda: scripted)
