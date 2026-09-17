@@ -28,7 +28,7 @@ from app.common import errors
 from app.common.paging import PageQuery, PageResponse
 from app.config import settings
 from app.db import tx
-from app.rag import answer, blocks, entity_table, routing, search
+from app.rag import answer, blocks, entity_table, route_cache, routing, search
 from app.rag import conversation_repository as repo
 from app.rag.models import (
     AskRequest,
@@ -187,7 +187,10 @@ def stream(p: Prepared) -> Iterator[bytes]:
     pieces: list[str] = []
     try:
         llm = llm_port()
-        decision = routing.decide(p.catalog, llm, p.question)
+        # 판정은 캐시를 먼저 본다(ARC-014). 값은 아래에서 매번 새로 뽑는다.
+        with tx() as cur:
+            routed = route_cache.decide(cur, p.catalog, llm, p.question)
+        decision = routed.decision
         query_text = decision.rewritten or p.question
         query_vec = embedding_port().embed([p.question])[0]
 
@@ -253,6 +256,7 @@ def stream(p: Prepared) -> Iterator[bytes]:
                 viz=block_list[0].template if block_list else None,
                 listing=decision.listing,
                 listingStatus=decision.listing_status if decision.listing else None,
+                routeCached=routed.cached,
             )
             assistant_id = repo.insert_message(
                 cur,

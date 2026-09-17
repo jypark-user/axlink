@@ -73,6 +73,8 @@ class Settings(BaseSettings):
     # 한 청크씩 앞부분만 넣는다. 41건 × 160자 ≈ 3천 토큰이라 8192 문맥에 든다.
     rag_list_limit: int = 60
     rag_list_chars: int = 160
+    # 라우팅 캐시(ARC-014). 같은 질문의 판정을 모델에 다시 묻지 않는다. 값은 매번 새로 뽑는다.
+    rag_route_cache: bool = True
 
     @property
     def access_ttl(self) -> timedelta:

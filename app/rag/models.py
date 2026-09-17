@@ -45,6 +45,7 @@ class QueryRouting(BaseModel):
     viz: str | None
     listing: str | None = None  # 종류 전체를 나열한 경우 그 source_type
     listingStatus: str | None = None  # noqa: N815 — 목록의 상태 조건 (OPEN | CLOSED | ALL)
+    routeCached: bool = False  # noqa: N815 — 판정을 캐시에서 가져왔는가 (ARC-014)
 
 
 class InfographicEvent(BaseModel):

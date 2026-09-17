@@ -398,6 +398,14 @@ export function AskPage(): ReactNode {
                 {m.routing && (
                   <p className="text-muted-foreground text-xs font-semibold tracking-wide mb-2">
                     {m.routing.type}
+                    {m.routing.routeCached && (
+                      <span
+                        className="ml-2 font-normal"
+                        title="같은 질문의 판정을 다시 묻지 않았습니다. 값은 새로 뽑았습니다"
+                      >
+                        · 판정 캐시
+                      </span>
+                    )}
                   </p>
                 )}
                 <AnswerBody
