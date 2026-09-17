@@ -467,6 +467,7 @@ def _message(row: dict[str, Any], sources: list[MessageSourceResponse]) -> Messa
         feedback=row["feedback"],
         createdAt=_iso(row["created_at"]) or "",
         infographics=infographics,
+        latencyMs=row.get("latency_ms"),
     )
 
 

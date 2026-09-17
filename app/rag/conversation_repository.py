@@ -162,7 +162,7 @@ def list_messages(cur: Any, conversation_id: str) -> list[dict[str, Any]]:
         """
         select id::text as id, conversation_id::text as conversation_id, seq, role, content,
                status, route_type, rewritten_query, measure_key, feedback, infographic_json,
-               created_at
+               created_at, latency_ms
           from message
          where conversation_id = %s
          order by seq

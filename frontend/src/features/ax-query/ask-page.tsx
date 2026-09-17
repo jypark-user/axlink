@@ -50,6 +50,20 @@ function useElapsedSeconds(running: boolean): number {
   return running ? seconds : 0;
 }
 
+/** 답을 만드는 데 든 시간. 발주기관이 "왜 이렇게 오래 걸리나" 를 물을 때 근거가 된다. */
+function ElapsedLabel({ ms }: { ms: number | null | undefined }): ReactNode {
+  if (ms === null || ms === undefined) return null;
+  const text = ms < 1000 ? `${ms}ms` : `${(ms / 1000).toFixed(ms < 10000 ? 1 : 0)}초`;
+  return (
+    <span
+      className="text-muted-foreground ml-auto font-mono text-[11px]"
+      title="답변 생성 소요 시간"
+    >
+      {text}
+    </span>
+  );
+}
+
 /** 답변을 기다리는 동안의 점 세 개. */
 function TypingDots({ label }: { label: string }): ReactNode {
   return (
@@ -389,7 +403,7 @@ export function AskPage(): ReactNode {
                   activeFootnote={panel === 'evidence' ? activeFootnote : null}
                   onSelect={openEvidence(m.sources)}
                 />
-                <div className="mt-3 flex gap-1">
+                <div className="mt-3 flex items-center gap-1">
                   {(
                     [
                       ['UP', ThumbsUp, '도움이 됨'],
@@ -411,6 +425,7 @@ export function AskPage(): ReactNode {
                       <Icon className="size-4" />
                     </Button>
                   ))}
+                  <ElapsedLabel ms={m.latencyMs} />
                 </div>
               </div>
             ),
@@ -439,6 +454,9 @@ export function AskPage(): ReactNode {
                     activeFootnote={panel === 'evidence' ? activeFootnote : null}
                     onSelect={openEvidence(stream.sources)}
                   />
+                  <div className="mt-3 flex items-center">
+                    <ElapsedLabel ms={stream.elapsedMs} />
+                  </div>
                   {stream.phase === 'aborted' && (
                     <p className="text-muted-foreground text-xs font-semibold tracking-wide mt-2">
                       중지됨

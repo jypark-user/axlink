@@ -247,6 +247,8 @@ def test_목록_질문은_표를_싣고_상태_조건이_지켜진다(client, co
     ).json()[1]
     assert len(saved["infographics"]) == 1
     assert saved["infographics"][0]["template"] == "DATA_TABLE"
+    # 소요 시간은 화면에 작게 보인다. 끝난 답에는 늘 있다
+    assert isinstance(saved["latencyMs"], int) and saved["latencyMs"] >= 0
 
 
 @requires_db

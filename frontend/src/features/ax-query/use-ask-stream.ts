@@ -22,6 +22,8 @@ export interface AskStreamState {
   draftText: string;
   sources: MessageSourceResponse[];
   infographics: SseInfographicEvent[];
+  /** done 이벤트가 알려준 소요 시간(ms) */
+  elapsedMs: number | null;
   assistantMessageId: string | null;
   error: ApiError | null;
   ask: (conversationId: string, request: AskRequest) => Promise<void>;
@@ -50,6 +52,7 @@ export function useAskStream(onSettled: (conversationId: string) => void): AskSt
   const [draftText, setDraftText] = useState('');
   const [sources, setSources] = useState<MessageSourceResponse[]>([]);
   const [infographics, setInfographics] = useState<SseInfographicEvent[]>([]);
+  const [elapsedMs, setElapsedMs] = useState<number | null>(null);
   const [assistantMessageId, setAssistantMessageId] = useState<string | null>(null);
   const [error, setError] = useState<ApiError | null>(null);
   const controllerRef = useRef<AbortController | null>(null);
@@ -63,6 +66,7 @@ export function useAskStream(onSettled: (conversationId: string) => void): AskSt
     setDraftText('');
     setSources([]);
     setInfographics([]);
+    setElapsedMs(null);
     setAssistantMessageId(null);
     setError(null);
   }, []);
@@ -86,6 +90,7 @@ export function useAskStream(onSettled: (conversationId: string) => void): AskSt
       setDraftText('');
       setSources([]);
       setInfographics([]);
+      setElapsedMs(null);
       setRouting(null);
       setError(null);
       setAssistantMessageId(null);
@@ -116,7 +121,8 @@ export function useAskStream(onSettled: (conversationId: string) => void): AskSt
             if (payload)
               setInfographics((prev) => [...prev.filter((b) => b.slot !== payload.slot), payload]);
           } else if (event.event === 'done') {
-            parse<SseDoneEvent>(event.data);
+            const done = parse<SseDoneEvent>(event.data);
+            if (done) setElapsedMs(done.elapsedMs);
             setPhase('finalizing');
             onSettled(conversationId);
             return;
@@ -152,6 +158,7 @@ export function useAskStream(onSettled: (conversationId: string) => void): AskSt
     draftText,
     sources,
     infographics,
+    elapsedMs,
     assistantMessageId,
     error,
     ask,

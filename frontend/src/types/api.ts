@@ -1034,6 +1034,8 @@ export interface MessageResponse {
   createdAt: string;
   /** 생성 시점에 함께 보여준 그림들. 본문의 [그림 N] 자리에 들어간다. */
   infographics: SseInfographicEvent[];
+  /** 답을 만드는 데 든 시간(ms). 스트리밍 중이거나 옛 메시지면 null */
+  latencyMs: number | null;
 }
 
 export interface MessageFeedbackRequest {

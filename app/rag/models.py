@@ -86,6 +86,7 @@ class MessageResponse(BaseModel):
     feedback: MessageFeedback | None
     createdAt: str  # noqa: N815
     infographics: list[InfographicEvent] = []
+    latencyMs: int | None = None  # noqa: N815 — 답을 만드는 데 든 시간. 화면에 작게 보인다
 
 
 class MessageFeedbackRequest(BaseModel):
