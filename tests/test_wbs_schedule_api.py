@@ -65,7 +65,8 @@ def plan_file(no_plan):
         cur.execute(
             """
             insert into work_product (id, project_id, type, version, title, status, is_current,
-                                      source_kind, file_uri, source_revision, external_url, pm_activity)
+                                      source_kind, file_uri, source_revision, external_url,
+                                      pm_activity)
             values (%s, %s, 'PROJECT_PLAN', %s, 'WBS', 'SUBMITTED', true, 'TOOL',
                     'docs/WBS.xlsx', %s, 'https://example.invalid/WBS.xlsx', 'PM_1')
             """,
