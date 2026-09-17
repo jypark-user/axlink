@@ -253,6 +253,12 @@ def stream(p: Prepared) -> Iterator[bytes]:
 
             gate_ok = found.passes_gate()
             chunks = found.chunks if gate_ok else []
+            # 무관하다고 했는데 문서 근거가 실제로 있으면 문서 질문이다. 모델이 "인수 조건이
+            # 뭐야" 를 무관으로 본 사례가 있어, 근거가 판정을 이긴다(ARC-015 3-3).
+            if decision.type == routing.OFF_TOPIC and gate_ok:
+                decision = routing.RouteDecision(
+                    type=routing.DOCUMENT, rewritten=decision.rewritten
+                )
             # 근거도 그림도 없으면 현황으로 내려간다. "답을 만들지 않았다" 보다 "맞는 문서는 없지만
             # 지금 상태는 이렇다" 가 낫다. 데이터가 아예 없는 사업에서만 예전처럼 막는다.
             used_fallback = False

@@ -78,7 +78,7 @@ class Settings(BaseSettings):
     # 근거를 못 찾은 질문을 사업 현황 요약으로 받는다(ARC-015). 끄면 예전처럼 "근거 부족" 이다.
     rag_overview_fallback: bool = True
     # 일반 질문 답변율의 바닥. live 시험이 이 아래면 실패한다. 기준선을 잰 뒤 올린다.
-    rag_general_answer_floor: float = 0.0
+    rag_general_answer_floor: float = 0.85  # 09.17 실측 100%. 판정이 흔들려 여유를 둔다
 
     @property
     def access_ttl(self) -> timedelta:
