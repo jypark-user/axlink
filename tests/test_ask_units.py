@@ -10,6 +10,7 @@ import httpx
 
 from app.ai import llm
 from app.ai.port import LlmResult
+from app.config import settings
 from app.rag import answer, routing, search
 from app.rag.search import RetrievedChunk
 from app.semantic.catalog import Catalog, DimensionDef, MeasureDef
@@ -294,7 +295,8 @@ def test_올라마_스키마_모드는_format_과_온도를_박는다(monkeypatc
     real = httpx.Client
     monkeypatch.setattr(llm.httpx, "Client", lambda **kw: real(transport=transport))
 
-    port = llm.OllamaLlm("http://x", "m", 5)
+    # 문맥 길이는 모델별 설정에서 온다(ARC-011). 기본값도 근거 청크 5개는 담아야 한다.
+    port = llm.OllamaLlm("http://x", "m", 5, num_ctx=settings.llm_num_ctx)
     port.complete("s", "u", json_schema=answer.ANSWER_SCHEMA)
     assert seen["format"] == answer.ANSWER_SCHEMA and seen["options"]["temperature"] == 0
     assert seen["options"]["num_ctx"] >= 4096

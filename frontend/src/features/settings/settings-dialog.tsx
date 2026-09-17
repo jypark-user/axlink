@@ -1,20 +1,22 @@
 import { useMemo, useState } from 'react';
-import { Check, Settings as SettingsIcon, User as UserIcon } from 'lucide-react';
+import { Check, Cpu, Settings as SettingsIcon, User as UserIcon } from 'lucide-react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { SearchInput } from '@/components/ui/search-input';
 import { Separator } from '@/components/ui/separator';
 import { useAuth } from '@/features/auth/auth-context';
+import { LlmSettingsSection } from '@/features/settings/llm-settings-section';
 import { themeModeLabel, useTheme, type ThemeMode } from '@/features/settings/theme-context';
 import { cn } from '@/lib/utils';
 import type { Role } from '@/types/api';
 
-type SectionId = 'general' | 'account';
+type SectionId = 'general' | 'account' | 'ai';
 
 const THEME_MODES: ThemeMode[] = ['light', 'dark', 'system'];
 
 const SECTION_LABEL: Record<SectionId, string> = {
   general: '일반',
   account: '계정',
+  ai: 'AI 모델',
 };
 
 const ROLE_LABEL: Record<Role, string> = {
@@ -87,6 +89,8 @@ function AccountSection() {
 export function SettingsDialog({ onClose }: { onClose: () => void }) {
   const [section, setSection] = useState<SectionId>('general');
   const [query, setQuery] = useState('');
+  const { me } = useAuth();
+  const isAdmin = me?.role === 'SUPER_ADMIN';
 
   const groups = useMemo(() => {
     const all = [
@@ -95,6 +99,8 @@ export function SettingsDialog({ onClose }: { onClose: () => void }) {
         items: [
           { id: 'general' as const, label: '일반', icon: SettingsIcon },
           { id: 'account' as const, label: '계정', icon: UserIcon },
+          // AI 모델 설정은 플랫폼 전체에 하나라 관리자만 본다 (ARC-011)
+          ...(isAdmin ? [{ id: 'ai' as const, label: 'AI 모델', icon: Cpu }] : []),
         ],
       },
     ];
@@ -106,7 +112,7 @@ export function SettingsDialog({ onClose }: { onClose: () => void }) {
         items: group.items.filter((item) => item.label.includes(keyword)),
       }))
       .filter((group) => group.items.length > 0);
-  }, [query]);
+  }, [query, isAdmin]);
 
   return (
     <Dialog open onOpenChange={(next) => !next && onClose()}>
@@ -158,7 +164,9 @@ export function SettingsDialog({ onClose }: { onClose: () => void }) {
             {SECTION_LABEL[section]}
           </div>
           <div className="min-h-0 flex-1 overflow-y-auto px-6 pb-6">
-            {section === 'general' ? <GeneralSection /> : <AccountSection />}
+            {section === 'general' && <GeneralSection />}
+            {section === 'account' && <AccountSection />}
+            {section === 'ai' && isAdmin && <LlmSettingsSection />}
           </div>
         </div>
       </DialogContent>

@@ -14,6 +14,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from starlette.exceptions import HTTPException as StarletteHTTPException
 
 from app.ai.embedding import embedding_port
+from app.ai.router import router as ai_router
 from app.auth.router import router as auth_router
 from app.common.errors import (
     ApiError,
@@ -76,6 +77,7 @@ app.include_router(board_router)
 app.include_router(semantic_router)
 app.include_router(review_router)
 app.include_router(ask_router)
+app.include_router(ai_router)
 
 
 @app.get("/api/health", tags=["health"])
