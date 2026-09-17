@@ -28,7 +28,7 @@ from app.common import errors
 from app.common.paging import PageQuery, PageResponse
 from app.config import settings
 from app.db import tx
-from app.rag import answer, blocks, entity_table, route_cache, routing, search
+from app.rag import answer, blocks, entity_table, overview, route_cache, routing, search
 from app.rag import conversation_repository as repo
 from app.rag.models import (
     AskRequest,
@@ -231,6 +231,12 @@ def stream(p: Prepared) -> Iterator[bytes]:
                 if table is not None:
                     block_list.append(blocks.from_entity(len(block_list) + 1, table))
 
+            # 사업 현황을 묻는 질문은 현황 그림으로 답한다(ARC-015)
+            used_overview = False
+            if decision.type == routing.OVERVIEW:
+                block_list.extend(overview.build(cur, p.principal, p.scope, len(block_list) + 1))
+                used_overview = bool(block_list)
+
             # 근거를 어디서 찾을지. 표를 만들었으면 같은 목록을 청크로 또 넣지 않는다. 09.17
             # 실측에서 요구사항 41건이 표와 청크 양쪽으로 들어가 프롬프트가 불어나 모델이
             # 시간 초과로 끊겼다. 표가 답이고, 청크는 주제가 닿는 것만 출처로 붙인다.
@@ -247,7 +253,20 @@ def stream(p: Prepared) -> Iterator[bytes]:
 
             gate_ok = found.passes_gate()
             chunks = found.chunks if gate_ok else []
+            # 근거도 그림도 없으면 현황으로 내려간다. "답을 만들지 않았다" 보다 "맞는 문서는 없지만
+            # 지금 상태는 이렇다" 가 낫다. 데이터가 아예 없는 사업에서만 예전처럼 막는다.
+            used_fallback = False
+            if (
+                decision.type == routing.DOCUMENT
+                and not gate_ok
+                and not block_list
+                and settings.rag_overview_fallback
+            ):  # OFF_TOPIC 은 여기 오지 않는다. 무관한 질문에 현황을 내지 않는다
+                block_list.extend(overview.build(cur, p.principal, p.scope, 1))
+                used_fallback = bool(block_list)
             route_type = _route_type(decision.type, gate_ok)
+            if used_overview or used_fallback:
+                route_type = routing.OVERVIEW
             routing_info = QueryRouting(
                 type=route_type,
                 rewrittenQuery=decision.rewritten,
@@ -286,7 +305,17 @@ def stream(p: Prepared) -> Iterator[bytes]:
             ),
         )
 
-        if decision.type == routing.DOCUMENT and not gate_ok and not block_list:
+        if used_fallback:
+            # 서버가 첫 줄을 쓴다. 문서를 못 찾았다는 말은 모델에게 맡기지 않는다
+            pieces.append(overview.LEAD)
+            yield _sse("delta", SseDeltaEvent(text=overview.LEAD))
+        if decision.type == routing.OFF_TOPIC:
+            # 사업과 무관한 질문. 현황으로 내려가면 날씨를 물었는데 진척률이 나온다
+            text = answer.off_topic()
+            pieces.append(text)
+            yield _sse("delta", SseDeltaEvent(text=text))
+            finish_reason = "NO_EVIDENCE"
+        elif decision.type == routing.DOCUMENT and not gate_ok and not block_list:
             # 근거 게이트(SWFR.RAG.007). 모델을 부르지 않는다.
             # 표가 만들어졌으면 근거가 있는 것이다. 표준 모델에서 꺼낸 행이라 색인이 비어
             # 있어도 답할 수 있다(ARC-013). 청크 유사도만으로 막으면 될 답을 막는다.
@@ -340,8 +369,9 @@ def stream(p: Prepared) -> Iterator[bytes]:
         elapsed = _elapsed(p)
         with tx() as cur:
             repo.finish_message(cur, assistant_id, "".join(pieces).strip(), "COMPLETE", elapsed)
-            # 답을 만든 판정만 다음에 다시 쓴다. 근거가 없어 막힌 판정은 틀렸을 수 있다(ARC-014).
-            if finish_reason != "NO_EVIDENCE":
+            # 답을 만든 판정만 다음에 다시 쓴다. 근거가 없어 막히거나 현황으로 내려간 판정은
+            # 틀렸을 수 있다(ARC-014).
+            if finish_reason != "NO_EVIDENCE" and not used_fallback:
                 route_cache.remember(cur, p.question, routed)
         done = SseDoneEvent(
             assistantMessageId=assistant_id, finishReason=finish_reason, elapsedMs=elapsed
