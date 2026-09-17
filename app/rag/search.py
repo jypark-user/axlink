@@ -140,6 +140,42 @@ def search_with_vector(
     )
 
 
+def list_by_source(
+    cur: Any, source_type: str, project_ids: list[str], limit: int, chars: int
+) -> SearchResult:
+    """종류 전체를 근거로. 소스당 첫 청크 하나씩, 제목 순으로, 본문은 앞부분만.
+    유사도는 1.0 으로 둔다 — 근거 게이트는 "질문과 닮았는가" 가 아니라 "그 종류인가" 로
+    이미 통과한 것이다. 총 건수는 candidate_count 에 실어 답변이 말할 수 있게 한다.
+    """
+    rows = fetch_all(
+        cur,
+        """
+        select c.id::text as id, c.project_id::text as project_id, p.name as project_name,
+               c.source_type, c.source_id::text as source_id, c.source_title, c.source_uri,
+               c.chunk_index, c.content, c.meta_json,
+               count(*) over () as total
+          from doc_chunk c
+          join project p on p.id = c.project_id
+         where c.project_id = any(%(projects)s::uuid[])
+           and c.source_type = %(type)s and c.chunk_index = 0
+         order by c.source_title, c.source_id
+         limit %(n)s
+        """,
+        {"projects": project_ids, "type": source_type, "n": limit},
+    )
+    chunks = []
+    for row in rows:
+        chunk = _chunk({**row, "similarity": 1.0}, 0.0)
+        body = " ".join(chunk.content.split())
+        chunk.content = body if len(body) <= chars else body[:chars].rstrip() + "…"
+        chunks.append(chunk)
+    return SearchResult(
+        chunks=chunks,
+        max_similarity=1.0 if chunks else 0.0,
+        candidate_count=int(rows[0]["total"]) if rows else 0,
+    )
+
+
 def _chunk(row: dict, score: float) -> RetrievedChunk:
     meta = row.get("meta_json") or {}
     heading = meta.get("headingPath") or []

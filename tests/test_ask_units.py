@@ -364,3 +364,44 @@ def _row(chunk_id: str, similarity: float) -> dict:
         "content": "본문", "meta_json": {}, "similarity": similarity,
     }
 
+
+# ---------------------------------------------------------------- 목록 질문
+
+
+def test_문서_경로의_list_는_아는_종류만_남긴다():
+    choice = {"route": "DOCUMENT", "list": "issue", "query": "이슈 목록"}
+    decision = routing.from_choice(_catalog(), choice)
+    assert decision.type == routing.DOCUMENT
+    assert decision.listing == "ISSUE"
+    assert decision.rewritten == "이슈 목록"
+
+    unknown = routing.from_choice(_catalog(), {"route": "DOCUMENT", "list": "COMMIT"})
+    assert unknown.listing is None
+
+
+def test_집계_경로에서는_list_를_무시한다():
+    choice = {"route": "AGGREGATE", "measure": "issue_count", "list": "ISSUE"}
+    decision = routing.from_choice(_catalog(), choice)
+    assert decision.type == routing.AGGREGATE
+    assert decision.listing is None
+
+
+def test_라우팅_프롬프트는_목록_종류를_알려준다():
+    prompt = routing.system_prompt(_catalog())
+    assert '"list"' in prompt
+    for key, label in routing.LISTABLE.items():
+        assert f"{key}({label})" in prompt
+
+
+def test_목록_범위_줄은_전체인지_일부인지_말한다():
+    assert "전체 3건" in answer.listing_scope("이슈", 3, 3)
+    partial = answer.listing_scope("요구사항", 60, 80)
+    assert "총 80건" in partial and "앞 60건" in partial
+    # 이 줄의 숫자는 근거로 친다 — 답변이 총 건수를 말해도 지어낸 숫자가 아니다.
+    assert answer.ungrounded_numbers("요구사항은 총 80건이다.", [partial]) == []
+
+
+def test_목록_프롬프트는_범위_절을_근거_앞에_둔다():
+    scope = "사업 범위 안의 이슈 전체 0건이 아래 근거다."
+    prompt = answer.user_prompt("이슈 목록", [], None, scope)
+    assert prompt.index("## 목록 범위") < prompt.index("## 근거")
