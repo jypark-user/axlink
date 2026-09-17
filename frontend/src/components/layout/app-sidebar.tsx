@@ -9,6 +9,7 @@ import {
   HardHat,
   Info,
   LayoutDashboard,
+  LayoutTemplate,
   Link2,
   MessageSquare,
   MessageSquarePlus,
@@ -71,7 +72,11 @@ interface NavGroup {
 const GLOBAL_GROUPS: NavGroup[] = [
   {
     label: null,
-    items: [{ to: '/projects', label: '사업 목록', icon: FolderKanban }],
+    items: [
+      { to: '/projects', label: '사업 목록', icon: FolderKanban },
+      // 위젯과 AI 답변이 고르는 그림 23종의 입력 계약. 관리자만 본다 (ARC-012)
+      { to: '/templates', label: '인포 템플릿', icon: LayoutTemplate, roles: ['SUPER_ADMIN'] },
+    ],
   },
 ];
 

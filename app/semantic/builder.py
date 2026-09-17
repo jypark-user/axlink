@@ -17,7 +17,7 @@ from typing import Any
 from uuid import UUID
 
 from app.common import errors
-from app.dashboard.widget_template import DEFAULT_LIMIT, is_template, row_cap
+from app.dashboard.widget_template import DEFAULT_LIMIT, fits, is_template, row_cap
 from app.semantic.catalog import Catalog, DimensionDef, FilterDef, MeasureDef, filter_key
 from app.semantic.models import WidgetColumn, WidgetFilter, WidgetOptions, WidgetSpec
 
@@ -109,6 +109,14 @@ def validate(catalog: Catalog, spec: WidgetSpec, allowed_project_ids: list[str])
     limit = min(query.limit or DEFAULT_LIMIT, row_cap(spec.template))
     if limit < 1:
         raise errors.validation_failed("limit 은 1 이상이어야 합니다.")
+    # 템플릿의 입력 계약(ARC-012). 차원 초과와 기간축 필수만 굳게 막는다.
+    # 나머지는 고를 때(generation·routing) 바로잡는다.
+    time_keys = {d.key for d in dimensions if d.value_type == "TIME"}
+    unfit = fits(
+        spec.template, measure.value_type, [d.key for d in dimensions], time_keys, strict=False
+    )
+    if unfit is not None:
+        raise errors.validation_failed(unfit)
 
     return ValidatedSpec(
         template=spec.template,
