@@ -26,6 +26,10 @@ class EmbeddingPort(Protocol):
 class LlmResult:
     text: str
     model: str  # 어느 모델이 만든 문장인지 답변에 남긴다. 감사 가능성
+    # 왜 멈췄는가. end_turn | max_tokens | tool_use. max_tokens 는 num_predict 에 걸린 것이다.
+    stop_reason: str = "end_turn"
+    prompt_tokens: int = 0
+    output_tokens: int = 0
 
 
 class LlmPort(Protocol):

@@ -1153,3 +1153,54 @@ export interface WbsScheduleResponse {
   /** 원천이 없을 때만. 진척률 산정의 핵심 입력이 빠졌음을 그대로 보인다. */
   notice: string | null;
 }
+
+// --- AI 모델 설정 (ARC-011) ----------------------------------------------------
+
+export interface LlmModelResponse {
+  name: string;
+  baseUrl: string;
+  /** 서버가 안 알려주면 0 */
+  contextLength: number;
+  supportsTools: boolean;
+  parameterSize: string | null;
+  quantization: string | null;
+  /** 실측 생성 속도. 미측정이면 null */
+  tokPerSec: number | null;
+  measuredAt: string | null;
+  /** 비우면 모델 기본값에 맡긴다 */
+  numCtx: number | null;
+  numPredict: number;
+  fetchedAt: string;
+}
+
+export interface LlmModelListResponse {
+  baseUrl: string;
+  models: LlmModelResponse[];
+  /** 조회 실패는 예외가 아니라 상태 문구다 */
+  error: string | null;
+}
+
+export interface LlmSettingResponse {
+  baseUrl: string;
+  model: string;
+  provider: string;
+  /** 한 요청이 쓸 수 있는 초. 0 이면 미설정 */
+  requestTimeoutSeconds: number;
+  updatedAt: string | null;
+  models: LlmModelResponse[];
+}
+
+export interface LlmSettingUpdateRequest {
+  baseUrl: string;
+  model: string;
+  numCtx: number | null;
+  numPredict: number;
+}
+
+export interface LlmMeasureResponse {
+  model: string;
+  tokPerSec: number;
+  evalCount: number;
+  evalDurationSeconds: number;
+  measuredAt: string;
+}
