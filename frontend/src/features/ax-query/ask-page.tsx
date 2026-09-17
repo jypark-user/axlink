@@ -134,7 +134,9 @@ export function AskPage(): ReactNode {
   const [dock, setDock] = useState<HTMLElement | null>(null);
   const [backdrop, setBackdrop] = useState<HTMLElement | null>(null);
   /** 보냈지만 아직 서버 목록에 없는 질문. 서버 것이 도착하면 자리를 내준다. */
-  const [pending, setPending] = useState<string | null>(null);
+  const [pending, setPending] = useState<{ text: string; conversationId: string | null } | null>(
+    null,
+  );
 
   useEffect(() => {
     setDock(document.getElementById(RESOURCE_DOCK_ID));
@@ -210,7 +212,7 @@ export function AskPage(): ReactNode {
     const scope = mentions.scope.length > 0 ? mentions.scope : projectScope;
     setQuestion('');
     // 서버를 기다리지 않고 먼저 건다 — 대화방을 새로 여는 왕복이 앞에 있어 그냥 두면 한참 비어 있다.
-    setPending(body);
+    setPending({ text: body, conversationId: conversationId ?? null });
     try {
       let target = conversationId;
       if (!target) {
@@ -219,6 +221,8 @@ export function AskPage(): ReactNode {
           projectScope: scope,
         });
         target = created.id;
+        // 말풍선을 새 대화에 묶는다. 다른 대화로 넘어가면 그쪽엔 안 보인다
+        setPending({ text: body, conversationId: created.id });
         conversations.reload();
         void navigate(`${basePath}/${created.id}`, { replace: true });
       }
@@ -250,13 +254,17 @@ export function AskPage(): ReactNode {
     }
   };
 
-  const streaming = stream.phase === 'streaming';
+  // 스트림은 한 대화의 것이다. 답을 기다리는 동안 다른 대화를 열면 거기엔 그리지 않는다.
+  const streamHere = stream.conversationId !== null && stream.conversationId === conversationId;
+  const streaming = stream.phase === 'streaming' && streamHere;
   const elapsed = useElapsedSeconds(streaming);
   const list = messages.data ?? [];
-  const answering = streaming || Boolean(stream.draftText);
+  const answering = streamHere && (stream.phase === 'streaming' || Boolean(stream.draftText));
   // 서버 목록에 같은 질문이 들어오는 순간 건 말풍선은 사라진다 — 두 개가 겹치지 않는다.
   const pendingShown =
-    pending !== null && !list.some((m) => m.role === 'USER' && m.content === pending);
+    pending !== null &&
+    (pending.conversationId ?? null) === (conversationId ?? null) &&
+    !list.some((m) => m.role === 'USER' && m.content === pending.text);
   const isEmpty = list.length === 0 && !answering && !pendingShown;
 
   const composer = (
@@ -369,7 +377,7 @@ export function AskPage(): ReactNode {
           <PromptChips
             prompts={suggestions.data?.questions ?? []}
             onSelect={send}
-            disabled={streaming}
+            disabled={stream.phase === 'streaming'}
           />
         </div>
       </div>
@@ -434,7 +442,7 @@ export function AskPage(): ReactNode {
           {pendingShown && (
             <div className="flex justify-end">
               <p className="bg-accent text-foreground text-base leading-7 max-w-[85%] rounded-lg px-4 py-3 whitespace-pre-line">
-                {pending}
+                {pending.text}
               </p>
             </div>
           )}

@@ -24,6 +24,8 @@ export interface AskStreamState {
   infographics: SseInfographicEvent[];
   /** done 이벤트가 알려준 소요 시간(ms) */
   elapsedMs: number | null;
+  /** 지금 답을 받고 있는 대화. 다른 대화를 열면 이 값이 달라 그쪽엔 그리지 않는다 */
+  conversationId: string | null;
   assistantMessageId: string | null;
   error: ApiError | null;
   ask: (conversationId: string, request: AskRequest) => Promise<void>;
@@ -53,6 +55,7 @@ export function useAskStream(onSettled: (conversationId: string) => void): AskSt
   const [sources, setSources] = useState<MessageSourceResponse[]>([]);
   const [infographics, setInfographics] = useState<SseInfographicEvent[]>([]);
   const [elapsedMs, setElapsedMs] = useState<number | null>(null);
+  const [activeConversationId, setActiveConversationId] = useState<string | null>(null);
   const [assistantMessageId, setAssistantMessageId] = useState<string | null>(null);
   const [error, setError] = useState<ApiError | null>(null);
   const controllerRef = useRef<AbortController | null>(null);
@@ -67,6 +70,7 @@ export function useAskStream(onSettled: (conversationId: string) => void): AskSt
     setSources([]);
     setInfographics([]);
     setElapsedMs(null);
+    setActiveConversationId(null);
     setAssistantMessageId(null);
     setError(null);
   }, []);
@@ -87,6 +91,7 @@ export function useAskStream(onSettled: (conversationId: string) => void): AskSt
       const controller = new AbortController();
       controllerRef.current = controller;
       setPhase('streaming');
+      setActiveConversationId(conversationId);
       setDraftText('');
       setSources([]);
       setInfographics([]);
@@ -159,6 +164,7 @@ export function useAskStream(onSettled: (conversationId: string) => void): AskSt
     sources,
     infographics,
     elapsedMs,
+    conversationId: activeConversationId,
     assistantMessageId,
     error,
     ask,
