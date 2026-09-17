@@ -993,6 +993,8 @@ export interface QueryRouting {
   listing?: string | null;
   /** 목록의 상태 조건. OPEN(처리 중) · CLOSED(완료) · ALL */
   listingStatus?: string | null;
+  /** 판정을 라우팅 캐시에서 가져왔는가. 값은 그래도 매번 새로 뽑는다 */
+  routeCached?: boolean;
 }
 
 /**
