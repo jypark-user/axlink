@@ -10,7 +10,7 @@ from typing import Any
 
 from app.ai.port import LlmPort
 from app.dashboard import generation
-from app.dashboard.widget_template import TEMPLATES
+from app.dashboard.widget_template import prompt_guide
 from app.semantic.catalog import Catalog, MeasureDef
 
 DOCUMENT = "DOCUMENT"
@@ -69,7 +69,7 @@ def from_choice(catalog: Catalog, choice: dict[str, Any] | None) -> RouteDecisio
 
     template = generation._template_of(choice)
     dimensions = generation._dimensions_of(choice, measure, catalog, template)
-    if template is None:
+    if template is None or not generation._fits(template, measure, dimensions, catalog):
         template = generation._default_template(dimensions, catalog)
     title = choice.get("title")
     return RouteDecision(
@@ -106,6 +106,5 @@ def system_prompt(catalog: Catalog) -> str:
         "지표 key 는 카탈로그에 있는 것만 쓴다. 맞는 지표가 없으면 DOCUMENT 다. "
         "차원은 0~2개이고 지표의 허용 차원에서만 고른다. 추이를 물으면 period_ 차원을 쓴다.\n\n"
         f"## 지표\n{measures}\n\n## 차원\n{dimensions}\n\n"
-        f"## 템플릿\n{', '.join(TEMPLATES)}\n"
-        "숫자 하나는 STAT_CARD, 범주 비교는 BAR_CHART, 추이는 LINE_CHART, 구성비는 PIE_CHART."
+        f"## 템플릿 (언제 고르는가)\n{prompt_guide(chat_only=True)}\n"
     )

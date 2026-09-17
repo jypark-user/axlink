@@ -196,3 +196,40 @@ class WbsScheduleResponse(BaseModel):
     warnings: list[str]
     # 원천이 없을 때만 채운다. 진척률 산정의 핵심 입력이 빠졌음을 화면이 그대로 보인다.
     notice: str | None
+
+
+# --- 인포 템플릿 카탈로그 (ARC-012) ----------------------------------------------
+
+
+class WidgetTemplateExample(BaseModel):
+    measure: str
+    dimensions: list[str]
+    title: str
+
+
+class WidgetTemplateResponse(BaseModel):
+    key: str
+    label: str
+    family: str
+    purpose: str
+    screen: str
+    when: str
+    measureTypes: list[str]  # noqa: N815 — 프런트 계약 필드명
+    dimsMin: int  # noqa: N815
+    dimsMax: int  # noqa: N815
+    timeAxis: str  # noqa: N815 — REQUIRED | OPTIONAL | NONE
+    categoryMax: int | None  # noqa: N815
+    usesTotal: bool  # noqa: N815
+    usesTarget: bool  # noqa: N815
+    usesPrevious: bool  # noqa: N815
+    options: list[str]
+    rowCap: int  # noqa: N815
+    chat: bool
+    note: str
+    example: WidgetTemplateExample
+    # 쇼케이스용 예시 값. 계약에서 만든 결정적 값이라 사업이 없어도 그림이 그려진다
+    sample: WidgetDataResponse
+
+
+class WidgetTemplateListResponse(BaseModel):
+    templates: list[WidgetTemplateResponse]

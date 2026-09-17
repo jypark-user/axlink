@@ -1204,3 +1204,42 @@ export interface LlmMeasureResponse {
   evalDurationSeconds: number;
   measuredAt: string;
 }
+
+// --- 인포 템플릿 카탈로그 (ARC-012) --------------------------------------------
+
+export type TemplateTimeAxis = 'REQUIRED' | 'OPTIONAL' | 'NONE';
+
+export interface WidgetTemplateExample {
+  measure: string;
+  dimensions: string[];
+  title: string;
+}
+
+export interface WidgetTemplateResponse {
+  key: WidgetTemplate;
+  label: string;
+  family: string;
+  purpose: string;
+  screen: string;
+  when: string;
+  measureTypes: string[];
+  dimsMin: number;
+  dimsMax: number;
+  timeAxis: TemplateTimeAxis;
+  /** 읽을 수 있는 범주 수 상한. 표 성격이면 null */
+  categoryMax: number | null;
+  usesTotal: boolean;
+  usesTarget: boolean;
+  usesPrevious: boolean;
+  options: string[];
+  rowCap: number;
+  chat: boolean;
+  note: string;
+  example: WidgetTemplateExample;
+  /** 쇼케이스용 예시 값. 계약에서 만든 결정적 값이라 사업이 없어도 그려진다 */
+  sample: WidgetDataResponse;
+}
+
+export interface WidgetTemplateListResponse {
+  templates: WidgetTemplateResponse[];
+}

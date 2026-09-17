@@ -4,7 +4,7 @@ from fastapi import APIRouter, Response, status
 
 from app.auth.deps import Principal
 from app.dashboard import board_service as service
-from app.dashboard import generation
+from app.dashboard import generation, template_samples, widget_template
 from app.dashboard.models import (
     DashboardDetailResponse,
     DashboardLayoutUpdateRequest,
@@ -15,6 +15,9 @@ from app.dashboard.models import (
     WidgetGenerateResponse,
     WidgetPreviewRequest,
     WidgetResponse,
+    WidgetTemplateExample,
+    WidgetTemplateListResponse,
+    WidgetTemplateResponse,
     WidgetUpdateRequest,
 )
 from app.db import tx
@@ -90,3 +93,26 @@ def generate(req: WidgetGenerateRequest, principal: Principal) -> WidgetGenerate
     """자연어 → 위젯 명세. LLM 은 지표·차원·템플릿을 고르기만 하고 값은 만들지 않는다."""
     with tx() as cur:
         return generation.generate(cur, principal, req)
+
+
+@router.get("/widget-templates", response_model=WidgetTemplateListResponse)
+def widget_templates(principal: Principal) -> WidgetTemplateListResponse:
+    """인포 템플릿 23종의 입력 계약 (ARC-012). 값이 아니라 정의라 DB 를 읽지 않는다."""
+    del principal  # 로그인만 확인한다. 정의는 비밀이 아니다
+    return WidgetTemplateListResponse(
+        templates=[
+            WidgetTemplateResponse(
+                key=t.key, label=t.label, family=t.family, purpose=t.purpose, screen=t.screen,
+                when=t.when, measureTypes=list(t.measure_types), dimsMin=t.dims_min,
+                dimsMax=t.dims_max, timeAxis=t.time_axis, categoryMax=t.category_max,
+                usesTotal=t.uses_total, usesTarget=t.uses_target, usesPrevious=t.uses_previous,
+                options=list(t.options), rowCap=t.row_cap, chat=t.chat, note=t.note,
+                example=WidgetTemplateExample(
+                    measure=t.example_measure, dimensions=list(t.example_dimensions),
+                    title=t.example_title,
+                ),
+                sample=template_samples.sample_for(t),
+            )
+            for t in widget_template.CATALOG
+        ]
+    )

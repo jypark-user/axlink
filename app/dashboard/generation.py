@@ -17,7 +17,7 @@ from app.dashboard.models import (
     WidgetGenerateResponse,
     WidgetGenerationRejection,
 )
-from app.dashboard.widget_template import TEMPLATES, TIME_TEMPLATES, is_template
+from app.dashboard.widget_template import TIME_TEMPLATES, fits, is_template, prompt_guide
 from app.semantic import catalog as catalog_module
 from app.semantic import service as semantic
 from app.semantic.catalog import Catalog, MeasureDef
@@ -56,7 +56,10 @@ def generate(
 
     template = req.template or _template_of(choice)
     dimensions = _dimensions_of(choice, measure, catalog, template)
-    if template is None:
+    if template is None or (
+        req.template is None and not _fits(template, measure, dimensions, catalog)
+    ):
+        # 모델이 고른 그림이 값 모양과 안 맞으면 값 모양으로 정한다. 값은 어차피 집계라 안전하다.
         template = _default_template(dimensions, catalog)
 
     spec = WidgetSpec(
@@ -99,9 +102,7 @@ def system_prompt(catalog: Catalog) -> str:
         '{"measure": null, "reason": "<이유>", "unmatched": ["<맞출 수 없던 용어>"]} '
         "를 출력한다.\n\n"
         f"## 지표\n{measures}\n\n## 차원\n{dimensions}\n\n"
-        f"## 템플릿\n{', '.join(TEMPLATES)}\n"
-        "숫자 하나는 STAT_CARD, 범주 비교는 BAR_CHART, 추이는 LINE_CHART, 구성비는 PIE_CHART, "
-        "두 차원은 STACKED_BAR_CHART 또는 HEATMAP."
+        f"## 템플릿 (언제 고르는가)\n{prompt_guide()}\n"
     )
 
 
@@ -159,6 +160,12 @@ def _default_template(dimensions: list[str], catalog: Catalog) -> str:
     if any(_is_time(catalog, d) for d in dimensions):
         return "LINE_CHART"
     return "STACKED_BAR_CHART" if len(dimensions) == 2 else "BAR_CHART"
+
+
+def _fits(template: str, measure: MeasureDef, dimensions: list[str], catalog: Catalog) -> bool:
+    """템플릿의 입력 계약(ARC-012)에 맞는가. 지표 유형까지 본다."""
+    time_keys = {k for k in dimensions if _is_time(catalog, k)}
+    return fits(template, measure.value_type, dimensions, time_keys) is None
 
 
 def _is_time(catalog: Catalog, key: str) -> bool:

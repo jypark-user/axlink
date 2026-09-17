@@ -36,6 +36,9 @@ const AssignmentsPage = lazy(() =>
 const CollectionPage = lazy(() =>
   import('@/features/collection/collection-page').then((m) => ({ default: m.CollectionPage })),
 );
+const TemplatesPage = lazy(() =>
+  import('@/features/templates/templates-page').then((m) => ({ default: m.TemplatesPage })),
+);
 const DocumentsPage = lazy(() =>
   import('@/features/documents/documents-page').then((m) => ({ default: m.DocumentsPage })),
 );
@@ -112,6 +115,17 @@ export function AppRoutes(): ReactNode {
             </SuspenseShell>
           }
         />
+        {/* 인포 템플릿 카탈로그 — 플랫폼 관리자만. 사업과 무관한 정의라 전역에 둔다 (ARC-012) */}
+        <Route element={<RequireRole allow={['SUPER_ADMIN']} />}>
+          <Route
+            path="/templates"
+            element={
+              <SuspenseShell>
+                <TemplatesPage />
+              </SuspenseShell>
+            }
+          />
+        </Route>
         <Route element={<RequireRole allow={EXCEPT_CONTRACTOR} />}>
           {/* 한 라우트로 둔다 — 대화를 새로 열 때 화면이 다시 뜨면 쓰던 것이 다 날아간다. */}
           <Route
