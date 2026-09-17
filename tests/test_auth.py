@@ -78,3 +78,16 @@ def test_password_check_is_deterministic():
     stored = bcrypt.hashpw(b"admin", bcrypt.gensalt(rounds=4)).decode()
     assert all(_verify_password("admin", stored) for _ in range(200))
     assert not any(_verify_password("nope", stored) for _ in range(200))
+
+
+def test_password_check_survives_flaky_bcrypt():
+    """09.17 실측: Windows · Python 3.13 에서 bcrypt 4.x 가 cost 10 해시를 같은 입력에 다르게
+    낸다(500번 중 최대 80번). 시드 계정과 같은 cost 10 해시로 실제 조건을 재현한다.
+    틀린 비밀번호는 한 번도 통과한 적이 없으므로 거부됐을 때만 다시 확인하면 된다."""
+    import bcrypt
+
+    from app.auth.service import _verify_password
+
+    stored = bcrypt.hashpw(b"admin", bcrypt.gensalt(rounds=10)).decode()
+    assert all(_verify_password("admin", stored) for _ in range(60))
+    assert not any(_verify_password("nope", stored) for _ in range(20))

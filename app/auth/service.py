@@ -23,12 +23,21 @@ from app.common.hashes import random_token, sha256_hex
 from app.config import settings
 from app.project import repository as project_repository
 
+# 09.17 실측(Windows · Python 3.13 · bcrypt 4.0~4.3): hashpw 가 같은 입력에 다른 값을 내는
+# 일이 있다. 4.3.0 은 500번 중 80번, 4.2.1 은 1번. Python 3.9 에서는 300번 중 0번이라
+# 3.13 빌드의 문제다. 틀린 비밀번호가 통과하는 쪽으로는 한 번도 흔들리지 않았으므로,
+# 거부됐을 때만 몇 번 더 확인한다. 정상 환경에서는 첫 번에 끝나 비용이 없다.
+_VERIFY_ATTEMPTS = 5
+
 
 def _verify_password(raw: str, stored_hash: str | None) -> bool:
     if not stored_hash:
         return False
     try:
-        return bcrypt.checkpw(raw.encode("utf-8"), stored_hash.encode("utf-8"))
+        for _ in range(_VERIFY_ATTEMPTS):
+            if bcrypt.checkpw(raw.encode("utf-8"), stored_hash.encode("utf-8")):
+                return True
+        return False
     except ValueError:
         # 해시 형식이 깨진 계정이다. 인증 실패로 다룬다.
         return False
