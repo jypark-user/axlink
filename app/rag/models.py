@@ -43,15 +43,22 @@ class QueryRouting(BaseModel):
     measureKey: str | None  # noqa: N815
     dimensions: list[str]
     viz: str | None
-    listing: str | None = None  # 문서 경로에서 종류 전체를 나열한 경우 그 source_type
+    listing: str | None = None  # 종류 전체를 나열한 경우 그 source_type
+    listingStatus: str | None = None  # noqa: N815 — 목록의 상태 조건 (OPEN | CLOSED | ALL)
 
 
 class InfographicEvent(BaseModel):
-    """값은 시맨틱 레이어가 DB 에서 뽑는다. 모델은 지표·차원·템플릿만 골랐다."""
+    """답변에 끼워 넣는 그림 하나 (ARC-013).
 
+    값은 시맨틱 레이어의 집계이거나 표준 모델의 행이다. 모델은 무엇을 그릴지만 골랐다.
+    slot 은 본문의 `[그림 N]` 표식 번호다. 프런트가 그 자리에 렌더러를 끼운다.
+    """
+
+    slot: int = 1
     template: str
     title: str
     data: WidgetDataResponse
+    note: str | None = None  # 그림 아래 설명. 목록이면 "총 N건 중 앞 M건"
 
 
 class MessageSourceResponse(BaseModel):
@@ -78,7 +85,8 @@ class MessageResponse(BaseModel):
     sources: list[MessageSourceResponse]
     feedback: MessageFeedback | None
     createdAt: str  # noqa: N815
-    infographic: InfographicEvent | None
+    infographics: list[InfographicEvent] = []
+    latencyMs: int | None = None  # noqa: N815 — 답을 만드는 데 든 시간. 화면에 작게 보인다
 
 
 class MessageFeedbackRequest(BaseModel):

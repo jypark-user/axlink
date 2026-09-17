@@ -28,7 +28,7 @@ from app.common import errors
 from app.common.paging import PageQuery, PageResponse
 from app.config import settings
 from app.db import tx
-from app.rag import answer, routing, search
+from app.rag import answer, blocks, entity_table, routing, search
 from app.rag import conversation_repository as repo
 from app.rag.models import (
     AskRequest,
@@ -192,7 +192,46 @@ def stream(p: Prepared) -> Iterator[bytes]:
         query_vec = embedding_port().embed([p.question])[0]
 
         with tx() as cur:
-            if decision.type == routing.DOCUMENT and decision.listing:
+            aggregate: answer.AggregateContext | None = None
+            block_list: list[blocks.Block] = []
+            if decision.type == routing.AGGREGATE:
+                aggregate, infographic = _aggregate(cur, p, decision)
+                if aggregate is None:
+                    decision = routing.RouteDecision(
+                        type=routing.DOCUMENT,
+                        rewritten=decision.rewritten,
+                        listing=decision.listing,
+                        listing_status=decision.listing_status,
+                    )
+                elif infographic is not None:
+                    block_list.append(
+                        blocks.from_aggregate(
+                            len(block_list) + 1,
+                            infographic.template,
+                            infographic.title,
+                            infographic.data,
+                            aggregate.lines,
+                        )
+                    )
+            # 목록은 표준 모델에서 행을 꺼내 표로 그린다. 청크에는 상태가 없어 조건을 못 건다
+            # (ARC-013). 09.17 실측에서 닫힌 이슈가 "작업이 안 된" 목록에 섞였다.
+            table = None
+            if decision.listing:
+                entity = entity_table.FROM_SOURCE_TYPE.get(decision.listing)
+                table = (
+                    entity_table.build(
+                        cur, entity, decision.listing_status, p.scope, settings.rag_list_limit
+                    )
+                    if entity
+                    else None
+                )
+                if table is not None:
+                    block_list.append(blocks.from_entity(len(block_list) + 1, table))
+
+            # 근거를 어디서 찾을지. 표를 만들었으면 같은 목록을 청크로 또 넣지 않는다. 09.17
+            # 실측에서 요구사항 41건이 표와 청크 양쪽으로 들어가 프롬프트가 불어나 모델이
+            # 시간 초과로 끊겼다. 표가 답이고, 청크는 주제가 닿는 것만 출처로 붙인다.
+            if decision.listing and table is None:
                 found = search.list_by_source(
                     cur,
                     decision.listing,
@@ -202,14 +241,6 @@ def stream(p: Prepared) -> Iterator[bytes]:
                 )
             else:
                 found = search.search_with_vector(cur, query_vec, query_text, p.scope)
-            aggregate: answer.AggregateContext | None = None
-            infographic: InfographicEvent | None = None
-            if decision.type == routing.AGGREGATE:
-                aggregate, infographic = _aggregate(cur, p, decision)
-                if aggregate is None:
-                    decision = routing.RouteDecision(
-                        type=routing.DOCUMENT, rewritten=decision.rewritten
-                    )
 
             gate_ok = found.passes_gate()
             chunks = found.chunks if gate_ok else []
@@ -219,8 +250,9 @@ def stream(p: Prepared) -> Iterator[bytes]:
                 rewrittenQuery=decision.rewritten,
                 measureKey=decision.measure.key if decision.measure else None,
                 dimensions=list(decision.dimensions),
-                viz=infographic.template if infographic else None,
+                viz=block_list[0].template if block_list else None,
                 listing=decision.listing,
+                listingStatus=decision.listing_status if decision.listing else None,
             )
             assistant_id = repo.insert_message(
                 cur,
@@ -232,7 +264,7 @@ def stream(p: Prepared) -> Iterator[bytes]:
                 route_type=route_type,
                 rewritten_query=decision.rewritten,
                 measure_key=routing_info.measureKey,
-                infographic=infographic.model_dump() if infographic else None,
+                infographic=[b.as_event() for b in block_list] or None,
             )
             repo.insert_sources(
                 cur, assistant_id, [_source_row(i, c) for i, c in enumerate(chunks, 1)]
@@ -250,8 +282,10 @@ def stream(p: Prepared) -> Iterator[bytes]:
             ),
         )
 
-        if decision.type == routing.DOCUMENT and not gate_ok:
+        if decision.type == routing.DOCUMENT and not gate_ok and not block_list:
             # 근거 게이트(SWFR.RAG.007). 모델을 부르지 않는다.
+            # 표가 만들어졌으면 근거가 있는 것이다. 표준 모델에서 꺼낸 행이라 색인이 비어
+            # 있어도 답할 수 있다(ARC-013). 청크 유사도만으로 막으면 될 답을 막는다.
             if decision.listing:
                 text = answer.empty_listing(routing.LISTABLE[decision.listing])
             else:
@@ -261,21 +295,31 @@ def stream(p: Prepared) -> Iterator[bytes]:
             finish_reason = "NO_EVIDENCE"
         else:
             scope_line = None
-            if decision.listing and decision.type == routing.DOCUMENT:
+            # 표를 만들었으면 범위는 표의 설명이 말한다. 두 번 말하면 모델이 둘을 더한다.
+            if decision.listing and decision.type == routing.DOCUMENT and table is None:
                 scope_line = answer.listing_scope(
                     routing.LISTABLE[decision.listing], len(chunks), found.candidate_count
                 )
-            prompt = answer.user_prompt(p.question, chunks, aggregate, scope_line)
+            prompt = answer.user_prompt(p.question, chunks, aggregate, scope_line, block_list)
             raw = llm.stream(answer.SYSTEM_PROMPT, prompt, json_schema=answer.ANSWER_SCHEMA)
             for piece in answer.decode_answer(answer.strip_think(raw)):
                 pieces.append(piece)
                 yield _sse("delta", SseDeltaEvent(text=piece))
+            # 본문이 표식을 안 쓴 그림은 끝에 붙인다. 만든 그림을 조용히 버리지 않는다.
+            tail = blocks.append_missing("".join(pieces), block_list)
+            if tail:
+                pieces.append(tail)
+                yield _sse("delta", SseDeltaEvent(text=tail))
             finish_reason = "STOP"
             grounds = [p.question, *(c.content for c in chunks)]
             if scope_line:
                 grounds.append(scope_line)
             if aggregate is not None:
                 grounds.extend(aggregate.lines)
+            for block in block_list:
+                grounds.extend(block.lines)
+                if block.note:
+                    grounds.append(block.note)
             bad = answer.ungrounded_numbers("".join(pieces), grounds)
             if bad:
                 # 지시를 어기고 만든 숫자는 지우지 못한다(이미 화면에 나갔다). 표시하고 남긴다.
@@ -286,8 +330,8 @@ def stream(p: Prepared) -> Iterator[bytes]:
 
         sources = [_source_from_chunk(i, c) for i, c in enumerate(chunks, 1)]
         yield _sse("sources", SseSourcesEvent(sources=sources))
-        if infographic is not None:
-            yield _sse("infographic", infographic)
+        for block in block_list:
+            yield _sse_raw("infographic", block.as_event())
 
         elapsed = _elapsed(p)
         with tx() as cur:
@@ -399,15 +443,18 @@ def _conversation(row: dict[str, Any]) -> ConversationResponse:
 
 def _message(row: dict[str, Any], sources: list[MessageSourceResponse]) -> MessageResponse:
     raw = row["infographic_json"]
-    infographic = InfographicEvent.model_validate(raw) if raw else None
+    # V28 이전 메시지는 그림 하나를 객체로 담고 있다. 목록으로 펴서 같은 길로 읽는다.
+    items = raw if isinstance(raw, list) else [raw] if raw else []
+    infographics = [InfographicEvent.model_validate(item) for item in items]
+    first = infographics[0] if infographics else None
     routing_info = None
     if row["route_type"]:
         routing_info = QueryRouting(
             type=row["route_type"],
             rewrittenQuery=row["rewritten_query"],
             measureKey=row["measure_key"],
-            dimensions=list(infographic.data.dimensions) if infographic else [],
-            viz=infographic.template if infographic else None,
+            dimensions=list(first.data.dimensions) if first else [],
+            viz=first.template if first else None,
         )
     return MessageResponse(
         id=row["id"],
@@ -419,7 +466,8 @@ def _message(row: dict[str, Any], sources: list[MessageSourceResponse]) -> Messa
         sources=sources,
         feedback=row["feedback"],
         createdAt=_iso(row["created_at"]) or "",
-        infographic=infographic,
+        infographics=infographics,
+        latencyMs=row.get("latency_ms"),
     )
 
 

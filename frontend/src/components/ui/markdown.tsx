@@ -1,5 +1,5 @@
 import { type ReactNode } from 'react';
-import ReactMarkdown from 'react-markdown';
+import ReactMarkdown, { type Components } from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import { cn } from '@/lib/utils';
 
@@ -10,9 +10,12 @@ import { cn } from '@/lib/utils';
 export function Markdown({
   children,
   className,
+  components,
 }: {
   children: string;
   className?: string;
+  /** 기본 렌더러 위에 덮어쓴다. 답변 본문이 각주 링크를 버튼으로 바꿀 때 쓴다. */
+  components?: Partial<Components>;
 }): ReactNode {
   return (
     <div className={cn('text-foreground text-base leading-7 flex flex-col gap-3', className)}>
@@ -61,6 +64,7 @@ export function Markdown({
           ),
           td: ({ children: c }) => <td className="border-border/60 border-b px-2 py-1.5">{c}</td>,
           hr: () => <hr className="border-border" />,
+          ...components,
         }}
       >
         {children}

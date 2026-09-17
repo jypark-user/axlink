@@ -12,6 +12,7 @@ from dataclasses import dataclass, field
 from typing import Any
 
 from app.config import settings
+from app.rag import blocks as blocks_mod
 from app.rag.search import RetrievedChunk
 from app.semantic.models import WidgetDataResponse
 
@@ -23,6 +24,9 @@ SYSTEM_PROMPT = (
     "2. 사실은 '근거' 절의 내용에서만 가져온다. 근거에 없는 내용은 모른다고 말한다.\n"
     "3. 근거를 인용한 문장 끝에 해당 근거 번호를 [1] 처럼 붙인다. 번호는 근거 절의 번호만 쓴다.\n"
     "4. 제목·목록 기호 없이 문단으로 답한다. 인사말과 사족은 넣지 않는다.\n"
+    "4-1. '그림 놓기' 절이 있으면 그 지시대로 본문에 [그림 N] 표식만 놓는다. "
+    "표식 자리에 표나 차트가 그려진다. 그림에 담긴 항목을 본문에 옮겨 적거나 다시 나열하지 "
+    "않는다. 본문은 건수와 요점 한두 문장이면 된다.\n"
     '5. 출력은 {"answer": "<답변>"} 꼴의 JSON 객체 하나다. 생각 과정은 쓰지 않는다.'
 )
 
@@ -100,6 +104,7 @@ def user_prompt(
     chunks: list[RetrievedChunk],
     aggregate: AggregateContext | None,
     listing: str | None = None,
+    blocks: list["blocks_mod.Block"] | None = None,
 ) -> str:
     parts = [f"## 질문\n{question}"]
     if listing:
@@ -109,6 +114,10 @@ def user_prompt(
         stamp = aggregate.data.generatedAt[:10]
         head = f"## 집계 값 ({aggregate.title}, 사업 {scope}개 범위, 기준 {stamp})"
         parts.append(head + "\n" + "\n".join(aggregate.lines))
+    for block in blocks or []:
+        parts.append(blocks_mod.prompt_section(block))
+    if blocks:
+        parts.append("## 그림 놓기\n" + blocks_mod.placement_rule(blocks))
     if chunks:
         parts.append("## 근거\n" + "\n\n".join(_evidence(i, c) for i, c in enumerate(chunks, 1)))
     else:
@@ -145,8 +154,9 @@ def snippet(chunk: RetrievedChunk, limit: int | None = None) -> str:
 
 
 def numbers_in(text: str) -> set[str]:
-    """본문의 숫자를 정규화한 문자열 집합으로. 각주 번호와 날짜는 수치가 아니라 뺀다."""
-    body = _FOOTNOTE.sub(" ", text)
+    """본문의 숫자를 정규화한 문자열 집합으로. 각주 번호·그림 표식·날짜는 수치가 아니라 뺀다."""
+    body = blocks_mod.MARKER.sub(" ", text)
+    body = _FOOTNOTE.sub(" ", body)
     body = _DATE.sub(" ", body)
     found: set[str] = set()
     for m in _NUMBER.finditer(body):

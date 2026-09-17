@@ -30,6 +30,40 @@ import type {
 
 const MAX_INPUT_HEIGHT = 176;
 
+/**
+ * 기다린 시간. 답은 끝나야 한 번에 보이므로(조각을 그리면 한 글자씩 찍혀 읽기 불편하다),
+ * 그동안 멈춘 게 아니라는 표시가 있어야 한다. 로컬 모델은 한 답에 1~2분이 든다.
+ */
+function useElapsedSeconds(running: boolean): number {
+  const [seconds, setSeconds] = useState(0);
+  const [wasRunning, setWasRunning] = useState(running);
+  // 시작할 때 0 으로. 렌더 중에 파생 상태를 맞추는 것은 React 가 허용하는 길이다.
+  if (running !== wasRunning) {
+    setWasRunning(running);
+    setSeconds(0);
+  }
+  useEffect(() => {
+    if (!running) return;
+    const timer = window.setInterval(() => setSeconds((n) => n + 1), 1000);
+    return () => window.clearInterval(timer);
+  }, [running]);
+  return running ? seconds : 0;
+}
+
+/** 답을 만드는 데 든 시간. 발주기관이 "왜 이렇게 오래 걸리나" 를 물을 때 근거가 된다. */
+function ElapsedLabel({ ms }: { ms: number | null | undefined }): ReactNode {
+  if (ms === null || ms === undefined) return null;
+  const text = ms < 1000 ? `${ms}ms` : `${(ms / 1000).toFixed(ms < 10000 ? 1 : 0)}초`;
+  return (
+    <span
+      className="text-muted-foreground ml-auto font-mono text-[11px]"
+      title="답변 생성 소요 시간"
+    >
+      {text}
+    </span>
+  );
+}
+
 /** 답변을 기다리는 동안의 점 세 개. */
 function TypingDots({ label }: { label: string }): ReactNode {
   return (
@@ -217,6 +251,7 @@ export function AskPage(): ReactNode {
   };
 
   const streaming = stream.phase === 'streaming';
+  const elapsed = useElapsedSeconds(streaming);
   const list = messages.data ?? [];
   const answering = streaming || Boolean(stream.draftText);
   // 서버 목록에 같은 질문이 들어오는 순간 건 말풍선은 사라진다 — 두 개가 겹치지 않는다.
@@ -360,7 +395,7 @@ export function AskPage(): ReactNode {
                 <AnswerBody
                   content={m.content}
                   sources={m.sources}
-                  infographic={m.infographic}
+                  infographics={m.infographics}
                   onFootnoteClick={openEvidence(m.sources)}
                 />
                 <SourceEvidence
@@ -368,7 +403,7 @@ export function AskPage(): ReactNode {
                   activeFootnote={panel === 'evidence' ? activeFootnote : null}
                   onSelect={openEvidence(m.sources)}
                 />
-                <div className="mt-3 flex gap-1">
+                <div className="mt-3 flex items-center gap-1">
                   {(
                     [
                       ['UP', ThumbsUp, '도움이 됨'],
@@ -390,6 +425,7 @@ export function AskPage(): ReactNode {
                       <Icon className="size-4" />
                     </Button>
                   ))}
+                  <ElapsedLabel ms={m.latencyMs} />
                 </div>
               </div>
             ),
@@ -405,12 +441,12 @@ export function AskPage(): ReactNode {
 
           {answering && (
             <div className="min-w-0">
-              {stream.draftText ? (
+              {stream.draftText && stream.phase !== 'streaming' ? (
                 <>
                   <AnswerBody
                     content={stream.draftText}
                     sources={stream.sources}
-                    infographic={stream.infographic}
+                    infographics={stream.infographics}
                     onFootnoteClick={openEvidence(stream.sources)}
                   />
                   <SourceEvidence
@@ -418,6 +454,9 @@ export function AskPage(): ReactNode {
                     activeFootnote={panel === 'evidence' ? activeFootnote : null}
                     onSelect={openEvidence(stream.sources)}
                   />
+                  <div className="mt-3 flex items-center">
+                    <ElapsedLabel ms={stream.elapsedMs} />
+                  </div>
                   {stream.phase === 'aborted' && (
                     <p className="text-muted-foreground text-xs font-semibold tracking-wide mt-2">
                       중지됨
@@ -425,7 +464,13 @@ export function AskPage(): ReactNode {
                   )}
                 </>
               ) : (
-                <TypingDots label="산출물에서 근거를 찾는 중…" />
+                <TypingDots
+                  label={
+                    stream.draftText
+                      ? `답변을 만드는 중… ${elapsed}초`
+                      : `산출물에서 근거를 찾는 중… ${elapsed}초`
+                  }
+                />
               )}
             </div>
           )}

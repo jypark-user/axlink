@@ -21,7 +21,9 @@ export interface AskStreamState {
   routing: QueryRouting | null;
   draftText: string;
   sources: MessageSourceResponse[];
-  infographic: SseInfographicEvent | null;
+  infographics: SseInfographicEvent[];
+  /** done 이벤트가 알려준 소요 시간(ms) */
+  elapsedMs: number | null;
   assistantMessageId: string | null;
   error: ApiError | null;
   ask: (conversationId: string, request: AskRequest) => Promise<void>;
@@ -49,7 +51,8 @@ export function useAskStream(onSettled: (conversationId: string) => void): AskSt
   const [routing, setRouting] = useState<QueryRouting | null>(null);
   const [draftText, setDraftText] = useState('');
   const [sources, setSources] = useState<MessageSourceResponse[]>([]);
-  const [infographic, setInfographic] = useState<SseInfographicEvent | null>(null);
+  const [infographics, setInfographics] = useState<SseInfographicEvent[]>([]);
+  const [elapsedMs, setElapsedMs] = useState<number | null>(null);
   const [assistantMessageId, setAssistantMessageId] = useState<string | null>(null);
   const [error, setError] = useState<ApiError | null>(null);
   const controllerRef = useRef<AbortController | null>(null);
@@ -62,7 +65,8 @@ export function useAskStream(onSettled: (conversationId: string) => void): AskSt
     setRouting(null);
     setDraftText('');
     setSources([]);
-    setInfographic(null);
+    setInfographics([]);
+    setElapsedMs(null);
     setAssistantMessageId(null);
     setError(null);
   }, []);
@@ -75,7 +79,7 @@ export function useAskStream(onSettled: (conversationId: string) => void): AskSt
   useEffect(() => () => controllerRef.current?.abort(), []);
 
   // 개발 빌드에서만 — 콘솔의 axViz() 로 그림 10종을 채팅 화면에서 바로 넘겨 본다.
-  useEffect(() => registerVizPreview(setInfographic), []);
+  useEffect(() => registerVizPreview((e) => setInfographics(e ? [e] : [])), []);
 
   const ask = useCallback(
     async (conversationId: string, request: AskRequest) => {
@@ -85,7 +89,8 @@ export function useAskStream(onSettled: (conversationId: string) => void): AskSt
       setPhase('streaming');
       setDraftText('');
       setSources([]);
-      setInfographic(null);
+      setInfographics([]);
+      setElapsedMs(null);
       setRouting(null);
       setError(null);
       setAssistantMessageId(null);
@@ -112,9 +117,12 @@ export function useAskStream(onSettled: (conversationId: string) => void): AskSt
           } else if (event.event === 'infographic') {
             debugLog('infographic', event.data);
             const payload = parse<SseInfographicEvent>(event.data);
-            if (payload) setInfographic(payload);
+            // 그림은 여러 장 올 수 있다. 같은 자리가 다시 오면 덮어쓴다.
+            if (payload)
+              setInfographics((prev) => [...prev.filter((b) => b.slot !== payload.slot), payload]);
           } else if (event.event === 'done') {
-            parse<SseDoneEvent>(event.data);
+            const done = parse<SseDoneEvent>(event.data);
+            if (done) setElapsedMs(done.elapsedMs);
             setPhase('finalizing');
             onSettled(conversationId);
             return;
@@ -149,7 +157,8 @@ export function useAskStream(onSettled: (conversationId: string) => void): AskSt
     routing,
     draftText,
     sources,
-    infographic,
+    infographics,
+    elapsedMs,
     assistantMessageId,
     error,
     ask,

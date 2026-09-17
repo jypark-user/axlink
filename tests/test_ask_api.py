@@ -241,7 +241,7 @@ def test_문서_질문은_근거와_각주가_붙어_저장된다(
         s["footnoteNo"] for s in sources
     ]
     assert assistant["sources"][0]["snippet"] == sources[0]["snippet"]
-    assert assistant["infographic"] is None
+    assert assistant["infographics"] == []
 
     page = client.get("/api/conversations?size=50", headers=_auth(token)).json()
     mine = next(c for c in page["content"] if c["id"] == conversation_id)
@@ -328,7 +328,7 @@ def test_집계_질문은_인포그래픽을_싣고_값은_DB_에서_온다(clie
     messages = client.get(
         f"/api/conversations/{conversation_id}/messages", headers=_auth(token)
     ).json()
-    saved = messages[1]["infographic"]
+    saved = messages[1]["infographics"][0]
     assert saved["template"] == "STAT_CARD"
     assert saved["data"]["rows"] == infographic["data"]["rows"]
     assert messages[1]["routing"]["viz"] == "STAT_CARD"
@@ -447,11 +447,17 @@ def indexed_entities():
 
 @requires_db
 def test_목록_질문은_종류_전체를_근거로_답한다(client, conversation, indexed_entities, monkeypatch):
+    """표를 못 만들 때의 길이다. 종류로 모은 청크가 근거가 되고 게이트는 종류로 통과한다.
+
+    표준 모델에 행이 있으면 표가 답하므로(ARC-013) 이 길로 오지 않는다. 표가 없는 종류만
+    여기로 온다. 표를 못 만드는 상황을 만들어 그 길을 시험한다.
+    """
     scripted = ScriptedLlm(
         {"route": "DOCUMENT", "list": "ISSUE", "query": "이슈 목록"},
         "이슈는 총 2건이다. 커넥터 시험[1]과 근거 게이트 임계값 결정[2]이다.",
     )
     monkeypatch.setattr(ask_service, "llm_port", lambda: scripted)
+    monkeypatch.setattr(ask_service.entity_table, "build", lambda *a, **k: None)
     # 문턱은 기본값 그대로 둔다. 목록은 유사도가 아니라 종류로 통과해야 한다.
 
     conversation_id, token = conversation()
@@ -478,12 +484,34 @@ def test_목록_질문은_종류_전체를_근거로_답한다(client, conversat
 
 
 @requires_db
-def test_목록_종류가_비어_있으면_모델을_부르지_않는다(
+def test_색인에_없어도_표준_모델에_있으면_답한다(
     client, conversation, indexed_entities, monkeypatch
 ):
+    """리스크는 색인 청크가 없다. 그래도 표준 모델에 행이 있으면 표로 답한다 (ARC-013).
+
+    청크 유사도만으로 막으면 될 답을 막는다. 표의 행은 SQL 이 꺼낸 것이라 근거가 있다.
+    """
+    route = {"route": "DOCUMENT", "list": "RISK", "listFilter": "ALL", "query": "리스크 목록"}
+    scripted = ScriptedLlm(route, "등록된 리스크입니다. " + chr(10) + "[그림 1]")
+    monkeypatch.setattr(ask_service, "llm_port", lambda: scripted)
+
+    conversation_id, token = conversation()
+    events = _ask(client, token, conversation_id, "리스크 목록")
+    assert events[-1][1]["finishReason"] == "STOP"
+    assert scripted.stream_calls == 1
+    block = next(d for e, d in events if e == "infographic")
+    assert block["template"] == "DATA_TABLE" and block["data"]["rows"]
+
+
+@requires_db
+def test_청크도_표도_없으면_모델을_부르지_않는다(
+    client, conversation, indexed_entities, monkeypatch
+):
+    """근거 게이트(SWFR.RAG.007)는 그대로다. 낼 것이 없으면 답을 만들지 않는다."""
     route = {"route": "DOCUMENT", "list": "RISK", "query": "리스크 목록"}
     scripted = ScriptedLlm(route, "안 불려야 한다")
     monkeypatch.setattr(ask_service, "llm_port", lambda: scripted)
+    monkeypatch.setattr(ask_service.entity_table, "build", lambda *a, **k: None)
 
     conversation_id, token = conversation()
     events = _ask(client, token, conversation_id, "리스크 목록")
