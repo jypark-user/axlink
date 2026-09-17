@@ -5,21 +5,38 @@ import { formatCell, rowValues } from '@/features/widgets/widget-data';
 import type { MessageSourceResponse, SseInfographicEvent, WidgetSpec } from '@/types/api';
 
 export interface FootnoteSegment {
-  kind: 'text' | 'footnote';
+  kind: 'text' | 'footnote' | 'figure';
   value: string;
   footnoteNo: number | null;
+  /** kind 가 figure 일 때 그림 자리 번호 */
+  slot?: number;
 }
 
+/**
+ * 본문을 글·각주·그림 자리로 나눈다.
+ *
+ * 각주는 `[1]`, 그림 자리는 `[그림 1]` 이다. 서버가 본문에 표식을 놓고 그림을 따로 보내면,
+ * 화면은 그 자리에 위젯 렌더러를 끼운다(ARC-013). 표식 뒤의 자리는 문단을 끊는다.
+ */
 export function parseFootnotes(content: string): FootnoteSegment[] {
   const segments: FootnoteSegment[] = [];
-  const re = /\[(\d{1,2})\]/g;
+  const re = /\[그림\s*(\d{1,2})\]|\[(\d{1,2})\]/g;
   let last = 0;
   let match: RegExpExecArray | null;
   while ((match = re.exec(content)) !== null) {
     if (match.index > last) {
       segments.push({ kind: 'text', value: content.slice(last, match.index), footnoteNo: null });
     }
-    segments.push({ kind: 'footnote', value: match[0], footnoteNo: Number(match[1]) });
+    if (match[1] !== undefined) {
+      segments.push({
+        kind: 'figure',
+        value: match[0],
+        footnoteNo: null,
+        slot: Number(match[1]),
+      });
+    } else {
+      segments.push({ kind: 'footnote', value: match[0], footnoteNo: Number(match[2]) });
+    }
     last = match.index + match[0].length;
   }
   if (last < content.length) {
@@ -31,39 +48,70 @@ export function parseFootnotes(content: string): FootnoteSegment[] {
 export function AnswerBody({
   content,
   sources,
-  infographic,
+  infographics,
   onFootnoteClick,
 }: {
   content: string;
   sources: MessageSourceResponse[];
-  /** 답변에 딸린 그림. 값은 서버가 DB 에서 뽑아 보낸다. */
-  infographic?: SseInfographicEvent | null;
+  /** 답변에 딸린 그림들. 값은 서버가 DB 에서 뽑아 보낸다. */
+  infographics?: SseInfographicEvent[] | null;
   onFootnoteClick?: (footnoteNo: number) => void;
 }): ReactNode {
   const known = new Set(sources.map((s) => s.footnoteNo));
-  const body = content;
+  const made = infographics ?? [];
+  const bySlot = new Map(made.map((b) => [b.slot, b]));
+  // 본문을 그림 자리에서 끊는다. 표식 앞뒤 글은 각각 한 문단이고, 그 사이에 그림이 들어간다.
+  const parts: { text: FootnoteSegment[]; figure: SseInfographicEvent | null }[] = [];
+  let buffer: FootnoteSegment[] = [];
+  for (const seg of parseFootnotes(content)) {
+    if (seg.kind === 'figure') {
+      const block = seg.slot === undefined ? undefined : bySlot.get(seg.slot);
+      if (block) {
+        parts.push({ text: buffer, figure: block });
+        bySlot.delete(seg.slot as number);
+        buffer = [];
+        continue;
+      }
+      // 그림이 안 온 표식은 글에서 지운다. 사용자에게 [그림 1] 이라는 글자를 보일 이유가 없다
+      continue;
+    }
+    buffer.push(seg);
+  }
+  // 본문이 자리를 안 잡은 그림은 끝에 붙인다
+  const leftovers = made.filter((b) => bySlot.has(b.slot));
+  parts.push({ text: buffer, figure: null });
+
   return (
     <>
-      <p className="text-foreground text-base leading-7 whitespace-pre-line">
-        {parseFootnotes(body).map((seg, i) => {
-          if (seg.kind === 'text' || seg.footnoteNo === null || !known.has(seg.footnoteNo)) {
-            return <span key={i}>{seg.value}</span>;
-          }
-          const no = seg.footnoteNo;
-          return (
-            <button
-              key={i}
-              type="button"
-              title={`[${no}] 근거 보기`}
-              className="text-primary hover:bg-accent focus-visible:bg-accent text-xs font-semibold tracking-wide mx-0.5 rounded-sm px-1 align-super font-mono transition-colors"
-              onClick={() => onFootnoteClick?.(no)}
-            >
-              {no}
-            </button>
-          );
-        })}
-      </p>
-      {infographic && <InfographicBlock infographic={infographic} />}
+      {parts.map((part, pi) => (
+        <div key={pi}>
+          {part.text.some((seg) => seg.value.trim() !== '') && (
+            <p className="text-foreground text-base leading-7 whitespace-pre-line">
+              {part.text.map((seg, i) => {
+                if (seg.kind === 'text' || seg.footnoteNo === null || !known.has(seg.footnoteNo)) {
+                  return <span key={i}>{seg.value}</span>;
+                }
+                const no = seg.footnoteNo;
+                return (
+                  <button
+                    key={i}
+                    type="button"
+                    title={`[${no}] 근거 보기`}
+                    className="text-primary hover:bg-accent focus-visible:bg-accent text-xs font-semibold tracking-wide mx-0.5 rounded-sm px-1 align-super font-mono transition-colors"
+                    onClick={() => onFootnoteClick?.(no)}
+                  >
+                    {no}
+                  </button>
+                );
+              })}
+            </p>
+          )}
+          {part.figure && <InfographicBlock infographic={part.figure} />}
+        </div>
+      ))}
+      {leftovers.map((block) => (
+        <InfographicBlock key={block.slot} infographic={block} />
+      ))}
     </>
   );
 }
@@ -87,7 +135,7 @@ function InfographicBlock({ infographic }: { infographic: SseInfographicEvent })
       <Renderer spec={spec} data={infographic.data} />
       {infographic.template !== 'DATA_TABLE' && <ValueTable infographic={infographic} />}
       <figcaption className="text-xs font-semibold tracking-wide text-muted-foreground mt-3">
-        연결된 도구·문서에서 수집한 값을 집계했습니다.
+        {infographic.note ?? '연결된 도구·문서에서 수집한 값을 집계했습니다.'}
       </figcaption>
     </figure>
   );

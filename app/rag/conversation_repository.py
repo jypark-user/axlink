@@ -123,7 +123,7 @@ def insert_message(
     route_type: str | None = None,
     rewritten_query: str | None = None,
     measure_key: str | None = None,
-    infographic: dict[str, Any] | None = None,
+    infographic: list[dict[str, Any]] | dict[str, Any] | None = None,
 ) -> str:
     row = fetch_one(
         cur,

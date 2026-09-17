@@ -360,7 +360,7 @@ export function AskPage(): ReactNode {
                 <AnswerBody
                   content={m.content}
                   sources={m.sources}
-                  infographic={m.infographic}
+                  infographics={m.infographics}
                   onFootnoteClick={openEvidence(m.sources)}
                 />
                 <SourceEvidence
@@ -410,7 +410,7 @@ export function AskPage(): ReactNode {
                   <AnswerBody
                     content={stream.draftText}
                     sources={stream.sources}
-                    infographic={stream.infographic}
+                    infographics={stream.infographics}
                     onFootnoteClick={openEvidence(stream.sources)}
                   />
                   <SourceEvidence

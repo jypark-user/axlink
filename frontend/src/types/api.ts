@@ -990,13 +990,22 @@ export interface QueryRouting {
   dimensions: string[];
   /** 모델이 고른 그림 형태. 서버가 데이터 모양으로 검증해 바꾸거나 버릴 수 있다. */
   viz: WidgetTemplate | null;
+  listing?: string | null;
+  /** 목록의 상태 조건. OPEN(처리 중) · CLOSED(완료) · ALL */
+  listingStatus?: string | null;
 }
 
-/** 값은 시맨틱 레이어가 DB 에서 뽑는다 — 모델은 지표·차원만 고른다. */
+/**
+ * 답변에 끼워 넣는 그림 하나. 값은 시맨틱 레이어의 집계이거나 표준 모델의 행이고,
+ * 모델은 무엇을 그릴지만 골랐다. slot 은 본문의 `[그림 N]` 표식 번호다.
+ */
 export interface SseInfographicEvent {
+  slot: number;
   template: WidgetTemplate;
   title: string;
   data: WidgetDataResponse;
+  /** 그림 아래 설명. 목록이면 "총 N건 중 앞 M건" */
+  note: string | null;
 }
 
 export interface MessageSourceResponse {
@@ -1023,8 +1032,8 @@ export interface MessageResponse {
   sources: MessageSourceResponse[];
   feedback: MessageFeedback | null;
   createdAt: string;
-  /** 생성 시점에 함께 보여준 인포그래픽. 없으면 null. */
-  infographic: SseInfographicEvent | null;
+  /** 생성 시점에 함께 보여준 그림들. 본문의 [그림 N] 자리에 들어간다. */
+  infographics: SseInfographicEvent[];
 }
 
 export interface MessageFeedbackRequest {

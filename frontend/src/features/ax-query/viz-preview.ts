@@ -116,8 +116,10 @@ export function sampleInfographic(template: WidgetTemplate): SseInfographicEvent
                                       : twoDim(months(4), ORGS.slice(0, 3));
 
   return {
+    slot: 1,
     template,
     title: `[미리보기] ${template}`,
+    note: null,
     data: {
       measure: 'preview',
       measureLabel: `[미리보기] ${template}`,

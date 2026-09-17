@@ -381,11 +381,23 @@ def test_문서_경로의_list_는_아는_종류만_남긴다():
     assert unknown.listing is None
 
 
-def test_집계_경로에서는_list_를_무시한다():
+def test_집계와_목록은_함께_올_수_있다():
+    """숫자와 목록을 같이 묻는 질문이 있다. 둘은 따로 판정해 그림 두 장이 된다 (ARC-013)."""
     choice = {"route": "AGGREGATE", "measure": "issue_count", "list": "ISSUE"}
     decision = routing.from_choice(_catalog(), choice)
     assert decision.type == routing.AGGREGATE
-    assert decision.listing is None
+    assert decision.listing == "ISSUE"
+
+
+def test_목록_상태_조건은_아는_값만_남긴다():
+    ok = routing.from_choice(
+        _catalog(), {"route": "DOCUMENT", "list": "ISSUE", "listFilter": "open"}
+    )
+    assert ok.listing_status == "OPEN"
+    unknown = routing.from_choice(
+        _catalog(), {"route": "DOCUMENT", "list": "ISSUE", "listFilter": "미정"}
+    )
+    assert unknown.listing_status == "ALL"
 
 
 def test_라우팅_프롬프트는_목록_종류를_알려준다():
