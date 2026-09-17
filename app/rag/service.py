@@ -206,7 +206,9 @@ def stream(p: Prepared) -> Iterator[bytes]:
                         listing=decision.listing,
                         listing_status=decision.listing_status,
                     )
-                elif infographic is not None:
+                elif infographic is not None and blocks.worth_drawing(infographic.data):
+                    # 값이 하나뿐이면 문장이 그 숫자를 말한다. 그림은 붙이지 않는다. 값은
+                    # aggregate 로 프롬프트와 수치 검문에 그대로 들어간다(ARC-013 4-1).
                     block_list.append(
                         blocks.from_aggregate(
                             len(block_list) + 1,

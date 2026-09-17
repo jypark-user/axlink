@@ -293,7 +293,9 @@ def test_색인이_비어_있으면_그렇다고_답한다(client, conversation,
 
 
 @requires_db
-def test_집계_질문은_인포그래픽을_싣고_값은_DB_에서_온다(client, conversation, monkeypatch):
+def test_값이_하나인_집계는_그림_없이_글로만_답한다(client, conversation, monkeypatch):
+    """문장이 숫자를 말하는데 카드까지 붙이면 답이 무거워진다(ARC-013 4절). 값은 그래도
+    프롬프트와 수치 검문에 들어간다."""
     with tx() as cur:
         expected = cur.execute(
             "select count(*) as n from issue where project_id = %s", (PID,)
@@ -309,31 +311,23 @@ def test_집계_질문은_인포그래픽을_싣고_값은_DB_에서_온다(clie
     conversation_id, token = conversation()
     events = _ask(client, token, conversation_id, "이슈가 몇 건이죠?")
     names = [e for e, _ in events]
-    assert names.index("infographic") > names.index("sources")
+    assert "infographic" not in names
     assert names[-1] == "done" and events[-1][1]["finishReason"] == "STOP"
 
     start = events[0][1]["routing"]
     assert start["type"] == "AGGREGATE" and start["measureKey"] == "issue_count"
-    assert start["viz"] == "STAT_CARD"
-
-    infographic = next(d for e, d in events if e == "infographic")
-    assert infographic["template"] == "STAT_CARD" and infographic["title"] == "이슈 건수"
-    assert infographic["data"]["measure"] == "issue_count"
-    assert infographic["data"]["rows"][0]["values"]["value"] == expected
-    assert infographic["data"]["appliedProjectIds"] == [PID]
+    assert start["viz"] is None
 
     # 프롬프트에 집계 값이 들어갔고, 그 값만 인용한 답은 검문을 통과한다
     assert f"이슈 건수: {expected}" in scripted.prompts[0]
     text = "".join(d["text"] for e, d in events if e == "delta")
-    assert "※" not in text
+    assert "※" not in text and "[그림" not in text
 
     messages = client.get(
         f"/api/conversations/{conversation_id}/messages", headers=_auth(token)
     ).json()
-    saved = messages[1]["infographics"][0]
-    assert saved["template"] == "STAT_CARD"
-    assert saved["data"]["rows"] == infographic["data"]["rows"]
-    assert messages[1]["routing"]["viz"] == "STAT_CARD"
+    assert messages[1]["infographics"] == []
+    assert messages[1]["routing"]["viz"] is None
 
 
 @requires_db
