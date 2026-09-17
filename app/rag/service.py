@@ -340,6 +340,9 @@ def stream(p: Prepared) -> Iterator[bytes]:
         elapsed = _elapsed(p)
         with tx() as cur:
             repo.finish_message(cur, assistant_id, "".join(pieces).strip(), "COMPLETE", elapsed)
+            # 답을 만든 판정만 다음에 다시 쓴다. 근거가 없어 막힌 판정은 틀렸을 수 있다(ARC-014).
+            if finish_reason != "NO_EVIDENCE":
+                route_cache.remember(cur, p.question, routed)
         done = SseDoneEvent(
             assistantMessageId=assistant_id, finishReason=finish_reason, elapsedMs=elapsed
         )

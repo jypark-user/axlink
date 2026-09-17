@@ -27,6 +27,7 @@ def issues():
         ("GH-8801", "열린 이슈 가", "OPEN", "MAJOR"),
         ("GH-8802", "열린 이슈 나", "IN_PROGRESS", "MINOR"),
         ("GH-8803", "닫힌 이슈 다", "CLOSED", "MINOR"),
+        ("GH-8804", "열린 이슈 라", "OPEN", "BLOCKER"),
     ]
     with tx() as cur:
         for key, title, status, severity in rows:
@@ -38,9 +39,11 @@ def issues():
                 """,
                 (PID, key, title, status, severity),
             )
-    yield {"open": 2, "closed": 1}
+    yield {"open": 3, "closed": 1}
     with tx() as cur:
-        cur.execute("delete from issue where issue_key in ('GH-8801','GH-8802','GH-8803')")
+        cur.execute(
+            "delete from issue where issue_key in ('GH-8801','GH-8802','GH-8803','GH-8804')"
+        )
 
 
 # ---------------------------------------------------------------- 표 만들기
@@ -54,9 +57,12 @@ def test_처리_중_이슈만_고르면_닫힌_것은_안_들어온다(issues):
         closed_table = entity_table.build(cur, "ISSUE", entity_table.CLOSED, [PID], 50)
 
     assert open_table is not None and all_table is not None
-    titles = {r.values["title"] for r in open_table.data.rows}
-    assert {"열린 이슈 가", "열린 이슈 나"} <= titles
+    titles = [r.values["title"] for r in open_table.data.rows]
+    assert {"열린 이슈 가", "열린 이슈 나", "열린 이슈 라"} <= set(titles)
     assert "닫힌 이슈 다" not in titles
+    # 급한 것이 위로. "가장 급한 작업" 이 이 순서를 그대로 읽는다
+    order = [titles.index(t) for t in ("열린 이슈 라", "열린 이슈 가", "열린 이슈 나")]
+    assert order == sorted(order)
     statuses = {r.values["status"] for r in open_table.data.rows}
     assert not (statuses & {"RESOLVED", "CLOSED"})
     closed_total = closed_table.total if closed_table else 0

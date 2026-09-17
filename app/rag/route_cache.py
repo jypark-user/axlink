@@ -45,10 +45,19 @@ def key_of(question: str, version: str) -> str:
 class Routed:
     decision: routing.RouteDecision
     cached: bool
+    # 아직 저장하지 않은 새 판정. 답을 만든 뒤 remember() 로 넣는다
+    key: str | None = None
+    version: str | None = None
+    choice: dict[str, Any] | None = None
+    model: str = ""
 
 
 def decide(cur: Any, catalog: Catalog, llm: LlmPort, question: str) -> Routed:
-    """캐시에 있으면 그 판정을 다시 검증해 쓰고, 없으면 모델에 묻고 저장한다.
+    """캐시에 있으면 그 판정을 다시 검증해 쓰고, 없으면 모델에 묻는다.
+
+    새 판정은 여기서 저장하지 않는다. 답을 실제로 만들었을 때만 remember() 가 넣는다.
+    문서 경로로 보냈는데 근거가 없어 답을 못 만든 판정은 틀렸을 가능성이 높다("가장 급한
+    작업" 을 문서 검색으로 보낸 경우). 그것을 저장하면 같은 질문이 계속 막힌다.
 
     저장은 모델의 JSON 원본이다. 읽을 때 from_choice 가 카탈로그로 다시 검증하므로 지표가
     폐기되면 그 판정은 문서 경로로 내려간다. 읽을 수 없는 답(파싱 실패)은 저장하지 않는다.
@@ -71,16 +80,29 @@ def decide(cur: Any, catalog: Catalog, llm: LlmPort, question: str) -> Routed:
         routing.system_prompt(catalog), question, json_schema=routing.CHOICE_SCHEMA
     )
     choice = generation.parse_choice(result.text)
-    if choice is not None:
-        cur.execute(
-            """
-            insert into route_cache (key_hash, question, catalog_version, choice_json, model)
-            values (%s, %s, %s, %s, %s)
-            on conflict (key_hash) do nothing
-            """,
-            (key, normalize(question), version, Jsonb(choice), result.model),
-        )
-    return Routed(routing.from_choice(catalog, choice), cached=False)
+    return Routed(
+        routing.from_choice(catalog, choice),
+        cached=False,
+        key=key,
+        version=version,
+        choice=choice,
+        model=result.model,
+    )
+
+
+def remember(cur: Any, question: str, routed: Routed) -> bool:
+    """답을 만든 판정을 저장한다. 캐시에서 온 것이거나 읽을 수 없던 답이면 아무것도 안 한다."""
+    if routed.cached or routed.choice is None or routed.key is None or routed.version is None:
+        return False
+    cur.execute(
+        """
+        insert into route_cache (key_hash, question, catalog_version, choice_json, model)
+        values (%s, %s, %s, %s, %s)
+        on conflict (key_hash) do nothing
+        """,
+        (routed.key, normalize(question), routed.version, Jsonb(routed.choice), routed.model),
+    )
+    return True
 
 
 def clear(cur: Any) -> int:

@@ -65,7 +65,9 @@ def test_같은_질문은_모델을_다시_부르지_않는다(clean_cache):
     llm = _Counting({"route": "AGGREGATE", "measure": "open_issue_count", "template": "STAT_CARD"})
     with tx() as cur:
         first = route_cache.decide(cur, cat, llm, "열린 이슈 몇 건이야?")
+        assert route_cache.remember(cur, "열린 이슈 몇 건이야?", first) is True
         second = route_cache.decide(cur, cat, llm, "열린  이슈 몇 건이야")
+        assert route_cache.remember(cur, "열린  이슈 몇 건이야", second) is False  # 캐시에서 온 것
         other = route_cache.decide(cur, cat, llm, "닫힌 이슈 몇 건이야?")
         hits = cur.execute("select sum(hit_count) as n from route_cache").fetchone()["n"]
     assert (first.cached, second.cached, other.cached) == (False, True, False)
@@ -85,7 +87,8 @@ def test_읽을_수_없는_답은_저장하지_않는다(clean_cache):
     cat = _catalog()
     llm = _Garbage({})
     with tx() as cur:
-        route_cache.decide(cur, cat, llm, "아무거나")
+        r1 = route_cache.decide(cur, cat, llm, "아무거나")
+        assert route_cache.remember(cur, "아무거나", r1) is False
         route_cache.decide(cur, cat, llm, "아무거나")
         n = cur.execute("select count(*) as n from route_cache").fetchone()["n"]
     assert llm.complete_calls == 2 and n == 0
@@ -97,7 +100,7 @@ def test_캐시된_판정도_카탈로그로_다시_검증한다(clean_cache, mo
     cat = _catalog()
     llm = _Counting({"route": "AGGREGATE", "measure": "open_issue_count", "template": "STAT_CARD"})
     with tx() as cur:
-        route_cache.decide(cur, cat, llm, "열린 이슈")
+        route_cache.remember(cur, "열린 이슈", route_cache.decide(cur, cat, llm, "열린 이슈"))
         version = route_cache.catalog_version(cat)
         cur.execute(
             "update route_cache set choice_json = %s where catalog_version = %s",
@@ -113,7 +116,7 @@ def test_끄면_매번_묻는다(clean_cache, monkeypatch):
     cat = _catalog()
     llm = _Counting({"route": "DOCUMENT", "query": "x"})
     with tx() as cur:
-        route_cache.decide(cur, cat, llm, "질문")
+        route_cache.remember(cur, "질문", route_cache.decide(cur, cat, llm, "질문"))
         r = route_cache.decide(cur, cat, llm, "질문")
         n = cur.execute("select count(*) as n from route_cache").fetchone()["n"]
     assert llm.complete_calls == 2 and r.cached is False and n == 0
@@ -151,4 +154,30 @@ def test_답변_경로에서_두_번째_질문은_캐시_표시가_붙는다(
     first, second = ask(), ask()
     assert first["routeCached"] is False and second["routeCached"] is True
     assert llm.complete_calls == 1
+    client.delete(f"/api/conversations/{cid}", headers=headers)
+
+
+@requires_db
+def test_근거가_없어_막힌_판정은_저장하지_않는다(client, client_token, clean_cache, monkeypatch):
+    """"가장 급한 작업" 을 문서 검색으로 보낸 판정이 캐시에 남아 같은 질문이 계속 막혔다.
+    답을 못 만든 판정은 다음에 다시 묻는다."""
+    llm = _Counting({"route": "DOCUMENT", "query": "급한 작업"})
+    monkeypatch.setattr(ask_service, "llm_port", lambda: llm)
+    monkeypatch.setattr(settings, "rag_min_similarity", 0.99)  # 근거 게이트가 막는다
+    token = client_token("r2")
+    headers = {"Authorization": f"Bearer {token}"}
+    cid = client.post(
+        "/api/conversations", json={"title": "급한", "projectScope": [PID]}, headers=headers
+    ).json()["id"]
+    for _ in range(2):
+        with client.stream(
+            "POST",
+            f"/api/conversations/{cid}/messages",
+            json={"question": "지금 가장 급한 작업이 뭐야?", "projectScope": []},
+            headers={**headers, "Accept": "text/event-stream"},
+        ) as res:
+            res.read()
+    with tx() as cur:
+        n = cur.execute("select count(*) as n from route_cache").fetchone()["n"]
+    assert n == 0 and llm.complete_calls == 2
     client.delete(f"/api/conversations/{cid}", headers=headers)
