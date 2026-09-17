@@ -252,6 +252,7 @@ def test_문서_질문은_근거와_각주가_붙어_저장된다(
 def test_근거가_부족하면_모델을_부르지_않는다(client, conversation, indexed_document, monkeypatch):
     scripted = ScriptedLlm({"route": "DOCUMENT"}, "이 문장은 나오면 안 된다")
     monkeypatch.setattr(ask_service, "llm_port", lambda: scripted)
+    monkeypatch.setattr(settings, "rag_overview_fallback", False)  # 게이트 자체를 본다
     monkeypatch.setattr(settings, "rag_min_similarity", 0.99)
 
     conversation_id, token = conversation()
@@ -274,6 +275,7 @@ def test_근거가_부족하면_모델을_부르지_않는다(client, conversati
 def test_색인이_비어_있으면_그렇다고_답한다(client, conversation, monkeypatch):
     scripted = ScriptedLlm({"route": "DOCUMENT"}, "x")
     monkeypatch.setattr(ask_service, "llm_port", lambda: scripted)
+    monkeypatch.setattr(settings, "rag_overview_fallback", False)  # 게이트 자체를 본다
     with tx() as cur:
         empty = cur.execute(
             "select count(*) as n from doc_chunk where project_id = %s", (PID,)
@@ -511,6 +513,7 @@ def test_청크도_표도_없으면_모델을_부르지_않는다(
     route = {"route": "DOCUMENT", "list": "RISK", "query": "리스크 목록"}
     scripted = ScriptedLlm(route, "안 불려야 한다")
     monkeypatch.setattr(ask_service, "llm_port", lambda: scripted)
+    monkeypatch.setattr(settings, "rag_overview_fallback", False)  # 게이트 자체를 본다
     monkeypatch.setattr(ask_service.entity_table, "build", lambda *a, **k: None)
 
     conversation_id, token = conversation()

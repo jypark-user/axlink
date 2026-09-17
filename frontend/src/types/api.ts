@@ -80,7 +80,7 @@ export type ChunkSourceType =
   | 'DOCUMENT_UPLOAD';
 export type MessageRole = 'USER' | 'ASSISTANT';
 export type MessageFeedback = 'UP' | 'DOWN';
-export type RouteType = 'DOCUMENT' | 'AGGREGATE' | 'MIXED';
+export type RouteType = 'DOCUMENT' | 'AGGREGATE' | 'MIXED' | 'OVERVIEW';
 export type WidgetTemplate =
   | 'STAT_CARD'
   | 'BAR_CHART'

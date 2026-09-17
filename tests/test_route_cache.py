@@ -126,9 +126,12 @@ def test_끄면_매번_묻는다(clean_cache, monkeypatch):
 def test_답변_경로에서_두_번째_질문은_캐시_표시가_붙는다(
     client, client_token, clean_cache, monkeypatch
 ):
-    llm = _Counting({"route": "DOCUMENT", "query": "이슈"}, "답입니다.")
+    # 집계 경로는 청크가 없어도 답을 만든다. 답을 만든 판정만 저장되므로 그 길로 간다
+    llm = _Counting(
+        {"route": "AGGREGATE", "measure": "open_issue_count", "template": "STAT_CARD"}, "답입니다."
+    )
     monkeypatch.setattr(ask_service, "llm_port", lambda: llm)
-    monkeypatch.setattr(settings, "rag_min_similarity", 0.0)
+    monkeypatch.setattr(settings, "rag_overview_fallback", False)
     token = client_token("r2")
     headers = {"Authorization": f"Bearer {token}"}
     cid = client.post(
@@ -163,6 +166,7 @@ def test_근거가_없어_막힌_판정은_저장하지_않는다(client, client
     답을 못 만든 판정은 다음에 다시 묻는다."""
     llm = _Counting({"route": "DOCUMENT", "query": "급한 작업"})
     monkeypatch.setattr(ask_service, "llm_port", lambda: llm)
+    monkeypatch.setattr(settings, "rag_overview_fallback", False)  # 게이트 자체를 본다
     monkeypatch.setattr(settings, "rag_min_similarity", 0.99)  # 근거 게이트가 막는다
     token = client_token("r2")
     headers = {"Authorization": f"Bearer {token}"}
