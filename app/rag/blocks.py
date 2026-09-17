@@ -43,6 +43,18 @@ class Block:
         }
 
 
+def worth_drawing(data: WidgetDataResponse) -> bool:
+    """그림이 문장보다 더 말해 주는가.
+
+    값이 하나뿐인 집계("이슈 7건")는 문장이 그 숫자를 이미 말한다. 카드까지 붙이면 답이
+    괜히 무거워진다. 범주나 기간이 있어 값이 여럿이면 그림이 문장을 대신한다.
+    """
+    values = [r for r in data.rows if r.values.get("value") is not None]
+    if data.dimensions and len(values) >= 2:
+        return True
+    return len(values) >= 2
+
+
 def from_aggregate(slot: int, template: str, title: str, data: WidgetDataResponse,
                    lines: list[str]) -> Block:
     return Block(slot=slot, template=template, title=title, data=data, lines=lines)
