@@ -1,4 +1,6 @@
 import { type ReactNode } from 'react';
+import type { Components } from 'react-markdown';
+import { Markdown } from '@/components/ui/markdown';
 import { cn } from '@/lib/utils';
 import { resolveWidgetRenderer } from '@/features/widgets/renderer-registry';
 import { formatCell, rowValues } from '@/features/widgets/widget-data';
@@ -45,6 +47,48 @@ export function parseFootnotes(content: string): FootnoteSegment[] {
   return segments;
 }
 
+const FOOTNOTE_HREF = '#fn-';
+
+/**
+ * 본문 조각을 마크다운 한 덩어리로 되돌린다. 아는 각주는 링크로 바꿔 렌더러가 버튼으로 그린다.
+ * 답변은 문서에서 옮긴 글이라 강조·코드·목록 표기가 섞여 온다. 그대로 보이면 기호가 남는다.
+ */
+function toMarkdown(segments: FootnoteSegment[], known: Set<number>): string {
+  return segments
+    .map((seg) =>
+      seg.kind === 'footnote' && seg.footnoteNo !== null && known.has(seg.footnoteNo)
+        ? `[${seg.footnoteNo}](${FOOTNOTE_HREF}${seg.footnoteNo})`
+        : seg.value,
+    )
+    .join('');
+}
+
+/** 각주 링크만 버튼으로. 그 밖의 링크는 기본 렌더러가 새 창으로 연다. */
+function footnoteLinks(onFootnoteClick?: (footnoteNo: number) => void): Partial<Components> {
+  return {
+    a: ({ href, children }) => {
+      if (href?.startsWith(FOOTNOTE_HREF)) {
+        const no = Number(href.slice(FOOTNOTE_HREF.length));
+        return (
+          <button
+            type="button"
+            title={`[${no}] 근거 보기`}
+            className="text-primary hover:bg-accent focus-visible:bg-accent text-xs font-semibold tracking-wide mx-0.5 rounded-sm px-1 align-super font-mono transition-colors"
+            onClick={() => onFootnoteClick?.(no)}
+          >
+            {no}
+          </button>
+        );
+      }
+      return (
+        <a href={href} target="_blank" rel="noreferrer" className="text-primary hover:underline">
+          {children}
+        </a>
+      );
+    },
+  };
+}
+
 export function AnswerBody({
   content,
   sources,
@@ -86,25 +130,9 @@ export function AnswerBody({
       {parts.map((part, pi) => (
         <div key={pi}>
           {part.text.some((seg) => seg.value.trim() !== '') && (
-            <p className="text-foreground text-base leading-7 whitespace-pre-line">
-              {part.text.map((seg, i) => {
-                if (seg.kind === 'text' || seg.footnoteNo === null || !known.has(seg.footnoteNo)) {
-                  return <span key={i}>{seg.value}</span>;
-                }
-                const no = seg.footnoteNo;
-                return (
-                  <button
-                    key={i}
-                    type="button"
-                    title={`[${no}] 근거 보기`}
-                    className="text-primary hover:bg-accent focus-visible:bg-accent text-xs font-semibold tracking-wide mx-0.5 rounded-sm px-1 align-super font-mono transition-colors"
-                    onClick={() => onFootnoteClick?.(no)}
-                  >
-                    {no}
-                  </button>
-                );
-              })}
-            </p>
+            <Markdown components={footnoteLinks(onFootnoteClick)}>
+              {toMarkdown(part.text, known)}
+            </Markdown>
           )}
           {part.figure && <InfographicBlock infographic={part.figure} />}
         </div>

@@ -30,6 +30,26 @@ import type {
 
 const MAX_INPUT_HEIGHT = 176;
 
+/**
+ * 기다린 시간. 답은 끝나야 한 번에 보이므로(조각을 그리면 한 글자씩 찍혀 읽기 불편하다),
+ * 그동안 멈춘 게 아니라는 표시가 있어야 한다. 로컬 모델은 한 답에 1~2분이 든다.
+ */
+function useElapsedSeconds(running: boolean): number {
+  const [seconds, setSeconds] = useState(0);
+  const [wasRunning, setWasRunning] = useState(running);
+  // 시작할 때 0 으로. 렌더 중에 파생 상태를 맞추는 것은 React 가 허용하는 길이다.
+  if (running !== wasRunning) {
+    setWasRunning(running);
+    setSeconds(0);
+  }
+  useEffect(() => {
+    if (!running) return;
+    const timer = window.setInterval(() => setSeconds((n) => n + 1), 1000);
+    return () => window.clearInterval(timer);
+  }, [running]);
+  return running ? seconds : 0;
+}
+
 /** 답변을 기다리는 동안의 점 세 개. */
 function TypingDots({ label }: { label: string }): ReactNode {
   return (
@@ -217,6 +237,7 @@ export function AskPage(): ReactNode {
   };
 
   const streaming = stream.phase === 'streaming';
+  const elapsed = useElapsedSeconds(streaming);
   const list = messages.data ?? [];
   const answering = streaming || Boolean(stream.draftText);
   // 서버 목록에 같은 질문이 들어오는 순간 건 말풍선은 사라진다 — 두 개가 겹치지 않는다.
@@ -405,7 +426,7 @@ export function AskPage(): ReactNode {
 
           {answering && (
             <div className="min-w-0">
-              {stream.draftText ? (
+              {stream.draftText && stream.phase !== 'streaming' ? (
                 <>
                   <AnswerBody
                     content={stream.draftText}
@@ -425,7 +446,13 @@ export function AskPage(): ReactNode {
                   )}
                 </>
               ) : (
-                <TypingDots label="산출물에서 근거를 찾는 중…" />
+                <TypingDots
+                  label={
+                    stream.draftText
+                      ? `답변을 만드는 중… ${elapsed}초`
+                      : `산출물에서 근거를 찾는 중… ${elapsed}초`
+                  }
+                />
               )}
             </div>
           )}
