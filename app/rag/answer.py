@@ -215,6 +215,13 @@ def empty_listing(label: str) -> str:
     )
 
 
+def off_topic() -> str:
+    return (
+        "이 도우미는 사업의 진척·이슈·요구사항·산출물·리스크와 관련 문서에 대해서만 답합니다. "
+        "사업과 관련된 질문으로 바꿔 보십시오."
+    )
+
+
 def insufficient_evidence(max_similarity: float, candidate_count: int) -> str:
     if candidate_count == 0:
         return (

@@ -27,6 +27,7 @@ def issues():
         ("GH-8801", "열린 이슈 가", "OPEN", "MAJOR"),
         ("GH-8802", "열린 이슈 나", "IN_PROGRESS", "MINOR"),
         ("GH-8803", "닫힌 이슈 다", "CLOSED", "MINOR"),
+        ("GH-8804", "열린 이슈 라", "OPEN", "BLOCKER"),
     ]
     with tx() as cur:
         for key, title, status, severity in rows:
@@ -38,9 +39,11 @@ def issues():
                 """,
                 (PID, key, title, status, severity),
             )
-    yield {"open": 2, "closed": 1}
+    yield {"open": 3, "closed": 1}
     with tx() as cur:
-        cur.execute("delete from issue where issue_key in ('GH-8801','GH-8802','GH-8803')")
+        cur.execute(
+            "delete from issue where issue_key in ('GH-8801','GH-8802','GH-8803','GH-8804')"
+        )
 
 
 # ---------------------------------------------------------------- 표 만들기
@@ -54,9 +57,12 @@ def test_처리_중_이슈만_고르면_닫힌_것은_안_들어온다(issues):
         closed_table = entity_table.build(cur, "ISSUE", entity_table.CLOSED, [PID], 50)
 
     assert open_table is not None and all_table is not None
-    titles = {r.values["title"] for r in open_table.data.rows}
-    assert {"열린 이슈 가", "열린 이슈 나"} <= titles
+    titles = [r.values["title"] for r in open_table.data.rows]
+    assert {"열린 이슈 가", "열린 이슈 나", "열린 이슈 라"} <= set(titles)
     assert "닫힌 이슈 다" not in titles
+    # 급한 것이 위로. "가장 급한 작업" 이 이 순서를 그대로 읽는다
+    order = [titles.index(t) for t in ("열린 이슈 라", "열린 이슈 가", "열린 이슈 나")]
+    assert order == sorted(order)
     statuses = {r.values["status"] for r in open_table.data.rows}
     assert not (statuses & {"RESOLVED", "CLOSED"})
     closed_total = closed_table.total if closed_table else 0
@@ -267,8 +273,8 @@ def test_본문이_표식을_빠뜨리면_끝에_붙는다(client, conversation,
 @requires_db
 def test_집계와_목록을_같이_물으면_그림이_둘이다(client, conversation, monkeypatch, issues):
     scripted = _Scripted(
-        {"route": "AGGREGATE", "measure": "issue_count", "dimensions": [],
-         "template": "STAT_CARD", "title": "이슈 건수", "list": "ISSUE", "listFilter": "ALL"},
+        {"route": "AGGREGATE", "measure": "issue_count", "dimensions": ["issue_status"],
+         "template": "BAR_CHART", "title": "상태별 이슈", "list": "ISSUE", "listFilter": "ALL"},
         "요약입니다. [그림 1] 목록은 [그림 2] 입니다.",
     )
     monkeypatch.setattr(ask_service, "llm_port", lambda: scripted)
@@ -278,4 +284,24 @@ def test_집계와_목록을_같이_물으면_그림이_둘이다(client, conver
     events = _ask(client, token, conversation_id, "이슈 몇 건이고 목록도 줘")
     made = [d for e, d in events if e == "infographic"]
     assert [b["slot"] for b in made] == [1, 2]
-    assert [b["template"] for b in made] == ["STAT_CARD", "DATA_TABLE"]
+    assert [b["template"] for b in made] == ["BAR_CHART", "DATA_TABLE"]
+
+
+def test_값이_하나뿐인_집계는_그림을_안_그린다():
+    from app.semantic.models import WidgetColumn, WidgetDataResponse, WidgetRow
+
+    def data(rows, dims):
+        return WidgetDataResponse(
+            measure="m", measureLabel="지표", unit="건", dimensions=dims,
+            columns=[WidgetColumn(key="value", label="값", type="number")],
+            rows=[WidgetRow(values=v) for v in rows], total=None, previousTotal=None,
+            target=None, appliedProjectIds=[], truncated=False, generatedAt="",
+        )
+
+    assert blocks.worth_drawing(data([{"value": 7}], [])) is False
+    assert blocks.worth_drawing(data([], [])) is False
+    assert blocks.worth_drawing(data([{"d0": "OPEN", "value": 5}], ["issue_status"])) is False
+    two = data([{"d0": "OPEN", "value": 5}, {"d0": "CLOSED", "value": 2}], ["issue_status"])
+    assert blocks.worth_drawing(two) is True
+    trend = data([{"d0": "2026-08", "value": 3}, {"d0": "2026-09", "value": 4}], ["period_month"])
+    assert blocks.worth_drawing(trend) is True

@@ -54,7 +54,12 @@ ENTITIES: dict[str, EntitySpec] = {
                 "to_char(coalesce(e.source_updated_at, e.updated_at), 'YYYY-MM-DD')",
             ),
         ),
-        order_by="coalesce(e.source_updated_at, e.updated_at) desc nulls last",
+        # 급한 것이 위로. 심각도 순, 같으면 최근에 움직인 것. "가장 급한 작업" 이 이 순서를 읽는다
+        order_by=(
+            "case e.severity when 'BLOCKER' then 0 when 'CRITICAL' then 1 when 'MAJOR' then 2 "
+            "when 'MINOR' then 3 when 'TRIVIAL' then 4 else 5 end, "
+            "coalesce(e.source_updated_at, e.updated_at) desc nulls last"
+        ),
         open_clause="e.status not in ('RESOLVED', 'CLOSED')",
         closed_clause="e.status in ('RESOLVED', 'CLOSED')",
         url_expr="e.external_url",

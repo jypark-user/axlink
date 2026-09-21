@@ -403,6 +403,8 @@ def test_목록_상태_조건은_아는_값만_남긴다():
 def test_라우팅_프롬프트는_목록_종류를_알려준다():
     prompt = routing.system_prompt(_catalog())
     assert '"list"' in prompt
+    # 무엇부터 할지 묻는 질문은 열린 이슈의 목록이다. 문서 검색으로 보내면 근거가 없어 막힌다
+    assert "가장 급한 작업" in prompt and "listFilter OPEN" in prompt
     for key, label in routing.LISTABLE.items():
         assert f"{key}({label})" in prompt
 

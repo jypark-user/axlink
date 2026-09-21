@@ -17,6 +17,8 @@ from app.semantic.catalog import Catalog, MeasureDef
 DOCUMENT = "DOCUMENT"
 AGGREGATE = "AGGREGATE"
 MIXED = "MIXED"
+OVERVIEW = "OVERVIEW"  # 사업 현황 요약. 문서를 가리키지 않는 일반 질문 (ARC-015)
+OFF_TOPIC = "OFF_TOPIC"  # 사업과 무관한 질문. 현황으로도 내려가지 않고 그렇다고 답한다
 
 # 목록으로 물을 수 있는 색인 종류. 모델이 이 밖의 값을 주면 보통 문서 검색으로 간다.
 LISTABLE: dict[str, str] = {
@@ -69,7 +71,13 @@ def from_choice(catalog: Catalog, choice: dict[str, Any] | None) -> RouteDecisio
     route = str(choice.get("route") or "").strip().upper()
     measure_key = choice.get("measure")
     measure = catalog.measure(str(measure_key)) if measure_key else None
-    if route != AGGREGATE or measure is None:
+    if route == OFF_TOPIC and measure is None and listing is None:
+        return RouteDecision(type=OFF_TOPIC, rewritten=rewritten)
+    if route == OVERVIEW and measure is None:
+        return RouteDecision(
+            type=OVERVIEW, rewritten=rewritten, listing=listing, listing_status=listing_status
+        )
+    if route not in (AGGREGATE, OVERVIEW) or measure is None:
         # 집계로 못 셀 질문이어도 목록은 낼 수 있다. 둘은 따로 판정한다.
         return RouteDecision(
             type=DOCUMENT, rewritten=rewritten, listing=listing, listing_status=listing_status
@@ -103,17 +111,26 @@ def system_prompt(catalog: Catalog) -> str:
     return (
         "당신은 사업 관리 질의를 분류하는 도우미다. 수치를 만들지 않고 답도 쓰지 않는다. "
         "질문이 아래 카탈로그의 지표로 셀 수 있는 것(진척률·건수·비율·추이)이면 AGGREGATE, "
-        "문서·이슈·회의록의 내용을 묻는 것이면 DOCUMENT 로 분류한다.\n"
+        "문서·이슈·회의록의 내용을 묻는 것이면 DOCUMENT, 사업이 전반적으로 어떤지를 묻는 "
+        '것("잘 되고 있어?", "문제 있어?", "현황 알려줘", "요약해 줘", "뭐가 걱정이야?")이면 '
+        "OVERVIEW 로 분류한다. 사업과 명백히 무관한 것(날씨, 일반 상식, 프로그래밍 문법, "
+        "잡담)만 OFF_TOPIC 이다. 사업의 목적·범위·인수 조건·연동 방식·이번 달 목표처럼 "
+        "사업에 대해 묻는 것은 무관이 아니라 DOCUMENT 다. 헷갈리면 DOCUMENT 로 둔다.\n"
         "출력은 JSON 객체 하나뿐이다. 설명을 붙이지 않는다.\n"
         '집계: {"route": "AGGREGATE", "measure": "<지표 key>", "dimensions": ["<차원 key>"], '
         '"template": "<템플릿>", "title": "<한국어 제목>", "query": "<검색용 핵심어>"}\n'
         '문서: {"route": "DOCUMENT", "query": "<검색용 핵심어>"}\n'
+        '현황: {"route": "OVERVIEW", "query": "<검색용 핵심어>"}\n'
+        '무관: {"route": "OFF_TOPIC"}\n'
         '목록: {"route": "DOCUMENT", "list": "<종류>", "listFilter": "<상태>", '
         '"query": "<검색용 핵심어>"}\n'
         "목록은 이슈·요구사항·리스크·산출물 같은 종류를 나열하거나 현황을 묻는 질문에 쓴다"
         '("이슈 목록", "요구사항 뭐가 있어", "등록된 리스크", "완료된 이슈는 뭐가 있어", '
         '"아직 작업이 안 된 이슈", "미제출 산출물 목록"). '
-        "상태 조건이 붙어도 나열을 묻는 것이면 목록이다. 종류는 "
+        "상태 조건이 붙어도 나열을 묻는 것이면 목록이다. "
+        '"가장 급한 작업", "먼저 처리할 것", "우선순위가 높은 이슈" 처럼 무엇부터 할지 묻는 '
+        "질문도 목록이다. 열린 이슈(list ISSUE, listFilter OPEN)를 심각도 순으로 받아 답한다. "
+        "종류는 "
         + ", ".join(f"{k}({v})" for k, v in LISTABLE.items())
         + " 중 하나다. 특정 항목의 내용을 묻는 질문에는 list 를 붙이지 않는다.\n"
         "listFilter 는 OPEN(아직 안 끝난 것), CLOSED(끝난 것), ALL(전부) 중 하나다. "

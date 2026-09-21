@@ -30,6 +30,15 @@ import type {
 
 const MAX_INPUT_HEIGHT = 176;
 
+interface PendingBubble {
+  text: string;
+  /** 새 대화라 아직 id 가 없으면 null. 만들어지면 채운다 */
+  conversationId: string | null;
+}
+
+/** 서버는 질문의 공백을 하나로 모아 저장한다. 같은 기준으로 견줘야 말풍선이 겹치지 않는다. */
+const squash = (text: string): string => text.trim().split(/\s+/).join(' ');
+
 /**
  * 기다린 시간. 답은 끝나야 한 번에 보이므로(조각을 그리면 한 글자씩 찍혀 읽기 불편하다),
  * 그동안 멈춘 게 아니라는 표시가 있어야 한다. 로컬 모델은 한 답에 1~2분이 든다.
@@ -134,7 +143,10 @@ export function AskPage(): ReactNode {
   const [dock, setDock] = useState<HTMLElement | null>(null);
   const [backdrop, setBackdrop] = useState<HTMLElement | null>(null);
   /** 보냈지만 아직 서버 목록에 없는 질문. 서버 것이 도착하면 자리를 내준다. */
-  const [pending, setPending] = useState<string | null>(null);
+  /** 보냈지만 아직 서버 목록에 없는 질문들. 서버 것이 도착하면 자리를 내준다. */
+  const [pending, setPending] = useState<PendingBubble[]>([]);
+  /** 이전 답이 아직 만들어지는 중에 보낸 질문. 답이 끝나면 바로 보낸다. */
+  const queuedRef = useRef<string | null>(null);
 
   useEffect(() => {
     setDock(document.getElementById(RESOURCE_DOCK_ID));
@@ -181,7 +193,7 @@ export function AskPage(): ReactNode {
   useEffect(() => {
     if (conversationId) return;
     setQuestion('');
-    setPending(null);
+    setPending([]);
     setActiveFootnote(null);
     setPanel(null);
     setPanelSources([]);
@@ -204,13 +216,22 @@ export function AskPage(): ReactNode {
     if (el) el.scrollTop = el.scrollHeight;
   }, [messages.data, stream.draftText, pending]);
 
-  const send = async (text: string) => {
+  const send = async (text: string, resend = false) => {
     const body = text.trim();
-    if (!body || stream.phase === 'streaming') return;
+    if (!body) return;
     const scope = mentions.scope.length > 0 ? mentions.scope : projectScope;
     setQuestion('');
     // 서버를 기다리지 않고 먼저 건다 — 대화방을 새로 여는 왕복이 앞에 있어 그냥 두면 한참 비어 있다.
-    setPending(body);
+    // 기다리다 다시 보내는 것이면 말풍선은 이미 걸려 있다.
+    if (!resend) {
+      setPending((prev) => [...prev, { text: body, conversationId: conversationId ?? null }]);
+    }
+    if (stream.phase === 'streaming') {
+      // 이전 답이 아직 만들어지는 중이다. 말풍선은 지금 걸고, 보내는 것은 답이 끝난 뒤에.
+      // 전에는 여기서 조용히 버려서 "칠 때마다 되다 안 되다" 로 보였다.
+      queuedRef.current = body;
+      return;
+    }
     try {
       let target = conversationId;
       if (!target) {
@@ -219,13 +240,19 @@ export function AskPage(): ReactNode {
           projectScope: scope,
         });
         target = created.id;
+        // 말풍선을 새 대화에 묶는다. 다른 대화로 넘어가면 그쪽엔 안 보인다
+        setPending((prev) =>
+          prev.map((b) =>
+            b.text === body && b.conversationId === null ? { ...b, conversationId: created.id } : b,
+          ),
+        );
         conversations.reload();
         void navigate(`${basePath}/${created.id}`, { replace: true });
       }
       await stream.ask(target, { question: body, projectScope: scope });
     } catch (e) {
       // 못 보냈으면 건 말풍선을 걷고 쓰던 글을 돌려준다.
-      setPending(null);
+      setPending((prev) => prev.filter((b) => b.text !== body));
       setQuestion(body);
       toast({
         title: '질문을 보내지 못했습니다.',
@@ -234,6 +261,15 @@ export function AskPage(): ReactNode {
       });
     }
   };
+
+  useEffect(() => {
+    if (stream.phase === 'streaming') return;
+    const next = queuedRef.current;
+    if (next === null) return;
+    queuedRef.current = null;
+    void send(next, true);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [stream.phase]);
 
   const openEvidence = (sources: MessageSourceResponse[]) => (footnoteNo: number) => {
     setPanelSources(sources);
@@ -250,13 +286,18 @@ export function AskPage(): ReactNode {
     }
   };
 
-  const streaming = stream.phase === 'streaming';
+  // 스트림은 한 대화의 것이다. 답을 기다리는 동안 다른 대화를 열면 거기엔 그리지 않는다.
+  const streamHere = stream.conversationId !== null && stream.conversationId === conversationId;
+  const streaming = stream.phase === 'streaming' && streamHere;
   const elapsed = useElapsedSeconds(streaming);
   const list = messages.data ?? [];
-  const answering = streaming || Boolean(stream.draftText);
+  const answering = streamHere && (stream.phase === 'streaming' || Boolean(stream.draftText));
   // 서버 목록에 같은 질문이 들어오는 순간 건 말풍선은 사라진다 — 두 개가 겹치지 않는다.
-  const pendingShown =
-    pending !== null && !list.some((m) => m.role === 'USER' && m.content === pending);
+  const served = new Set(list.filter((m) => m.role === 'USER').map((m) => squash(m.content)));
+  const pendingHere = pending.filter(
+    (b) => (b.conversationId ?? null) === (conversationId ?? null) && !served.has(squash(b.text)),
+  );
+  const pendingShown = pendingHere.length > 0;
   const isEmpty = list.length === 0 && !answering && !pendingShown;
 
   const composer = (
@@ -369,7 +410,7 @@ export function AskPage(): ReactNode {
           <PromptChips
             prompts={suggestions.data?.questions ?? []}
             onSelect={send}
-            disabled={streaming}
+            disabled={stream.phase === 'streaming'}
           />
         </div>
       </div>
@@ -390,6 +431,14 @@ export function AskPage(): ReactNode {
                 {m.routing && (
                   <p className="text-muted-foreground text-xs font-semibold tracking-wide mb-2">
                     {m.routing.type}
+                    {m.routing.routeCached && (
+                      <span
+                        className="ml-2 font-normal"
+                        title="같은 질문의 판정을 다시 묻지 않았습니다. 값은 새로 뽑았습니다"
+                      >
+                        · 판정 캐시
+                      </span>
+                    )}
                   </p>
                 )}
                 <AnswerBody
@@ -431,13 +480,13 @@ export function AskPage(): ReactNode {
             ),
           )}
 
-          {pendingShown && (
-            <div className="flex justify-end">
+          {pendingHere.map((b, i) => (
+            <div key={`${b.text}-${i}`} className="flex justify-end">
               <p className="bg-accent text-foreground text-base leading-7 max-w-[85%] rounded-lg px-4 py-3 whitespace-pre-line">
-                {pending}
+                {b.text}
               </p>
             </div>
-          )}
+          ))}
 
           {answering && (
             <div className="min-w-0">

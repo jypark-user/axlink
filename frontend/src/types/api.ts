@@ -80,7 +80,7 @@ export type ChunkSourceType =
   | 'DOCUMENT_UPLOAD';
 export type MessageRole = 'USER' | 'ASSISTANT';
 export type MessageFeedback = 'UP' | 'DOWN';
-export type RouteType = 'DOCUMENT' | 'AGGREGATE' | 'MIXED';
+export type RouteType = 'DOCUMENT' | 'AGGREGATE' | 'MIXED' | 'OVERVIEW';
 export type WidgetTemplate =
   | 'STAT_CARD'
   | 'BAR_CHART'
@@ -993,6 +993,8 @@ export interface QueryRouting {
   listing?: string | null;
   /** 목록의 상태 조건. OPEN(처리 중) · CLOSED(완료) · ALL */
   listingStatus?: string | null;
+  /** 판정을 라우팅 캐시에서 가져왔는가. 값은 그래도 매번 새로 뽑는다 */
+  routeCached?: boolean;
 }
 
 /**
