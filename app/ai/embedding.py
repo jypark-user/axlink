@@ -60,7 +60,7 @@ class OllamaEmbedding:
                 break
             time.sleep(_RETRY_DELAYS[attempt])
 
-        detail = f"Ollama 오류 {last.status_code}" if last is not None else "Ollama 오류"
+        detail = f"LLM 서버 오류 {last.status_code}" if last is not None else "LLM 서버 오류"
         raise errors.ApiError(503, "AI_UNAVAILABLE", detail)
 
     def _vectors(self, body: dict, expected: int) -> list[list[float]]:

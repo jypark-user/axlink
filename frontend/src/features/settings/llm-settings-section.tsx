@@ -98,7 +98,7 @@ function LlmSettingsForm({
       if (res.error) {
         setListStatus(res.error);
       } else if (res.models.length === 0) {
-        setListStatus('설치된 모델이 없습니다. ollama pull 로 먼저 받아 두세요.');
+        setListStatus('서버에 올라온 모델이 없습니다. 서버에 모델을 먼저 올려 두세요.');
       } else {
         setListStatus(`모델 ${res.models.length}개를 받아왔습니다.`);
       }
@@ -215,7 +215,7 @@ function LlmSettingsForm({
       )}
 
       <div className={FIELD}>
-        <Label htmlFor="llm-base-url">Ollama 서버 주소</Label>
+        <Label htmlFor="llm-base-url">LLM 서버 주소</Label>
         <div className="flex gap-2">
           <Input
             id="llm-base-url"
@@ -237,7 +237,7 @@ function LlmSettingsForm({
           {listStatus ??
             (models.length > 0
               ? `저장된 목록 ${models.length}개 · ${models[0] ? formatDateTime(models[0].fetchedAt) : ''} 기준`
-              : '주소를 입력하면 설치된 모델 목록을 받아옵니다.')}
+              : '온프레미스 LLM 서버 주소입니다. 입력하면 그 서버에 올라온 모델 목록을 받아옵니다.')}
         </p>
       </div>
 
@@ -294,7 +294,7 @@ function LlmSettingsForm({
           {selected && selected.contextLength > 0
             ? `이 모델의 최대치는 ${selected.contextLength.toLocaleString('ko-KR')} 토큰이고 그 값을 그대로 채웠습니다. 긴 문서와 코드를 한 번에 담아야 앞부분이 조용히 잘리지 않습니다. `
             : '서버가 최대치를 알려주지 않아 비워 두었습니다. 비우면 모델 기본값을 씁니다. '}
-          Ollama 는 이 길이만큼 KV 캐시를 미리 잡습니다. 메모리가 부족해 모델 적재가 실패하면 값을
+          서버는 이 길이만큼 KV 캐시를 미리 잡습니다. 메모리가 부족해 모델 적재가 실패하면 값을
           낮추세요.
         </p>
       </div>

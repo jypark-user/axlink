@@ -42,13 +42,13 @@ def list_models(base_url: str) -> list[DiscoveredModel]:
         with httpx.Client(timeout=_TAGS_TIMEOUT) as client:
             res = client.get(url)
     except httpx.RequestError as exc:
-        raise errors.ApiError(503, "AI_UNAVAILABLE", f"Ollama 에 닿지 못했습니다: {exc}") from exc
+        raise errors.ApiError(503, "AI_UNAVAILABLE", f"LLM 서버에 닿지 못했습니다: {exc}") from exc
     if res.status_code >= 400:
-        raise errors.ApiError(503, "AI_UNAVAILABLE", f"Ollama 오류 {res.status_code}")
+        raise errors.ApiError(503, "AI_UNAVAILABLE", f"LLM 서버 오류 {res.status_code}")
     try:
         body = res.json()
     except ValueError as exc:
-        raise errors.ApiError(503, "AI_UNAVAILABLE", "Ollama 응답을 읽지 못했습니다.") from exc
+        raise errors.ApiError(503, "AI_UNAVAILABLE", "LLM 서버 응답을 읽지 못했습니다.") from exc
     return [parse_tag(item) for item in body.get("models") or [] if item.get("name")]
 
 
@@ -83,7 +83,7 @@ def measure_rate(base_url: str, model: str) -> MeasuredRate:
         with httpx.Client(timeout=_MEASURE_TIMEOUT) as client:
             res = client.post(url, json=payload)
     except httpx.RequestError as exc:
-        raise errors.ApiError(503, "AI_UNAVAILABLE", f"Ollama 에 닿지 못했습니다: {exc}") from exc
+        raise errors.ApiError(503, "AI_UNAVAILABLE", f"LLM 서버에 닿지 못했습니다: {exc}") from exc
     if res.status_code >= 400:
         raise errors.ApiError(503, "AI_UNAVAILABLE", _ollama_error(res))
     return rate_from_generate(model, res.json())
@@ -93,7 +93,7 @@ def rate_from_generate(model: str, body: dict[str, Any]) -> MeasuredRate:
     eval_count = _int(body.get("eval_count"))
     duration_ns = _int(body.get("eval_duration"))
     if eval_count <= 0 or duration_ns <= 0:
-        raise errors.ApiError(503, "AI_UNAVAILABLE", "Ollama 가 생성 통계를 주지 않았습니다.")
+        raise errors.ApiError(503, "AI_UNAVAILABLE", "LLM 서버가 생성 통계를 주지 않았습니다.")
     seconds = duration_ns / 1e9
     return MeasuredRate(
         model=str(body.get("model") or model),
@@ -108,7 +108,7 @@ def _ollama_error(res: httpx.Response) -> str:
         detail = res.json().get("error")
     except ValueError:
         detail = None
-    return f"Ollama 오류 {res.status_code}" + (f": {detail}" if detail else "")
+    return f"LLM 서버 오류 {res.status_code}" + (f": {detail}" if detail else "")
 
 
 def _int(value: Any) -> int:
