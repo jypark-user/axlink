@@ -94,17 +94,40 @@ def _xlsx(path: Path) -> ExtractResult:
 
 
 def _pdf(path: Path) -> ExtractResult:
-    from pypdf import PdfReader
+    """쪽마다 본문과 표를 따로 뽑는다. 표는 괘선으로 찾고, 표 안 글자는 본문에서 뺀다.
 
-    reader = PdfReader(path)
-    pages, found = [], False
-    for i, page in enumerate(reader.pages, 1):
-        body = (page.extract_text() or "").strip()
-        found = found or bool(body)
-        pages.append(f"<!-- {i}쪽 -->\n{body}" if body else f"<!-- {i}쪽 --> 텍스트 없음")
+    본문에 표 셀까지 섞이면 같은 값이 두 번 색인되고 행·열 구조도 잃는다. 괘선 없는 표는
+    못 찾는다. 그건 본문으로 남는다.
+    """
+    import pdfplumber
+
+    pages, found, table_count = [], False, 0
+    with pdfplumber.open(path) as pdf:
+        page_count = len(pdf.pages)
+        for i, page in enumerate(pdf.pages, 1):
+            tables = page.find_tables()
+            prose = page
+            for table in tables:
+                prose = prose.outside_bbox(table.bbox)
+            body = (prose.extract_text() or "").strip()
+            chunks = [body] if body else []
+            for table in tables:
+                rows = [
+                    ["" if cell is None else " ".join(str(cell).split()) for cell in row]
+                    for row in table.extract()
+                ]
+                rows = [r for r in rows if any(r)]
+                if rows:
+                    chunks.append(markdown_table(rows))
+                    table_count += 1
+            found = found or bool(chunks)
+            if chunks:
+                pages.append(f"<!-- {i}쪽 -->\n" + "\n\n".join(chunks))
+            else:
+                pages.append(f"<!-- {i}쪽 --> 텍스트 없음")
     # 스캔본은 페이지는 있는데 글자가 하나도 안 나온다. OCR 은 범위 밖이라 판별만 한다.
     warning = "" if found else "텍스트가 추출되지 않았습니다 — 스캔 이미지 PDF 로 보입니다."
-    return ExtractResult("\n\n".join(pages), 0, page_count=len(reader.pages), warning=warning)
+    return ExtractResult("\n\n".join(pages), table_count, page_count=page_count, warning=warning)
 
 
 def markdown_table(rows: list[list[str]]) -> str:
