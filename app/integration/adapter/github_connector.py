@@ -26,6 +26,7 @@ ITEM_PATHS = {
     "issue": "/issues",
     "pull_request": "/pulls",
     "commit": "/commits",
+    "milestone": "/milestones",
 }
 
 
@@ -112,6 +113,8 @@ def fetch_items(
 
     증분(since)은 종류마다 수단이 다르다 — 이슈·커밋은 API 의 since 필터,
     PR 목록에는 그런 필터가 없어 갱신 내림차순으로 받다가 경계에서 끊는다.
+    마일스톤은 갱신 필터도 정렬도 없고 저장소당 몇 개뿐이라 매번 전부 받는다. 원본이
+    같으면 적재 단계가 걸러 낸다.
     """
     headers = _headers(token)
     base = _repo_url(base_url, target_resource) + ITEM_PATHS[kind]
@@ -119,7 +122,9 @@ def fetch_items(
     stop_before: str | None = None
     if kind in ("issue", "pull_request"):
         params.update(state="all", sort="updated", direction="asc")
-    if since is not None:
+    elif kind == "milestone":
+        params.update(state="all")  # 닫힌 마일스톤이 달성 기록이다(SWFR.PIP.007)
+    if since is not None and kind != "milestone":
         if kind in ("issue", "commit"):
             params["since"] = _iso_z(since)
         else:  # pull_request
