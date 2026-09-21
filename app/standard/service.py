@@ -35,7 +35,7 @@ from app.standard.models import (
 class PromoteResult:
     upserted: int = 0
     unmapped: int = 0
-    raw_only: int = 0    # 원본 보존이 목적인 종류(버전·트래커). 실패가 아니다
+    raw_only: int = 0    # 원본 보존이 목적인 종류(마일스톤·버전·트래커). 실패가 아니다
     indexed: int = 0
     unchanged: int = 0
     by_type: dict[str, int] = field(default_factory=dict)
@@ -76,6 +76,10 @@ def promote_connection(cur: Any, connection: dict[str, Any], port: EmbeddingPort
                     uri=rec["external_url"],
                 )
             )
+        elif kind == "milestone":
+            # 원본 보존이 목적이다. 일정 지표(SWFR.PIP.007)가 여기서 읽는다
+            result.raw_only += 1
+            continue
         elif kind == "file":
             product_type = settings.collect_file_map.get(payload.get("path", ""))
             rec = mapping.to_work_product(payload, product_type) if product_type else None

@@ -72,6 +72,31 @@ def test_깃허브_이슈는_since_커밋도_since_PR은_내림차순_경계(mon
     assert [item[0] for item in got] == ["pull_request:9"]  # 경계 이전 PR 은 나오지 않는다
 
 
+def test_깃허브_마일스톤은_상태_불문_전량이고_since_를_안_붙인다(monkeypatch):
+    """마일스톤에는 갱신 필터가 없다. 닫힌 것까지 받아야 달성 기록이 남는다(SWFR.PIP.007)."""
+    seen = {}
+
+    def handler(request):
+        seen.update(path=request.url.path, params=dict(request.url.params))
+        return httpx.Response(200, json=[
+            {"number": 3, "title": "M2 연계·수집 기반 확보", "state": "open",
+             "due_on": "2026-09-12T00:00:00Z"},
+            {"number": 1, "title": "M0 착수보고", "state": "closed",
+             "due_on": "2026-08-11T00:00:00Z", "closed_at": "2026-08-11T09:00:00Z"},
+        ])
+
+    _client_with(handler, monkeypatch, gh)
+    since = datetime(2026, 9, 9, 3, 0, 0, tzinfo=UTC)
+    got = list(
+        gh.fetch_items("https://api.github.com", "o/r", "t", "milestone", 50, 2, since=since)
+    )
+
+    assert seen["path"].endswith("/repos/o/r/milestones")
+    assert seen["params"]["state"] == "all" and "since" not in seen["params"]
+    assert [item[0] for item in got] == ["milestone:3", "milestone:1"]
+    assert got[1][1]["closed_at"] == "2026-08-11T09:00:00Z"  # 원본 그대로 보존된다
+
+
 # ── 수집 흐름 — 커서 승계와 3회 재현 (시험 DB)
 
 @requires_db
