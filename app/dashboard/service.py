@@ -38,6 +38,7 @@ from app.dashboard.models import (
 )
 from app.integration import repository as integration_repo
 from app.standard import repository as standard_repo
+from app.standard import wbs_repository
 
 # WBS 가 들어오는 산출물 항목. 저장소에 커밋된 계획 파일이 여기로 승격된다.
 PLAN_TYPE = "PROJECT_PLAN"
@@ -61,7 +62,7 @@ def compute(cur: Any, project_id: str, at: date) -> ProgressResponse:
     warnings: list[str] = []
 
     plan_row = standard_repo.current_work_product(cur, project_id, PLAN_TYPE)
-    wbs_progress, plan_warning = _read_plan(project_id, plan_row, at)
+    wbs_progress, plan_warning = _read_plan(cur, project_id, plan_row, at)
     if plan_warning:
         warnings.append(plan_warning)
     if wbs_progress is not None:
@@ -149,7 +150,7 @@ def wbs_schedule(
 def schedule(cur: Any, project_id: str, at: date) -> WbsScheduleResponse:
     warnings: list[str] = []
     plan_row = standard_repo.current_work_product(cur, project_id, PLAN_TYPE)
-    plan, plan_warning = _load_plan(project_id, plan_row)
+    plan, plan_warning = _load_plan(cur, project_id, plan_row)
     if plan_warning:
         warnings.append(plan_warning)
     if plan is not None:
@@ -199,19 +200,31 @@ def schedule(cur: Any, project_id: str, at: date) -> WbsScheduleResponse:
 
 
 def _load_plan(
-    project_id: str, plan_row: dict[str, Any] | None
+    cur: Any, project_id: str, plan_row: dict[str, Any] | None
 ) -> tuple[wbs.WbsPlan | None, str | None]:
+    """현행 계획서의 WBS. 행이 그 버전에서 왔으면 행을 읽고, 아니면 파일을 한 번 읽어 남긴다.
+
+    파일은 계획서 버전마다 한 번만 연다(ARC-016). 그 뒤로 진척·일정·확인 요청·항목 화면이
+    같은 행을 본다. 파일을 못 읽으면 예전 행이 있어도 쓰지 않는다. 틀린 버전의 값을 현행
+    이라고 보이는 것보다 "못 읽었다" 가 낫다.
+    """
     if plan_row is None:
         return None, None
+    plan_id = str(plan_row["id"])
+    if wbs_repository.loaded_version(cur, project_id) == plan_id:
+        return wbs_repository.load_plan(cur, project_id), None
+
     path = _plan_path(project_id, plan_row)
     if path is None:
         return None, "WBS 항목은 채워졌으나 보관된 원본을 찾지 못했다. 다시 수집이 필요하다"
     try:
-        return wbs.parse(path.read_bytes()), None
+        plan = wbs.parse(path.read_bytes())
     except wbs.WbsParseError as exc:
         return None, f"WBS 를 읽지 못했다 — {exc}"
     except OSError as exc:
         return None, f"WBS 원본을 열지 못했다 — {exc}"
+    wbs_repository.replace_plan(cur, project_id, plan_id, plan)
+    return plan, None
 
 
 def _level_of(wbs_id: str) -> int:
@@ -329,37 +342,19 @@ def _pct(ratio: float) -> int:
 
 
 def current_wbs_rows(cur: Any, project_id: str) -> list[wbs.WbsRow]:
-    """현행 WBS 의 행. 파일이 없거나 못 읽으면 빈 목록이다. 확인 요청이 항목을 고를 때 쓴다."""
+    """현행 WBS 의 말단 행. 없거나 못 읽으면 빈 목록이다. 확인 요청이 항목을 고를 때 쓴다."""
     plan_row = standard_repo.current_work_product(cur, project_id, PLAN_TYPE)
-    if plan_row is None:
-        return []
-    path = _plan_path(project_id, plan_row)
-    if path is None:
-        return []
-    try:
-        return wbs.parse(path.read_bytes()).rows
-    except (wbs.WbsParseError, OSError):
-        return []
+    plan, _ = _load_plan(cur, project_id, plan_row)
+    return [] if plan is None else plan.rows
 
 
 def _read_plan(
-    project_id: str, plan_row: dict[str, Any] | None, at: date | None = None
+    cur: Any, project_id: str, plan_row: dict[str, Any] | None, at: date | None = None
 ) -> tuple[wbs.WbsProgress | None, str | None]:
-    """수집해 둔 WBS 파일을 읽는다. 못 읽어도 나머지 두 갈래는 나와야 한다."""
-    if plan_row is None:
-        return None, None
-
-    path = _plan_path(project_id, plan_row)
-    if path is None:
-        return None, "WBS 항목은 채워졌으나 보관된 원본을 찾지 못했다. 다시 수집이 필요하다"
-
-    try:
-        plan = wbs.parse(path.read_bytes())
-    except wbs.WbsParseError as exc:
-        return None, f"WBS 를 읽지 못했다 — {exc}"
-    except OSError as exc:
-        return None, f"WBS 원본을 열지 못했다 — {exc}"
-
+    """현행 WBS 의 진척. 못 읽어도 나머지 두 갈래는 나와야 한다."""
+    plan, warning = _load_plan(cur, project_id, plan_row)
+    if plan is None:
+        return None, warning
     return wbs.progress(plan, at or date.today()), None
 
 
