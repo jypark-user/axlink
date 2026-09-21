@@ -138,7 +138,7 @@ class OllamaLlm:
                     break
                 time.sleep(_RETRY_DELAYS[attempt])
 
-        detail = f"Ollama 오류 {last.status_code}" if last is not None else "Ollama 오류"
+        detail = f"LLM 서버 오류 {last.status_code}" if last is not None else "LLM 서버 오류"
         raise errors.ApiError(503, "AI_UNAVAILABLE", detail)
 
     def stream(
@@ -160,7 +160,7 @@ class OllamaLlm:
                 client.stream("POST", self._url, json=payload) as res,
             ):
                 if res.status_code >= 400:
-                    raise errors.ApiError(503, "AI_UNAVAILABLE", f"Ollama 오류 {res.status_code}")
+                    raise errors.ApiError(503, "AI_UNAVAILABLE", f"LLM 서버 오류 {res.status_code}")
                 for line in res.iter_lines():
                     if not line.strip():
                         continue
