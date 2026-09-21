@@ -3,7 +3,9 @@ import { Link } from 'react-router-dom';
 import type { ColumnDef } from '@tanstack/react-table';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
+import { Markdown } from '@/components/ui/markdown';
 import { Progress } from '@/components/ui/progress';
+import { Sheet, SheetContent, SheetHeader, SheetTitle } from '@/components/ui/sheet';
 import { DataTable, SortableHeader } from '@/components/ui/data-table';
 import { DataState } from '@/components/common/data-state';
 import { PaginationBar } from '@/components/common/pagination-bar';
@@ -17,9 +19,12 @@ import { badgeVariantFor, label } from '@/lib/labels';
 import { toQueryString } from '@/lib/query';
 import { useAsync } from '@/lib/use-async';
 import { ALLOWED, rejectReason } from '@/features/documents/upload';
-import type { DocumentUploadResponse, PageResponse } from '@/types/api';
+import type { DocumentTextResponse, DocumentUploadResponse, PageResponse } from '@/types/api';
 
-const documentColumns = (projectId: string): ColumnDef<DocumentUploadResponse, unknown>[] => [
+const documentColumns = (
+  projectId: string,
+  onShowText: (doc: DocumentUploadResponse) => void,
+): ColumnDef<DocumentUploadResponse, unknown>[] => [
   {
     accessorKey: 'fileName',
     header: ({ column }) => <SortableHeader column={column}>파일명</SortableHeader>,
@@ -58,16 +63,64 @@ const documentColumns = (projectId: string): ColumnDef<DocumentUploadResponse, u
   {
     id: 'actions',
     header: '',
-    cell: ({ row }) =>
-      row.original.draftAvailable ? (
-        <div className="flex justify-end">
+    cell: ({ row }) => (
+      <div className="flex justify-end gap-2">
+        {/* 읽기가 끝난 문서만. 글자 수가 있으면 추출본이 있다는 뜻이다 */}
+        {row.original.extractedCharCount !== null && (
+          <Button size="sm" variant="ghost" onClick={() => onShowText(row.original)}>
+            추출 결과
+          </Button>
+        )}
+        {row.original.draftAvailable && (
           <Button asChild size="sm" variant="outline">
             <Link to={`/p/${projectId}/documents/${row.original.id}/draft`}>초안 확인</Link>
           </Button>
-        </div>
-      ) : null,
+        )}
+      </div>
+    ),
   },
 ];
+
+/** 문서에서 뽑은 글을 그대로 보여 준다. 표가 행·열로 남았는지 여기서 확인한다(SWFR.CON.007). */
+function TextSheet({
+  doc,
+  onClose,
+}: {
+  doc: DocumentUploadResponse | null;
+  onClose: () => void;
+}): ReactNode {
+  const docId = doc?.id ?? null;
+  const state = useAsync<DocumentTextResponse | null>(
+    () => (docId ? api.get<DocumentTextResponse>(`/documents/${docId}/text`) : Promise.resolve(null)),
+    [docId],
+  );
+  return (
+    <Sheet open={doc !== null} onOpenChange={(o) => !o && onClose()}>
+      <SheetContent className="flex w-full flex-col gap-4 overflow-y-auto sm:max-w-2xl">
+        {doc && (
+          <SheetHeader>
+            <SheetTitle className="text-base">{doc.fileName}</SheetTitle>
+            {state.data && (
+              <p className="text-muted-foreground text-sm tnum">
+                {state.data.charCount.toLocaleString('ko-KR')}자
+                {state.data.pageCount !== null && ` · ${state.data.pageCount}쪽`}
+              </p>
+            )}
+          </SheetHeader>
+        )}
+        <DataState state={state} onRetry={state.reload} empty={{ text: '추출된 글이 없습니다.' }}>
+          {(text) =>
+            text && text.text.trim() ? (
+              <Markdown className="text-sm leading-6">{text.text}</Markdown>
+            ) : (
+              <p className="text-muted-foreground text-sm">추출된 글이 없습니다.</p>
+            )
+          }
+        </DataState>
+      </SheetContent>
+    </Sheet>
+  );
+}
 
 // 추출까지가 지금의 종착점이다. 정형화(STRUCTURED)가 붙기 전까지 EXTRACTED 를
 // 진행 중으로 보면 목록이 2초마다 영원히 다시 부른다.
@@ -79,6 +132,7 @@ export function DocumentsPage(): ReactNode {
   const inputRef = useRef<HTMLInputElement>(null);
   const [page, setPage] = useState(0);
   const [progress, setProgress] = useState<number | null>(null);
+  const [shown, setShown] = useState<DocumentUploadResponse | null>(null);
 
   const state = useAsync<PageResponse<DocumentUploadResponse>>(
     () =>
@@ -159,7 +213,7 @@ export function DocumentsPage(): ReactNode {
         {(pageData) => (
           <>
             <DataTable<DocumentUploadResponse, unknown>
-              columns={documentColumns(project.id)}
+              columns={documentColumns(project.id, setShown)}
               data={pageData.content}
               paginated={false}
               emptyText="업로드된 문서가 없습니다."
@@ -168,6 +222,7 @@ export function DocumentsPage(): ReactNode {
           </>
         )}
       </DataState>
+      <TextSheet doc={shown} onClose={() => setShown(null)} />
     </>
   );
 }

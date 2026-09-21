@@ -1089,6 +1089,16 @@ export interface DocumentUploadResponse {
   error: string | null;
 }
 
+/** 추출 결과 원문. 파싱이 제대로 됐는지 사람이 눈으로 확인하는 용도다. */
+export interface DocumentTextResponse {
+  id: string;
+  fileName: string;
+  status: DocumentStatus;
+  charCount: number;
+  pageCount: number | null;
+  text: string;
+}
+
 export interface DraftRequirement {
   index: number;
   code: string | null;
