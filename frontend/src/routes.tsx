@@ -193,36 +193,38 @@ export function AppRoutes(): ReactNode {
             }
           />
 
+          {/* 용역사도 본다. 산출물 문서를 올리는 쪽이 용역사고, 올린 것이 WBS 산출물 판정과
+              22종 항목의 재료가 된다(ARC-016). 쓰기 권한은 서버가 사업 배정으로 가른다. */}
+          <Route
+            path="documents"
+            element={
+              <SuspenseShell>
+                <DocumentsPage />
+              </SuspenseShell>
+            }
+          />
+          <Route
+            path="documents/:documentId/draft"
+            element={
+              <SuspenseShell>
+                <StructuringDraftPage />
+              </SuspenseShell>
+            }
+          />
+          <Route
+            path="deliverables"
+            element={
+              <SuspenseShell>
+                <DeliverablesPage />
+              </SuspenseShell>
+            }
+          />
           <Route element={<RequireRole allow={EXCEPT_CONTRACTOR} />}>
             <Route
               path="dashboard"
               element={
                 <SuspenseShell>
                   <DashboardPage />
-                </SuspenseShell>
-              }
-            />
-            <Route
-              path="documents"
-              element={
-                <SuspenseShell>
-                  <DocumentsPage />
-                </SuspenseShell>
-              }
-            />
-            <Route
-              path="documents/:documentId/draft"
-              element={
-                <SuspenseShell>
-                  <StructuringDraftPage />
-                </SuspenseShell>
-              }
-            />
-            <Route
-              path="deliverables"
-              element={
-                <SuspenseShell>
-                  <DeliverablesPage />
                 </SuspenseShell>
               }
             />
