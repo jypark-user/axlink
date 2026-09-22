@@ -32,6 +32,7 @@ TIME_COLUMNS: dict[str, str] = {
     "correction_action": "e.created_at",
     "progress_record": "e.period_end",
     "progress_snapshot": "e.snapshot_date",
+    "wbs_item": "coalesce(e.end_on::timestamptz, e.updated_at)",
 }
 
 _TIME_COL = "<TIME_COL>"

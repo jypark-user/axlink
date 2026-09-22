@@ -68,6 +68,8 @@ export function SchedulePage(): ReactNode {
           // 말단 작업만 센다. 상위 항목은 하위의 합이라 따로 세면 두 번 센다.
           const leaves = tasks.filter((t) => t.level > 0 || tasks.length === 1);
           const late = leaves.filter((t) => scheduleStatusOf(t) === 'late').length;
+          const dl = data.deliverables ?? { submitted: 0, missing: 0, overdue: 0, none: 0 };
+          const expected = dl.submitted + dl.missing + dl.overdue;
 
           if (data.source === 'NONE') {
             return (
@@ -89,14 +91,28 @@ export function SchedulePage(): ReactNode {
             <Window
               title="작업 일정"
               hint={
-                late > 0 ? (
-                  <>
-                    작업 {leaves.length}개 · 계획보다 늦은 작업{' '}
-                    <span className="tnum text-destructive font-medium">{late}</span>개
-                  </>
-                ) : (
-                  `작업 ${leaves.length}개 · 모두 계획대로 진행 중입니다`
-                )
+                <>
+                  작업 {leaves.length}개
+                  {late > 0 ? (
+                    <>
+                      {' '}· 계획보다 늦은 작업{' '}
+                      <span className="tnum text-destructive font-medium">{late}</span>개
+                    </>
+                  ) : (
+                    ' · 모두 계획대로 진행 중'
+                  )}
+                  {expected > 0 && (
+                    <>
+                      {' '}· 산출물 <span className="tnum">{dl.submitted}</span>/{expected}개 제출
+                      {dl.overdue > 0 && (
+                        <>
+                          , 지연{' '}
+                          <span className="tnum text-destructive font-medium">{dl.overdue}</span>개
+                        </>
+                      )}
+                    </>
+                  )}
+                </>
               }
               className="pt-0"
               action={<ScheduleLegend />}

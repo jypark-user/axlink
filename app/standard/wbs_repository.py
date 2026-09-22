@@ -127,13 +127,58 @@ def load_plan(cur: Any, project_id: str) -> wbs.WbsPlan | None:
     return wbs.WbsPlan(rows=leaves, weight_total=total, warnings=warnings, groups=groups)
 
 
+def save_judgements(cur: Any, project_id: str, judgements: list) -> None:
+    """판정 결과를 행에 남긴다. 시맨틱 레이어와 질의가 SQL 로 센다."""
+    cur.executemany(
+        """
+        update wbs_item
+           set deliverable_status = %s, deliverable_rule = %s, deliverable_ref = %s,
+               deliverable_url = %s, judged_at = now()
+         where project_id = %s and wbs_id = %s
+           and (deliverable_status is distinct from %s or deliverable_rule is distinct from %s
+                or deliverable_ref is distinct from %s or deliverable_url is distinct from %s)
+        """,
+        [
+            (j.status, j.rule, j.ref, j.url, project_id, j.wbs_id, j.status, j.rule, j.ref, j.url)
+            for j in judgements
+        ],
+    )
+
+
+def project_documents(cur: Any, project_id: str) -> list[dict[str, Any]]:
+    """올린 문서 이름. 파일 이름 규칙의 재료다. 실패·반려된 문서는 뺀다."""
+    return fetch_all(
+        cur,
+        """
+        select id, original_filename
+          from document_upload
+         where project_id = %s and status not in ('FAILED', 'REJECTED')
+        """,
+        (project_id,),
+    )
+
+
+def current_products(cur: Any, project_id: str) -> list[dict[str, Any]]:
+    """현행 산출물 항목. 경로·제목·유형 규칙의 재료다."""
+    return fetch_all(
+        cur,
+        """
+        select id, type, title, status, file_uri, external_url
+          from work_product
+         where project_id = %s and is_current
+        """,
+        (project_id,),
+    )
+
+
 def list_items(cur: Any, project_id: str) -> list[dict[str, Any]]:
     """항목 화면·질의용 원본 행. 활성만."""
     return fetch_all(
         cur,
         """
         select id, wbs_id, parent_wbs_id, name, deliverable, start_on, end_on, weight,
-               declared_planned, actual, line_no, work_product_id
+               declared_planned, actual, line_no, work_product_id,
+               deliverable_status, deliverable_rule, deliverable_ref, deliverable_url
           from wbs_item
          where project_id = %s and active
          order by line_no, wbs_id

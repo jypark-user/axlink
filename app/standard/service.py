@@ -76,8 +76,8 @@ def promote_connection(cur: Any, connection: dict[str, Any], port: EmbeddingPort
                     uri=rec["external_url"],
                 )
             )
-        elif kind == "milestone":
-            # 원본 보존이 목적이다. 일정 지표(SWFR.PIP.007)가 여기서 읽는다
+        elif kind in ("milestone", "tree"):
+            # 원본 보존이 목적이다. 일정 지표(SWFR.PIP.007)와 산출물 판정(ARC-016)이 여기서 읽는다
             result.raw_only += 1
             continue
         elif kind == "file":

@@ -24,13 +24,14 @@ from app.auth import repository as auth_repo
 from app.auth.deps import AuthPrincipal
 from app.common import errors
 from app.config import settings
-from app.dashboard import repository, wbs
+from app.dashboard import deliverable, repository, wbs
 from app.dashboard.models import (
     OBSERVED,
     SELF_REPORTED,
     WBS_SOURCE_FILE,
     WBS_SOURCE_NONE,
     WBS_SOURCE_REDMINE,
+    DeliverableSummary,
     ProgressMeasure,
     ProgressResponse,
     WbsItemResponse,
@@ -155,6 +156,8 @@ def schedule(cur: Any, project_id: str, at: date) -> WbsScheduleResponse:
         warnings.append(plan_warning)
     if plan is not None:
         assert plan_row is not None
+        judged = refresh_deliverables(cur, project_id, at)
+        counts = deliverable.summarize(list(judged.values()))
         return WbsScheduleResponse(
             source=WBS_SOURCE_FILE,
             sourceLabel=f"용역사 WBS ({plan_row.get('file_uri') or '사업수행계획서'})",
@@ -162,9 +165,15 @@ def schedule(cur: Any, project_id: str, at: date) -> WbsScheduleResponse:
             baseDate=at.isoformat(),
             planVersion=plan_row["version"],
             planUpdatedAt=plan_row["updated_at"].isoformat(),
-            items=_items_from_plan(plan, at),
+            items=_items_from_plan(plan, at, judged),
             warnings=[*warnings, *plan.warnings],
             notice=None,
+            deliverables=DeliverableSummary(
+                submitted=counts[deliverable.SUBMITTED],
+                missing=counts[deliverable.MISSING],
+                overdue=counts[deliverable.OVERDUE],
+                none=counts[deliverable.NONE],
+            ),
         )
 
     issues = integration_repo.redmine_issue_payloads(cur, project_id)
@@ -240,9 +249,42 @@ def _sort_key(wbs_id: str) -> tuple:
     return tuple(out)
 
 
-def _items_from_plan(plan: wbs.WbsPlan, at: date) -> list[WbsItemResponse]:
+def refresh_deliverables(
+    cur: Any, project_id: str, at: date
+) -> dict[str, deliverable.Judgement]:
+    """말단 항목의 산출물을 지금 있는 파일·문서·산출물과 대조해 행에 남긴다(ARC-016 2단계).
+
+    조회 때마다 다시 한다. 재료(저장소 트리·문서·산출물)가 바뀌면 판정도 바뀌어야 하고,
+    36개 항목을 집합으로 맞추는 일이라 비싸지 않다.
+    """
+    items = wbs_repository.list_items(cur, project_id)
+    raw_tree = integration_repo.github_repo_tree(cur, project_id)
+    tree = None
+    if raw_tree and raw_tree.get("paths"):
+        tree = deliverable.RepoTree(
+            sha=str(raw_tree.get("sha") or ""),
+            paths=frozenset(raw_tree["paths"]),
+            blob_url_base=raw_tree.get("html_url"),
+        )
+    judgements = deliverable.judge(
+        items,
+        tree=tree,
+        products=wbs_repository.current_products(cur, project_id),
+        documents=wbs_repository.project_documents(cur, project_id),
+        today=at,
+    )
+    wbs_repository.save_judgements(cur, project_id, judgements)
+    # 묶음은 저장만 하고 돌려주지 않는다. 요약이 말단만 세야 "산출물 열 없음" 이 뜻을 가진다
+    leaves = {i["wbs_id"] for i in items if i.get("weight") is not None}
+    return {j.wbs_id: j for j in judgements if j.wbs_id in leaves}
+
+
+def _items_from_plan(
+    plan: wbs.WbsPlan, at: date, judged: dict[str, deliverable.Judgement] | None = None
+) -> list[WbsItemResponse]:
     """상위 항목은 하위 말단의 가중 평균으로 진척을 낸다. 말단은 파일의 실적 그대로다."""
     items: list[WbsItemResponse] = []
+    judged = judged or {}
     leaves = plan.rows
     for group in plan.groups:
         prefix = group.wbs_id.rstrip(".") + "."
@@ -268,6 +310,7 @@ def _items_from_plan(plan: wbs.WbsPlan, at: date) -> list[WbsItemResponse]:
             )
         )
     for row in leaves:
+        j = judged.get(row.wbs_id)
         items.append(
             WbsItemResponse(
                 wbsId=row.wbs_id,
@@ -281,6 +324,10 @@ def _items_from_plan(plan: wbs.WbsPlan, at: date) -> list[WbsItemResponse]:
                 progress=_pct(row.actual),
                 planned=_pct(row.planned_at(at)),
                 externalUrl=None,
+                deliverableStatus=j.status if j else deliverable.NONE,
+                deliverableRule=j.rule if j else None,
+                deliverableRef=j.ref if j else None,
+                deliverableUrl=j.url if j else None,
             )
         )
     items.sort(key=lambda i: _sort_key(i.wbsId))

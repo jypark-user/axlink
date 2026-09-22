@@ -1162,6 +1162,20 @@ export interface WbsItemResponse {
   /** 기준일의 계획 진척. 0~100 */
   planned: number;
   externalUrl: string | null;
+  /** 산출물 판정(ARC-016). 묶음·산출물 열 없음은 NONE */
+  deliverableStatus?: DeliverableStatus;
+  deliverableRule?: 'REPO_PATH' | 'FILE_NAME' | 'PRODUCT_TYPE' | null;
+  deliverableRef?: string | null;
+  deliverableUrl?: string | null;
+}
+
+export type DeliverableStatus = 'NONE' | 'SUBMITTED' | 'MISSING' | 'OVERDUE';
+
+export interface DeliverableSummary {
+  submitted: number;
+  missing: number;
+  overdue: number;
+  none: number;
 }
 
 export interface WbsScheduleResponse {
@@ -1173,6 +1187,7 @@ export interface WbsScheduleResponse {
   planUpdatedAt: string | null;
   items: WbsItemResponse[];
   warnings: string[];
+  deliverables?: DeliverableSummary;
   /** 원천이 없을 때만. 진척률 산정의 핵심 입력이 빠졌음을 그대로 보인다. */
   notice: string | null;
 }

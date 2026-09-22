@@ -53,6 +53,7 @@ const ITEM_LABELS: Record<string, string> = {
   pull_request: '풀 리퀘스트(PR)',
   commit: '커밋',
   milestone: '마일스톤',
+  tree: '저장소 파일 목록',
 };
 
 /** 도구별 입력 예시. 박PM이 무엇을 넣는지 필드에서 바로 알게 한다. */

@@ -327,6 +327,54 @@ export function KanbanView({ tasks }: { tasks: ScheduleTask[] }): ReactNode {
 /* ────────────────────────────── WBS ────────────────────────────── */
 
 /** 작업분해구조. 묶음과 활동을 들여쓰기로 세우고 계획 대비 진척을 나란히 놓는다. */
+const DELIVERABLE_LABEL: Record<ScheduleTask['deliverableStatus'], string> = {
+  NONE: '',
+  SUBMITTED: '제출',
+  MISSING: '미제출',
+  OVERDUE: '지연',
+};
+
+const DELIVERABLE_TONE: Record<ScheduleTask['deliverableStatus'], string> = {
+  NONE: '',
+  SUBMITTED: 'bg-emerald-500/15 text-emerald-700 dark:text-emerald-300',
+  MISSING: 'bg-amber-500/15 text-amber-700 dark:text-amber-300',
+  OVERDUE: 'bg-destructive/15 text-destructive',
+};
+
+/** 산출물 칸. 판정 결과를 알약으로, 근거(맞춘 파일)는 제목에, 링크가 있으면 원문으로. */
+function DeliverableCell({ task }: { task: ScheduleTask }): ReactNode {
+  if (!task.deliverable) return <span className="text-muted-foreground text-sm">—</span>;
+  const label = DELIVERABLE_LABEL[task.deliverableStatus];
+  const title = task.deliverableRef
+    ? `${task.deliverable} · ${task.deliverableRef}`
+    : task.deliverable;
+  const pill = (
+    <span
+      className={cn(
+        'inline-block rounded px-1.5 py-0.5 text-xs font-medium whitespace-nowrap',
+        DELIVERABLE_TONE[task.deliverableStatus],
+      )}
+      title={title}
+    >
+      {label}
+    </span>
+  );
+  return (
+    <span className="flex items-center gap-2">
+      {task.deliverableUrl ? (
+        <a href={task.deliverableUrl} target="_blank" rel="noreferrer" className="underline-offset-2 hover:underline">
+          {pill}
+        </a>
+      ) : (
+        pill
+      )}
+      <span className="text-muted-foreground block max-w-[14rem] truncate text-xs" title={task.deliverable}>
+        {task.deliverable}
+      </span>
+    </span>
+  );
+}
+
 export function WbsView({ tasks }: { tasks: ScheduleTask[] }): ReactNode {
   const columns = useMemo<ColumnDef<ScheduleTask, unknown>[]>(
     () => [
@@ -366,6 +414,12 @@ export function WbsView({ tasks }: { tasks: ScheduleTask[] }): ReactNode {
         cell: ({ row }) => (
           <span className="text-muted-foreground text-sm">{row.original.owner}</span>
         ),
+      },
+      {
+        id: 'deliverable',
+        accessorFn: (task) => task.deliverableStatus,
+        header: '산출물',
+        cell: ({ row }) => <DeliverableCell task={row.original} />,
       },
       {
         accessorKey: 'planned',
