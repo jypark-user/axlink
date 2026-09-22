@@ -26,6 +26,7 @@ from app.document.models import (
 )
 from app.rag import indexing
 from app.rag import repository as rag_repo
+from app.standard import wbs_repository
 
 MAX_BYTES = 50 * 1024 * 1024  # 프런트 features/documents/upload.ts 와 같은 한도
 
@@ -60,9 +61,20 @@ def _store(project_id: str, file_hash: str, ext: str, content: bytes) -> str:
 
 
 def upload(
-    cur: Any, principal: AuthPrincipal, project_id: str, filename: str, content: bytes
+    cur: Any, principal: AuthPrincipal, project_id: str, filename: str, content: bytes,
+    wbs_id: str | None = None,
 ) -> DocumentUploadResponse:
+    """문서를 올린다. wbs_id 를 주면 그 WBS 항목의 산출물로 바로 붙는다(ARC-016).
+
+    항목이 없으면 올리기 전에 거절한다. 조용히 안 붙이면 용역사는 올렸다고 믿고 판정은 그대로다.
+    """
     _require_project(cur, principal, project_id)
+    wbs_item_id: str | None = None
+    if wbs_id:
+        item = wbs_repository.find_item(cur, project_id, wbs_id.strip())
+        if item is None:
+            raise errors.validation_failed(f"WBS 항목 {wbs_id} 이(가) 이 사업에 없습니다.")
+        wbs_item_id = str(item["id"])
 
     if not filename or not filename.strip():
         raise errors.validation_failed("파일명이 없습니다.")
@@ -90,6 +102,8 @@ def upload(
         extractor.MIME_BY_EXT.get(ext, "application/octet-stream"),
         ext, len(content), file_hash,
     )
+    if wbs_item_id:
+        repository.link_wbs_item(cur, document_id, wbs_item_id)
 
     try:
         result = extractor.extract(Path(settings.document_root) / stored_path, ext)

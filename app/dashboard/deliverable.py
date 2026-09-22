@@ -21,6 +21,7 @@ SUBMITTED = "SUBMITTED"
 MISSING = "MISSING"
 OVERDUE = "OVERDUE"
 
+RULE_LINK = "LINKED_DOC"
 RULE_PATH = "REPO_PATH"
 RULE_NAME = "FILE_NAME"
 RULE_TYPE = "PRODUCT_TYPE"
@@ -60,6 +61,11 @@ def _stem(value: str) -> str:
     return " ".join(stem.split()).casefold()
 
 
+def stem_of(value: str) -> str:
+    """바깥에서 같은 이름 규칙으로 문서를 항목에 붙일 때 쓴다."""
+    return _stem(value)
+
+
 def _type_by_name() -> dict[str, str]:
     return {" ".join(label.split()).casefold(): code for code, label in DISPLAY_NAMES.items()}
 
@@ -83,6 +89,11 @@ def judge(
     product_titles = {_stem(p["title"]): p for p in products if p.get("title")}
     product_by_type = {p["type"]: p for p in products if p.get("type")}
     doc_names = {_stem(d["original_filename"]): d for d in documents if d.get("original_filename")}
+    linked: dict[str, dict] = {}
+    for d in documents:  # 최근 것이 앞에 온다. 항목마다 첫 것만 근거로 쓴다
+        key = str(d["wbs_item_id"]) if d.get("wbs_item_id") else None
+        if key and key not in linked:
+            linked[key] = d
     type_names = _type_by_name()
 
     out: list[Judgement] = []
@@ -93,6 +104,14 @@ def judge(
             out.append(Judgement(wbs_id, NONE))
             continue
 
+        doc = linked.get(str(item.get("id"))) if item.get("id") else None
+        if doc is not None:
+            # 0) 항목에 직접 올린 문서. 이름이 달라도 그 항목의 산출물이다
+            out.append(Judgement(
+                wbs_id, SUBMITTED, RULE_LINK, doc["original_filename"],
+                f"/api/documents/{doc['id']}/content",
+            ))
+            continue
         found = _match(deliverable, tree, product_paths, product_titles, product_by_type,
                        doc_names, type_names)
         if found is not None:

@@ -1178,6 +1178,35 @@ export interface DeliverableSummary {
   none: number;
 }
 
+/** 산출물 화면 한 줄. WBS 말단 작업이 정한 산출물과 판정, 붙은 문서, 29110 태그 (ARC-016). */
+export interface WbsDeliverableDocument {
+  id: string;
+  fileName: string;
+  status: DocumentStatus;
+  uploadedAt: string;
+  proposedType: string | null;
+  confirmed: boolean;
+}
+
+export interface WbsDeliverableItem {
+  wbsId: string;
+  name: string;
+  deliverable: string | null;
+  endDate: string | null;
+  status: DeliverableStatus;
+  rule: 'LINKED_DOC' | 'REPO_PATH' | 'FILE_NAME' | 'PRODUCT_TYPE' | null;
+  ref: string | null;
+  url: string | null;
+  productType: string | null;
+  documents: WbsDeliverableDocument[];
+}
+
+export interface WbsDeliverablesResponse {
+  baseDate: string;
+  items: WbsDeliverableItem[];
+  summary: DeliverableSummary;
+}
+
 export interface WbsScheduleResponse {
   source: WbsSource;
   sourceLabel: string;

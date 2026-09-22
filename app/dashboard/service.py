@@ -34,6 +34,9 @@ from app.dashboard.models import (
     DeliverableSummary,
     ProgressMeasure,
     ProgressResponse,
+    WbsDeliverableDocument,
+    WbsDeliverableItem,
+    WbsDeliverablesResponse,
     WbsItemResponse,
     WbsScheduleResponse,
 )
@@ -277,6 +280,88 @@ def refresh_deliverables(
     # 묶음은 저장만 하고 돌려주지 않는다. 요약이 말단만 세야 "산출물 열 없음" 이 뜻을 가진다
     leaves = {i["wbs_id"] for i in items if i.get("weight") is not None}
     return {j.wbs_id: j for j in judgements if j.wbs_id in leaves}
+
+
+def wbs_deliverables(
+    cur: Any, principal: AuthPrincipal, project_id: str, at: date | None = None
+) -> WbsDeliverablesResponse:
+    """산출물 화면. WBS 말단 작업마다 산출물·판정·붙은 문서·29110 태그를 한 줄로 낸다."""
+    allowed = auth_repo.allowed_project_ids(
+        cur, principal.role, principal.org_id, principal.user_id
+    )
+    if project_id not in allowed:
+        raise errors.project_access_denied()
+    today = at or date.today()
+    # 행이 그 계획서 버전에서 왔는지부터 맞춘다. 없으면 파일을 한 번 읽어 남긴다
+    plan_row = standard_repo.current_work_product(cur, project_id, PLAN_TYPE)
+    _load_plan(cur, project_id, plan_row)
+    judged = refresh_deliverables(cur, project_id, today)
+    items = wbs_repository.list_items(cur, project_id)
+    documents = wbs_repository.project_documents(cur, project_id)
+    products = wbs_repository.current_products(cur, project_id)
+    doc_type_by_id = {str(p["id"]): p["type"] for p in products}
+
+    by_item: dict[str, list[dict]] = {}
+    by_stem: dict[str, list[dict]] = {}
+    for d in documents:
+        if d.get("wbs_item_id"):
+            by_item.setdefault(str(d["wbs_item_id"]), []).append(d)
+        by_stem.setdefault(deliverable_stem(d["original_filename"]), []).append(d)
+
+    out: list[WbsDeliverableItem] = []
+    for item in items:
+        if item["weight"] is None:
+            continue
+        j = judged.get(item["wbs_id"])
+        docs = list(by_item.get(str(item["id"]), []))
+        if item.get("deliverable"):
+            for d in by_stem.get(deliverable_stem(item["deliverable"]), []):
+                if d not in docs:
+                    docs.append(d)
+        product_type = next(
+            (doc_type_by_id[str(d["work_product_id"])] for d in docs
+             if d.get("work_product_id") and str(d["work_product_id"]) in doc_type_by_id),
+            None,
+        ) or next((d["proposed_type"] for d in docs if d.get("proposed_type")), None)
+        out.append(
+            WbsDeliverableItem(
+                wbsId=item["wbs_id"],
+                name=item["name"],
+                deliverable=item.get("deliverable"),
+                endDate=item["end_on"].isoformat() if item.get("end_on") else None,
+                status=j.status if j else deliverable.NONE,
+                rule=j.rule if j else None,
+                ref=j.ref if j else None,
+                url=j.url if j else None,
+                productType=product_type,
+                documents=[
+                    WbsDeliverableDocument(
+                        id=str(d["id"]),
+                        fileName=d["original_filename"],
+                        status=d["status"],
+                        uploadedAt=d["created_at"].isoformat(),
+                        proposedType=d.get("proposed_type"),
+                        confirmed=d.get("draft_status") == "CONFIRMED",
+                    )
+                    for d in docs
+                ],
+            )
+        )
+    counts = deliverable.summarize(list(judged.values()))
+    return WbsDeliverablesResponse(
+        baseDate=today.isoformat(),
+        items=out,
+        summary=DeliverableSummary(
+            submitted=counts[deliverable.SUBMITTED],
+            missing=counts[deliverable.MISSING],
+            overdue=counts[deliverable.OVERDUE],
+            none=counts[deliverable.NONE],
+        ),
+    )
+
+
+def deliverable_stem(value: str) -> str:
+    return deliverable.stem_of(value)
 
 
 def _items_from_plan(

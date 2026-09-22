@@ -71,6 +71,12 @@ def insert(
     return str(row["id"])
 
 
+def link_wbs_item(cur: Any, document_id: str, wbs_item_id: str) -> None:
+    cur.execute(
+        "update document_upload set wbs_item_id = %s where id = %s", (wbs_item_id, document_id)
+    )
+
+
 def mark_extracted(
     cur: Any, document_id: str, text: str, page_count: int | None, warning: str
 ) -> None:
