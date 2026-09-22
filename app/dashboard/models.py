@@ -183,6 +183,20 @@ class WbsItemResponse(BaseModel):
     progress: int  # 0~100
     planned: int  # 기준일의 계획 진척. 0~100
     externalUrl: str | None  # noqa: N815
+    # 산출물 판정(ARC-016 2단계). 묶음·산출물 열 없음은 NONE
+    deliverableStatus: str = "NONE"  # noqa: N815  NONE | SUBMITTED | MISSING | OVERDUE
+    deliverableRule: str | None = None  # noqa: N815  REPO_PATH | FILE_NAME | PRODUCT_TYPE
+    deliverableRef: str | None = None  # noqa: N815  맞춘 경로·파일명·유형
+    deliverableUrl: str | None = None  # noqa: N815
+
+
+class DeliverableSummary(BaseModel):
+    """말단 항목의 산출물 판정 건수. none 은 산출물 열이 없는 항목이다."""
+
+    submitted: int = 0
+    missing: int = 0
+    overdue: int = 0
+    none: int = 0
 
 
 class WbsScheduleResponse(BaseModel):
@@ -196,6 +210,7 @@ class WbsScheduleResponse(BaseModel):
     warnings: list[str]
     # 원천이 없을 때만 채운다. 진척률 산정의 핵심 입력이 빠졌음을 화면이 그대로 보인다.
     notice: str | None
+    deliverables: DeliverableSummary = DeliverableSummary()
 
 
 # --- 인포 템플릿 카탈로그 (ARC-012) ----------------------------------------------

@@ -140,7 +140,13 @@ def test_용역사_WBS_파일이_그대로_작업_줄이_된다(client, client_t
         "wbsId": "1.2", "name": "중간보고", "level": 1, "owner": "", "deliverable": "중간보고서.md",
         "startDate": "2026-09-22", "endDate": "2026-09-30", "weight": 0.3,
         "progress": 50, "planned": 50, "externalUrl": None,
+        # 산출물 "중간보고서.md" 는 저장소에도 문서에도 없다. 종료일(09.30)이 안 지났으니 미제출
+        "deliverableStatus": "MISSING", "deliverableRule": None, "deliverableRef": None,
+        "deliverableUrl": None,
     }
+    # 1.1(08.11 종료)·2.1(09.12 종료)은 지났고 파일이 없으니 지연, 1.2 만 미제출
+    assert body["deliverables"] == {"submitted": 0, "missing": 1, "overdue": 2, "none": 0}
+    assert by_id["2.1"]["deliverableStatus"] == "OVERDUE"
     # 상위 항목은 하위의 가중 평균. (0.2×1.0 + 0.3×0.5) / 0.5 = 0.7
     assert by_id["1"]["progress"] == 70
     assert by_id["1"]["startDate"] == "2026-08-11" and by_id["1"]["endDate"] == "2026-09-30"

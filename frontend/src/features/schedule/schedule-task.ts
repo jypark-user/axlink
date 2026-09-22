@@ -15,7 +15,14 @@ export interface ScheduleTask {
   progress: number;
   /** 오늘 기준 계획 진척률. progress 가 이보다 낮으면 늦은 것이다. */
   planned: number;
+  /** WBS 가 정한 산출물과 그 제출 판정. 묶음은 NONE */
+  deliverable: string | null;
+  deliverableStatus: DeliverableStatus;
+  deliverableRef: string | null;
+  deliverableUrl: string | null;
 }
+
+export type DeliverableStatus = 'NONE' | 'SUBMITTED' | 'MISSING' | 'OVERDUE';
 
 export type ScheduleStatus = 'upcoming' | 'running' | 'late' | 'done';
 

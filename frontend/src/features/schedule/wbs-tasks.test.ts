@@ -31,6 +31,10 @@ describe('toScheduleTasks', () => {
       endAt: '2026-08-11',
       progress: 50,
       planned: 80,
+      deliverable: null,
+      deliverableStatus: 'NONE',
+      deliverableRef: null,
+      deliverableUrl: null,
     });
     expect(scheduleStatusOf(task)).toBe('late');
   });

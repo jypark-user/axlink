@@ -17,5 +17,9 @@ export function toScheduleTasks(items: WbsItemResponse[]): ScheduleTask[] {
     endAt: item.endDate ?? '',
     progress: item.progress,
     planned: item.planned,
+    deliverable: item.deliverable,
+    deliverableStatus: item.deliverableStatus ?? 'NONE',
+    deliverableRef: item.deliverableRef ?? null,
+    deliverableUrl: item.deliverableUrl ?? null,
   }));
 }
