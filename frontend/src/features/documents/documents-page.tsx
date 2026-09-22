@@ -183,7 +183,7 @@ export function DocumentsPage(): ReactNode {
     <>
       <PageHeader
         title="문서"
-        description="올린 문서는 AI 가 읽어 색인하고, 요구사항 초안을 뽑습니다."
+        description="산출물 문서를 올리는 자리입니다. 올린 문서는 AI 가 읽어 색인하고 산출물 유형과 요구사항 초안을 뽑습니다. 파일 이름이 WBS 산출물 열과 같으면 제출로 잡힙니다."
         actions={
           <>
             <input

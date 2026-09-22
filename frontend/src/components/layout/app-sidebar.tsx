@@ -104,8 +104,8 @@ const projectGroups = (base: string): NavGroup[] => [
   {
     label: '자료',
     items: [
-      { to: `${base}/deliverables`, label: '산출물', icon: FileText, roles: EXCEPT_CONTRACTOR },
-      { to: `${base}/documents`, label: '자료', icon: Upload, roles: EXCEPT_CONTRACTOR },
+      { to: `${base}/deliverables`, label: '산출물', icon: FileText },
+      { to: `${base}/documents`, label: '자료', icon: Upload },
     ],
   },
   {
