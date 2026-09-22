@@ -309,6 +309,23 @@ def mapping_rule_count(mapping_rules_json: Any) -> int:
     return len(data.get("rules", data))
 
 
+def github_repo_tree(cur: Any, project_id: str) -> dict[str, Any] | None:
+    """사업에 연결된 GitHub 저장소의 파일 목록(가장 최근 수집분). 산출물 판정의 재료다."""
+    row = fetch_one(
+        cur,
+        """
+        select ra.payload_jsonb as payload
+          from raw_artifact ra
+          join tool_connection tc on tc.id = ra.tool_connection_id
+         where tc.project_id = %s and tc.tool = 'GITHUB' and ra.object_kind = 'tree'
+         order by ra.fetched_at desc
+         limit 1
+        """,
+        (project_id,),
+    )
+    return None if row is None else (row["payload"] or None)
+
+
 def redmine_issue_payloads(cur: Any, project_id: str) -> list[dict[str, Any]]:
     """사업에 연결된 Redmine 의 이슈 원시본. 일정 화면이 WBS 파일 없을 때 대체 원천으로 쓴다.
     표준 모델의 issue 에는 시작일·종료일이 없고 원시본에는 그대로 있다."""

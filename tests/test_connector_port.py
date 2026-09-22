@@ -13,7 +13,7 @@ from app.integration import adapter, port
 
 def test_등록된_도구는_어댑터가_나온다():
     assert port.get_connector("GITHUB").item_kinds == (
-        "issue", "pull_request", "commit", "milestone"
+        "issue", "pull_request", "commit", "milestone", "tree"
     )
     assert port.get_connector("REDMINE").item_kinds == ("issue", "version", "tracker")
 

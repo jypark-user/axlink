@@ -27,6 +27,7 @@ ITEM_PATHS = {
     "pull_request": "/pulls",
     "commit": "/commits",
     "milestone": "/milestones",
+    "tree": "/git/trees/HEAD",  # 파일 목록. WBS 산출물 경로가 저장소에 있는지 본다(ARC-016)
 }
 
 
@@ -117,6 +118,9 @@ def fetch_items(
     같으면 적재 단계가 걸러 낸다.
     """
     headers = _headers(token)
+    if kind == "tree":
+        yield from _fetch_tree(base_url, target_resource, headers)
+        return
     base = _repo_url(base_url, target_resource) + ITEM_PATHS[kind]
     params = {"per_page": per_page}
     stop_before: str | None = None
@@ -153,6 +157,44 @@ def fetch_items(
                 yield _external_id(kind, item), item
             if len(batch) < per_page:
                 return
+
+
+def _html_base(base_url: str) -> str:
+    """API 주소에서 웹 주소를 만든다. api.github.com 은 github.com, 사내 서버는 /api/v3 를 뗀다."""
+    base = base_url.rstrip("/")
+    if "api.github.com" in base:
+        return "https://github.com"
+    return base.removesuffix("/api/v3")
+
+
+def _fetch_tree(
+    base_url: str, target_resource: str, headers: dict[str, str]
+) -> Iterator[tuple[str, dict]]:
+    """저장소 파일 목록 한 장. 한 번에 다 받고(recursive) 경로만 남긴다.
+
+    갱신 필터가 없으니 매번 받는다. 내용이 같으면 적재 단계가 거른다. 트리가 잘리면
+    (아주 큰 저장소) truncated 를 그대로 남겨 판정이 "없다" 고 단정하지 않게 한다.
+    """
+    url = _repo_url(base_url, target_resource) + ITEM_PATHS["tree"]
+    with httpx.Client(timeout=settings.connector_timeout) as client:
+        res = _get(client, url, headers, params={"recursive": "1"})
+    if res.status_code == 403:
+        if res.headers.get("X-RateLimit-Remaining") == "0":
+            raise errors.ApiError(429, "TOOL_RATE_LIMITED", "레이트리밋")
+        raise errors.ApiError(403, "TOOL_AUTH", "tree 읽기 권한이 없습니다.")
+    if res.status_code in (404, 409):  # 빈 저장소
+        return
+    if res.status_code >= 400:
+        raise errors.ApiError(502, "TOOL_UNREACHABLE", f"GitHub 오류 {res.status_code}")
+    body = res.json()
+    sha = str(body.get("sha") or "")
+    paths = [e["path"] for e in body.get("tree") or [] if e.get("type") == "blob" and e.get("path")]
+    yield "tree:HEAD", {
+        "sha": sha,
+        "truncated": bool(body.get("truncated")),
+        "paths": paths,
+        "html_url": f"{_html_base(base_url)}/{target_resource}/blob/{sha}/",
+    }
 
 
 def fetch_file(
