@@ -1112,27 +1112,6 @@ export interface NotificationsResponse {
   seenAt: string | null;
 }
 
-/** 활동 한 줄. 알림과 활동 탭이 같은 것을 본다. */
-export interface ActivityEventResponse {
-  id: string;
-  projectId: string;
-  projectName: string;
-  occurredAt: string;
-  kind: string;
-  audience: 'CLIENT' | 'CONTRACTOR' | 'ALL';
-  actorLabel: string;
-  targetType: string | null;
-  targetKey: string | null;
-  summary: string;
-  detail: Record<string, unknown>;
-}
-
-export interface NotificationsResponse {
-  items: ActivityEventResponse[];
-  unread: number;
-  seenAt: string | null;
-}
-
 /** 서버 오류 기록 한 건. 최고관리자 화면용. */
 export interface ErrorLogResponse {
   id: string;

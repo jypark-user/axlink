@@ -1,7 +1,6 @@
 import type { ReactNode } from 'react';
 import { SidebarTrigger } from '@/components/ui/sidebar';
 import { NotificationBell } from '@/components/layout/notification-bell';
-import { NotificationBell } from '@/components/layout/notification-bell';
 import { ProjectSwitcher } from '@/components/layout/project-switcher';
 
 export function AppHeader({
