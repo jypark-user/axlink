@@ -1,0 +1,71 @@
+"""최고관리자 운영 화면 API. 지금은 서버 오류 기록만 있다."""
+
+from typing import Annotated, Any
+
+from fastapi import APIRouter, Query
+from pydantic import BaseModel
+
+from app.auth.deps import Principal
+from app.common import error_log, errors
+from app.common.paging import PageResponse
+from app.db import tx
+
+router = APIRouter(prefix="/api/admin", tags=["admin"])
+
+
+class ErrorLogResponse(BaseModel):
+    id: str
+    occurredAt: str  # noqa: N815
+    method: str
+    path: str
+    statusCode: int  # noqa: N815
+    code: str
+    message: str
+    exception: str | None
+    traceback: str | None
+    username: str | None
+    userName: str | None  # noqa: N815
+
+
+def _require_admin(principal) -> None:
+    if principal.role != "SUPER_ADMIN":
+        raise errors.ApiError(403, "FORBIDDEN", "플랫폼 관리자만 볼 수 있습니다.")
+
+
+def _to_response(r: dict[str, Any]) -> ErrorLogResponse:
+    return ErrorLogResponse(
+        id=str(r["id"]),
+        occurredAt=r["occurred_at"].isoformat(),
+        method=r["method"],
+        path=r["path"],
+        statusCode=r["status_code"],
+        code=r["code"],
+        message=r["message"],
+        exception=r["exception"],
+        traceback=r["traceback"],
+        username=r["username"],
+        userName=r["user_name"],
+    )
+
+
+@router.get("/errors", response_model=PageResponse[ErrorLogResponse])
+def list_errors(
+    principal: Principal,
+    page: Annotated[int, Query(ge=0)] = 0,
+    size: Annotated[int, Query(ge=1, le=200)] = 50,
+) -> PageResponse[ErrorLogResponse]:
+    """서버 오류 기록. 최근 것이 앞이다."""
+    _require_admin(principal)
+    with tx() as cur:
+        rows, total = error_log.list_recent(cur, page, size)
+    from app.common.paging import PageQuery
+
+    return PageResponse.of([_to_response(r) for r in rows], PageQuery(page=page, size=size), total)
+
+
+@router.delete("/errors", status_code=204)
+def clear_errors(principal: Principal) -> None:
+    """기록을 비운다. 살펴본 뒤 새 오류만 보려고 쓴다."""
+    _require_admin(principal)
+    with tx() as cur:
+        error_log.clear(cur)

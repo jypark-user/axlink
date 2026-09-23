@@ -116,7 +116,33 @@ async def http_error_handler(request: Request, exc: StarletteHTTPException) -> J
 
 
 async def unhandled_error_handler(request: Request, exc: Exception) -> JSONResponse:
+    """잡히지 않은 예외. 응답은 짧게, 원인은 오류 기록 표에 남긴다(관리자 화면).
+
+    기록 함수는 여기서 늦게 불러온다. errors 는 어디서나 import 되는 모듈이라 DB 모듈을
+    위에서 끌어오면 순환이 생긴다.
+    """
+    from app.common import error_log
+
+    error_log.record(
+        method=request.method,
+        path=request.url.path,
+        status_code=500,
+        code="INTERNAL",
+        message=f"{type(exc).__name__}: {exc}"[:2000],
+        exc=exc,
+        user_id=_user_id_of(request),
+    )
     return JSONResponse(
         status_code=500,
         content=_envelope("INTERNAL", _DEFAULT_MESSAGES["INTERNAL"], None, request.url.path),
     )
+
+
+def _user_id_of(request: Request) -> str | None:
+    """누가 겪은 오류인지. 토큰이 없거나 틀리면 모른다고 둔다. 기록 때문에 또 죽지 않는다."""
+    try:
+        from app.auth.deps import current_principal
+
+        return current_principal(request).user_id
+    except Exception:  # noqa: BLE001
+        return None

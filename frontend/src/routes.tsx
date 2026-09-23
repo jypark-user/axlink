@@ -39,6 +39,9 @@ const CollectionPage = lazy(() =>
 const TemplatesPage = lazy(() =>
   import('@/features/templates/templates-page').then((m) => ({ default: m.TemplatesPage })),
 );
+const ErrorLogPage = lazy(() =>
+  import('@/features/admin/error-log-page').then((m) => ({ default: m.ErrorLogPage })),
+);
 const DocumentsPage = lazy(() =>
   import('@/features/documents/documents-page').then((m) => ({ default: m.DocumentsPage })),
 );
@@ -127,6 +130,14 @@ export function AppRoutes(): ReactNode {
             element={
               <SuspenseShell>
                 <TemplatesPage />
+          <Route
+            path="/admin/errors"
+            element={
+              <SuspenseShell>
+                <ErrorLogPage />
+              </SuspenseShell>
+            }
+          />
               </SuspenseShell>
             }
           />

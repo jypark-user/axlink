@@ -1091,6 +1091,21 @@ export interface DocumentUploadResponse {
   error: string | null;
 }
 
+/** 서버 오류 기록 한 건. 최고관리자 화면용. */
+export interface ErrorLogResponse {
+  id: string;
+  occurredAt: string;
+  method: string;
+  path: string;
+  statusCode: number;
+  code: string;
+  message: string;
+  exception: string | null;
+  traceback: string | null;
+  username: string | null;
+  userName: string | null;
+}
+
 /** 자료 상세. 왼쪽 정보·설정, 오른쪽 추출 결과의 재료다. */
 export interface DocumentDetailResponse {
   id: string;

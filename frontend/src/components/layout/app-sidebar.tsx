@@ -20,6 +20,7 @@ import {
   Trash2,
   Upload,
   Waypoints,
+  TriangleAlert,
 } from 'lucide-react';
 import {
   DropdownMenu,
@@ -76,6 +77,7 @@ const GLOBAL_GROUPS: NavGroup[] = [
       { to: '/projects', label: '사업 목록', icon: FolderKanban },
       // 위젯과 AI 답변이 고르는 그림 23종의 입력 계약. 관리자만 본다 (ARC-012)
       { to: '/templates', label: '인포 템플릿', icon: LayoutTemplate, roles: ['SUPER_ADMIN'] },
+      { to: '/admin/errors', label: '서버 오류 기록', icon: TriangleAlert, roles: ['SUPER_ADMIN'] },
     ],
   },
 ];
