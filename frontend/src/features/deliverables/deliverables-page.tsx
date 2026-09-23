@@ -205,11 +205,15 @@ function buildColumns(
     },
     {
       accessorKey: 'deliverable',
-      header: '산출물',
+      // WBS 산출물 열에 적힌 이름이다. 실제 파일이 아직 없을 수 있어 "정한" 을 붙인다.
+      header: () => <span title="WBS 산출물 열에 적힌 이름. 실제 파일과 다를 수 있다">WBS 가 정한 산출물</span>,
       cell: ({ row }) => (
         <span
-          className="text-muted-foreground block max-w-[18rem] truncate text-sm"
-          title={row.original.deliverable ?? ''}
+          className={cn(
+            'block max-w-[18rem] truncate text-sm',
+            row.original.status === 'SUBMITTED' ? 'text-muted-foreground' : 'text-muted-foreground/70 italic',
+          )}
+          title={`WBS 에 적힌 이름: ${row.original.deliverable ?? ''}`}
         >
           {row.original.deliverable ?? '-'}
         </span>

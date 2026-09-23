@@ -183,7 +183,7 @@ export function DocumentsPage(): ReactNode {
     <>
       <PageHeader
         title="문서"
-        description="산출물 문서를 올리는 자리입니다. 올린 문서는 AI 가 읽어 색인하고 산출물 유형과 요구사항 초안을 뽑습니다. 파일 이름이 WBS 산출물 열과 같으면 제출로 잡힙니다."
+        description="산출물 문서를 올리는 자리입니다. 올린 문서는 AI 가 읽어 색인하고 산출물 유형과 요구사항 초안을 뽑습니다. PDF · DOCX · XLSX · PPTX · HWP · HWPX · MD · TXT 를 받고, 같은 파일을 다시 올리면 다시 읽습니다. 특정 WBS 항목의 산출물로 올리려면 산출물 화면의 올리기를 쓰십시오."
         actions={
           <>
             <input
