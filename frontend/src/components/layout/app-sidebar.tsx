@@ -53,8 +53,11 @@ import type { ConversationResponse, PageResponse, Role } from '@/types/api';
 /** AI 질문은 발주사 전용 — 용역사는 LLM 기능을 쓰지 않는다. */
 const ASK_ROLES: Role[] = ['CLIENT'];
 
-/** 용역사에게 감출 메뉴에 붙인다. 용역사는 사업 정보·연동·동기화 이력만 본다. */
-const EXCEPT_CONTRACTOR: Role[] = ['SUPER_ADMIN', 'CLIENT'];
+/**
+ * 용역사도 현황 화면을 본다(읽기 전용). 숫자는 용역사 자신의 데이터에서 나오고, 발주기관이
+ * 무엇을 보고 요청하는지 미리 알아야 관리순환이 돈다. 편집은 서버가 발주기관·관리자로 가른다.
+ * AI 질의와 용역사 할당만 발주기관 전용이다.
+ */
 
 interface NavItem {
   to: string;
@@ -91,15 +94,10 @@ const projectGroups = (base: string): NavGroup[] => [
   {
     label: '현황',
     items: [
-      {
-        to: `${base}/dashboard`,
-        label: '진행 상황',
-        icon: LayoutDashboard,
-        roles: EXCEPT_CONTRACTOR,
-      },
-      { to: `${base}/schedule`, label: '일정', icon: CalendarRange, roles: EXCEPT_CONTRACTOR },
-      { to: `${base}/issues`, label: '이슈 · 위험', icon: CircleDot, roles: EXCEPT_CONTRACTOR },
-      { to: `${base}/traceability`, label: '요구사항', icon: Waypoints, roles: EXCEPT_CONTRACTOR },
+      { to: `${base}/dashboard`, label: '진행 상황', icon: LayoutDashboard },
+      { to: `${base}/schedule`, label: '일정', icon: CalendarRange },
+      { to: `${base}/issues`, label: '이슈 · 위험', icon: CircleDot },
+      { to: `${base}/traceability`, label: '요구사항', icon: Waypoints },
       { to: `${base}/reviews`, label: '확인 요청', icon: ClipboardList },
     ],
   },
