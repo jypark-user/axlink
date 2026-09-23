@@ -1,4 +1,5 @@
 import { useMemo, useRef, useState, type ChangeEvent, type ReactNode } from 'react';
+import { Link } from 'react-router-dom';
 import type { ColumnDef } from '@tanstack/react-table';
 import { Button } from '@/components/ui/button';
 import { DataTable, SortableHeader } from '@/components/ui/data-table';
@@ -112,7 +113,10 @@ export function DeliverablesPage(): ReactNode {
     }
   };
 
-  const columns = useMemo(() => buildColumns(pickFile, uploadingFor), [uploadingFor]);
+  const columns = useMemo(
+    () => buildColumns(project.id, pickFile, uploadingFor),
+    [project.id, uploadingFor],
+  );
 
   return (
     <>
@@ -183,6 +187,7 @@ export function DeliverablesPage(): ReactNode {
 }
 
 function buildColumns(
+  projectId: string,
   onUpload: (wbsId: string) => void,
   uploadingFor: string | null,
 ): ColumnDef<WbsDeliverableItem, unknown>[] {
@@ -235,10 +240,17 @@ function buildColumns(
           </span>
         );
         const why = item.rule ? `${RULE_LABEL[item.rule] ?? item.rule}: ${item.ref ?? ''}` : null;
+        // 근거가 올린 문서면 자료 상세로, 저장소 파일이면 원천(GitHub)으로 간다
+        const docBacked = item.rule === 'LINKED_DOC' || item.rule === 'FILE_NAME';
+        const detailDoc = docBacked ? item.documents[0] : undefined;
         return (
           <span className="flex flex-col gap-0.5">
-            {item.url ? (
-              <a href={item.url} target="_blank" rel="noreferrer" className="w-fit">
+            {detailDoc ? (
+              <Link to={`/p/${projectId}/documents/${detailDoc.id}`} className="w-fit">
+                {pill}
+              </Link>
+            ) : item.url ? (
+              <a href={item.url} target="_blank" rel="noreferrer" className="w-fit" title="원천 저장소에서 보기">
                 {pill}
               </a>
             ) : (
@@ -262,16 +274,14 @@ function buildColumns(
         return (
           <span className="flex flex-col gap-0.5">
             {docs.map((d) => (
-              <a
+              <Link
                 key={d.id}
-                href={`/api/documents/${d.id}/content`}
-                target="_blank"
-                rel="noreferrer"
+                to={`/p/${projectId}/documents/${d.id}`}
                 className="max-w-[14rem] truncate text-sm underline-offset-2 hover:underline"
                 title={`${d.fileName} · ${formatDateTime(d.uploadedAt)}`}
               >
                 {d.fileName}
-              </a>
+              </Link>
             ))}
           </span>
         );

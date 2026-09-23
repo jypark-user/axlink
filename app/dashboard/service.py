@@ -282,6 +282,12 @@ def refresh_deliverables(
     return {j.wbs_id: j for j in judgements if j.wbs_id in leaves}
 
 
+def ensure_wbs_loaded(cur: Any, project_id: str) -> None:
+    """현행 계획서의 항목 행이 있게 한다. 문서를 항목에 붙일 때처럼 행이 먼저 필요한 곳이 부른다."""
+    plan_row = standard_repo.current_work_product(cur, project_id, PLAN_TYPE)
+    _load_plan(cur, project_id, plan_row)
+
+
 def wbs_deliverables(
     cur: Any, principal: AuthPrincipal, project_id: str, at: date | None = None
 ) -> WbsDeliverablesResponse:
@@ -318,11 +324,16 @@ def wbs_deliverables(
             for d in by_stem.get(deliverable_stem(item["deliverable"]), []):
                 if d not in docs:
                     docs.append(d)
-        product_type = next(
-            (doc_type_by_id[str(d["work_product_id"])] for d in docs
-             if d.get("work_product_id") and str(d["work_product_id"]) in doc_type_by_id),
-            None,
-        ) or next((d["proposed_type"] for d in docs if d.get("proposed_type")), None)
+        # 확정된 유형 > 사람이 단 태그 > 초안 추정 순
+        product_type = (
+            next(
+                (doc_type_by_id[str(d["work_product_id"])] for d in docs
+                 if d.get("work_product_id") and str(d["work_product_id"]) in doc_type_by_id),
+                None,
+            )
+            or next((d["product_type"] for d in docs if d.get("product_type")), None)
+            or next((d["proposed_type"] for d in docs if d.get("proposed_type")), None)
+        )
         out.append(
             WbsDeliverableItem(
                 wbsId=item["wbs_id"],

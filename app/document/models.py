@@ -18,6 +18,37 @@ class DocumentUploadResponse(BaseModel):
     error: str | None
 
 
+class DocumentDetailResponse(BaseModel):
+    """자료 상세. 왼쪽 정보·설정, 오른쪽 추출 결과의 재료다."""
+
+    id: str
+    projectId: str  # noqa: N815
+    fileName: str  # noqa: N815
+    fileSize: int  # noqa: N815
+    mimeType: str  # noqa: N815
+    status: str
+    error: str | None
+    uploadedBy: str  # noqa: N815
+    uploadedAt: str  # noqa: N815
+    pageCount: int | None  # noqa: N815
+    extractedCharCount: int | None  # noqa: N815
+    wbsId: str | None  # noqa: N815  붙은 WBS 항목
+    wbsName: str | None  # noqa: N815
+    productType: str | None  # noqa: N815  사람이 정한 태그. 없으면 초안 추정을 보인다
+    proposedType: str | None  # noqa: N815
+    draftStatus: str | None  # noqa: N815
+    workProductId: str | None  # noqa: N815  확정돼 22종 항목에 들어갔으면 그 항목
+    downloadUrl: str  # noqa: N815
+    originalUrl: str | None  # noqa: N815  원천 도구 링크. 올린 문서는 없다
+
+
+class DocumentUpdateRequest(BaseModel):
+    """자료 설정. 둘 다 선택이고, 빈 문자열은 지운다는 뜻이다."""
+
+    wbsId: str | None = None  # noqa: N815
+    productType: str | None = None  # noqa: N815
+
+
 class DocumentTextResponse(BaseModel):
     """추출 결과 확인용. 프런트 화면에는 아직 없고 도구·검증에서 쓴다."""
 

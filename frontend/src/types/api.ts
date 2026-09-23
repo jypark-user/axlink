@@ -1091,6 +1091,34 @@ export interface DocumentUploadResponse {
   error: string | null;
 }
 
+/** 자료 상세. 왼쪽 정보·설정, 오른쪽 추출 결과의 재료다. */
+export interface DocumentDetailResponse {
+  id: string;
+  projectId: string;
+  fileName: string;
+  fileSize: number;
+  mimeType: string;
+  status: DocumentStatus;
+  error: string | null;
+  uploadedBy: string;
+  uploadedAt: string;
+  pageCount: number | null;
+  extractedCharCount: number | null;
+  wbsId: string | null;
+  wbsName: string | null;
+  productType: string | null;
+  proposedType: string | null;
+  draftStatus: StructuringDraftStatus | null;
+  workProductId: string | null;
+  downloadUrl: string;
+  originalUrl: string | null;
+}
+
+export interface DocumentUpdateRequest {
+  wbsId?: string;
+  productType?: string;
+}
+
 /** 추출 결과 원문. 파싱이 제대로 됐는지 사람이 눈으로 확인하는 용도다. */
 export interface DocumentTextResponse {
   id: string;
