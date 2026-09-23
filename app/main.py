@@ -13,6 +13,7 @@ from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
 from starlette.exceptions import HTTPException as StarletteHTTPException
 
+from app.activity.router import router as activity_router
 from app.admin.router import router as admin_router
 from app.ai.embedding import embedding_port
 from app.ai.router import router as ai_router
@@ -80,6 +81,7 @@ app.include_router(review_router)
 app.include_router(ask_router)
 app.include_router(ai_router)
 app.include_router(admin_router)
+app.include_router(activity_router)
 
 
 @app.get("/api/health", tags=["health"])

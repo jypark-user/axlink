@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState, type FormEvent, type ReactNode } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import type { ColumnDef } from '@tanstack/react-table';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -153,7 +154,22 @@ export function ReviewRequestsPage(): ReactNode {
     [project.id],
   );
   const [createOpen, setCreateOpen] = useState(false);
-  const [selectedId, setSelectedId] = useState<string | null>(null);
+  const [searchParams, setSearchParams] = useSearchParams();
+  // 알림에서 왔을 때 ?open=<요청 id> 로 상세를 바로 연다. 한 번 열면 주소에서 지운다
+  const [selectedId, setSelectedId] = useState<string | null>(searchParams.get('open'));
+  useEffect(() => {
+    if (searchParams.get('open')) {
+      setSearchParams(
+        (prev) => {
+          const next = new URLSearchParams(prev);
+          next.delete('open');
+          return next;
+        },
+        { replace: true },
+      );
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
   const columns = useMemo(() => buildColumns(), []);
 
   return (

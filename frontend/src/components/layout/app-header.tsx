@@ -1,5 +1,7 @@
 import type { ReactNode } from 'react';
 import { SidebarTrigger } from '@/components/ui/sidebar';
+import { NotificationBell } from '@/components/layout/notification-bell';
+import { NotificationBell } from '@/components/layout/notification-bell';
 import { ProjectSwitcher } from '@/components/layout/project-switcher';
 
 export function AppHeader({
@@ -19,7 +21,10 @@ export function AppHeader({
       <div className="flex min-w-0 flex-1 items-center gap-2 truncate text-sm font-medium">
         {children}
       </div>
-      <div className="flex items-center gap-2">{trailing}</div>
+      <div className="flex items-center gap-2">
+        {trailing}
+        <NotificationBell />
+      </div>
     </header>
   );
 }
