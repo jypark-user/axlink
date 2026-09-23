@@ -5,7 +5,7 @@
 
 from typing import Annotated
 
-from fastapi import APIRouter, File, Query, Response, UploadFile
+from fastapi import APIRouter, File, Form, Query, Response, UploadFile
 from fastapi.responses import FileResponse
 
 from app.auth.deps import Principal
@@ -14,7 +14,9 @@ from app.db import tx
 from app.document import draft_service, service
 from app.document.models import (
     DocumentChunkResponse,
+    DocumentDetailResponse,
     DocumentTextResponse,
+    DocumentUpdateRequest,
     DocumentUploadResponse,
     StructuringConfirmRequest,
     StructuringConfirmResponse,
@@ -45,11 +47,32 @@ def list_documents(
     status_code=201,
 )
 async def upload_document(
-    project_id: str, principal: Principal, file: Annotated[UploadFile, File()]
+    project_id: str,
+    principal: Principal,
+    file: Annotated[UploadFile, File()],
+    wbsId: Annotated[str | None, Form()] = None,  # noqa: N803  WBS 항목에 바로 붙여 올릴 때
 ) -> DocumentUploadResponse:
     content = await file.read()
     with tx() as cur:
-        return service.upload(cur, principal, project_id, file.filename or "", content)
+        return service.upload(
+            cur, principal, project_id, file.filename or "", content, wbs_id=wbsId
+        )
+
+
+@router.get("/documents/{document_id}", response_model=DocumentDetailResponse)
+def get_document(document_id: str, principal: Principal) -> DocumentDetailResponse:
+    """자료 상세. 정보·설정과 추출 결과 링크."""
+    with tx() as cur:
+        return service.get_detail(cur, principal, document_id)
+
+
+@router.patch("/documents/{document_id}", response_model=DocumentDetailResponse)
+def update_document(
+    document_id: str, req: DocumentUpdateRequest, principal: Principal
+) -> DocumentDetailResponse:
+    """자료 설정: WBS 항목과 29110 유형 태그."""
+    with tx() as cur:
+        return service.update(cur, principal, document_id, req)
 
 
 @router.get("/documents/{document_id}/text", response_model=DocumentTextResponse)

@@ -17,15 +17,20 @@ from app.auth.models import AuthPrincipal
 from app.common import errors
 from app.common.paging import PageQuery, PageResponse
 from app.config import settings
+from app.dashboard import service as dashboard_service
 from app.document import draft_service, extractor, repository
 from app.document.access import require_project as _require_project
 from app.document.models import (
     DocumentChunkResponse,
+    DocumentDetailResponse,
     DocumentTextResponse,
+    DocumentUpdateRequest,
     DocumentUploadResponse,
 )
 from app.rag import indexing
 from app.rag import repository as rag_repo
+from app.standard import wbs_repository
+from app.standard.work_product_type import DISPLAY_NAMES
 
 MAX_BYTES = 50 * 1024 * 1024  # 프런트 features/documents/upload.ts 와 같은 한도
 
@@ -60,9 +65,21 @@ def _store(project_id: str, file_hash: str, ext: str, content: bytes) -> str:
 
 
 def upload(
-    cur: Any, principal: AuthPrincipal, project_id: str, filename: str, content: bytes
+    cur: Any, principal: AuthPrincipal, project_id: str, filename: str, content: bytes,
+    wbs_id: str | None = None,
 ) -> DocumentUploadResponse:
+    """문서를 올린다. wbs_id 를 주면 그 WBS 항목의 산출물로 바로 붙는다(ARC-016).
+
+    항목이 없으면 올리기 전에 거절한다. 조용히 안 붙이면 용역사는 올렸다고 믿고 판정은 그대로다.
+    """
     _require_project(cur, principal, project_id)
+    wbs_item_id: str | None = None
+    if wbs_id:
+        dashboard_service.ensure_wbs_loaded(cur, project_id)
+        item = wbs_repository.find_item(cur, project_id, wbs_id.strip())
+        if item is None:
+            raise errors.validation_failed(f"WBS 항목 {wbs_id} 이(가) 이 사업에 없습니다.")
+        wbs_item_id = str(item["id"])
 
     if not filename or not filename.strip():
         raise errors.validation_failed("파일명이 없습니다.")
@@ -79,10 +96,14 @@ def upload(
     file_hash = hashlib.sha256(content).hexdigest()
     existing = repository.find_by_hash(cur, project_id, file_hash)
     if existing:
-        # 내용이 같으면 같은 파일이다. 파일명만 바꿔 다시 올린 경우까지 여기서 걸린다.
-        raise errors.ApiError(
-            409, "DOCUMENT_DUPLICATE", f"같은 문서가 이미 있습니다: {existing['original_filename']}"
-        )
+        # 내용이 같으면 같은 파일이다. 막지 않는다. 읽기에 실패했던 것이면 다시 읽고, WBS
+        # 항목을 지정했으면 잇는다. 사용자는 "다시 올리기" 로 재시도한다고 여긴다.
+        document_id = str(existing["id"])
+        if wbs_item_id:
+            repository.link_wbs_item(cur, document_id, wbs_item_id)
+        if existing["status"] == "FAILED":
+            _process(cur, project_id, document_id, filename.strip(), ext, existing["stored_path"])
+        return _to_response(repository.find_by_id(cur, document_id))
 
     stored_path = _store(project_id, file_hash, ext, content)
     document_id = repository.insert(
@@ -90,27 +111,28 @@ def upload(
         extractor.MIME_BY_EXT.get(ext, "application/octet-stream"),
         ext, len(content), file_hash,
     )
+    if wbs_item_id:
+        repository.link_wbs_item(cur, document_id, wbs_item_id)
+    _process(cur, project_id, document_id, filename.strip(), ext, stored_path)
+    return _to_response(repository.find_by_id(cur, document_id))
 
+
+def _process(
+    cur: Any, project_id: str, document_id: str, filename: str, ext: str, stored_path: str
+) -> None:
+    """읽고 색인하고 초안까지. 처음 올릴 때와 실패 뒤 다시 올릴 때가 같은 길을 간다."""
     try:
         result = extractor.extract(Path(settings.document_root) / stored_path, ext)
     except Exception as exc:  # noqa: BLE001 — 파서가 죽어도 업로드 자체는 남긴다
         repository.mark_failed(cur, document_id, f"{type(exc).__name__}: {exc}")
-    else:
-        if result.text.strip():
-            repository.mark_extracted(
-                cur, document_id, result.text, result.page_count, result.warning
-            )
-            _index(cur, project_id, document_id, filename.strip(), result.text, stored_path)
-            # 읽은 김에 초안까지 만든다. 사람이 확인할 것이 생겨야 업로드가 끝난 것이다.
-            draft_service.propose_for_upload(
-                cur, document_id, project_id, filename.strip(), result.text
-            )
-        else:
-            repository.mark_failed(
-                cur, document_id, result.warning or "본문을 읽지 못했습니다."
-            )
-
-    return _to_response(repository.find_by_id(cur, document_id))
+        return
+    if not result.text.strip():
+        repository.mark_failed(cur, document_id, result.warning or "본문을 읽지 못했습니다.")
+        return
+    repository.mark_extracted(cur, document_id, result.text, result.page_count, result.warning)
+    _index(cur, project_id, document_id, filename, result.text, stored_path)
+    # 읽은 김에 초안까지 만든다. 사람이 확인할 것이 생겨야 업로드가 끝난 것이다.
+    draft_service.propose_for_upload(cur, document_id, project_id, filename, result.text)
 
 
 def list_for_project(
@@ -120,6 +142,64 @@ def list_for_project(
     total = repository.count_by_project(cur, project_id)
     rows = repository.list_by_project(cur, project_id, page)
     return PageResponse.of([_to_response(r) for r in rows], page, total)
+
+
+def get_detail(cur: Any, principal: AuthPrincipal, document_id: str) -> DocumentDetailResponse:
+    row = repository.find_by_id(cur, document_id)
+    if row is None:
+        raise errors.not_found("문서", document_id)
+    _require_project(cur, principal, str(row["project_id"]))
+    return DocumentDetailResponse(
+        id=str(row["id"]),
+        projectId=str(row["project_id"]),
+        fileName=row["original_filename"],
+        fileSize=row["size_bytes"],
+        mimeType=row["content_type"],
+        status=row["status"],
+        error=row["error"],
+        uploadedBy=row["uploaded_by"],
+        uploadedAt=row["created_at"].isoformat(),
+        pageCount=row["page_count"],
+        extractedCharCount=row["extracted_chars"],
+        wbsId=row["wbs_id"],
+        wbsName=row["wbs_name"],
+        productType=row["product_type"],
+        proposedType=row["proposed_type"],
+        draftStatus=row["draft_status"],
+        workProductId=str(row["draft_work_product_id"]) if row["draft_work_product_id"] else None,
+        downloadUrl=f"/api/documents/{row['id']}/content",
+        originalUrl=None,  # 올린 문서는 여기가 원본이다. 도구에서 온 산출물은 external_url 을 쓴다
+    )
+
+
+def update(
+    cur: Any, principal: AuthPrincipal, document_id: str, req: DocumentUpdateRequest
+) -> DocumentDetailResponse:
+    """자료 설정. WBS 항목과 29110 유형 태그를 사람이 정한다. 빈 문자열은 지운다."""
+    row = repository.find_by_id(cur, document_id)
+    if row is None:
+        raise errors.not_found("문서", document_id)
+    project_id = str(row["project_id"])
+    _require_project(cur, principal, project_id)
+
+    if req.wbsId is not None:
+        wbs_id = req.wbsId.strip()
+        if not wbs_id:
+            repository.link_wbs_item(cur, document_id, None)
+        else:
+            dashboard_service.ensure_wbs_loaded(cur, project_id)
+            item = wbs_repository.find_item(cur, project_id, wbs_id)
+            if item is None:
+                raise errors.validation_failed(f"WBS 항목 {wbs_id} 이(가) 이 사업에 없습니다.")
+            repository.link_wbs_item(cur, document_id, str(item["id"]))
+
+    if req.productType is not None:
+        product_type = req.productType.strip() or None
+        if product_type is not None and product_type not in DISPLAY_NAMES:
+            raise errors.validation_failed(f"알 수 없는 산출물 유형입니다: {product_type}")
+        repository.set_product_type(cur, document_id, product_type)
+
+    return get_detail(cur, principal, document_id)
 
 
 def get_text(cur: Any, principal: AuthPrincipal, document_id: str) -> DocumentTextResponse:

@@ -120,19 +120,20 @@ def test_hwpx_table_survives_upload(client, as_pm):
 
 
 @requires_db
-def test_same_content_is_rejected(client, as_pm):
-    """파일명을 바꿔 다시 올려도 내용이 같으면 같은 문서다."""
+def test_same_content_is_the_same_document(client, as_pm):
+    """파일명을 바꿔 다시 올려도 내용이 같으면 같은 문서다. 막지 않고 그 문서를 돌려준다."""
     data = _xlsx_bytes("중복확인")
-    assert _upload(client, as_pm, "첫번째.xlsx", data).status_code == 201
+    first = _upload(client, as_pm, "첫번째.xlsx", data)
+    assert first.status_code == 201
 
     again = _upload(client, as_pm, "이름만다름.xlsx", data)
-    assert again.status_code == 409
-    assert again.json()["code"] == "DOCUMENT_DUPLICATE"
+    assert again.status_code == 201
+    assert again.json()["id"] == first.json()["id"]
 
 
 @requires_db
 def test_unsupported_extension_is_rejected(client, as_pm):
-    res = _upload(client, as_pm, "메모.txt", b"aaaa")
+    res = _upload(client, as_pm, "압축.zip", b"aaaa")
     assert res.status_code == 400
     assert "HWP" in res.json()["message"]
 
@@ -247,3 +248,35 @@ def test_delete_allows_reupload_of_same_file(client, as_pm):
     again = _upload(client, as_pm, "재업로드.xlsx", data)
     assert again.status_code == 201
     assert again.json()["status"] == "STRUCTURED"
+
+
+# ── 같은 문서 다시 올리기. 막지 않고, 실패했던 것이면 다시 읽는다 (09.23 착수보고 PDF 사례)
+
+
+@requires_db
+def test_failed_document_is_reprocessed_on_reupload(client, as_pm, monkeypatch):
+    from app.document import extractor, service
+
+    data = _xlsx_bytes("재시도확인")
+    real = extractor.extract
+    calls = {"n": 0}
+
+    def flaky(path, ext):
+        calls["n"] += 1
+        if calls["n"] == 1:
+            raise ValueError("Bounding box is not fully within parent page bounding box")
+        return real(path, ext)
+
+    monkeypatch.setattr(service.extractor, "extract", flaky)
+
+    first = _upload(client, as_pm, "재시도.xlsx", data)
+    assert first.status_code == 201, first.text
+    assert first.json()["status"] == "FAILED"
+    assert "Bounding box" in first.json()["error"]
+    doc_id = first.json()["id"]
+
+    second = _upload(client, as_pm, "재시도.xlsx", data)
+    assert second.status_code == 201, second.text
+    assert second.json()["id"] == doc_id  # 같은 문서다. 두 벌이 생기지 않는다
+    assert second.json()["status"] == "STRUCTURED"
+    assert second.json()["error"] is None

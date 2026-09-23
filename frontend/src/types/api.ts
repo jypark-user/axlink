@@ -1091,6 +1091,34 @@ export interface DocumentUploadResponse {
   error: string | null;
 }
 
+/** 자료 상세. 왼쪽 정보·설정, 오른쪽 추출 결과의 재료다. */
+export interface DocumentDetailResponse {
+  id: string;
+  projectId: string;
+  fileName: string;
+  fileSize: number;
+  mimeType: string;
+  status: DocumentStatus;
+  error: string | null;
+  uploadedBy: string;
+  uploadedAt: string;
+  pageCount: number | null;
+  extractedCharCount: number | null;
+  wbsId: string | null;
+  wbsName: string | null;
+  productType: string | null;
+  proposedType: string | null;
+  draftStatus: StructuringDraftStatus | null;
+  workProductId: string | null;
+  downloadUrl: string;
+  originalUrl: string | null;
+}
+
+export interface DocumentUpdateRequest {
+  wbsId?: string;
+  productType?: string;
+}
+
 /** 추출 결과 원문. 파싱이 제대로 됐는지 사람이 눈으로 확인하는 용도다. */
 export interface DocumentTextResponse {
   id: string;
@@ -1176,6 +1204,35 @@ export interface DeliverableSummary {
   missing: number;
   overdue: number;
   none: number;
+}
+
+/** 산출물 화면 한 줄. WBS 말단 작업이 정한 산출물과 판정, 붙은 문서, 29110 태그 (ARC-016). */
+export interface WbsDeliverableDocument {
+  id: string;
+  fileName: string;
+  status: DocumentStatus;
+  uploadedAt: string;
+  proposedType: string | null;
+  confirmed: boolean;
+}
+
+export interface WbsDeliverableItem {
+  wbsId: string;
+  name: string;
+  deliverable: string | null;
+  endDate: string | null;
+  status: DeliverableStatus;
+  rule: 'LINKED_DOC' | 'REPO_PATH' | 'FILE_NAME' | 'PRODUCT_TYPE' | null;
+  ref: string | null;
+  url: string | null;
+  productType: string | null;
+  documents: WbsDeliverableDocument[];
+}
+
+export interface WbsDeliverablesResponse {
+  baseDate: string;
+  items: WbsDeliverableItem[];
+  summary: DeliverableSummary;
 }
 
 export interface WbsScheduleResponse {

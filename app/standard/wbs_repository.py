@@ -146,15 +146,27 @@ def save_judgements(cur: Any, project_id: str, judgements: list) -> None:
 
 
 def project_documents(cur: Any, project_id: str) -> list[dict[str, Any]]:
-    """올린 문서 이름. 파일 이름 규칙의 재료다. 실패·반려된 문서는 뺀다."""
+    """올린 문서. 파일 이름 규칙과 항목 연결 규칙의 재료다. 실패·반려된 문서는 뺀다."""
     return fetch_all(
         cur,
         """
-        select id, original_filename
-          from document_upload
-         where project_id = %s and status not in ('FAILED', 'REJECTED')
+        select d.id, d.original_filename, d.wbs_item_id, d.status, d.created_at,
+               d.product_type, s.proposed_type, s.status as draft_status, s.work_product_id
+          from document_upload d
+          left join structuring_draft s on s.document_upload_id = d.id
+         where d.project_id = %s and d.status not in ('FAILED', 'REJECTED')
+         order by d.created_at desc
         """,
         (project_id,),
+    )
+
+
+def find_item(cur: Any, project_id: str, wbs_id: str) -> dict[str, Any] | None:
+    return fetch_one(
+        cur,
+        "select id, wbs_id, name, deliverable from wbs_item "
+        "where project_id = %s and wbs_id = %s and active",
+        (project_id, wbs_id),
     )
 
 

@@ -41,6 +41,18 @@ def test_경로_대소문자와_구분자는_흔들려도_맞춘다():
     assert j.status == d.SUBMITTED and j.ref == "app/integration/port.py"
 
 
+def test_항목에_붙은_문서가_있으면_이름과_상관없이_제출이다():
+    item = {**_item("1.4", "docs/50-report/중간보고서.md", end=date(2026, 1, 1)), "id": "item-1"}
+    docs = [{"id": "d9", "original_filename": "아무이름.hwp", "wbs_item_id": "item-1"}]
+    j = d.judge([item], tree=None, products=[], documents=docs, today=TODAY)[0]
+    assert j.status == d.SUBMITTED and j.rule == d.RULE_LINK
+    assert j.ref == "아무이름.hwp" and j.url == "/api/documents/d9/content"
+    # 다른 항목에 붙은 문서는 이 항목의 근거가 아니다
+    other = [{"id": "d8", "original_filename": "x.hwp", "wbs_item_id": "item-2"}]
+    j2 = d.judge([item], tree=None, products=[], documents=other, today=TODAY)[0]
+    assert j2.status == d.OVERDUE
+
+
 def test_폴더를_적으면_그_아래_파일이_있을_때_제출이다():
     tree = d.RepoTree(
         sha="s", blob_url_base="https://github.com/o/r/blob/s/",

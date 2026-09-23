@@ -14,6 +14,7 @@ from app.dashboard import service, snapshot
 from app.dashboard.models import (
     ProgressResponse,
     ProgressSnapshotResponse,
+    WbsDeliverablesResponse,
     WbsScheduleResponse,
 )
 from app.db import tx
@@ -46,6 +47,15 @@ def take_snapshot(
     """
     with tx() as cur:
         return snapshot.take(cur, principal, project_id, at)
+
+
+@router.get("/{project_id}/wbs/deliverables", response_model=WbsDeliverablesResponse)
+def wbs_deliverables(
+    project_id: str, principal: Principal, at: Annotated[date | None, Query()] = None
+) -> WbsDeliverablesResponse:
+    """산출물 화면. WBS 가 정한 산출물과 제출 판정(ARC-016)."""
+    with tx() as cur:
+        return service.wbs_deliverables(cur, principal, project_id, at)
 
 
 @router.get("/{project_id}/wbs", response_model=WbsScheduleResponse)

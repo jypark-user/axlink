@@ -10,12 +10,15 @@ _COLUMNS = """
     d.size_bytes, d.file_hash, d.page_count, d.status, d.error, d.created_at,
     length(d.extracted_text) as extracted_chars,
     u.name as uploaded_by,
-    s.status as draft_status, s.work_product_id as draft_work_product_id
+    s.status as draft_status, s.work_product_id as draft_work_product_id,
+    s.proposed_type, d.product_type, d.wbs_item_id,
+    w.wbs_id, w.name as wbs_name
 """
 _FROM = """
     from document_upload d
     join app_user u on u.id = d.uploaded_by_user_id
     left join structuring_draft s on s.document_upload_id = d.id
+    left join wbs_item w on w.id = d.wbs_item_id
 """
 
 
@@ -69,6 +72,20 @@ def insert(
         ),
     )
     return str(row["id"])
+
+
+def link_wbs_item(cur: Any, document_id: str, wbs_item_id: str | None) -> None:
+    cur.execute(
+        "update document_upload set wbs_item_id = %s, updated_at = now() where id = %s",
+        (wbs_item_id, document_id),
+    )
+
+
+def set_product_type(cur: Any, document_id: str, product_type: str | None) -> None:
+    cur.execute(
+        "update document_upload set product_type = %s, updated_at = now() where id = %s",
+        (product_type, document_id),
+    )
 
 
 def mark_extracted(

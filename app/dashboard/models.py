@@ -190,6 +190,38 @@ class WbsItemResponse(BaseModel):
     deliverableUrl: str | None = None  # noqa: N815
 
 
+class WbsDeliverableDocument(BaseModel):
+    """항목에 붙었거나 이름이 맞은 문서."""
+
+    id: str
+    fileName: str  # noqa: N815
+    status: str
+    uploadedAt: str  # noqa: N815
+    proposedType: str | None  # noqa: N815  초안이 추정한 29110 유형. 확정 전이라도 태그로 보인다
+    confirmed: bool
+
+
+class WbsDeliverableItem(BaseModel):
+    """산출물 화면의 한 줄. WBS 말단 작업이 정한 산출물과 그 판정(ARC-016)."""
+
+    wbsId: str  # noqa: N815
+    name: str
+    deliverable: str | None
+    endDate: str | None  # noqa: N815
+    status: str  # NONE | SUBMITTED | MISSING | OVERDUE
+    rule: str | None
+    ref: str | None
+    url: str | None
+    productType: str | None  # noqa: N815  29110 유형 태그. 확정된 산출물이나 초안 추정에서 온다
+    documents: list[WbsDeliverableDocument]
+
+
+class WbsDeliverablesResponse(BaseModel):
+    baseDate: str  # noqa: N815
+    items: list[WbsDeliverableItem]
+    summary: "DeliverableSummary"
+
+
 class DeliverableSummary(BaseModel):
     """말단 항목의 산출물 판정 건수. none 은 산출물 열이 없는 항목이다."""
 

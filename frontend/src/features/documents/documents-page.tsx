@@ -3,9 +3,7 @@ import { Link } from 'react-router-dom';
 import type { ColumnDef } from '@tanstack/react-table';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
-import { Markdown } from '@/components/ui/markdown';
 import { Progress } from '@/components/ui/progress';
-import { Sheet, SheetContent, SheetHeader, SheetTitle } from '@/components/ui/sheet';
 import { DataTable, SortableHeader } from '@/components/ui/data-table';
 import { DataState } from '@/components/common/data-state';
 import { PaginationBar } from '@/components/common/pagination-bar';
@@ -19,19 +17,20 @@ import { badgeVariantFor, label } from '@/lib/labels';
 import { toQueryString } from '@/lib/query';
 import { useAsync } from '@/lib/use-async';
 import { ALLOWED, rejectReason } from '@/features/documents/upload';
-import type { DocumentTextResponse, DocumentUploadResponse, PageResponse } from '@/types/api';
+import type { DocumentUploadResponse, PageResponse } from '@/types/api';
 
-const documentColumns = (
-  projectId: string,
-  onShowText: (doc: DocumentUploadResponse) => void,
-): ColumnDef<DocumentUploadResponse, unknown>[] => [
+const documentColumns = (projectId: string): ColumnDef<DocumentUploadResponse, unknown>[] => [
   {
     accessorKey: 'fileName',
     header: ({ column }) => <SortableHeader column={column}>파일명</SortableHeader>,
     cell: ({ row }) => (
-      <span className="block max-w-xs truncate" title={row.original.fileName}>
+      <Link
+        to={`/p/${projectId}/documents/${row.original.id}`}
+        className="block max-w-xs truncate underline-offset-2 hover:underline"
+        title={row.original.fileName}
+      >
         {row.original.fileName}
-      </span>
+      </Link>
     ),
   },
   {
@@ -65,12 +64,9 @@ const documentColumns = (
     header: '',
     cell: ({ row }) => (
       <div className="flex justify-end gap-2">
-        {/* 읽기가 끝난 문서만. 글자 수가 있으면 추출본이 있다는 뜻이다 */}
-        {row.original.extractedCharCount !== null && (
-          <Button size="sm" variant="ghost" onClick={() => onShowText(row.original)}>
-            추출 결과
-          </Button>
-        )}
+        <Button asChild size="sm" variant="ghost">
+          <Link to={`/p/${projectId}/documents/${row.original.id}`}>상세</Link>
+        </Button>
         {row.original.draftAvailable && (
           <Button asChild size="sm" variant="outline">
             <Link to={`/p/${projectId}/documents/${row.original.id}/draft`}>초안 확인</Link>
@@ -81,46 +77,6 @@ const documentColumns = (
   },
 ];
 
-/** 문서에서 뽑은 글을 그대로 보여 준다. 표가 행·열로 남았는지 여기서 확인한다(SWFR.CON.007). */
-function TextSheet({
-  doc,
-  onClose,
-}: {
-  doc: DocumentUploadResponse | null;
-  onClose: () => void;
-}): ReactNode {
-  const docId = doc?.id ?? null;
-  const state = useAsync<DocumentTextResponse | null>(
-    () => (docId ? api.get<DocumentTextResponse>(`/documents/${docId}/text`) : Promise.resolve(null)),
-    [docId],
-  );
-  return (
-    <Sheet open={doc !== null} onOpenChange={(o) => !o && onClose()}>
-      <SheetContent className="flex w-full flex-col gap-4 overflow-y-auto sm:max-w-2xl">
-        {doc && (
-          <SheetHeader>
-            <SheetTitle className="text-base">{doc.fileName}</SheetTitle>
-            {state.data && (
-              <p className="text-muted-foreground text-sm tnum">
-                {state.data.charCount.toLocaleString('ko-KR')}자
-                {state.data.pageCount !== null && ` · ${state.data.pageCount}쪽`}
-              </p>
-            )}
-          </SheetHeader>
-        )}
-        <DataState state={state} onRetry={state.reload} empty={{ text: '추출된 글이 없습니다.' }}>
-          {(text) =>
-            text && text.text.trim() ? (
-              <Markdown className="text-sm leading-6">{text.text}</Markdown>
-            ) : (
-              <p className="text-muted-foreground text-sm">추출된 글이 없습니다.</p>
-            )
-          }
-        </DataState>
-      </SheetContent>
-    </Sheet>
-  );
-}
 
 // 추출까지가 지금의 종착점이다. 정형화(STRUCTURED)가 붙기 전까지 EXTRACTED 를
 // 진행 중으로 보면 목록이 2초마다 영원히 다시 부른다.
@@ -132,7 +88,6 @@ export function DocumentsPage(): ReactNode {
   const inputRef = useRef<HTMLInputElement>(null);
   const [page, setPage] = useState(0);
   const [progress, setProgress] = useState<number | null>(null);
-  const [shown, setShown] = useState<DocumentUploadResponse | null>(null);
 
   const state = useAsync<PageResponse<DocumentUploadResponse>>(
     () =>
@@ -183,7 +138,7 @@ export function DocumentsPage(): ReactNode {
     <>
       <PageHeader
         title="문서"
-        description="산출물 문서를 올리는 자리입니다. 올린 문서는 AI 가 읽어 색인하고 산출물 유형과 요구사항 초안을 뽑습니다. 파일 이름이 WBS 산출물 열과 같으면 제출로 잡힙니다."
+        description="산출물 문서를 올리는 자리입니다. 올린 문서는 AI 가 읽어 색인하고 산출물 유형과 요구사항 초안을 뽑습니다. PDF · DOCX · XLSX · PPTX · HWP · HWPX · MD · TXT 를 받고, 같은 파일을 다시 올리면 다시 읽습니다. 특정 WBS 항목의 산출물로 올리려면 산출물 화면의 올리기를 쓰십시오."
         actions={
           <>
             <input
@@ -213,7 +168,7 @@ export function DocumentsPage(): ReactNode {
         {(pageData) => (
           <>
             <DataTable<DocumentUploadResponse, unknown>
-              columns={documentColumns(project.id, setShown)}
+              columns={documentColumns(project.id)}
               data={pageData.content}
               paginated={false}
               emptyText="업로드된 문서가 없습니다."
@@ -222,7 +177,6 @@ export function DocumentsPage(): ReactNode {
           </>
         )}
       </DataState>
-      <TextSheet doc={shown} onClose={() => setShown(null)} />
     </>
   );
 }
