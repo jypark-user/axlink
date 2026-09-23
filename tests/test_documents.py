@@ -280,3 +280,16 @@ def test_failed_document_is_reprocessed_on_reupload(client, as_pm, monkeypatch):
     assert second.json()["id"] == doc_id  # 같은 문서다. 두 벌이 생기지 않는다
     assert second.json()["status"] == "STRUCTURED"
     assert second.json()["error"] is None
+
+
+@requires_db
+def test_pptx_upload_is_parsed_and_stored(client, as_pm):
+    """발표 자료(pptx)도 받는다. 표의 확장자 제약과 코드 목록이 같아야 한다 (09.23 500 사례)."""
+    from tests.test_extractor_office import _pptx_bytes
+
+    res = _upload(client, as_pm, "착수보고.pptx", _pptx_bytes())
+    assert res.status_code == 201, res.text
+    body = res.json()
+    assert body["status"] == "STRUCTURED" and body["error"] is None
+    text = client.get(f"/api/documents/{body['id']}/text", headers=_auth(as_pm)).json()
+    assert "| 마일스톤 | 목표일 |" in text["text"] and text["pageCount"] == 2
