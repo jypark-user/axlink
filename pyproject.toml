@@ -22,6 +22,7 @@ dependencies = [
   "hwp-hwpx-parser>=1.0",
   "pypdf>=6.0",
   "pdfplumber>=0.11",      # PDF 표. pypdf 는 글자만 뽑고 표를 못 본다
+  "python-pptx>=1.0",      # 발표 자료. 착수·중간·최종보고 자료가 pptx 다
   "python-docx>=1.1",
   "openpyxl>=3.1",
 ]
