@@ -33,10 +33,26 @@ class ScheduleOption(BaseModel):
     label: str
 
 
+class SnapshotOption(BaseModel):
+    hours: int
+    label: str
+
+
+SNAPSHOT_LABELS = {
+    24: "하루 한 번 (정한 시각)",
+    12: "12시간마다",
+    6: "6시간마다",
+    3: "3시간마다",
+    1: "매시간",
+}
+
+
 class ProjectScheduleResponse(BaseModel):
     projectId: str  # noqa: N815
     syncIntervalMinutes: int  # noqa: N815
     snapshotTime: str  # noqa: N815  "HH:MM" 사업 시간대
+    snapshotIntervalHours: int  # noqa: N815  24 면 정한 시각에 하루 한 번
+    snapshotOptions: list[SnapshotOption]  # noqa: N815
     timezone: str
     options: list[ScheduleOption]
     minIntervalMinutes: int  # noqa: N815
@@ -49,6 +65,7 @@ class ProjectScheduleResponse(BaseModel):
 class ProjectScheduleUpdateRequest(BaseModel):
     syncIntervalMinutes: int  # noqa: N815
     snapshotTime: str = Field(pattern=r"^\d{2}:\d{2}$")  # noqa: N815
+    snapshotIntervalHours: int = scheduler.DEFAULT_SNAPSHOT_INTERVAL  # noqa: N815
 
 
 def _require_project(cur: Any, principal: AuthPrincipal, project_id: str) -> None:
@@ -72,8 +89,10 @@ def get(cur: Any, principal: AuthPrincipal, project_id: str) -> ProjectScheduleR
     row = fetch_one(cur, "select * from project_schedule where project_id = %s", (project_id,))
     interval = row["sync_interval_minutes"] if row else scheduler.DEFAULT_SYNC_INTERVAL
     at = scheduler.DEFAULT_SNAPSHOT_TIME
+    every = scheduler.DEFAULT_SNAPSHOT_INTERVAL
     if row:
         at = time(row["snapshot_hour"], row["snapshot_minute"])
+        every = row["snapshot_interval_hours"]
     last = fetch_one(
         cur, "select max(snapshot_date) as d from progress_snapshot where project_id = %s",
         (project_id,),
@@ -83,6 +102,11 @@ def get(cur: Any, principal: AuthPrincipal, project_id: str) -> ProjectScheduleR
         projectId=project_id,
         syncIntervalMinutes=interval,
         snapshotTime=at.strftime("%H:%M"),
+        snapshotIntervalHours=every,
+        snapshotOptions=[
+            SnapshotOption(hours=h, label=SNAPSHOT_LABELS[h])
+            for h in scheduler.SNAPSHOT_INTERVAL_OPTIONS
+        ],
         timezone=str(scheduler.LOCAL_TZ),
         options=[
             ScheduleOption(minutes=m, label=INTERVAL_LABELS[m])
@@ -106,6 +130,9 @@ def update(
     if req.syncIntervalMinutes not in scheduler.SYNC_INTERVAL_OPTIONS:
         choices = ", ".join(str(m) for m in scheduler.SYNC_INTERVAL_OPTIONS)
         raise errors.validation_failed(f"수집 주기는 {choices} 분 중 하나여야 합니다.")
+    if req.snapshotIntervalHours not in scheduler.SNAPSHOT_INTERVAL_OPTIONS:
+        choices = ", ".join(str(h) for h in scheduler.SNAPSHOT_INTERVAL_OPTIONS)
+        raise errors.validation_failed(f"스냅샷 빈도는 {choices} 시간 중 하나여야 합니다.")
     try:
         hour, minute = (int(x) for x in req.snapshotTime.split(":"))
         at = time(hour, minute)
@@ -115,14 +142,18 @@ def update(
         """
         insert into project_schedule
             (project_id, sync_interval_minutes, snapshot_hour, snapshot_minute,
-             updated_by_user_id, updated_at)
-        values (%s, %s, %s, %s, %s, now())
+             snapshot_interval_hours, updated_by_user_id, updated_at)
+        values (%s, %s, %s, %s, %s, %s, now())
         on conflict (project_id) do update set
           sync_interval_minutes = excluded.sync_interval_minutes,
           snapshot_hour = excluded.snapshot_hour, snapshot_minute = excluded.snapshot_minute,
+          snapshot_interval_hours = excluded.snapshot_interval_hours,
           updated_by_user_id = excluded.updated_by_user_id, updated_at = now()
         """,
-        (project_id, req.syncIntervalMinutes, at.hour, at.minute, principal.user_id),
+        (
+            project_id, req.syncIntervalMinutes, at.hour, at.minute, req.snapshotIntervalHours,
+            principal.user_id,
+        ),
     )
     return get(cur, principal, project_id)
 

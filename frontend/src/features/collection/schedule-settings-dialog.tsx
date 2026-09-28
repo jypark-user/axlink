@@ -78,12 +78,14 @@ function ScheduleForm({
   );
   const [interval, setInterval] = useState<number>(30);
   const [snapshotTime, setSnapshotTime] = useState('00:10');
+  const [snapshotEvery, setSnapshotEvery] = useState<number>(24);
   const [saving, setSaving] = useState<'sync' | 'snapshot' | null>(null);
 
   useEffect(() => {
     if (!state.data) return;
     setInterval(state.data.syncIntervalMinutes);
     setSnapshotTime(state.data.snapshotTime);
+    setSnapshotEvery(state.data.snapshotIntervalHours);
   }, [state.data]);
 
   // 서버는 둘을 한 설정으로 갖는다. 따로 저장해도 바뀐 쪽만 다르게 보낸다.
@@ -94,6 +96,8 @@ function ScheduleForm({
       await api.put<ProjectScheduleResponse>(`/projects/${projectId}/schedule`, {
         syncIntervalMinutes: which === 'sync' ? interval : state.data.syncIntervalMinutes,
         snapshotTime: which === 'snapshot' ? snapshotTime : state.data.snapshotTime,
+        snapshotIntervalHours:
+          which === 'snapshot' ? snapshotEvery : state.data.snapshotIntervalHours,
       });
       toast({
         title: which === 'sync' ? '수집 주기를 저장했습니다.' : '스냅샷 시각을 저장했습니다.',
@@ -154,15 +158,31 @@ function ScheduleForm({
 
           <section className="flex flex-col gap-3 border-t pt-5">
             <div>
-              <h3 className="text-sm font-semibold">일별 스냅샷 시각</h3>
+              <h3 className="text-sm font-semibold">일별 스냅샷</h3>
               <p className="text-muted-foreground mt-1 text-sm">
-                매일 이 시각에 진척·일정·품질·산출물 지표를 한 줄로 남깁니다. 추이 그래프의
-                재료입니다. 과업지시서 Ⅱ.2가 정한 일별 기록이라 주기는 없고 시각만 정합니다.
+                매일 정한 시각에 진척·일정·품질·산출물 지표를 한 줄로 남깁니다. 추이 그래프의
+                재료입니다. 과업지시서 Ⅱ.2의 일별 기록이 최소이고, 더 자주 갱신하면 그날 값이
+                최신으로 덮입니다.
               </p>
             </div>
-            <div className="flex items-end gap-3">
+            <div className="flex flex-wrap items-end gap-3">
               <div className="flex flex-col gap-1.5">
-                <Label htmlFor="snapshot-time">시각 ({s.timezone})</Label>
+                <Label htmlFor="snapshot-every">빈도</Label>
+                <select
+                  id="snapshot-every"
+                  className="bg-background border-input h-9 rounded-md border px-2 text-sm"
+                  value={snapshotEvery}
+                  onChange={(e) => setSnapshotEvery(Number(e.target.value))}
+                >
+                  {s.snapshotOptions.map((o) => (
+                    <option key={o.hours} value={o.hours}>
+                      {o.label}
+                    </option>
+                  ))}
+                </select>
+              </div>
+              <div className="flex flex-col gap-1.5">
+                <Label htmlFor="snapshot-time">기준 시각 ({s.timezone})</Label>
                 <input
                   id="snapshot-time"
                   type="time"
@@ -174,7 +194,10 @@ function ScheduleForm({
               <Button
                 size="sm"
                 onClick={() => void save('snapshot')}
-                disabled={saving !== null || snapshotTime === s.snapshotTime}
+                disabled={
+                  saving !== null ||
+                  (snapshotTime === s.snapshotTime && snapshotEvery === s.snapshotIntervalHours)
+                }
               >
                 {saving === 'snapshot' ? '저장 중…' : '저장'}
               </Button>

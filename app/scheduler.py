@@ -32,6 +32,10 @@ TICK_SECONDS = 60
 SYNC_INTERVAL_OPTIONS = (0, 15, 30, 60, 180, 360, 1440)  # 분. 0 은 수동만
 DEFAULT_SYNC_INTERVAL = 30
 DEFAULT_SNAPSHOT_TIME = time(0, 10)
+# 스냅샷 갱신 빈도(시간). 24 는 정한 시각에 하루 한 번. 그보다 작으면 그날 줄을 더 자주 덮는다.
+# 과업지시서 Ⅱ.2 의 "일별" 은 최소 보장이라 24 보다 긴 선택지는 두지 않는다.
+SNAPSHOT_INTERVAL_OPTIONS = (24, 12, 6, 3, 1)
+DEFAULT_SNAPSHOT_INTERVAL = 24
 
 
 @dataclass(frozen=True)
@@ -39,6 +43,7 @@ class Schedule:
     project_id: str
     sync_interval_minutes: int
     snapshot_at: time
+    snapshot_interval_hours: int = DEFAULT_SNAPSHOT_INTERVAL
 
 
 def sync_due(
@@ -69,21 +74,35 @@ def snapshot_due(
     return False
 
 
+def refresh_due(last_taken_at: datetime | None, interval_hours: int, now: datetime) -> bool:
+    """정한 시각과 별개로, 빈도가 하루보다 잦으면 마지막으로 찍은 뒤 그 시간이 지났는가."""
+    if interval_hours >= 24 or last_taken_at is None:
+        return False
+    return now - last_taken_at >= timedelta(hours=interval_hours)
+
+
 def _load_schedules(cur: Any) -> list[Schedule]:
     rows = fetch_all(
         cur,
         """
         select p.id as project_id,
                coalesce(s.sync_interval_minutes, %s) as interval_minutes,
-               coalesce(s.snapshot_hour, %s) as h, coalesce(s.snapshot_minute, %s) as m
+               coalesce(s.snapshot_hour, %s) as h, coalesce(s.snapshot_minute, %s) as m,
+               coalesce(s.snapshot_interval_hours, %s) as every_hours
           from project p
           left join project_schedule s on s.project_id = p.id
          where p.status in ('PLANNING', 'ACTIVE', 'CLOSING')
         """,
-        (DEFAULT_SYNC_INTERVAL, DEFAULT_SNAPSHOT_TIME.hour, DEFAULT_SNAPSHOT_TIME.minute),
+        (
+            DEFAULT_SYNC_INTERVAL, DEFAULT_SNAPSHOT_TIME.hour, DEFAULT_SNAPSHOT_TIME.minute,
+            DEFAULT_SNAPSHOT_INTERVAL,
+        ),
     )
     return [
-        Schedule(str(r["project_id"]), int(r["interval_minutes"]), time(r["h"], r["m"]))
+        Schedule(
+            str(r["project_id"]), int(r["interval_minutes"]), time(r["h"], r["m"]),
+            int(r["every_hours"]),
+        )
         for r in rows
     ]
 
@@ -124,13 +143,19 @@ def run_once(now: datetime, *, just_started: bool, taken_at_scheduled: set[str])
         local_today = now.astimezone(LOCAL_TZ).date()
         with tx() as cur:
             last = cur.execute(
-                "select max(snapshot_date) as d from progress_snapshot where project_id = %s",
+                """
+                select max(snapshot_date) as d, max(created_at) as taken_at
+                  from progress_snapshot where project_id = %s
+                """,
                 (sched.project_id,),
             ).fetchone()
         last_date = last["d"] if last else None
+        last_taken_at = last["taken_at"] if last else None
         at_time = now.astimezone(LOCAL_TZ).time() >= sched.snapshot_at
-        due = snapshot_due(last_date, sched.snapshot_at, now, just_started=just_started) or (
-            at_time and sched.project_id not in taken_at_scheduled and last_date == local_today
+        due = (
+            snapshot_due(last_date, sched.snapshot_at, now, just_started=just_started)
+            or (at_time and sched.project_id not in taken_at_scheduled and last_date == local_today)
+            or refresh_due(last_taken_at, sched.snapshot_interval_hours, now)
         )
         if due:
             try:

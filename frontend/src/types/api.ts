@@ -1097,6 +1097,9 @@ export interface ProjectScheduleResponse {
   syncIntervalMinutes: number;
   /** "HH:MM", 사업 시간대 */
   snapshotTime: string;
+  /** 24 면 정한 시각에 하루 한 번. 작으면 그날 줄을 그 간격으로 다시 찍는다 */
+  snapshotIntervalHours: number;
+  snapshotOptions: { hours: number; label: string }[];
   timezone: string;
   options: { minutes: number; label: string }[];
   minIntervalMinutes: number;
