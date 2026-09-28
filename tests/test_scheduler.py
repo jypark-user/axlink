@@ -125,8 +125,22 @@ def test_한_회차가_오늘_스냅샷을_만들고_같은_날_다시_돌면_�
         n = fetch_one(
             cur, "select count(*) as n from progress_snapshot where project_id = %s", (PID,)
         )
+        logged = fetch_one(
+            cur,
+            """
+            select count(*) as n, max(summary) as s, max(audience) as a
+              from activity_event where project_id = %s and kind = 'SNAPSHOT_TAKEN'
+            """,
+            (PID,),
+        )
         cur.execute("delete from progress_snapshot where project_id = %s", (PID,))
+        cur.execute(
+            "delete from activity_event where project_id = %s and kind = 'SNAPSHOT_TAKEN'",
+            (PID,),
+        )
     assert n["n"] == 1  # 같은 날 두 번 찍어도 한 줄이다
+    # 찍은 사실은 활동에 남고, 알림 대상이 아닌 LOG 다
+    assert logged["n"] >= 3 and logged["a"] == "LOG" and "일별 스냅샷 기록" in logged["s"]
 
 
 @requires_db

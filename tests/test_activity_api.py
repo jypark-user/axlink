@@ -70,6 +70,25 @@ def test_확인_요청은_용역사에게_조치_보고는_발주기관에게_�
 
 
 @requires_db
+def test_기록만_하는_활동은_알림_수에_안_들어간다(client, client_token):
+    from app.activity import service as activity
+
+    _clear()
+    with tx() as cur:
+        activity.record(
+            cur, project_id=PID, kind=activity.SNAPSHOT_TAKEN, audience=activity.LOG,
+            summary="일별 스냅샷 기록 2026-09-28: 진척 73.9%", actor_label="스케줄러",
+        )
+    for who in ("r2", "r3"):
+        got = _notifications(client, client_token(who))
+        assert got["unread"] == 0 and all(i["kind"] != "SNAPSHOT_TAKEN" for i in got["items"])
+    # 활동 탭에는 있다
+    tab = client.get(f"/api/projects/{PID}/activity", headers=_auth(client_token("r3"))).json()
+    assert [e["kind"] for e in tab["content"]] == ["SNAPSHOT_TAKEN"]
+    _clear()
+
+
+@requires_db
 def test_용역사가_문서를_올리면_발주기관이_알림을_받는다(client, client_token):
     _clear()
     contractor_tok = client_token("r3")

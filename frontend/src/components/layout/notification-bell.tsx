@@ -25,6 +25,7 @@ const KIND_LABEL: Record<string, string> = {
   DELIVERABLE_OVERDUE: '산출물 지연',
   SYNC_FAILED: '동기화 실패',
   SYNC_CHANGED: '동기화 변경',
+  SNAPSHOT_TAKEN: '스냅샷 기록',
 };
 
 const POLL_MS = 60_000;

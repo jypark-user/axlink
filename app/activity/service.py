@@ -23,6 +23,7 @@ log = logging.getLogger(__name__)
 CLIENT = "CLIENT"
 CONTRACTOR = "CONTRACTOR"
 ALL = "ALL"
+LOG = "LOG"  # 활동 탭에만 남고 알림으로는 안 간다. 매일 일어나는 일이 여기다
 
 # 종류. 화면 라벨은 프런트가 붙인다
 REVIEW_REQUESTED = "REVIEW_REQUESTED"
@@ -34,6 +35,7 @@ DELIVERABLE_SUBMITTED = "DELIVERABLE_SUBMITTED"
 DELIVERABLE_OVERDUE = "DELIVERABLE_OVERDUE"
 SYNC_FAILED = "SYNC_FAILED"
 SYNC_CHANGED = "SYNC_CHANGED"
+SNAPSHOT_TAKEN = "SNAPSHOT_TAKEN"
 
 
 def other_side(role: str) -> str:
