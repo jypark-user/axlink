@@ -113,7 +113,7 @@ export function CollectionPage(): ReactNode {
     <>
       <PageHeader
         title="동기화"
-        description="자동 수집 설정과 수집 잡 이력입니다. 이력은 30초마다 자동 갱신됩니다."
+        description="도구에서 가져온 수집 잡 이력입니다. 30초마다 자동 갱신됩니다."
         actions={
           <Button size="sm" variant="outline" onClick={reload}>
             새로고침
