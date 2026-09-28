@@ -157,7 +157,7 @@ function ScheduleForm({
               <h3 className="text-sm font-semibold">일별 스냅샷 시각</h3>
               <p className="text-muted-foreground mt-1 text-sm">
                 매일 이 시각에 진척·일정·품질·산출물 지표를 한 줄로 남깁니다. 추이 그래프의
-                재료입니다. 하루 한 번이 기준이라 주기는 없고 시각만 정합니다.
+                재료입니다. 과업지시서 Ⅱ.2가 정한 일별 기록이라 주기는 없고 시각만 정합니다.
               </p>
             </div>
             <div className="flex items-end gap-3">
