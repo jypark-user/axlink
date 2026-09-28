@@ -24,7 +24,8 @@ INTERVAL_LABELS = {
     60: "1시간마다",
     180: "3시간마다",
     360: "6시간마다",
-    1440: "하루 한 번",
+    720: "12시간마다",
+    1440: "하루 한 번 (정한 시각)",
 }
 
 
@@ -50,6 +51,7 @@ SNAPSHOT_LABELS = {
 class ProjectScheduleResponse(BaseModel):
     projectId: str  # noqa: N815
     syncIntervalMinutes: int  # noqa: N815
+    syncTime: str  # noqa: N815  "HH:MM". 하루 한 번일 때 도는 시각
     snapshotTime: str  # noqa: N815  "HH:MM" 사업 시간대
     snapshotIntervalHours: int  # noqa: N815  24 면 정한 시각에 하루 한 번
     snapshotOptions: list[SnapshotOption]  # noqa: N815
@@ -64,6 +66,7 @@ class ProjectScheduleResponse(BaseModel):
 
 class ProjectScheduleUpdateRequest(BaseModel):
     syncIntervalMinutes: int  # noqa: N815
+    syncTime: str = Field(default="06:00", pattern=r"^\d{2}:\d{2}$")  # noqa: N815
     snapshotTime: str = Field(pattern=r"^\d{2}:\d{2}$")  # noqa: N815
     snapshotIntervalHours: int = scheduler.DEFAULT_SNAPSHOT_INTERVAL  # noqa: N815
 
@@ -90,9 +93,11 @@ def get(cur: Any, principal: AuthPrincipal, project_id: str) -> ProjectScheduleR
     interval = row["sync_interval_minutes"] if row else scheduler.DEFAULT_SYNC_INTERVAL
     at = scheduler.DEFAULT_SNAPSHOT_TIME
     every = scheduler.DEFAULT_SNAPSHOT_INTERVAL
+    sync_at = scheduler.DEFAULT_SYNC_TIME
     if row:
         at = time(row["snapshot_hour"], row["snapshot_minute"])
         every = row["snapshot_interval_hours"]
+        sync_at = time(row["sync_hour"], row["sync_minute"])
     last = fetch_one(
         cur, "select max(snapshot_date) as d from progress_snapshot where project_id = %s",
         (project_id,),
@@ -101,6 +106,7 @@ def get(cur: Any, principal: AuthPrincipal, project_id: str) -> ProjectScheduleR
     return ProjectScheduleResponse(
         projectId=project_id,
         syncIntervalMinutes=interval,
+        syncTime=sync_at.strftime("%H:%M"),
         snapshotTime=at.strftime("%H:%M"),
         snapshotIntervalHours=every,
         snapshotOptions=[
@@ -136,23 +142,27 @@ def update(
     try:
         hour, minute = (int(x) for x in req.snapshotTime.split(":"))
         at = time(hour, minute)
+        sh, sm = (int(x) for x in req.syncTime.split(":"))
+        sync_at = time(sh, sm)
     except ValueError as exc:
-        raise errors.validation_failed("스냅샷 시각은 HH:MM 꼴이어야 합니다.") from exc
+        raise errors.validation_failed("시각은 HH:MM 꼴이어야 합니다.") from exc
     cur.execute(
         """
         insert into project_schedule
-            (project_id, sync_interval_minutes, snapshot_hour, snapshot_minute,
-             snapshot_interval_hours, updated_by_user_id, updated_at)
-        values (%s, %s, %s, %s, %s, %s, now())
+            (project_id, sync_interval_minutes, sync_hour, sync_minute,
+             snapshot_hour, snapshot_minute, snapshot_interval_hours,
+             updated_by_user_id, updated_at)
+        values (%s, %s, %s, %s, %s, %s, %s, %s, now())
         on conflict (project_id) do update set
           sync_interval_minutes = excluded.sync_interval_minutes,
+          sync_hour = excluded.sync_hour, sync_minute = excluded.sync_minute,
           snapshot_hour = excluded.snapshot_hour, snapshot_minute = excluded.snapshot_minute,
           snapshot_interval_hours = excluded.snapshot_interval_hours,
           updated_by_user_id = excluded.updated_by_user_id, updated_at = now()
         """,
         (
-            project_id, req.syncIntervalMinutes, at.hour, at.minute, req.snapshotIntervalHours,
-            principal.user_id,
+            project_id, req.syncIntervalMinutes, sync_at.hour, sync_at.minute,
+            at.hour, at.minute, req.snapshotIntervalHours, principal.user_id,
         ),
     )
     return get(cur, principal, project_id)

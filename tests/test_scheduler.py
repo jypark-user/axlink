@@ -30,6 +30,15 @@ def test_주기가_지났을_때만_수집하고_0_이면_안_한다():
     assert scheduler.sync_due(now - timedelta(days=3), 0, now) is False
 
 
+def test_하루_한_번_수집은_정한_시각_규칙이다():
+    at = time(6, 0)
+    yesterday = _at(6, 5, day=27)
+    assert scheduler.sync_due(yesterday, 1440, _at(5, 59), at) is False  # 시각 전
+    assert scheduler.sync_due(yesterday, 1440, _at(6, 0), at) is True
+    assert scheduler.sync_due(_at(6, 1), 1440, _at(23, 0), at) is False  # 오늘 이미 했다
+    assert scheduler.sync_due(None, 1440, _at(3, 0), at) is True  # 처음이면 지금
+
+
 def test_빈도가_하루보다_잦으면_마지막_뒤_그_시간이_지났을_때_다시_찍는다():
     now = _at(15, 0)
     # 하루 한 번(24)은 정한 시각 규칙만 쓴다
@@ -132,7 +141,8 @@ def test_설정_API_는_선택지만_받고_발주기관만_바꾼다(client, cl
     body = got.json()
     assert body["syncIntervalMinutes"] == 30 and body["snapshotTime"] == "00:10"
     assert body["minIntervalMinutes"] == 15 and body["editable"] is False
-    assert [o["minutes"] for o in body["options"]] == [0, 15, 30, 60, 180, 360, 1440]
+    assert [o["minutes"] for o in body["options"]] == [0, 15, 30, 60, 180, 360, 720, 1440]
+    assert body["syncTime"] == "06:00"
     assert body["snapshotIntervalHours"] == 24
     assert [o["hours"] for o in body["snapshotOptions"]] == [24, 12, 6, 3, 1]
 
@@ -152,11 +162,15 @@ def test_설정_API_는_선택지만_받고_발주기관만_바꾼다(client, cl
 
     ok = client.put(
         f"/api/projects/{PID}/schedule",
-        json={"syncIntervalMinutes": 60, "snapshotTime": "06:30", "snapshotIntervalHours": 6},
+        json={
+            "syncIntervalMinutes": 1440, "syncTime": "07:30",
+            "snapshotTime": "06:30", "snapshotIntervalHours": 6,
+        },
         headers=auth(r2),
     )
     assert ok.status_code == 200, ok.text
-    assert ok.json()["syncIntervalMinutes"] == 60 and ok.json()["snapshotTime"] == "06:30"
+    assert ok.json()["syncIntervalMinutes"] == 1440 and ok.json()["syncTime"] == "07:30"
+    assert ok.json()["snapshotTime"] == "06:30"
     assert ok.json()["snapshotIntervalHours"] == 6
     odd = client.put(
         f"/api/projects/{PID}/schedule",

@@ -1095,6 +1095,8 @@ export interface DocumentUploadResponse {
 export interface ProjectScheduleResponse {
   projectId: string;
   syncIntervalMinutes: number;
+  /** "HH:MM". 하루 한 번일 때 도는 시각 */
+  syncTime: string;
   /** "HH:MM", 사업 시간대 */
   snapshotTime: string;
   /** 24 면 정한 시각에 하루 한 번. 작으면 그날 줄을 그 간격으로 다시 찍는다 */

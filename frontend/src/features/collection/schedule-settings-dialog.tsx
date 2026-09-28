@@ -77,6 +77,7 @@ function ScheduleForm({
     [projectId],
   );
   const [interval, setInterval] = useState<number>(30);
+  const [syncTime, setSyncTime] = useState('06:00');
   const [snapshotTime, setSnapshotTime] = useState('00:10');
   const [snapshotEvery, setSnapshotEvery] = useState<number>(24);
   const [saving, setSaving] = useState<'sync' | 'snapshot' | null>(null);
@@ -84,6 +85,7 @@ function ScheduleForm({
   useEffect(() => {
     if (!state.data) return;
     setInterval(state.data.syncIntervalMinutes);
+    setSyncTime(state.data.syncTime);
     setSnapshotTime(state.data.snapshotTime);
     setSnapshotEvery(state.data.snapshotIntervalHours);
   }, [state.data]);
@@ -95,6 +97,7 @@ function ScheduleForm({
     try {
       await api.put<ProjectScheduleResponse>(`/projects/${projectId}/schedule`, {
         syncIntervalMinutes: which === 'sync' ? interval : state.data.syncIntervalMinutes,
+        syncTime: which === 'sync' ? syncTime : state.data.syncTime,
         snapshotTime: which === 'snapshot' ? snapshotTime : state.data.snapshotTime,
         snapshotIntervalHours:
           which === 'snapshot' ? snapshotEvery : state.data.snapshotIntervalHours,
@@ -127,9 +130,9 @@ function ScheduleForm({
                 이 간격으로 연결된 도구에서 변경분을 다시 읽습니다. 수동 수집은 언제든 됩니다.
               </p>
             </div>
-            <div className="flex items-end gap-3">
-              <div className="flex flex-1 flex-col gap-1.5">
-                <Label htmlFor="sync-interval">주기</Label>
+            <div className="flex flex-wrap items-end gap-3">
+              <div className="flex flex-col gap-1.5">
+                <Label htmlFor="sync-interval">빈도</Label>
                 <select
                   id="sync-interval"
                   className="bg-background border-input h-9 rounded-md border px-2 text-sm"
@@ -143,16 +146,32 @@ function ScheduleForm({
                   ))}
                 </select>
               </div>
+              <div className="flex flex-col gap-1.5">
+                <Label htmlFor="sync-time">기준 시각 ({s.timezone})</Label>
+                <input
+                  id="sync-time"
+                  type="time"
+                  className="bg-background border-input h-9 w-40 rounded-md border px-2 text-sm"
+                  value={syncTime}
+                  disabled={interval !== 1440}
+                  title={interval !== 1440 ? '하루 한 번일 때만 씁니다' : undefined}
+                  onChange={(e) => setSyncTime(e.target.value)}
+                />
+              </div>
               <Button
                 size="sm"
                 onClick={() => void save('sync')}
-                disabled={saving !== null || interval === s.syncIntervalMinutes}
+                disabled={
+                  saving !== null || (interval === s.syncIntervalMinutes && syncTime === s.syncTime)
+                }
               >
                 {saving === 'sync' ? '저장 중…' : '저장'}
               </Button>
             </div>
             <span className="text-muted-foreground text-xs">
               최소 {s.minIntervalMinutes}분입니다. 너무 자주 부르면 도구의 호출 한도에 걸립니다.
+              하루 한 번을 고르면 기준 시각에 돌고, 더 잦은 빈도는 마지막 수집 뒤 그 간격으로
+              돕니다.
             </span>
           </section>
 

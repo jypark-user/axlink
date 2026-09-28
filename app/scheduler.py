@@ -29,8 +29,9 @@ log = logging.getLogger(__name__)
 
 LOCAL_TZ = ZoneInfo("Asia/Seoul")
 TICK_SECONDS = 60
-SYNC_INTERVAL_OPTIONS = (0, 15, 30, 60, 180, 360, 1440)  # 분. 0 은 수동만
+SYNC_INTERVAL_OPTIONS = (0, 15, 30, 60, 180, 360, 720, 1440)  # 분. 0 은 수동만
 DEFAULT_SYNC_INTERVAL = 30
+DEFAULT_SYNC_TIME = time(6, 0)  # 하루 한 번을 고른 사업이 도는 시각
 DEFAULT_SNAPSHOT_TIME = time(0, 10)
 # 스냅샷 갱신 빈도(시간). 24 는 정한 시각에 하루 한 번. 그보다 작으면 그날 줄을 더 자주 덮는다.
 # 과업지시서 Ⅱ.2 의 "일별" 은 최소 보장이라 24 보다 긴 선택지는 두지 않는다.
@@ -44,16 +45,26 @@ class Schedule:
     sync_interval_minutes: int
     snapshot_at: time
     snapshot_interval_hours: int = DEFAULT_SNAPSHOT_INTERVAL
+    sync_at: time = DEFAULT_SYNC_TIME
 
 
 def sync_due(
-    last_synced_at: datetime | None, interval_minutes: int, now: datetime
+    last_synced_at: datetime | None, interval_minutes: int, now: datetime,
+    sync_at: time = DEFAULT_SYNC_TIME,
 ) -> bool:
-    """마지막 수집 뒤 주기가 지났는가. 0 이면 자동 수집 안 함. 한 번도 안 했으면 지금."""
+    """수집할 때인가. 0 이면 자동 수집 안 함. 한 번도 안 했으면 지금.
+
+    하루 한 번(1440)은 스냅샷처럼 정한 시각 규칙이다. 오늘 아직 안 했고 그 시각이 지났으면
+    돈다. 더 잦은 주기는 마지막 수집 뒤 간격이다.
+    """
     if interval_minutes <= 0:
         return False
     if last_synced_at is None:
         return True
+    if interval_minutes >= 1440:
+        local = now.astimezone(LOCAL_TZ)
+        done_today = last_synced_at.astimezone(LOCAL_TZ).date() >= local.date()
+        return not done_today and local.time() >= sync_at
     return now - last_synced_at >= timedelta(minutes=interval_minutes)
 
 
@@ -88,20 +99,21 @@ def _load_schedules(cur: Any) -> list[Schedule]:
         select p.id as project_id,
                coalesce(s.sync_interval_minutes, %s) as interval_minutes,
                coalesce(s.snapshot_hour, %s) as h, coalesce(s.snapshot_minute, %s) as m,
-               coalesce(s.snapshot_interval_hours, %s) as every_hours
+               coalesce(s.snapshot_interval_hours, %s) as every_hours,
+               coalesce(s.sync_hour, %s) as sh, coalesce(s.sync_minute, %s) as sm
           from project p
           left join project_schedule s on s.project_id = p.id
          where p.status in ('PLANNING', 'ACTIVE', 'CLOSING')
         """,
         (
             DEFAULT_SYNC_INTERVAL, DEFAULT_SNAPSHOT_TIME.hour, DEFAULT_SNAPSHOT_TIME.minute,
-            DEFAULT_SNAPSHOT_INTERVAL,
+            DEFAULT_SNAPSHOT_INTERVAL, DEFAULT_SYNC_TIME.hour, DEFAULT_SYNC_TIME.minute,
         ),
     )
     return [
         Schedule(
             str(r["project_id"]), int(r["interval_minutes"]), time(r["h"], r["m"]),
-            int(r["every_hours"]),
+            int(r["every_hours"]), time(r["sh"], r["sm"]),
         )
         for r in rows
     ]
@@ -128,7 +140,9 @@ def run_once(now: datetime, *, just_started: bool, taken_at_scheduled: set[str])
                 connections = [
                     c for c in integ_repo.find_by_project(cur, sched.project_id)
                     if c["status"] in ("VERIFIED", "ACTIVE")
-                    and sync_due(c.get("last_synced_at"), sched.sync_interval_minutes, now)
+                    and sync_due(
+                        c.get("last_synced_at"), sched.sync_interval_minutes, now, sched.sync_at
+                    )
                 ]
             for conn in connections:
                 try:
