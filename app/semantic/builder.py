@@ -225,6 +225,10 @@ def build(spec: ValidatedSpec, dimensions: list[DimensionDef] | None = None) -> 
             columns.append(WidgetColumn(key=label_alias, label=f"{d.label} 명", type="string"))
     select.append(f"{_sql(measure.value_expr, time_col)} as value")
     columns.append(WidgetColumn(key="value", label=measure.label, type=_value_type(measure)))
+    # 비율 지표는 분자·분모를 같이 센다. 열 목록에는 넣지 않는다. 차트가 값만 그려야 한다
+    if measure.numerator_expr and measure.denominator_expr:
+        select.append(f"{_sql(measure.numerator_expr, time_col)} as numerator")
+        select.append(f"{_sql(measure.denominator_expr, time_col)} as denominator")
 
     params: dict[str, Any] = {"projects": list(spec.project_ids)}
     where = ["e.project_id = any(%(projects)s::uuid[])"]

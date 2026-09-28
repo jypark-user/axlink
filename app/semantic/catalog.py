@@ -26,6 +26,9 @@ class MeasureDef:
     default_dimension: str | None
     target_value: float | None
     status: str
+    basis: str | None = None  # 사람 말 산출 근거. 답변과 위젯이 같이 보인다(QUR.WEB.002)
+    numerator_expr: str | None = None  # 비율 지표의 분자. value_expr 와 같은 집계 단위
+    denominator_expr: str | None = None
 
 
 @dataclass(frozen=True)
@@ -106,6 +109,9 @@ def load(cur: Any) -> Catalog:
             default_dimension=r["default_dimension"],
             target_value=None if r.get("target_value") is None else float(r["target_value"]),
             status=r["status"],
+            basis=r.get("basis"),
+            numerator_expr=r.get("numerator_expr"),
+            denominator_expr=r.get("denominator_expr"),
         )
     for r in fetch_all(cur, "select * from semantic_dimension order by key"):
         catalog.dimensions[r["key"]] = DimensionDef(

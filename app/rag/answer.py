@@ -21,6 +21,9 @@ SYSTEM_PROMPT = (
     "규칙:\n"
     "1. 수치는 '집계 값' 절에 제공된 값만 그대로 인용한다. 없는 수치는 만들지 않고, "
     "제공된 값을 더하거나 나누어 새 수치를 만들지도 않는다.\n"
+    "1-1. 집계 값 절에 '산출 근거' 가 있으면 값을 말한 뒤 그 근거를 한 문장으로 덧붙인다. "
+    "괄호의 분자·분모(예: 0건 / 41건)가 있으면 함께 말한다. 값이 0 이거나 없을 때는 그 이유가 "
+    "근거에 있으면 반드시 말한다.\n"
     "2. 사실은 '근거' 절의 내용에서만 가져온다. 근거에 없는 내용은 모른다고 말한다.\n"
     "3. 근거를 인용한 문장 끝에 해당 근거 번호를 [1] 처럼 붙인다. 번호는 근거 절의 번호만 쓴다.\n"
     "4. 제목·목록 기호 없이 문단으로 답한다. 인사말과 사족은 넣지 않는다.\n"
@@ -74,7 +77,11 @@ def aggregate_lines(data: WidgetDataResponse) -> list[str]:
             if value is not None:
                 labels.append(f"{col.label} {value}")
         head = ", ".join(labels) if labels else data.measureLabel
-        lines.append(f"- {head}: {format_value(row.values.get('value'))}{unit}")
+        line = f"- {head}: {format_value(row.values.get('value'))}{unit}"
+        num, den = row.values.get("numerator"), row.values.get("denominator")
+        if num is not None and den is not None:
+            line += f" ({format_value(num)}건 / {format_value(den)}건)"
+        lines.append(line)
     if data.total is not None and data.dimensions:
         lines.append(f"- 전체: {format_value(data.total.values.get('value'))}{unit}")
     if data.previousTotal is not None:
@@ -84,6 +91,9 @@ def aggregate_lines(data: WidgetDataResponse) -> list[str]:
         lines.append(f"- 목표: {format_value(data.target)}{unit}")
     if not lines:
         lines.append(f"- {data.measureLabel}: 집계된 값이 없음")
+    if data.basis:
+        # 왜 그 숫자인지. 모델은 이 문장을 근거로 값의 뜻을 풀어 말할 수 있다
+        lines.append(f"- 산출 근거: {data.basis}")
     return lines
 
 

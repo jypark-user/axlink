@@ -67,6 +67,7 @@ class WidgetDataResponse(BaseModel):
     appliedProjectIds: list[str]  # noqa: N815
     truncated: bool
     generatedAt: str  # noqa: N815
+    basis: str | None = None  # 산출 근거. 화면 설명과 답변 프롬프트가 같이 쓴다
 
 
 class SemanticMeasureResponse(BaseModel):

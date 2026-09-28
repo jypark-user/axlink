@@ -203,6 +203,19 @@ def _chunk(
     )
 
 
+def test_비율_지표는_분자_분모와_산출_근거를_같이_편다():
+    data = _data(
+        dimensions=[], columns=[WidgetColumn(key="value", label="요구사항 이행률", type="percent")],
+        rows=[WidgetRow(values={"value": 0.0, "numerator": 0, "denominator": 41})], total=None,
+    )
+    data.basis = "검증완료 요구사항 수를 전체로 나눈 값이다. 시험 결과가 없으면 0% 다."
+    lines = answer.aggregate_lines(data)
+    assert lines[0] == "- 이슈 건수: 0건 (0건 / 41건)"  # _data 도우미의 지표명·단위
+    assert lines[-1].startswith("- 산출 근거: 검증완료")
+    # 검문은 분자·분모 숫자도 근거로 안다
+    assert answer.ungrounded_numbers("검증된 요구사항이 0건이라 41건 중 0%입니다.", lines) == []
+
+
 def _data(dimensions, columns, rows, total) -> WidgetDataResponse:
     return WidgetDataResponse(
         measure="issue_count",
