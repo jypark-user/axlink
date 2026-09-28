@@ -6,7 +6,7 @@ import { DataTable, SortableHeader } from '@/components/ui/data-table';
 import { DataState } from '@/components/common/data-state';
 import { PaginationBar } from '@/components/common/pagination-bar';
 import { PageHeader } from '@/components/layout/page-header';
-import { ScheduleSettingsCard } from '@/features/collection/schedule-settings-card';
+import { ScheduleSettingsDialog } from '@/features/collection/schedule-settings-dialog';
 import { useProjectContext } from '@/components/layout/project-shell';
 import { api } from '@/lib/http';
 import { formatDateTime } from '@/lib/format';
@@ -115,12 +115,14 @@ export function CollectionPage(): ReactNode {
         title="동기화"
         description="도구에서 가져온 수집 잡 이력입니다. 30초마다 자동 갱신됩니다."
         actions={
-          <Button size="sm" variant="outline" onClick={reload}>
-            새로고침
-          </Button>
+          <>
+            <ScheduleSettingsDialog projectId={project.id} onSaved={reload} />
+            <Button size="sm" variant="outline" onClick={reload}>
+              새로고침
+            </Button>
+          </>
         }
       />
-      <ScheduleSettingsCard projectId={project.id} />
       <DataState state={state} onRetry={reload} empty={{ text: '수집 이력이 없습니다.' }}>
         {(data) => (
           <>
