@@ -20,6 +20,7 @@ from datetime import date
 from pathlib import Path
 from typing import Any
 
+from app.activity import service as activity
 from app.auth import repository as auth_repo
 from app.auth.deps import AuthPrincipal
 from app.common import errors
@@ -276,7 +277,24 @@ def refresh_deliverables(
         documents=wbs_repository.project_documents(cur, project_id),
         today=at,
     )
-    wbs_repository.save_judgements(cur, project_id, judgements)
+    changed = wbs_repository.save_judgements(cur, project_id, judgements)
+    names = {i["wbs_id"]: i["name"] for i in items}
+    for wbs_id, before, now in changed:
+        # 제출로 바뀐 것은 발주기관이, 지연이 된 것은 둘 다 알아야 한다. 그 외 전이는 조용히
+        if now == deliverable.SUBMITTED and before in (deliverable.MISSING, deliverable.OVERDUE):
+            activity.record(
+                cur, project_id=project_id, kind=activity.DELIVERABLE_SUBMITTED,
+                audience=activity.CLIENT, actor_label="판정",
+                summary=f"산출물 제출됨: {wbs_id} {names.get(wbs_id, '')}",
+                target_type="WBS_ITEM", target_key=wbs_id,
+            )
+        elif now == deliverable.OVERDUE and before == deliverable.MISSING:
+            activity.record(
+                cur, project_id=project_id, kind=activity.DELIVERABLE_OVERDUE,
+                audience=activity.ALL, actor_label="판정",
+                summary=f"산출물 지연: {wbs_id} {names.get(wbs_id, '')}",
+                target_type="WBS_ITEM", target_key=wbs_id,
+            )
     # 묶음은 저장만 하고 돌려주지 않는다. 요약이 말단만 세야 "산출물 열 없음" 이 뜻을 가진다
     leaves = {i["wbs_id"] for i in items if i.get("weight") is not None}
     return {j.wbs_id: j for j in judgements if j.wbs_id in leaves}

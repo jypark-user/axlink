@@ -12,6 +12,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
+from app.activity import service as activity
 from app.ai.embedding import embedding_port
 from app.auth.models import AuthPrincipal
 from app.common import errors
@@ -114,6 +115,13 @@ def upload(
     if wbs_item_id:
         repository.link_wbs_item(cur, document_id, wbs_item_id)
     _process(cur, project_id, document_id, filename.strip(), ext, stored_path)
+    where = f" ({wbs_id.strip()} 항목)" if wbs_id else ""
+    activity.record(
+        cur, project_id=project_id, kind=activity.DOCUMENT_UPLOADED,
+        audience=activity.other_side(principal.role),
+        summary=f"문서 올림: {filename.strip()}{where}", actor=principal,
+        target_type="DOCUMENT", target_key=document_id,
+    )
     return _to_response(repository.find_by_id(cur, document_id))
 
 

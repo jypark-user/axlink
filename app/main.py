@@ -13,6 +13,7 @@ from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
 from starlette.exceptions import HTTPException as StarletteHTTPException
 
+from app.activity.router import router as activity_router
 from app.admin.router import router as admin_router
 from app.ai.embedding import embedding_port
 from app.ai.router import router as ai_router
@@ -32,6 +33,7 @@ from app.document.router import router as document_router
 from app.integration.router import router as integration_router
 from app.org.router import router as org_router
 from app.project.router import router as project_router
+from app.project.schedule import router as schedule_router
 from app.rag.indexing import verify_dimension
 from app.rag.router import router as ask_router
 from app.review.router import router as review_router
@@ -46,9 +48,18 @@ async def lifespan(_: FastAPI) -> AsyncIterator[None]:
     # 기동 때 막는 편이 낫다.
     with tx() as cur:
         verify_dimension(cur, embedding_port())
+    # 일별 스냅샷과 주기 수집은 스스로 돌아야 한다(SWFR.PIP.005·CON.005). 앱과 함께 뜨고 진다
+    task = stop = None
+    if settings.scheduler_enabled:
+        from app import scheduler
+
+        task, stop = scheduler.start()
     try:
         yield
     finally:
+        if stop is not None and task is not None:
+            stop.set()
+            task.cancel()
         close_pool()
 
 
@@ -80,6 +91,8 @@ app.include_router(review_router)
 app.include_router(ask_router)
 app.include_router(ai_router)
 app.include_router(admin_router)
+app.include_router(activity_router)
+app.include_router(schedule_router)
 
 
 @app.get("/api/health", tags=["health"])

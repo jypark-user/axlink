@@ -80,6 +80,14 @@ def run_sync(cur: Any, connection: dict[str, Any], retry_of: str | None = None) 
             error=exc.message, error_code=_ERROR_CODE.get(exc.code, "TOOL_UNAVAILABLE"),
         )
         repository.mark_synced(cur, cid, finished, exc.message)
+        from app.activity import service as activity
+
+        activity.record(
+            cur, project_id=str(connection["project_id"]), kind=activity.SYNC_FAILED,
+            audience=activity.ALL, actor_label="동기화",
+            summary=f"동기화 실패: {connection.get('name') or connection['tool']} · {exc.message}",
+            target_type="SYNC_JOB", target_key=str(job_id), occurred_at=finished,
+        )
         return job_id
 
     denied += _collect_files(cur, cid, connector, base, target, token, job_id, stats)

@@ -8,6 +8,7 @@
 from datetime import UTC, datetime
 from typing import Any
 
+from app.activity import service as activity
 from app.auth import repository as auth_repo
 from app.auth.models import AuthPrincipal
 from app.common import errors
@@ -119,6 +120,11 @@ def create(
     repository.insert_event(
         cur, request_id, "REQUESTED", req.body.strip() or None, principal.user_id, state, now
     )
+    activity.record(
+        cur, project_id=project_id, kind=activity.REVIEW_REQUESTED, audience=activity.CONTRACTOR,
+        summary=f"확인 요청: {req.title.strip()} ({label})", actor=principal,
+        target_type="REVIEW_REQUEST", target_key=request_id, occurred_at=now,
+    )
     return _to_response(repository.find_by_id(cur, request_id))
 
 
@@ -171,6 +177,11 @@ def report(
     repository.insert_event(
         cur, request_id, "REPORTED", req.body.strip(), principal.user_id, state, now
     )
+    activity.record(
+        cur, project_id=str(row["project_id"]), kind=activity.REVIEW_REPORTED,
+        audience=activity.CLIENT, summary=f"조치 보고: {row['title']}", actor=principal,
+        target_type="REVIEW_REQUEST", target_key=request_id, occurred_at=now,
+    )
     return get_detail(cur, principal, request_id)
 
 
@@ -185,6 +196,11 @@ def confirm(cur: Any, principal: AuthPrincipal, request_id: str) -> ReviewReques
     now = datetime.now(UTC)
     repository.mark_confirmed(cur, request_id, principal.user_id, now)
     repository.insert_event(cur, request_id, "CONFIRMED", None, principal.user_id, state, now)
+    activity.record(
+        cur, project_id=str(row["project_id"]), kind=activity.REVIEW_CONFIRMED,
+        audience=activity.CONTRACTOR, summary=f"확인완료: {row['title']}", actor=principal,
+        target_type="REVIEW_REQUEST", target_key=request_id, occurred_at=now,
+    )
     return get_detail(cur, principal, request_id)
 
 
@@ -203,5 +219,10 @@ def rerequest(
     repository.mark_rerequested(cur, request_id, req.body.strip(), state, now)
     repository.insert_event(
         cur, request_id, "REREQUESTED", req.body.strip(), principal.user_id, state, now
+    )
+    activity.record(
+        cur, project_id=str(row["project_id"]), kind=activity.REVIEW_REREQUESTED,
+        audience=activity.CONTRACTOR, summary=f"다시 요청: {row['title']}", actor=principal,
+        target_type="REVIEW_REQUEST", target_key=request_id, occurred_at=now,
     )
     return get_detail(cur, principal, request_id)

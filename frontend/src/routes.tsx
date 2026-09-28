@@ -130,14 +130,14 @@ export function AppRoutes(): ReactNode {
             element={
               <SuspenseShell>
                 <TemplatesPage />
-          <Route
-            path="/admin/errors"
-            element={
-              <SuspenseShell>
-                <ErrorLogPage />
-              </SuspenseShell>
-            }
-          />
+                <Route
+                  path="/admin/errors"
+                  element={
+                    <SuspenseShell>
+                      <ErrorLogPage />
+                    </SuspenseShell>
+                  }
+                />
               </SuspenseShell>
             }
           />
@@ -243,39 +243,39 @@ export function AppRoutes(): ReactNode {
               </SuspenseShell>
             }
           />
+          <Route
+            path="dashboard"
+            element={
+              <SuspenseShell>
+                <DashboardPage />
+              </SuspenseShell>
+            }
+          />
+          <Route
+            path="traceability"
+            element={
+              <SuspenseShell>
+                <TraceabilityPage />
+              </SuspenseShell>
+            }
+          />
+          <Route
+            path="schedule"
+            element={
+              <SuspenseShell>
+                <SchedulePage />
+              </SuspenseShell>
+            }
+          />
+          <Route
+            path="issues"
+            element={
+              <SuspenseShell>
+                <IssuesPage />
+              </SuspenseShell>
+            }
+          />
           <Route element={<RequireRole allow={EXCEPT_CONTRACTOR} />}>
-            <Route
-              path="dashboard"
-              element={
-                <SuspenseShell>
-                  <DashboardPage />
-                </SuspenseShell>
-              }
-            />
-            <Route
-              path="traceability"
-              element={
-                <SuspenseShell>
-                  <TraceabilityPage />
-                </SuspenseShell>
-              }
-            />
-            <Route
-              path="schedule"
-              element={
-                <SuspenseShell>
-                  <SchedulePage />
-                </SuspenseShell>
-              }
-            />
-            <Route
-              path="issues"
-              element={
-                <SuspenseShell>
-                  <IssuesPage />
-                </SuspenseShell>
-              }
-            />
             <Route
               path="ask/:conversationId?"
               element={
