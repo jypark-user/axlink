@@ -37,6 +37,15 @@ def project_progress(
         return service.project_progress(cur, principal, project_id, at)
 
 
+@router.get("/{project_id}/snapshots", response_model=list[ProgressSnapshotResponse])
+def list_snapshots(
+    project_id: str, principal: Principal, limit: Annotated[int, Query(ge=1, le=366)] = 90
+) -> list[ProgressSnapshotResponse]:
+    """스냅샷 이력. 최근 것이 앞이다."""
+    with tx() as cur:
+        return snapshot.list_recent(cur, principal, project_id, limit)
+
+
 @router.post("/{project_id}/snapshots", response_model=ProgressSnapshotResponse)
 def take_snapshot(
     project_id: str, principal: Principal, at: BaseDate = None

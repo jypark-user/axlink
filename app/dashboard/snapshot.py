@@ -16,7 +16,7 @@ from app.auth.models import AuthPrincipal
 from app.common import errors
 from app.dashboard import service as progress_service
 from app.dashboard.models import ProgressSnapshotResponse
-from app.db import fetch_one
+from app.db import fetch_all, fetch_one
 
 
 def take(
@@ -28,6 +28,28 @@ def take(
     if project_id not in allowed:
         raise errors.project_access_denied()
     return take_unchecked(cur, project_id, at or date.today(), actor=principal)
+
+
+def list_recent(
+    cur: Any, principal: AuthPrincipal, project_id: str, limit: int = 90
+) -> list[ProgressSnapshotResponse]:
+    """스냅샷 화면. 최근 것이 앞이다. 값이 어떻게 움직였는지 이 줄들만 봐도 읽히게 한다."""
+    allowed = auth_repo.allowed_project_ids(
+        cur, principal.role, principal.org_id, principal.user_id
+    )
+    if project_id not in allowed:
+        raise errors.project_access_denied()
+    rows = fetch_all(
+        cur,
+        """
+        select * from progress_snapshot
+         where project_id = %s
+         order by snapshot_date desc
+         limit %s
+        """,
+        (project_id, limit),
+    )
+    return [_response(r) for r in rows]
 
 
 def take_unchecked(

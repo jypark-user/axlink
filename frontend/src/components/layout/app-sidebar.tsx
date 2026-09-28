@@ -2,6 +2,7 @@ import { Link, NavLink, useLocation, useNavigate } from 'react-router-dom';
 import type { LucideIcon } from 'lucide-react';
 import {
   CalendarRange,
+  Camera,
   CircleDot,
   ClipboardList,
   FileText,
@@ -96,6 +97,7 @@ const projectGroups = (base: string): NavGroup[] => [
     items: [
       { to: `${base}/dashboard`, label: '진행 상황', icon: LayoutDashboard },
       { to: `${base}/schedule`, label: '일정', icon: CalendarRange },
+      { to: `${base}/snapshots`, label: '스냅샷', icon: Camera },
       { to: `${base}/issues`, label: '이슈 · 위험', icon: CircleDot },
       { to: `${base}/traceability`, label: '요구사항', icon: Waypoints },
       { to: `${base}/reviews`, label: '확인 요청', icon: ClipboardList },

@@ -1091,6 +1091,27 @@ export interface DocumentUploadResponse {
   error: string | null;
 }
 
+/** 일별 스냅샷 한 줄. 그날 지표를 고정한 값이다. */
+export interface ProgressSnapshotResponse {
+  projectId: string;
+  snapshotDate: string;
+  level: string;
+  representativePct: number | null;
+  wbsActualPct: number | null;
+  wbsPlannedPct: number | null;
+  behindTaskCount: number;
+  issueResolvedCount: number;
+  issueTotalCount: number;
+  requirementVerifiedCount: number;
+  requirementTotalCount: number;
+  riskClosedCount: number;
+  riskTotalCount: number;
+  workProductSubmittedCount: number;
+  workProductApprovedCount: number;
+  workProductTotalCount: number;
+  createdAt: string;
+}
+
 /** 사업별 자동 수집 주기와 일별 스냅샷 시각. 서버 안 스케줄러가 읽는다. */
 export interface ProjectScheduleResponse {
   projectId: string;

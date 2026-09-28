@@ -71,6 +71,9 @@ const IssuesPage = lazy(() =>
 const SchedulePage = lazy(() =>
   import('@/features/schedule/schedule-page').then((m) => ({ default: m.SchedulePage })),
 );
+const SnapshotsPage = lazy(() =>
+  import('@/features/snapshots/snapshots-page').then((m) => ({ default: m.SnapshotsPage })),
+);
 const ReviewRequestsPage = lazy(() =>
   import('@/features/review-requests/review-requests-page').then((m) => ({
     default: m.ReviewRequestsPage,
@@ -264,6 +267,14 @@ export function AppRoutes(): ReactNode {
             element={
               <SuspenseShell>
                 <SchedulePage />
+              </SuspenseShell>
+            }
+          />
+          <Route
+            path="snapshots"
+            element={
+              <SuspenseShell>
+                <SnapshotsPage />
               </SuspenseShell>
             }
           />
