@@ -35,6 +35,7 @@ class Settings(BaseSettings):
     # 1단계 경량 검증용 잠정값. 모델 확정은 로컬 검증(작업 규약 §5) 결과로 한다.
     llm_model: str = "qwen3:4b"
     llm_timeout: float = 120.0
+    scheduler_enabled: bool = True  # 서버 안 스케줄러(일별 스냅샷·주기 수집). 시험에서 끈다
     # 생성 문맥 길이. 근거 청크 5개(각 최대 1000토큰)와 지시가 들어가야 한다.
     llm_num_ctx: int = 8192
     ollama_base_url: str = "http://localhost:11434"

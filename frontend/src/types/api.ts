@@ -1091,6 +1091,21 @@ export interface DocumentUploadResponse {
   error: string | null;
 }
 
+/** 사업별 자동 수집 주기와 일별 스냅샷 시각. 서버 안 스케줄러가 읽는다. */
+export interface ProjectScheduleResponse {
+  projectId: string;
+  syncIntervalMinutes: number;
+  /** "HH:MM", 사업 시간대 */
+  snapshotTime: string;
+  timezone: string;
+  options: { minutes: number; label: string }[];
+  minIntervalMinutes: number;
+  lastSnapshotDate: string | null;
+  nextSnapshotAt: string;
+  editable: boolean;
+  updatedAt: string | null;
+}
+
 /** 활동 한 줄. 알림과 활동 탭이 같은 것을 본다. */
 export interface ActivityEventResponse {
   id: string;
