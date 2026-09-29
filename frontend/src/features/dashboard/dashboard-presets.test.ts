@@ -16,6 +16,7 @@ describe('dashboard-presets', () => {
       expect(preset.widgets.length).toBeGreaterThan(0);
       for (const w of preset.widgets) {
         expect(widgetRenderers[w.template]).toBeTypeOf('function');
+        expect(w.intent.length).toBeGreaterThan(5);
       }
     }
   });
@@ -76,6 +77,6 @@ describe('dashboard-presets', () => {
     const spec = toWidgetSpec(DASHBOARD_PRESETS[0].widgets[0], 'prj-1');
     expect(spec.query.projectScope).toEqual(['prj-1']);
     expect(spec.query.filters).toEqual([]);
-    expect(spec.prompt).toBe(DASHBOARD_PRESETS[0].widgets[0].title);
+    expect(spec.prompt).toBe(DASHBOARD_PRESETS[0].widgets[0].intent);
   });
 });

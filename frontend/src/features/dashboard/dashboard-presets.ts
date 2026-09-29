@@ -9,6 +9,8 @@ import type { GridItem, WidgetSpec, WidgetTemplate } from '@/types/api';
 export interface PresetWidget {
   template: WidgetTemplate;
   title: string;
+  /** 사람이 "표시할 내용" 에 적었을 문장. 위젯 명세의 prompt 로 저장돼 고칠 때 보인다 */
+  intent: string;
   measure: string;
   dimensions?: string[];
 }
@@ -43,18 +45,21 @@ export const DASHBOARD_PRESETS: DashboardPreset[] = [
       {
         template: 'STAT_CARD',
         title: '일정 진척(계획 대비)',
+        intent: '이번 달 실적 진척률이 계획보다 얼마나 앞서거나 뒤졌는지 한 숫자로',
         measure: 'schedule_variance_pct',
         dimensions: ['period_month'],
       },
       {
         template: 'BULLET_CHART',
         title: '용역사별 이슈 처리율 vs 목표',
+        intent: '용역사별 이슈 처리율을 목표선(85%)과 나란히 보여줘',
         measure: 'issue_resolution_rate',
         dimensions: ['contractor_org'],
       },
       {
         template: 'SPARKLINE',
         title: '상태별 이슈 잔추세',
+        intent: '월별로 상태별 이슈 건수가 어떻게 남아 있는지 작은 추세선으로',
         measure: 'issue_count',
         dimensions: ['period_month', 'issue_status'],
       },
@@ -62,24 +67,28 @@ export const DASHBOARD_PRESETS: DashboardPreset[] = [
       {
         template: 'LINE_CHART',
         title: '월별 시험 통과율',
+        intent: '월별 CI 시험 통과율 추이',
         measure: 'test_pass_rate',
         dimensions: ['period_month'],
       },
       {
         template: 'AREA_CHART',
         title: '주별 이슈 처리율 추이',
+        intent: '주별 이슈 처리율이 오르고 있는지 내리고 있는지',
         measure: 'issue_resolution_rate',
         dimensions: ['period_week'],
       },
       {
         template: 'CUMULATIVE_FLOW',
         title: '이슈 누적 흐름(쌓임 vs 닫힘)',
+        intent: '월별로 이슈가 쌓이는 속도와 닫히는 속도를 누적 흐름으로',
         measure: 'issue_count',
         dimensions: ['period_month', 'issue_status'],
       },
       {
         template: 'CALENDAR_HEATMAP',
         title: '일별 커밋·MR 활동',
+        intent: '날짜별 커밋과 머지리퀘스트 활동량을 달력 히트맵으로',
         measure: 'code_activity_count',
         dimensions: ['period_day'],
       },
@@ -87,30 +96,35 @@ export const DASHBOARD_PRESETS: DashboardPreset[] = [
       {
         template: 'BAR_CHART',
         title: '심각도별 열린 이슈',
+        intent: '열린 이슈가 심각도별로 몇 건인지',
         measure: 'open_issue_count',
         dimensions: ['issue_severity'],
       },
       {
         template: 'PARETO',
         title: '담당자별 열린 이슈 집중도',
+        intent: '열린 이슈가 어느 담당자에게 몰려 있는지 파레토로',
         measure: 'open_issue_count',
         dimensions: ['assignee'],
       },
       {
         template: 'STACKED_BAR_CHART',
         title: '용역사 × 심각도별 이슈',
+        intent: '용역사별 이슈를 심각도로 쌓아서',
         measure: 'issue_count',
         dimensions: ['contractor_org', 'issue_severity'],
       },
       {
         template: 'HEATMAP',
         title: '활동 × 산출물 유형별 미제출',
+        intent: '29110 활동과 산출물 유형별로 미제출이 어디에 몰려 있는지 히트맵으로',
         measure: 'work_product_missing_count',
         dimensions: ['iso_activity', 'work_product_type'],
       },
       {
         template: 'TREEMAP',
         title: '유형별 미제출 산출물 크기',
+        intent: '미제출 산출물을 유형별 크기로 한눈에',
         measure: 'work_product_missing_count',
         dimensions: ['work_product_type'],
       },
@@ -118,24 +132,28 @@ export const DASHBOARD_PRESETS: DashboardPreset[] = [
       {
         template: 'PIE_CHART',
         title: '상태별 열린 리스크',
+        intent: '열린 리스크가 상태별로 몇 건인지',
         measure: 'open_risk_count',
         dimensions: ['risk_status'],
       },
       {
         template: 'DONUT_CHART',
         title: '우선순위별 요구사항 비중',
+        intent: '요구사항 이행률을 우선순위별로 나눠 비중으로',
         measure: 'requirement_fulfillment_rate',
         dimensions: ['requirement_priority'],
       },
       {
         template: 'STATUS_FLOW',
         title: '요구사항 단계 분포',
+        intent: '요구사항이 정의·구현·검증·인수 단계에 각각 몇 건 있는지 흐름으로',
         measure: 'requirement_fulfillment_rate',
         dimensions: ['requirement_status'],
       },
       {
         template: 'RADAR_CHART',
         title: '활동별 산출물 승인률 균형',
+        intent: '29110 활동별 산출물 승인률이 고르게 가는지 레이더로',
         measure: 'work_product_approval_rate',
         dimensions: ['iso_activity'],
       },
@@ -143,12 +161,14 @@ export const DASHBOARD_PRESETS: DashboardPreset[] = [
       {
         template: 'SLOPE_CHART',
         title: '용역사별 이슈, 처음과 지금',
+        intent: '용역사별 이슈 건수가 첫 달과 지금 사이에 어떻게 바뀌었는지',
         measure: 'issue_count',
         dimensions: ['period_month', 'contractor_org'],
       },
       {
         template: 'BUMP_CHART',
         title: '심각도별 이슈 순위 변화',
+        intent: '월별로 심각도별 이슈 건수 순위가 어떻게 바뀌는지',
         measure: 'issue_count',
         dimensions: ['period_month', 'issue_severity'],
       },
@@ -156,24 +176,28 @@ export const DASHBOARD_PRESETS: DashboardPreset[] = [
       {
         template: 'PROGRESS_LIST',
         title: '용역사별 요구사항 이행률',
+        intent: '용역사별 요구사항 이행률을 진행 막대 목록으로',
         measure: 'requirement_fulfillment_rate',
         dimensions: ['contractor_org'],
       },
       {
         template: 'HORIZONTAL_BAR_CHART',
         title: '산출물 22종 승인률',
+        intent: '산출물 22종 각각의 승인률을 가로 막대로',
         measure: 'work_product_approval_rate',
         dimensions: ['work_product_type'],
       },
       {
         template: 'CHECKLIST',
         title: '산출물 22종 승인 점검표',
+        intent: '산출물 22종이 승인됐는지 점검표로 하나씩',
         measure: 'work_product_approval_rate',
         dimensions: ['work_product_type'],
       },
       {
         template: 'DATA_TABLE',
         title: '담당자별 이슈 평균 처리일',
+        intent: '담당자별로 이슈 하나를 닫는 데 평균 며칠 걸리는지 표로',
         measure: 'issue_avg_resolution_days',
         dimensions: ['assignee'],
       },
@@ -188,26 +212,35 @@ export const DASHBOARD_PRESETS: DashboardPreset[] = [
       {
         template: 'STAT_CARD',
         title: '일정 진척(계획 대비)',
+        intent: '이번 달 실적 진척률이 계획보다 얼마나 앞서거나 뒤졌는지 한 숫자로',
         measure: 'schedule_variance_pct',
         dimensions: ['period_month'],
       },
       {
         template: 'STAT_CARD',
         title: '요구사항 이행률',
+        intent: '월별 요구사항 이행률의 현재 값과 목표',
         measure: 'requirement_fulfillment_rate',
         dimensions: ['period_month'],
       },
-      { template: 'STAT_CARD', title: '산출물 승인률', measure: 'work_product_approval_rate' },
+      {
+        template: 'STAT_CARD',
+        title: '산출물 승인률',
+        intent: '산출물 승인률 현재 값',
+        measure: 'work_product_approval_rate',
+      },
       // 월이 쌓이면 선이 빽빽해진다 — 면적이 흐름을 더 잘 보여 준다.
       {
         template: 'AREA_CHART',
         title: '월별 요구사항 이행률 추이',
+        intent: '월별 요구사항 이행률이 어떻게 올라왔는지 면적 추이로',
         measure: 'requirement_fulfillment_rate',
         dimensions: ['period_month'],
       },
       {
         template: 'STATUS_FLOW',
         title: '요구사항 단계 분포',
+        intent: '요구사항이 정의·구현·검증·인수 단계에 각각 몇 건 있는지 흐름으로',
         measure: 'requirement_fulfillment_rate',
         dimensions: ['requirement_status'],
       },
@@ -215,6 +248,7 @@ export const DASHBOARD_PRESETS: DashboardPreset[] = [
       {
         template: 'DONUT_CHART',
         title: '우선순위별 요구사항 비중',
+        intent: '요구사항 이행률을 우선순위별로 나눠 비중으로',
         measure: 'requirement_fulfillment_rate',
         dimensions: ['requirement_priority'],
       },
@@ -225,11 +259,17 @@ export const DASHBOARD_PRESETS: DashboardPreset[] = [
     name: '이슈 · 위험 중심',
     description: '어디에 몰려 있고 누가 막혀 있는지 — 분포·순위·균형으로 본다.',
     widgets: [
-      { template: 'STAT_CARD', title: '이슈 평균 처리일', measure: 'issue_avg_resolution_days' },
+      {
+        template: 'STAT_CARD',
+        title: '이슈 평균 처리일',
+        intent: '이슈 하나를 닫는 데 평균 며칠 걸리는지',
+        measure: 'issue_avg_resolution_days',
+      },
       // 용역사 안에서 심각도가 어떻게 갈리는지 — 막대 둘로 나눠 보면 비교가 안 된다.
       {
         template: 'STACKED_BAR_CHART',
         title: '용역사 × 심각도별 열린 이슈',
+        intent: '용역사별 열린 이슈를 심각도로 쌓아서',
         measure: 'open_issue_count',
         dimensions: ['contractor_org', 'issue_severity'],
       },
@@ -237,12 +277,14 @@ export const DASHBOARD_PRESETS: DashboardPreset[] = [
       {
         template: 'HORIZONTAL_BAR_CHART',
         title: '담당자별 열린 이슈',
+        intent: '담당자별 열린 이슈 건수를 가로 막대로',
         measure: 'open_issue_count',
         dimensions: ['assignee'],
       },
       {
         template: 'AREA_CHART',
         title: '주별 이슈 처리율 추이',
+        intent: '주별 이슈 처리율이 오르고 있는지 내리고 있는지',
         measure: 'issue_resolution_rate',
         dimensions: ['period_week'],
       },
@@ -250,12 +292,14 @@ export const DASHBOARD_PRESETS: DashboardPreset[] = [
       {
         template: 'RADAR_CHART',
         title: '용역사별 이슈 처리율 균형',
+        intent: '용역사별 이슈 처리율이 고른지 레이더로',
         measure: 'issue_resolution_rate',
         dimensions: ['contractor_org'],
       },
       {
         template: 'DONUT_CHART',
         title: '심각도별 열린 리스크',
+        intent: '열린 리스크가 심각도별로 몇 건인지 도넛으로',
         measure: 'open_risk_count',
         dimensions: ['risk_severity'],
       },
@@ -269,18 +313,21 @@ export const DASHBOARD_PRESETS: DashboardPreset[] = [
       {
         template: 'STATUS_FLOW',
         title: '산출물 상태 분포',
+        intent: '산출물이 미제출·제출·승인 상태에 각각 몇 건 있는지 흐름으로',
         measure: 'work_product_approval_rate',
         dimensions: ['work_product_status'],
       },
       {
         template: 'HEATMAP',
         title: '활동 × 산출물 유형별 미제출',
+        intent: '29110 활동과 산출물 유형별로 미제출이 어디에 몰려 있는지 히트맵으로',
         measure: 'work_product_missing_count',
         dimensions: ['iso_activity', 'work_product_type'],
       },
       {
         template: 'CHECKLIST',
         title: '산출물 22종 승인 점검표',
+        intent: '산출물 22종이 승인됐는지 점검표로 하나씩',
         measure: 'work_product_approval_rate',
         dimensions: ['work_product_type'],
       },
@@ -288,6 +335,7 @@ export const DASHBOARD_PRESETS: DashboardPreset[] = [
       {
         template: 'HORIZONTAL_BAR_CHART',
         title: '산출물 22종 승인률',
+        intent: '산출물 22종 각각의 승인률을 가로 막대로',
         measure: 'work_product_approval_rate',
         dimensions: ['work_product_type'],
       },
@@ -295,12 +343,14 @@ export const DASHBOARD_PRESETS: DashboardPreset[] = [
       {
         template: 'RADAR_CHART',
         title: '활동별 산출물 승인률 균형',
+        intent: '29110 활동별 산출물 승인률이 고르게 가는지 레이더로',
         measure: 'work_product_approval_rate',
         dimensions: ['iso_activity'],
       },
       {
         template: 'STAT_CARD',
         title: '요구사항→시험 추적률',
+        intent: '시험 케이스가 연결된 요구사항 비율 현재 값',
         measure: 'requirement_test_trace_rate',
       },
     ],
@@ -310,7 +360,7 @@ export const DASHBOARD_PRESETS: DashboardPreset[] = [
 export const toWidgetSpec = (widget: PresetWidget, projectId: string): WidgetSpec => ({
   template: widget.template,
   title: widget.title,
-  prompt: widget.title, // 추천 구성은 제목이 곧 의도다. 고칠 때 빈칸이 아니게
+  prompt: widget.intent,
   query: {
     measure: widget.measure,
     dimensions: widget.dimensions ?? [],
