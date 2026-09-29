@@ -26,10 +26,45 @@ describe('dashboard-presets', () => {
       expect(grid).toHaveLength(preset.widgets.length);
       grid.forEach((item, i) => {
         expect(item.x + item.w).toBeLessThanOrEqual(12);
-        expect(item.w).toBe(DEFAULT_SIZE[preset.widgets[i].template].w);
+        expect(item.w).toBeGreaterThanOrEqual(DEFAULT_SIZE[preset.widgets[i].template].w);
+        expect(item.h).toBeGreaterThanOrEqual(DEFAULT_SIZE[preset.widgets[i].template].h);
         grid.slice(i + 1).forEach((other) => expect(overlaps(item, other)).toBe(false));
       });
     }
+  });
+
+  it('마지막 줄을 빼고는 줄마다 12컬럼을 꽉 채우고 높이를 맞춘다', () => {
+    for (const preset of DASHBOARD_PRESETS) {
+      const grid = packGrid(preset.widgets);
+      const rows = new Map<number, typeof grid>();
+      for (const item of grid) rows.set(item.y, [...(rows.get(item.y) ?? []), item]);
+      const ys = [...rows.keys()].sort((a, b) => a - b);
+      ys.forEach((y, r) => {
+        const items = rows.get(y)!;
+        const width = items.reduce((sum, it) => sum + it.w, 0);
+        if (r < ys.length - 1) expect(width).toBe(12);
+        expect(new Set(items.map((it) => it.h)).size).toBe(1);
+      });
+    }
+  });
+
+  it('남은 칸은 한 칸씩 돌아가며 나누고 마지막 줄의 원형 차트는 6까지만 넓힌다', () => {
+    const grid = packGrid([
+      { template: 'STAT_CARD', title: 'a', measure: 'm' },
+      { template: 'STACKED_BAR_CHART', title: 'b', measure: 'm' },
+      { template: 'RADAR_CHART', title: 'c', measure: 'm' },
+      { template: 'DONUT_CHART', title: 'd', measure: 'm' },
+      { template: 'DONUT_CHART', title: 'e', measure: 'm' },
+    ]);
+    // 3+6=9 → 남은 3칸을 번갈아: 카드 4(상한) · 막대 8. 높이는 막대 4에 맞춘다
+    expect(grid.slice(0, 2).map((g) => [g.x, g.w, g.h])).toEqual([
+      [0, 4, 4],
+      [4, 8, 4],
+    ]);
+    // 마지막 줄 4+4+4=12 는 그대로다
+    expect(grid.slice(2).map((g) => g.w)).toEqual([4, 4, 4]);
+    const lone = packGrid([{ template: 'DONUT_CHART', title: 'd', measure: 'm' }]);
+    expect(lone[0].w).toBe(6);
   });
 
   it('기존 위젯 아래에서 시작한다', () => {

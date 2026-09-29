@@ -328,21 +328,73 @@ export const toWidgetSpec = (widget: PresetWidget, projectId: string): WidgetSpe
   },
 });
 
-/** 위젯을 12컬럼 안에서 왼쪽→오른쪽으로 흘려 담는다. 서버가 i 를 위젯 id 로 채운다. */
+/** 줄을 채울 때 더 넓어지지 않는 상한. 원형 차트와 숫자 카드는 넓어지면 비어 보인다. */
+const STRETCH_MAX: Partial<Record<WidgetTemplate, number>> = {
+  STAT_CARD: 4,
+  PIE_CHART: 6,
+  DONUT_CHART: 6,
+  RADAR_CHART: 6,
+};
+
+/**
+ * 위젯을 12컬럼 안에서 왼쪽→오른쪽으로 흘려 담는다. 서버가 i 를 위젯 id 로 채운다.
+ *
+ * 기본 폭대로만 놓으면 줄마다 오른쪽이 비고(3+6=9, 4+4=8) 옆 위젯보다 낮은 카드 밑에
+ * 구멍이 남는다. 그래서 줄을 만든 뒤 남은 칸을 그 줄의 위젯에 한 칸씩 돌아가며 나눠 주고,
+ * 한 줄의 높이는 가장 높은 위젯에 맞춘다. 글줄 맞춤처럼 마지막 줄만 왼쪽 정렬로 둔다.
+ */
 export const packGrid = (widgets: PresetWidget[], startY = 0, cols = 12): GridItem[] => {
-  let x = 0;
-  let y = startY;
-  let rowHeight = 0;
-  return widgets.map((w) => {
+  const rows: GridItem[][] = [];
+  let row: GridItem[] = [];
+  let used = 0;
+  for (const w of widgets) {
     const size = DEFAULT_SIZE[w.template];
-    if (x + size.w > cols) {
-      x = 0;
-      y += rowHeight;
-      rowHeight = 0;
+    if (used + size.w > cols && row.length > 0) {
+      rows.push(row);
+      row = [];
+      used = 0;
     }
-    const item: GridItem = { i: '', x, y, w: size.w, h: size.h, minW: size.minW, minH: size.minH };
-    x += size.w;
-    rowHeight = Math.max(rowHeight, size.h);
-    return item;
+    row.push({ i: '', x: used, y: 0, w: size.w, h: size.h, minW: size.minW, minH: size.minH });
+    used += size.w;
+  }
+  if (row.length > 0) rows.push(row);
+
+  let y = startY;
+  const out: GridItem[] = [];
+  rows.forEach((items, r) => {
+    const isLast = r === rows.length - 1;
+    const templates = items.map((_, i) => widgets[out.length + i].template);
+    let spare = cols - items.reduce((sum, it) => sum + it.w, 0);
+    // 먼저 상한 안에서 나누고, 그래도 남으면(마지막 줄이 아닐 때만) 상한을 풀어 채운다.
+    // 마지막 줄은 상한에서 멈춘다. 홀로 남은 도넛이 화면을 다 차지하지 않게
+    const share = (capped: boolean) => {
+      let guard = cols;
+      while (spare > 0 && guard-- > 0) {
+        let given = false;
+        items.forEach((it, i) => {
+          if (spare <= 0) return;
+          const cap = capped ? (STRETCH_MAX[templates[i]] ?? cols) : cols;
+          if (it.w < cap) {
+            it.w += 1;
+            spare -= 1;
+            given = true;
+          }
+        });
+        if (!given) break;
+      }
+    };
+    share(true);
+    if (!isLast) share(false);
+    const height = Math.max(...items.map((it) => it.h));
+    let x = 0;
+    for (const it of items) {
+      it.x = x;
+      it.y = y;
+      it.h = height;
+      x += it.w;
+      out.push(it);
+    }
+    y += height;
   });
+  return out;
 };
