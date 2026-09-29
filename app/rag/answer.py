@@ -13,7 +13,7 @@ from typing import Any
 
 from app.config import settings
 from app.rag import blocks as blocks_mod
-from app.rag.routing import PreviousTurn
+from app.rag.routing import PreviousTurn, render_previous
 from app.rag.search import RetrievedChunk
 from app.semantic.models import WidgetDataResponse
 
@@ -124,11 +124,11 @@ def user_prompt(
     aggregate: AggregateContext | None,
     listing: str | None = None,
     blocks: list["blocks_mod.Block"] | None = None,
-    previous: "PreviousTurn | None" = None,
+    previous: list[PreviousTurn] | None = None,
 ) -> str:
     parts = [f"## 질문\n{question}"]
-    if previous is not None:
-        parts.append(f"## 앞 대화\n질문: {previous.question}\n답: {previous.excerpt()}")
+    if previous:
+        parts.append("## 앞 대화 (마지막이 직전)\n" + render_previous(previous))
     if listing:
         parts.append("## 목록 범위\n" + listing)
     if aggregate is not None:

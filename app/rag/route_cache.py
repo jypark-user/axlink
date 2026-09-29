@@ -57,7 +57,7 @@ def decide(
     catalog: Catalog,
     llm: LlmPort,
     question: str,
-    previous: routing.PreviousTurn | None = None,
+    previous: list[routing.PreviousTurn] | None = None,
 ) -> Routed:
     """캐시에 있으면 그 판정을 다시 검증해 쓰고, 없으면 모델에 묻는다.
 

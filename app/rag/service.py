@@ -14,7 +14,7 @@ import json
 import logging
 import time
 from collections.abc import Iterator
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from datetime import datetime
 from typing import Any
 
@@ -155,8 +155,8 @@ class Prepared:
     user_message_id: str
     catalog: Catalog
     started: float
-    # 직전 질문·답. 후속 질문이 무엇을 가리키는지 판정과 본문이 같이 본다
-    previous: routing.PreviousTurn | None = None
+    # 최근 질문·답. 후속 질문이 무엇을 가리키는지 판정과 본문이 같이 본다
+    previous: list[routing.PreviousTurn] = field(default_factory=list)
 
 
 def prepare(cur: Any, principal: AuthPrincipal, conversation_id: str, req: AskRequest) -> Prepared:
@@ -169,17 +169,16 @@ def prepare(cur: Any, principal: AuthPrincipal, conversation_id: str, req: AskRe
     requested = req.projectScope or list(conversation["project_scope"] or [])
     scope = _scope(allowed, requested, require=True)
 
-    last = repo.last_turn(cur, conversation_id)
-    previous = (
+    previous = [
         routing.PreviousTurn(
-            question=last["question"],
-            answer=last["answer"],
-            measure_key=last.get("measure_key"),
-            route_type=last.get("route_type"),
+            question=t["question"],
+            answer=t["answer"],
+            measure_key=t.get("measure_key"),
+            route_type=t.get("route_type"),
+            topic=t.get("rewritten_query"),
         )
-        if last
-        else None
-    )
+        for t in repo.last_turns(cur, conversation_id, routing.PREVIOUS_TURNS)
+    ]
     seq = repo.next_seq(cur, conversation_id)
     user_message_id = repo.insert_message(cur, conversation_id, seq, "USER", question)
     repo.touch_conversation(cur, conversation_id)
@@ -356,7 +355,7 @@ def stream(p: Prepared) -> Iterator[bytes]:
                     routing.LISTABLE[decision.listing], len(chunks), found.candidate_count
                 )
             # 후속 질문에만 앞 대화를 준다. 주제가 선 질문에 앞 답을 주면 모델이 그걸 다시 말한다
-            previous = p.previous if decision.follow_up else None
+            previous = p.previous if decision.follow_up else []
             prompt = answer.user_prompt(
                 p.question, chunks, aggregate, scope_line, block_list, previous
             )
@@ -371,8 +370,8 @@ def stream(p: Prepared) -> Iterator[bytes]:
                 yield _sse("delta", SseDeltaEvent(text=tail))
             finish_reason = "STOP"
             grounds = [p.question, *(c.content for c in chunks)]
-            if previous is not None:
-                grounds.append(previous.answer)  # 앞 답의 숫자는 그때 이미 검문을 지났다
+            # 앞 답의 숫자는 그때 이미 검문을 지났다
+            grounds.extend(t.answer for t in previous)
             if scope_line:
                 grounds.append(scope_line)
             if aggregate is not None:

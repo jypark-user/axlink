@@ -34,24 +34,41 @@ LISTABLE: dict[str, str] = {
 # 건너뛰어 "AGGREGATE 인데 measure 없음" 이 됐고, 객체라고만 묶으면 여섯 키를 다 채웠다.
 CHOICE_SCHEMA: dict[str, Any] = {"type": "object"}
 
-# 앞 대화 답을 프롬프트에 넣을 때 자르는 길이. 요점은 앞부분에 있다
-PREVIOUS_ANSWER_CHARS = 700
+# 앞 대화를 프롬프트에 넣을 때의 한도. 최근 몇 턴을 보이고 답은 앞부분만 자른다. 요점은
+# 앞에 있고, "둘이 왜 달라?" 처럼 두 턴을 가리키는 질문은 한 턴만으로는 못 푼다
+PREVIOUS_TURNS = 3
+PREVIOUS_ANSWER_CHARS = 500
 
 
 @dataclass
 class PreviousTurn:
-    """직전 질문·답. 후속 질문("그 방법의 흐름을 보여줘")이 무엇을 가리키는지 알려 준다."""
+    """앞선 질문·답 한 쌍. 후속 질문("그 방법의 흐름을 보여줘")이 무엇을 가리키는지 알려 준다."""
 
     question: str
     answer: str
     measure_key: str | None = None
     route_type: str | None = None
+    topic: str | None = None  # 그때 판정이 뽑은 검색 핵심어. 지표가 없는 목록·현황 답의 주제
 
     def excerpt(self) -> str:
         text = " ".join(self.answer.split())
         if len(text) > PREVIOUS_ANSWER_CHARS:
             text = text[:PREVIOUS_ANSWER_CHARS] + "…"
         return text
+
+    def render(self) -> str:
+        tags = []
+        if self.measure_key:
+            tags.append(f"지표 {self.measure_key}")
+        if self.topic:
+            tags.append(f"주제어 {self.topic}")
+        tail = f" ({', '.join(tags)})" if tags else ""
+        return f"질문: {self.question}\n답{tail}: {self.excerpt()}"
+
+
+def render_previous(turns: list[PreviousTurn]) -> str:
+    """오래된 것부터, 마지막이 직전 턴이다."""
+    return "\n\n".join(t.render() for t in turns)
 
 
 @dataclass
@@ -71,7 +88,7 @@ class RouteDecision:
 
 
 def decide(
-    catalog: Catalog, llm: LlmPort, question: str, previous: PreviousTurn | None = None
+    catalog: Catalog, llm: LlmPort, question: str, previous: list[PreviousTurn] | None = None
 ) -> RouteDecision:
     result = llm.complete(
         system_prompt(catalog), user_content(question, previous), json_schema=CHOICE_SCHEMA
@@ -80,16 +97,12 @@ def decide(
     return from_choice(catalog, choice)
 
 
-def user_content(question: str, previous: PreviousTurn | None) -> str:
+def user_content(question: str, previous: list[PreviousTurn] | None) -> str:
     """모델에 주는 질문. 앞 대화가 있으면 같이 준다. 이번 질문이 무엇을 가리키는지는 모델이
     앞 질문을 봐야 안다. 앞 대화가 없으면 질문 문장 그대로다(캐시 키와 같은 문자열)."""
-    if previous is None:
+    if not previous:
         return question
-    subject = f"\n앞 답의 지표: {previous.measure_key}" if previous.measure_key else ""
-    return (
-        f"## 앞 대화\n질문: {previous.question}\n답: {previous.excerpt()}{subject}\n\n"
-        f"## 이번 질문\n{question}"
-    )
+    return f"## 앞 대화 (마지막이 직전)\n{render_previous(previous)}\n\n## 이번 질문\n{question}"
 
 
 def from_choice(catalog: Catalog, choice: dict[str, Any] | None) -> RouteDecision:
@@ -190,10 +203,15 @@ def system_prompt(catalog: Catalog) -> str:
         "지표 key 는 카탈로그에 있는 것만 쓴다. 맞는 지표가 없으면 DOCUMENT 다. "
         "차원은 0~2개이고 지표의 허용 차원에서만 고른다. 추이를 물으면 period_ 차원을 쓴다.\n"
         "입력에 '앞 대화' 절이 있으면 이번 질문이 그것을 가리키는지 본다. \"그 방법의 흐름을 "
-        "보여줘\", \"왜 그래?\", \"더 자세히\", \"그림으로\" 처럼 혼자서는 주제가 없는 질문은 "
-        "후속 질문이다. 후속 질문은 앞 대화와 같은 주제로 분류하고(앞 답의 지표가 있으면 그 "
-        "지표를 measure 로), \"followUp\": true 를 붙인다. 앞 답에서 말한 방법·절차를 흐름·단계·"
-        "그림으로 보여 달라는 것은 사업 현황(OVERVIEW)이 아니다. 이번 질문만으로 주제가 서면 "
+        "보여줘\", \"왜 그래?\", \"더 자세히\", \"그림으로\", \"그건 어떻게 해결해?\", \"그 중에 "
+        "지연된 건?\" 처럼 혼자서는 주제가 없는 질문은 후속 질문이다. 후속 질문은 앞 대화와 같은 "
+        "주제로 분류하고 \"followUp\": true 를 붙인다. 주제는 이렇게 잇는다. 앞 답에 지표가 있으면 "
+        "그 지표를 measure 로 쓴다. 앞 답이 목록·현황이었으면 이번 질문이 가리키는 항목(\"미제출 "
+        "산출물\", \"지연 작업\", \"열린 이슈\" 등)에 맞는 카탈로그 지표를 measure 로 고른다. "
+        "\"왜\", \"어떻게 해결\", \"줄이려면\", \"올리려면\" 은 그 지표의 산출 근거가 답하므로 "
+        "AGGREGATE 다. 앞 답의 목록에 조건을 더하는 질문(\"그 중에 지연된 건\")은 같은 종류의 "
+        "목록에 조건을 바꿔 다시 list 로 낸다. 앞 답에서 말한 방법·절차를 흐름·단계·그림으로 보여 "
+        "달라는 것은 사업 현황(OVERVIEW)이 아니다. 앞 대화가 있어도 이번 질문만으로 주제가 서면 "
         "followUp 은 false 다.\n\n"
         f"## 지표\n{measures}\n\n## 차원\n{dimensions}\n\n"
         f"## 템플릿 (언제 고르는가)\n{prompt_guide(chat_only=True)}\n"

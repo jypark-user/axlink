@@ -66,7 +66,7 @@ def test_후속_판정은_저장하지_않는다(clean_cache):
         {"route": "AGGREGATE", "measure": "open_issue_count", "template": "STAT_CARD",
          "followUp": True}
     )
-    previous = routing.PreviousTurn(question="열린 이슈 몇 건이야?", answer="3건입니다.")
+    previous = [routing.PreviousTurn(question="열린 이슈 몇 건이야?", answer="3건입니다.")]
     with tx() as cur:
         routed = route_cache.decide(cur, cat, llm, "왜 그래?", previous)
         assert routed.decision.follow_up is True

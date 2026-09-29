@@ -209,19 +209,24 @@ def test_후속_질문은_앞_대화와_함께_모델에_가고_캐시되지_않
         answer="시험 결과서를 올려 검증완료로 바꿔야 합니다. " * 40,
         measure_key="requirement_fulfillment_rate",
     )
-    content = routing.user_content("흐름을 그림으로 보여줘", previous)
-    assert content.startswith("## 앞 대화\n질문: 요구사항 이행률을 높이려면")
-    assert "앞 답의 지표: requirement_fulfillment_rate" in content
+    earlier = routing.PreviousTurn(
+        question="미제출 산출물 목록 보여줘", answer="46건입니다.", topic="미제출 산출물"
+    )
+    content = routing.user_content("흐름을 그림으로 보여줘", [earlier, previous])
+    assert content.startswith("## 앞 대화 (마지막이 직전)\n질문: 미제출 산출물 목록 보여줘")
+    assert "답 (주제어 미제출 산출물): 46건입니다." in content
+    assert "답 (지표 requirement_fulfillment_rate): 시험 결과서를" in content
     assert content.endswith("## 이번 질문\n흐름을 그림으로 보여줘")
     assert len(previous.excerpt()) <= routing.PREVIOUS_ANSWER_CHARS + 1  # 말줄임표
     # 앞 대화가 없으면 질문 문장 그대로다(캐시 키와 같은 문자열)
     assert routing.user_content("진척률은?", None) == "진척률은?"
+    assert routing.user_content("진척률은?", []) == "진척률은?"
     # followUp 표식은 판정에 남고, 본문 프롬프트에도 앞 대화 절이 붙는다
     choice = {"route": "AGGREGATE", "measure": "open_issue_count", "followUp": True}
     assert routing.from_choice(_catalog(), choice).follow_up is True
     assert routing.from_choice(_catalog(), {"route": "OVERVIEW"}).follow_up is False
-    prompt = answer.user_prompt("흐름을 그림으로 보여줘", [], None, previous=previous)
-    assert "## 앞 대화\n질문: 요구사항 이행률을 높이려면" in prompt
+    prompt = answer.user_prompt("흐름을 그림으로 보여줘", [], None, previous=[previous])
+    assert "## 앞 대화 (마지막이 직전)\n질문: 요구사항 이행률을 높이려면" in prompt
     assert "## 근거" in prompt
 
 
