@@ -190,7 +190,7 @@ export function WidgetCreateDialog({
           </div>
 
           <div className="flex flex-col gap-2">
-            <Label htmlFor="widget-prompt">표시할 내용</Label>
+            <Label htmlFor="widget-prompt">내용</Label>
             <Textarea
               id="widget-prompt"
               value={prompt}
@@ -198,19 +198,16 @@ export function WidgetCreateDialog({
               rows={3}
               placeholder={
                 editing
-                  ? '이 위젯을 만들 때 적은 의도가 없습니다. 바꿀 내용을 적고 다시 생성하세요'
+                  ? '저장된 내용이 없습니다. 바꿀 내용을 적고 다시 생성하세요'
                   : (guide?.prompts[0] ?? '예: 용역사별 이번 달 이슈 처리율')
               }
             />
             {guide && (
               <div className="rounded-md border border-border/60 bg-muted/30 px-3 py-2.5 text-xs text-muted-foreground">
-                <p>
-                  <span className="font-medium text-foreground">{guide.label}</span> ·{' '}
-                  {guide.purpose}. {guide.when}
-                </p>
+                <p>{guide.purpose}</p>
                 {guide.prompts.length > 0 && (
                   <div className="mt-2 flex flex-wrap gap-1.5">
-                    <span className="self-center">이렇게 적으면 됩니다:</span>
+                    <span className="self-center">내용 예시</span>
                     {guide.prompts.map((example) => (
                       <button
                         key={example}
