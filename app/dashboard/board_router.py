@@ -111,6 +111,7 @@ def widget_templates(principal: Principal) -> WidgetTemplateListResponse:
                     measure=t.example_measure, dimensions=list(t.example_dimensions),
                     title=t.example_title,
                 ),
+                prompts=list(widget_template.prompt_examples(t.key)),
                 sample=template_samples.sample_for(t),
             )
             for t in widget_template.CATALOG

@@ -18,6 +18,8 @@ import { defaultGridItem } from '@/features/dashboard/layout-mapper';
 import { resolveWidgetRenderer } from '@/features/widgets/renderer-registry';
 import { label as labelOf } from '@/lib/labels';
 import type {
+  WidgetTemplateListResponse,
+  WidgetTemplateResponse,
   GridItem,
   WidgetDataResponse,
   WidgetGenerateResponse,
@@ -69,6 +71,21 @@ export function WidgetCreateDialog({
   const [spec, setSpec] = useState<WidgetSpec | null>(editing?.spec ?? null);
   const [preview, setPreview] = useState<WidgetDataResponse | null>(null);
   const [rejection, setRejection] = useState<string | null>(null);
+  // 고른 템플릿이 무엇을 보여 주는 그림이고 어떻게 적으면 되는지. 정의라 한 번만 받는다
+  const [guide, setGuide] = useState<WidgetTemplateResponse | null>(null);
+  useEffect(() => {
+    if (!template) return;
+    let alive = true;
+    api
+      .get<WidgetTemplateListResponse>('/widget-templates')
+      .then((res) => {
+        if (alive) setGuide(res.templates.find((t) => t.key === template) ?? null);
+      })
+      .catch(() => undefined);
+    return () => {
+      alive = false;
+    };
+  }, [template]);
 
   // 고치는 중이면 지금 그려져 있는 값을 미리보기에 띄운다 —
   // 다시 생성하기 전에도 무엇을 고치는 중인지 보여야 한다.
@@ -182,9 +199,32 @@ export function WidgetCreateDialog({
               placeholder={
                 editing
                   ? '이 위젯을 만들 때 적은 의도가 없습니다. 바꿀 내용을 적고 다시 생성하세요'
-                  : '예: 용역사별 이번 달 이슈 처리율'
+                  : (guide?.prompts[0] ?? '예: 용역사별 이번 달 이슈 처리율')
               }
             />
+            {guide && (
+              <div className="rounded-md border border-border/60 bg-muted/30 px-3 py-2.5 text-xs text-muted-foreground">
+                <p>
+                  <span className="font-medium text-foreground">{guide.label}</span> ·{' '}
+                  {guide.purpose}. {guide.when}
+                </p>
+                {guide.prompts.length > 0 && (
+                  <div className="mt-2 flex flex-wrap gap-1.5">
+                    <span className="self-center">이렇게 적으면 됩니다:</span>
+                    {guide.prompts.map((example) => (
+                      <button
+                        key={example}
+                        type="button"
+                        className="rounded-full border border-border bg-background px-2.5 py-1 text-xs text-foreground hover:border-primary hover:text-primary"
+                        onClick={() => setPrompt(example)}
+                      >
+                        {example}
+                      </button>
+                    ))}
+                  </div>
+                )}
+              </div>
+            )}
           </div>
 
           {rejection && (

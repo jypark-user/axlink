@@ -274,6 +274,7 @@ class WidgetTemplateResponse(BaseModel):
     chat: bool
     note: str
     example: WidgetTemplateExample
+    prompts: list[str]  # "표시할 내용" 에 이렇게 적으라는 예시 문장
     # 쇼케이스용 예시 값. 계약에서 만든 결정적 값이라 사업이 없어도 그림이 그려진다
     sample: WidgetDataResponse
 

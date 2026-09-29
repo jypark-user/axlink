@@ -1410,6 +1410,8 @@ export interface WidgetTemplateResponse {
   chat: boolean;
   note: string;
   example: WidgetTemplateExample;
+  /** "표시할 내용" 에 이렇게 적으라는 예시 문장 */
+  prompts: string[];
   /** 쇼케이스용 예시 값. 계약에서 만든 결정적 값이라 사업이 없어도 그려진다 */
   sample: WidgetDataResponse;
 }
