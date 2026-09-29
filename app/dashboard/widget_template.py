@@ -10,6 +10,8 @@
 
 from dataclasses import dataclass
 
+from app.common import korean
+
 # 시간축 요구 수준
 TIME_REQUIRED = "REQUIRED"  # 기간 차원이 없으면 뜻이 없다
 TIME_OPTIONAL = "OPTIONAL"  # 있으면 추이, 없으면 범주
@@ -263,17 +265,17 @@ def fits(
     n = len(dimensions)
     has_time = any(d in time_keys for d in dimensions)
     if n > t.dims_max:
-        return f"{t.label}은(는) 차원을 {t.dims_max}개까지 받습니다"
+        return f"{korean.attach(t.label, '은')} 차원을 {t.dims_max}개까지 받습니다"
     if t.time_axis == TIME_REQUIRED and not has_time:
-        return f"{t.label}은(는) 기간 차원이 있어야 합니다"
+        return f"{korean.attach(t.label, '은')} 기간 차원이 있어야 합니다"
     if not strict:
         return None
     if measure_type not in t.measure_types:
-        return f"{t.label}은(는) {'·'.join(t.measure_types)} 지표만 받습니다"
+        return f"{korean.attach(t.label, '은')} {'·'.join(t.measure_types)} 지표만 받습니다"
     if n < t.dims_min:
-        return f"{t.label}은(는) 차원이 {t.dims_min}개 이상이어야 합니다"
+        return f"{korean.attach(t.label, '은')} 차원이 {t.dims_min}개 이상이어야 합니다"
     if t.time_axis == TIME_NONE and has_time:
-        return f"{t.label}은(는) 기간 차원을 쓰지 않습니다"
+        return f"{korean.attach(t.label, '은')} 기간 차원을 쓰지 않습니다"
     return None
 
 

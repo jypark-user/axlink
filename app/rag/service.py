@@ -24,7 +24,7 @@ from app.ai.embedding import embedding_port
 from app.ai.llm import llm_port
 from app.auth import repository as auth_repo
 from app.auth.models import AuthPrincipal
-from app.common import errors
+from app.common import errors, korean
 from app.common.paging import PageQuery, PageResponse
 from app.config import settings
 from app.db import tx
@@ -49,7 +49,7 @@ from app.rag.models import (
 from app.rag.search import RetrievedChunk
 from app.semantic import catalog as catalog_module
 from app.semantic import service as semantic
-from app.semantic.catalog import Catalog
+from app.semantic.catalog import Catalog, MeasureDef
 from app.semantic.models import WidgetOptions, WidgetQuery, WidgetSpec
 
 log = logging.getLogger(__name__)
@@ -68,6 +68,16 @@ _SUGGESTED_DOCUMENT_QUESTIONS = (
     "과업지시서에 정한 납품 산출물은 무엇인가요?",
     "최근 이슈에서 지연 사유로 적힌 내용은 무엇인가요?",
 )
+
+
+def _suggested_question(m: MeasureDef) -> str:
+    """단위에 맞는 물음. 건수는 "몇 건", 비율은 "몇 퍼센트". 조사는 라벨 끝소리로 고른다."""
+    subject = korean.attach(m.label, "은")
+    if m.unit == "건":
+        return f"{subject} 지금 몇 건인가요?"
+    if m.unit == "%":
+        return f"{subject} 현재 몇 퍼센트인가요?"
+    return f"{subject} 현재 얼마인가요?"
 
 
 # ---------------------------------------------------------------- 대화
@@ -135,7 +145,7 @@ def suggestions(
     _scope(_allowed(cur, principal), project_ids, require=False)
     catalog = catalog_module.load(cur)
     questions = [
-        f"{m.label}은(는) 현재 얼마인가요?"
+        _suggested_question(m)
         for key in _SUGGESTED_MEASURES
         if (m := catalog.measure(key)) is not None
     ]

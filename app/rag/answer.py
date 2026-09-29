@@ -11,6 +11,7 @@ from collections.abc import Iterator
 from dataclasses import dataclass, field
 from typing import Any
 
+from app.common import korean
 from app.config import settings
 from app.rag import blocks as blocks_mod
 from app.rag.routing import PreviousTurn, render_previous
@@ -213,9 +214,10 @@ def _sort_key(token: str) -> tuple[float, str]:
 
 
 def guard_note(numbers: list[str]) -> str:
+    listed = ", ".join(numbers)
     return (
-        "\n\n※ 위 답변의 수치 " + ", ".join(numbers)
-        + " 은(는) 집계 값과 근거 원문에 없는 값입니다. 화면의 집계 값을 기준으로 보십시오."
+        f"\n\n※ 위 답변의 수치 {korean.attach(listed, '은')} 집계 값과 근거 원문에 없는 값입니다. "
+        "화면의 집계 값을 기준으로 보십시오."
     )
 
 
