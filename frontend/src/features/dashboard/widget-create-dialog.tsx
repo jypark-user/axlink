@@ -16,6 +16,7 @@ import { Textarea } from '@/components/ui/textarea';
 import { api } from '@/lib/http';
 import { defaultGridItem } from '@/features/dashboard/layout-mapper';
 import { resolveWidgetRenderer } from '@/features/widgets/renderer-registry';
+import { isIdColumn, resolveColumns } from '@/features/widgets/widget-data';
 import { label as labelOf } from '@/lib/labels';
 import type {
   WidgetTemplateListResponse,
@@ -39,6 +40,35 @@ function PreviewBody({ spec, data }: { spec: WidgetSpec; data: WidgetDataRespons
   }
   return <Renderer spec={spec} data={data} />;
 }
+
+/** 열을 고를 수 있는 표 성격의 템플릿. 차트는 열이 아니라 축이라 고를 게 없다 */
+const COLUMN_PICK_TEMPLATES = new Set<string>(['DATA_TABLE', 'CHECKLIST']);
+
+/**
+ * 열 하나를 켜거나 끈 명세. 열 순서는 데이터 순서를 따르고, 기본 상태(설정 없음)에서
+ * 처음 손대면 그때 보이던 열 목록을 기준으로 시작한다.
+ */
+const withColumn = (
+  spec: WidgetSpec,
+  data: WidgetDataResponse,
+  key: string,
+  shown: boolean,
+): WidgetSpec => {
+  const current = new Set(resolveColumns(data, spec.options).map((c) => c.key));
+  if (shown) current.add(key);
+  else current.delete(key);
+  const columns = data.columns.map((c) => c.key).filter((k) => current.has(k));
+  const options = spec.options ?? {
+    unit: null,
+    sort: null,
+    threshold: null,
+    stacked: null,
+    showLegend: null,
+    compareWithPrevious: null,
+    columns: null,
+  };
+  return { ...spec, options: { ...options, columns } };
+};
 
 export function WidgetCreateDialog({
   dashboardId,
@@ -237,12 +267,43 @@ export function WidgetCreateDialog({
 
           {spec && preview && (
             <div className="flex flex-col gap-2">
-              <Label>3. 미리보기</Label>
+              <Label>미리보기</Label>
               <div className="rounded-lg border p-3">
                 <PreviewBody spec={spec} data={preview} />
               </div>
             </div>
           )}
+
+          {spec &&
+            preview &&
+            COLUMN_PICK_TEMPLATES.has(spec.template) &&
+            preview.columns.length > 1 && (
+              <div className="flex flex-col gap-2">
+                <Label>보이는 열</Label>
+                <div className="flex flex-wrap gap-x-4 gap-y-1.5 rounded-lg border px-3 py-2.5 text-sm">
+                  {preview.columns.map((column) => {
+                    const shown = resolveColumns(preview, spec.options).some(
+                      (c) => c.key === column.key,
+                    );
+                    return (
+                      <label key={column.key} className="flex items-center gap-1.5">
+                        <input
+                          type="checkbox"
+                          checked={shown}
+                          onChange={(event) =>
+                            setSpec(withColumn(spec, preview, column.key, event.target.checked))
+                          }
+                        />
+                        <span>{column.label}</span>
+                        {isIdColumn(column, preview) && (
+                          <span className="text-muted-foreground text-xs">(식별자)</span>
+                        )}
+                      </label>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
         </div>
 
         <DialogFooter>

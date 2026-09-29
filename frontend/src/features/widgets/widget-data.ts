@@ -24,12 +24,23 @@ export const asText = (value: unknown): string => {
   return JSON.stringify(value) ?? '';
 };
 
+/**
+ * 이름 열(`d0_label`)이 같이 온 차원의 식별자 열(`d0`). 사람이 읽을 이름이 있으면
+ * uuid 는 안 보여도 된다. 표에 보이는 열을 고를 때 기본으로 숨긴다.
+ */
+export const isIdColumn = (column: WidgetColumn, data: WidgetDataResponse): boolean =>
+  data.columns.some((other) => other.key === `${column.key}_label`);
+
+/** 열 설정이 없을 때 표에 보이는 열. 식별자 열은 이름 열이 있으면 숨긴다 */
+export const defaultColumns = (data: WidgetDataResponse): WidgetColumn[] =>
+  data.columns.filter((c) => !isIdColumn(c, data));
+
 export const resolveColumns = (
   data: WidgetDataResponse,
   options: WidgetOptions | null,
 ): WidgetColumn[] => {
   const wanted = options?.columns;
-  if (!wanted || wanted.length === 0) return data.columns;
+  if (!wanted || wanted.length === 0) return defaultColumns(data);
   return wanted
     .map((key) => data.columns.find((c) => c.key === key))
     .filter((c): c is WidgetColumn => c !== undefined);

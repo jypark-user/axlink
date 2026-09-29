@@ -1,5 +1,33 @@
 import { describe, expect, it } from 'vitest';
-import { categoryKey } from '@/features/widgets/widget-data';
+
+const withLabelColumn = {
+  columns: [
+    { key: 'd0', label: '용역사', type: 'string' },
+    { key: 'd0_label', label: '용역사 명', type: 'string' },
+    { key: 'value', label: '이슈 건수', type: 'number' },
+  ],
+  rows: [],
+} as unknown as WidgetDataResponse;
+
+describe('resolveColumns', () => {
+  it('이름 열이 있는 차원의 식별자 열은 기본으로 숨긴다', () => {
+    expect(resolveColumns(withLabelColumn, null).map((c) => c.key)).toEqual(['d0_label', 'value']);
+  });
+
+  it('열을 고르면 그 순서대로 보이고 식별자 열도 고를 수 있다', () => {
+    const picked = resolveColumns(withLabelColumn, {
+      unit: null,
+      sort: null,
+      threshold: null,
+      stacked: null,
+      showLegend: null,
+      compareWithPrevious: null,
+      columns: ['value', 'd0'],
+    });
+    expect(picked.map((c) => c.key)).toEqual(['value', 'd0']);
+  });
+});
+import { categoryKey, resolveColumns } from '@/features/widgets/widget-data';
 import type { WidgetDataResponse } from '@/types/api';
 
 /**
