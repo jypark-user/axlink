@@ -76,5 +76,6 @@ describe('dashboard-presets', () => {
     const spec = toWidgetSpec(DASHBOARD_PRESETS[0].widgets[0], 'prj-1');
     expect(spec.query.projectScope).toEqual(['prj-1']);
     expect(spec.query.filters).toEqual([]);
+    expect(spec.prompt).toBe(DASHBOARD_PRESETS[0].widgets[0].title);
   });
 });

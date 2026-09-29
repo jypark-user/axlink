@@ -310,6 +310,7 @@ export const DASHBOARD_PRESETS: DashboardPreset[] = [
 export const toWidgetSpec = (widget: PresetWidget, projectId: string): WidgetSpec => ({
   template: widget.template,
   title: widget.title,
+  prompt: widget.title, // 추천 구성은 제목이 곧 의도다. 고칠 때 빈칸이 아니게
   query: {
     measure: widget.measure,
     dimensions: widget.dimensions ?? [],

@@ -62,7 +62,8 @@ export function WidgetCreateDialog({
   // 고치는 중이면 그 위젯이 쓰던 모양을 그대로 이어 쓴다.
   const template = editing?.spec?.template ?? initialTemplate;
   const [title, setTitle] = useState(editing?.spec?.title ?? '');
-  const [prompt, setPrompt] = useState('');
+  // 고치는 중이면 만들 때 적은 의도를 그대로 띄운다 — 무엇을 보려던 위젯인지 알고 고쳐야 한다.
+  const [prompt, setPrompt] = useState(editing?.spec?.prompt ?? '');
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [spec, setSpec] = useState<WidgetSpec | null>(editing?.spec ?? null);
@@ -120,7 +121,12 @@ export function WidgetCreateDialog({
     setBusy(true);
     setError(null);
     try {
-      const named = title.trim() ? { ...spec, title: title.trim() } : spec;
+      const named: WidgetSpec = {
+        ...spec,
+        title: title.trim() || spec.title,
+        // 의도는 명세와 같이 저장한다. 비워 두면 전에 적은 것을 지킨다
+        prompt: prompt.trim() || spec.prompt || null,
+      };
       if (editing) {
         // 고치는 것은 명세만 바꾼다 — 자리와 크기는 그대로 둔다.
         await api.patch(`/widgets/${editing.id}`, { spec: named });
@@ -175,7 +181,7 @@ export function WidgetCreateDialog({
               rows={3}
               placeholder={
                 editing
-                  ? '바꿀 내용을 적고 다시 생성하세요. 제목만 고칠 거면 비워 두세요'
+                  ? '이 위젯을 만들 때 적은 의도가 없습니다. 바꿀 내용을 적고 다시 생성하세요'
                   : '예: 용역사별 이번 달 이슈 처리율'
               }
             />

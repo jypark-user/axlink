@@ -794,6 +794,8 @@ export interface WidgetSpec {
   title: string;
   query: WidgetQuery;
   options: WidgetOptions | null;
+  /** 만들 때 적은 의도. 고칠 때 다시 보여 준다. 값은 query 가 정한다 */
+  prompt?: string | null;
 }
 
 export interface WidgetColumn {

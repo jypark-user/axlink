@@ -65,6 +65,7 @@ def generate(
     spec = WidgetSpec(
         template=template,
         title=str(choice.get("title") or measure.label),
+        prompt=prompt,
         query=WidgetQuery(
             measure=measure.key,
             dimensions=dimensions,

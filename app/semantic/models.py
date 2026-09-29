@@ -42,6 +42,9 @@ class WidgetSpec(BaseModel):
     title: str = ""
     query: WidgetQuery
     options: WidgetOptions | None = None
+    # 위젯을 만들 때 적은 의도("용역사별 이번 달 이슈 처리율"). 고칠 때 다시 보여 준다.
+    # 값을 정하는 것은 query 이고 이 문장은 사람을 위한 기록이다
+    prompt: str | None = None
 
 
 class WidgetColumn(BaseModel):
