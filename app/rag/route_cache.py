@@ -52,7 +52,13 @@ class Routed:
     model: str = ""
 
 
-def decide(cur: Any, catalog: Catalog, llm: LlmPort, question: str) -> Routed:
+def decide(
+    cur: Any,
+    catalog: Catalog,
+    llm: LlmPort,
+    question: str,
+    previous: routing.PreviousTurn | None = None,
+) -> Routed:
     """캐시에 있으면 그 판정을 다시 검증해 쓰고, 없으면 모델에 묻는다.
 
     새 판정은 여기서 저장하지 않는다. 답을 실제로 만들었을 때만 remember() 가 넣는다.
@@ -61,9 +67,12 @@ def decide(cur: Any, catalog: Catalog, llm: LlmPort, question: str) -> Routed:
 
     저장은 모델의 JSON 원본이다. 읽을 때 from_choice 가 카탈로그로 다시 검증하므로 지표가
     폐기되면 그 판정은 문서 경로로 내려간다. 읽을 수 없는 답(파싱 실패)은 저장하지 않는다.
+
+    캐시에 있는 판정은 앞 대화 없이도 뜻이 선 질문의 것이다(후속 판정은 remember 가 거른다).
+    그래서 앞 대화가 있어도 캐시를 먼저 본다.
     """
     if not settings.rag_route_cache:
-        return Routed(routing.decide(catalog, llm, question), cached=False)
+        return Routed(routing.decide(catalog, llm, question, previous), cached=False)
 
     version = catalog_version(catalog)
     key = key_of(question, version)
@@ -77,7 +86,9 @@ def decide(cur: Any, catalog: Catalog, llm: LlmPort, question: str) -> Routed:
         return Routed(routing.from_choice(catalog, row["choice_json"]), cached=True)
 
     result = llm.complete(
-        routing.system_prompt(catalog), question, json_schema=routing.CHOICE_SCHEMA
+        routing.system_prompt(catalog),
+        routing.user_content(question, previous),
+        json_schema=routing.CHOICE_SCHEMA,
     )
     choice = generation.parse_choice(result.text)
     return Routed(
@@ -91,8 +102,11 @@ def decide(cur: Any, catalog: Catalog, llm: LlmPort, question: str) -> Routed:
 
 
 def remember(cur: Any, question: str, routed: Routed) -> bool:
-    """답을 만든 판정을 저장한다. 캐시에서 온 것이거나 읽을 수 없던 답이면 아무것도 안 한다."""
+    """답을 만든 판정을 저장한다. 캐시에서 온 것이거나 읽을 수 없던 답이면 아무것도 안 한다.
+    앞 대화에 기댄 후속 판정도 저장하지 않는다. "그림으로 보여줘" 는 대화마다 뜻이 다르다."""
     if routed.cached or routed.choice is None or routed.key is None or routed.version is None:
+        return False
+    if routed.decision.follow_up:
         return False
     cur.execute(
         """

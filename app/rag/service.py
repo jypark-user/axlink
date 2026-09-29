@@ -155,6 +155,8 @@ class Prepared:
     user_message_id: str
     catalog: Catalog
     started: float
+    # 직전 질문·답. 후속 질문이 무엇을 가리키는지 판정과 본문이 같이 본다
+    previous: routing.PreviousTurn | None = None
 
 
 def prepare(cur: Any, principal: AuthPrincipal, conversation_id: str, req: AskRequest) -> Prepared:
@@ -167,6 +169,17 @@ def prepare(cur: Any, principal: AuthPrincipal, conversation_id: str, req: AskRe
     requested = req.projectScope or list(conversation["project_scope"] or [])
     scope = _scope(allowed, requested, require=True)
 
+    last = repo.last_turn(cur, conversation_id)
+    previous = (
+        routing.PreviousTurn(
+            question=last["question"],
+            answer=last["answer"],
+            measure_key=last.get("measure_key"),
+            route_type=last.get("route_type"),
+        )
+        if last
+        else None
+    )
     seq = repo.next_seq(cur, conversation_id)
     user_message_id = repo.insert_message(cur, conversation_id, seq, "USER", question)
     repo.touch_conversation(cur, conversation_id)
@@ -178,6 +191,7 @@ def prepare(cur: Any, principal: AuthPrincipal, conversation_id: str, req: AskRe
         user_message_id=user_message_id,
         catalog=catalog_module.load(cur),
         started=time.monotonic(),
+        previous=previous,
     )
 
 
@@ -189,7 +203,7 @@ def stream(p: Prepared) -> Iterator[bytes]:
         llm = llm_port()
         # 판정은 캐시를 먼저 본다(ARC-014). 값은 아래에서 매번 새로 뽑는다.
         with tx() as cur:
-            routed = route_cache.decide(cur, p.catalog, llm, p.question)
+            routed = route_cache.decide(cur, p.catalog, llm, p.question, p.previous)
         decision = routed.decision
         query_text = decision.rewritten or p.question
         query_vec = embedding_port().embed([p.question])[0]
@@ -341,7 +355,11 @@ def stream(p: Prepared) -> Iterator[bytes]:
                 scope_line = answer.listing_scope(
                     routing.LISTABLE[decision.listing], len(chunks), found.candidate_count
                 )
-            prompt = answer.user_prompt(p.question, chunks, aggregate, scope_line, block_list)
+            # 후속 질문에만 앞 대화를 준다. 주제가 선 질문에 앞 답을 주면 모델이 그걸 다시 말한다
+            previous = p.previous if decision.follow_up else None
+            prompt = answer.user_prompt(
+                p.question, chunks, aggregate, scope_line, block_list, previous
+            )
             raw = llm.stream(answer.SYSTEM_PROMPT, prompt, json_schema=answer.ANSWER_SCHEMA)
             for piece in answer.decode_answer(answer.strip_think(raw)):
                 pieces.append(piece)
@@ -353,6 +371,8 @@ def stream(p: Prepared) -> Iterator[bytes]:
                 yield _sse("delta", SseDeltaEvent(text=tail))
             finish_reason = "STOP"
             grounds = [p.question, *(c.content for c in chunks)]
+            if previous is not None:
+                grounds.append(previous.answer)  # 앞 답의 숫자는 그때 이미 검문을 지났다
             if scope_line:
                 grounds.append(scope_line)
             if aggregate is not None:

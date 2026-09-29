@@ -13,6 +13,7 @@ from typing import Any
 
 from app.config import settings
 from app.rag import blocks as blocks_mod
+from app.rag.routing import PreviousTurn
 from app.rag.search import RetrievedChunk
 from app.semantic.models import WidgetDataResponse
 
@@ -30,7 +31,13 @@ SYSTEM_PROMPT = (
     "4-1. '그림 놓기' 절이 있으면 그 지시대로 본문에 [그림 N] 표식만 놓는다. "
     "표식 자리에 표나 차트가 그려진다. 그림에 담긴 항목을 본문에 옮겨 적거나 다시 나열하지 "
     "않는다. 본문은 건수와 요점 한두 문장이면 된다.\n"
-    '5. 출력은 {"answer": "<답변>"} 꼴의 JSON 객체 하나다. 생각 과정은 쓰지 않는다.'
+    '5. 출력은 {"answer": "<답변>"} 꼴의 JSON 객체 하나다. 생각 과정은 쓰지 않는다.\n'
+    "6. '앞 대화' 절이 있으면 이번 질문의 '그 방법', '그거', '흐름' 은 앞 대화의 주제다. "
+    "앞 답을 되풀이하지 말고 이번 질문이 새로 묻는 것만 답한다.\n"
+    "7. 절차·방법의 흐름·단계·순서를 그림이나 도식으로 보여 달라는 질문에는 화면 그림을 "
+    "그리지 않는다. 대신 산출 근거와 근거 절에 있는 절차를 '1) … → 2) … → 3) …' 처럼 한 줄에 "
+    "한 단계씩 순서대로 쓴다. 이때는 규칙 4 의 문단 제한을 두지 않는다. 근거에 없는 단계를 "
+    "지어내지 않는다."
 )
 
 # 생성 출력을 이 모양으로 묶는다. 경량 모델이 답 앞에 생각을 늘어놓는 길을 막는다.
@@ -44,6 +51,8 @@ _ESCAPES = {"n": "\n", "t": "\t", "r": "\r", "b": "\b", "f": "\f", "/": "/", "\\
 
 _FOOTNOTE = re.compile(r"\[\d{1,2}\]")
 _DATE = re.compile(r"\d{4}[-./]\d{1,2}[-./]\d{1,2}|\d{4}년|\d{1,2}월|\d{1,2}일")
+# 절차를 단계로 쓸 때의 번호("1) …", "2. …", "3단계"). 수치가 아니다
+_STEP = re.compile(r"(?:^|(?<=\s)|(?<=→)\s*)\d{1,2}(?:\)|\.\s|단계)")
 _NUMBER = re.compile(r"\d+(?:[.,]\d+)*")
 _THINK_OPEN = "<think>"
 _THINK_CLOSE = "</think>"
@@ -115,8 +124,11 @@ def user_prompt(
     aggregate: AggregateContext | None,
     listing: str | None = None,
     blocks: list["blocks_mod.Block"] | None = None,
+    previous: "PreviousTurn | None" = None,
 ) -> str:
     parts = [f"## 질문\n{question}"]
+    if previous is not None:
+        parts.append(f"## 앞 대화\n질문: {previous.question}\n답: {previous.excerpt()}")
     if listing:
         parts.append("## 목록 범위\n" + listing)
     if aggregate is not None:
@@ -164,10 +176,12 @@ def snippet(chunk: RetrievedChunk, limit: int | None = None) -> str:
 
 
 def numbers_in(text: str) -> set[str]:
-    """본문의 숫자를 정규화한 문자열 집합으로. 각주 번호·그림 표식·날짜는 수치가 아니라 뺀다."""
+    """본문의 숫자를 정규화한 문자열 집합으로. 각주 번호·그림 표식·날짜·단계 번호는 수치가
+    아니라 뺀다."""
     body = blocks_mod.MARKER.sub(" ", text)
     body = _FOOTNOTE.sub(" ", body)
     body = _DATE.sub(" ", body)
+    body = _STEP.sub(" ", body)
     found: set[str] = set()
     for m in _NUMBER.finditer(body):
         found.add(_normalize(m.group(0)))
