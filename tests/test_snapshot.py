@@ -152,3 +152,29 @@ def test_접근_없는_사업은_찍지_못한다(client, client_token):
     other = "c0000000-0000-4000-8000-000000000099"
     res = client.post(f"/api/projects/{other}/snapshots", headers=_auth(client_token("r3")))
     assert res.status_code == 403
+
+
+@requires_db
+def test_스냅샷_이력은_최근_것이_앞이고_배정된_사업만_본다(client, client_token):
+    """스냅샷 화면. 하루 한 줄이 어떻게 쌓였는지를 이 목록으로 본다."""
+    from datetime import date as _date
+
+    from app.dashboard import snapshot as _snapshot
+
+    with tx() as cur:
+        cur.execute("delete from progress_snapshot where project_id = %s", (PID,))
+        _snapshot.take_unchecked(cur, PID, _date(2026, 9, 26))
+        _snapshot.take_unchecked(cur, PID, _date(2026, 9, 27))
+    auth = {"Authorization": f"Bearer {client_token('r3')}"}
+    res = client.get(f"/api/projects/{PID}/snapshots?limit=10", headers=auth)
+    assert res.status_code == 200, res.text
+    assert [r["snapshotDate"] for r in res.json()] == ["2026-09-27", "2026-09-26"]
+    assert res.json()[0]["createdAt"]
+    other = "c0000000-0000-4000-8000-000000000099"
+    assert client.get(f"/api/projects/{other}/snapshots", headers=auth).status_code == 403
+    with tx() as cur:
+        cur.execute("delete from progress_snapshot where project_id = %s", (PID,))
+        cur.execute(
+            "delete from activity_event where project_id = %s and kind = 'SNAPSHOT_TAKEN'",
+            (PID,),
+        )

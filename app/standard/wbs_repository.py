@@ -127,8 +127,23 @@ def load_plan(cur: Any, project_id: str) -> wbs.WbsPlan | None:
     return wbs.WbsPlan(rows=leaves, weight_total=total, warnings=warnings, groups=groups)
 
 
-def save_judgements(cur: Any, project_id: str, judgements: list) -> None:
-    """판정 결과를 행에 남긴다. 시맨틱 레이어와 질의가 SQL 로 센다."""
+def save_judgements(cur: Any, project_id: str, judgements: list) -> list[tuple[str, str, str]]:
+    """판정 결과를 행에 남긴다. 시맨틱 레이어와 질의가 SQL 로 센다.
+
+    바뀐 항목을 (wbs_id, 이전, 지금) 으로 돌려준다. 활동 기록이 이걸 본다.
+    """
+    before = {
+        r["wbs_id"]: r["deliverable_status"]
+        for r in fetch_all(
+            cur,
+            "select wbs_id, deliverable_status from wbs_item where project_id = %s",
+            (project_id,),
+        )
+    }
+    changed = [
+        (j.wbs_id, before[j.wbs_id], j.status)
+        for j in judgements if j.wbs_id in before and before[j.wbs_id] != j.status
+    ]
     cur.executemany(
         """
         update wbs_item
@@ -143,6 +158,7 @@ def save_judgements(cur: Any, project_id: str, judgements: list) -> None:
             for j in judgements
         ],
     )
+    return changed
 
 
 def project_documents(cur: Any, project_id: str) -> list[dict[str, Any]]:

@@ -14,7 +14,7 @@ import json
 import logging
 import time
 from collections.abc import Iterator
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from datetime import datetime
 from typing import Any
 
@@ -24,7 +24,7 @@ from app.ai.embedding import embedding_port
 from app.ai.llm import llm_port
 from app.auth import repository as auth_repo
 from app.auth.models import AuthPrincipal
-from app.common import errors
+from app.common import errors, korean
 from app.common.paging import PageQuery, PageResponse
 from app.config import settings
 from app.db import tx
@@ -49,7 +49,7 @@ from app.rag.models import (
 from app.rag.search import RetrievedChunk
 from app.semantic import catalog as catalog_module
 from app.semantic import service as semantic
-from app.semantic.catalog import Catalog
+from app.semantic.catalog import Catalog, MeasureDef
 from app.semantic.models import WidgetOptions, WidgetQuery, WidgetSpec
 
 log = logging.getLogger(__name__)
@@ -68,6 +68,16 @@ _SUGGESTED_DOCUMENT_QUESTIONS = (
     "과업지시서에 정한 납품 산출물은 무엇인가요?",
     "최근 이슈에서 지연 사유로 적힌 내용은 무엇인가요?",
 )
+
+
+def _suggested_question(m: MeasureDef) -> str:
+    """단위에 맞는 물음. 건수는 "몇 건", 비율은 "몇 퍼센트". 조사는 라벨 끝소리로 고른다."""
+    subject = korean.attach(m.label, "은")
+    if m.unit == "건":
+        return f"{subject} 지금 몇 건인가요?"
+    if m.unit == "%":
+        return f"{subject} 현재 몇 퍼센트인가요?"
+    return f"{subject} 현재 얼마인가요?"
 
 
 # ---------------------------------------------------------------- 대화
@@ -135,7 +145,7 @@ def suggestions(
     _scope(_allowed(cur, principal), project_ids, require=False)
     catalog = catalog_module.load(cur)
     questions = [
-        f"{m.label}은(는) 현재 얼마인가요?"
+        _suggested_question(m)
         for key in _SUGGESTED_MEASURES
         if (m := catalog.measure(key)) is not None
     ]
@@ -155,6 +165,8 @@ class Prepared:
     user_message_id: str
     catalog: Catalog
     started: float
+    # 최근 질문·답. 후속 질문이 무엇을 가리키는지 판정과 본문이 같이 본다
+    previous: list[routing.PreviousTurn] = field(default_factory=list)
 
 
 def prepare(cur: Any, principal: AuthPrincipal, conversation_id: str, req: AskRequest) -> Prepared:
@@ -167,6 +179,16 @@ def prepare(cur: Any, principal: AuthPrincipal, conversation_id: str, req: AskRe
     requested = req.projectScope or list(conversation["project_scope"] or [])
     scope = _scope(allowed, requested, require=True)
 
+    previous = [
+        routing.PreviousTurn(
+            question=t["question"],
+            answer=t["answer"],
+            measure_key=t.get("measure_key"),
+            route_type=t.get("route_type"),
+            topic=t.get("rewritten_query"),
+        )
+        for t in repo.last_turns(cur, conversation_id, routing.PREVIOUS_TURNS)
+    ]
     seq = repo.next_seq(cur, conversation_id)
     user_message_id = repo.insert_message(cur, conversation_id, seq, "USER", question)
     repo.touch_conversation(cur, conversation_id)
@@ -178,6 +200,7 @@ def prepare(cur: Any, principal: AuthPrincipal, conversation_id: str, req: AskRe
         user_message_id=user_message_id,
         catalog=catalog_module.load(cur),
         started=time.monotonic(),
+        previous=previous,
     )
 
 
@@ -189,7 +212,7 @@ def stream(p: Prepared) -> Iterator[bytes]:
         llm = llm_port()
         # 판정은 캐시를 먼저 본다(ARC-014). 값은 아래에서 매번 새로 뽑는다.
         with tx() as cur:
-            routed = route_cache.decide(cur, p.catalog, llm, p.question)
+            routed = route_cache.decide(cur, p.catalog, llm, p.question, p.previous)
         decision = routed.decision
         query_text = decision.rewritten or p.question
         query_vec = embedding_port().embed([p.question])[0]
@@ -341,7 +364,11 @@ def stream(p: Prepared) -> Iterator[bytes]:
                 scope_line = answer.listing_scope(
                     routing.LISTABLE[decision.listing], len(chunks), found.candidate_count
                 )
-            prompt = answer.user_prompt(p.question, chunks, aggregate, scope_line, block_list)
+            # 후속 질문에만 앞 대화를 준다. 주제가 선 질문에 앞 답을 주면 모델이 그걸 다시 말한다
+            previous = p.previous if decision.follow_up else []
+            prompt = answer.user_prompt(
+                p.question, chunks, aggregate, scope_line, block_list, previous
+            )
             raw = llm.stream(answer.SYSTEM_PROMPT, prompt, json_schema=answer.ANSWER_SCHEMA)
             for piece in answer.decode_answer(answer.strip_think(raw)):
                 pieces.append(piece)
@@ -353,6 +380,8 @@ def stream(p: Prepared) -> Iterator[bytes]:
                 yield _sse("delta", SseDeltaEvent(text=tail))
             finish_reason = "STOP"
             grounds = [p.question, *(c.content for c in chunks)]
+            # 앞 답의 숫자는 그때 이미 검문을 지났다
+            grounds.extend(t.answer for t in previous)
             if scope_line:
                 grounds.append(scope_line)
             if aggregate is not None:

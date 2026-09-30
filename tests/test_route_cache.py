@@ -60,6 +60,23 @@ def clean_cache():
 
 
 @requires_db
+def test_후속_판정은_저장하지_않는다(clean_cache):
+    cat = _catalog()
+    llm = _Counting(
+        {"route": "AGGREGATE", "measure": "open_issue_count", "template": "STAT_CARD",
+         "followUp": True}
+    )
+    previous = [routing.PreviousTurn(question="열린 이슈 몇 건이야?", answer="3건입니다.")]
+    with tx() as cur:
+        routed = route_cache.decide(cur, cat, llm, "왜 그래?", previous)
+        assert routed.decision.follow_up is True
+        assert route_cache.remember(cur, "왜 그래?", routed) is False
+        again = route_cache.decide(cur, cat, llm, "왜 그래?", previous)
+    assert again.cached is False
+    assert llm.complete_calls == 2
+
+
+@requires_db
 def test_같은_질문은_모델을_다시_부르지_않는다(clean_cache):
     cat = _catalog()
     llm = _Counting({"route": "AGGREGATE", "measure": "open_issue_count", "template": "STAT_CARD"})

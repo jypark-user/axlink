@@ -73,6 +73,7 @@ def run_validated(cur: Any, validated: ValidatedSpec) -> WidgetDataResponse:
         target=measure.target_value,
         appliedProjectIds=list(validated.project_ids),
         truncated=truncated,
+        basis=validated.measure.basis,
         generatedAt=datetime.now(UTC).isoformat().replace("+00:00", "Z"),
     )
 

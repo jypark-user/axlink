@@ -16,8 +16,11 @@ import { Textarea } from '@/components/ui/textarea';
 import { api } from '@/lib/http';
 import { defaultGridItem } from '@/features/dashboard/layout-mapper';
 import { resolveWidgetRenderer } from '@/features/widgets/renderer-registry';
+import { isIdColumn, resolveColumns } from '@/features/widgets/widget-data';
 import { label as labelOf } from '@/lib/labels';
 import type {
+  WidgetTemplateListResponse,
+  WidgetTemplateResponse,
   GridItem,
   WidgetDataResponse,
   WidgetGenerateResponse,
@@ -37,6 +40,35 @@ function PreviewBody({ spec, data }: { spec: WidgetSpec; data: WidgetDataRespons
   }
   return <Renderer spec={spec} data={data} />;
 }
+
+/** 열을 고를 수 있는 표 성격의 템플릿. 차트는 열이 아니라 축이라 고를 게 없다 */
+const COLUMN_PICK_TEMPLATES = new Set<string>(['DATA_TABLE', 'CHECKLIST']);
+
+/**
+ * 열 하나를 켜거나 끈 명세. 열 순서는 데이터 순서를 따르고, 기본 상태(설정 없음)에서
+ * 처음 손대면 그때 보이던 열 목록을 기준으로 시작한다.
+ */
+const withColumn = (
+  spec: WidgetSpec,
+  data: WidgetDataResponse,
+  key: string,
+  shown: boolean,
+): WidgetSpec => {
+  const current = new Set(resolveColumns(data, spec.options).map((c) => c.key));
+  if (shown) current.add(key);
+  else current.delete(key);
+  const columns = data.columns.map((c) => c.key).filter((k) => current.has(k));
+  const options = spec.options ?? {
+    unit: null,
+    sort: null,
+    threshold: null,
+    stacked: null,
+    showLegend: null,
+    compareWithPrevious: null,
+    columns: null,
+  };
+  return { ...spec, options: { ...options, columns } };
+};
 
 export function WidgetCreateDialog({
   dashboardId,
@@ -62,12 +94,28 @@ export function WidgetCreateDialog({
   // 고치는 중이면 그 위젯이 쓰던 모양을 그대로 이어 쓴다.
   const template = editing?.spec?.template ?? initialTemplate;
   const [title, setTitle] = useState(editing?.spec?.title ?? '');
-  const [prompt, setPrompt] = useState('');
+  // 고치는 중이면 만들 때 적은 의도를 그대로 띄운다 — 무엇을 보려던 위젯인지 알고 고쳐야 한다.
+  const [prompt, setPrompt] = useState(editing?.spec?.prompt ?? '');
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [spec, setSpec] = useState<WidgetSpec | null>(editing?.spec ?? null);
   const [preview, setPreview] = useState<WidgetDataResponse | null>(null);
   const [rejection, setRejection] = useState<string | null>(null);
+  // 고른 템플릿이 무엇을 보여 주는 그림이고 어떻게 적으면 되는지. 정의라 한 번만 받는다
+  const [guide, setGuide] = useState<WidgetTemplateResponse | null>(null);
+  useEffect(() => {
+    if (!template) return;
+    let alive = true;
+    api
+      .get<WidgetTemplateListResponse>('/widget-templates')
+      .then((res) => {
+        if (alive) setGuide(res.templates.find((t) => t.key === template) ?? null);
+      })
+      .catch(() => undefined);
+    return () => {
+      alive = false;
+    };
+  }, [template]);
 
   // 고치는 중이면 지금 그려져 있는 값을 미리보기에 띄운다 —
   // 다시 생성하기 전에도 무엇을 고치는 중인지 보여야 한다.
@@ -120,7 +168,12 @@ export function WidgetCreateDialog({
     setBusy(true);
     setError(null);
     try {
-      const named = title.trim() ? { ...spec, title: title.trim() } : spec;
+      const named: WidgetSpec = {
+        ...spec,
+        title: title.trim() || spec.title,
+        // 의도는 명세와 같이 저장한다. 비워 두면 전에 적은 것을 지킨다
+        prompt: prompt.trim() || spec.prompt || null,
+      };
       if (editing) {
         // 고치는 것은 명세만 바꾼다 — 자리와 크기는 그대로 둔다.
         await api.patch(`/widgets/${editing.id}`, { spec: named });
@@ -167,7 +220,7 @@ export function WidgetCreateDialog({
           </div>
 
           <div className="flex flex-col gap-2">
-            <Label htmlFor="widget-prompt">표시할 내용</Label>
+            <Label htmlFor="widget-prompt">내용</Label>
             <Textarea
               id="widget-prompt"
               value={prompt}
@@ -175,10 +228,30 @@ export function WidgetCreateDialog({
               rows={3}
               placeholder={
                 editing
-                  ? '바꿀 내용을 적고 다시 생성하세요. 제목만 고칠 거면 비워 두세요'
-                  : '예: 용역사별 이번 달 이슈 처리율'
+                  ? '저장된 내용이 없습니다. 바꿀 내용을 적고 다시 생성하세요'
+                  : (guide?.prompts[0] ?? '예: 용역사별 이번 달 이슈 처리율')
               }
             />
+            {guide && (
+              <div className="rounded-md border border-border/60 bg-muted/30 px-3 py-2.5 text-xs text-muted-foreground">
+                <p>{guide.purpose}</p>
+                {guide.prompts.length > 0 && (
+                  <div className="mt-2 flex flex-wrap gap-1.5">
+                    <span className="self-center">내용 예시</span>
+                    {guide.prompts.map((example) => (
+                      <button
+                        key={example}
+                        type="button"
+                        className="rounded-full border border-border bg-background px-2.5 py-1 text-xs text-foreground hover:border-primary hover:text-primary"
+                        onClick={() => setPrompt(example)}
+                      >
+                        {example}
+                      </button>
+                    ))}
+                  </div>
+                )}
+              </div>
+            )}
           </div>
 
           {rejection && (
@@ -194,12 +267,43 @@ export function WidgetCreateDialog({
 
           {spec && preview && (
             <div className="flex flex-col gap-2">
-              <Label>3. 미리보기</Label>
+              <Label>미리보기</Label>
               <div className="rounded-lg border p-3">
                 <PreviewBody spec={spec} data={preview} />
               </div>
             </div>
           )}
+
+          {spec &&
+            preview &&
+            COLUMN_PICK_TEMPLATES.has(spec.template) &&
+            preview.columns.length > 1 && (
+              <div className="flex flex-col gap-2">
+                <Label>보이는 열</Label>
+                <div className="flex flex-wrap gap-x-4 gap-y-1.5 rounded-lg border px-3 py-2.5 text-sm">
+                  {preview.columns.map((column) => {
+                    const shown = resolveColumns(preview, spec.options).some(
+                      (c) => c.key === column.key,
+                    );
+                    return (
+                      <label key={column.key} className="flex items-center gap-1.5">
+                        <input
+                          type="checkbox"
+                          checked={shown}
+                          onChange={(event) =>
+                            setSpec(withColumn(spec, preview, column.key, event.target.checked))
+                          }
+                        />
+                        <span>{column.label}</span>
+                        {isIdColumn(column, preview) && (
+                          <span className="text-muted-foreground text-xs">(식별자)</span>
+                        )}
+                      </label>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
         </div>
 
         <DialogFooter>

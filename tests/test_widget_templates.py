@@ -34,6 +34,16 @@ def test_프런트_렌더러_등록과_같은_목록이다():
     assert registered == set(widget_template.TEMPLATES)
 
 
+def test_템플릿마다_적는_법_예시가_있다():
+    """위젯 추가 대화상자가 고른 템플릿 아래에 보여 준다. 없으면 상태 흐름 같은 그림은
+    무엇을 적어야 할지 알 길이 없다."""
+    for t in CATALOG:
+        examples = widget_template.prompt_examples(t.key)
+        assert examples, t.key
+        assert all(len(e) >= 6 for e in examples), t.key
+    assert set(widget_template.PROMPT_EXAMPLES) == {t.key for t in CATALOG}
+
+
 def test_예시는_자기_계약에_맞는다():
     """관리자 화면이 예시로 그리는 명세다. 계약을 어기면 화면이 빈다."""
     time_keys = {"period_day", "period_week", "period_month"}
@@ -104,6 +114,7 @@ def test_API_는_23종의_계약을_돌려준다(client, client_token):
     line = next(i for i in items if i["key"] == "LINE_CHART")
     assert line["timeAxis"] == "REQUIRED" and line["dimsMin"] == 1
     assert line["example"]["dimensions"] == ["period_month"]
+    assert len(line["prompts"]) >= 1
     assert len(line["sample"]["rows"]) > 0 and line["sample"]["columns"][0]["type"] == "date"
 
 

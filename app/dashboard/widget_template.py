@@ -10,6 +10,8 @@
 
 from dataclasses import dataclass
 
+from app.common import korean
+
 # 시간축 요구 수준
 TIME_REQUIRED = "REQUIRED"  # 기간 차원이 없으면 뜻이 없다
 TIME_OPTIONAL = "OPTIONAL"  # 있으면 추이, 없으면 범주
@@ -263,17 +265,17 @@ def fits(
     n = len(dimensions)
     has_time = any(d in time_keys for d in dimensions)
     if n > t.dims_max:
-        return f"{t.label}은(는) 차원을 {t.dims_max}개까지 받습니다"
+        return f"{korean.attach(t.label, '은')} 차원을 {t.dims_max}개까지 받습니다"
     if t.time_axis == TIME_REQUIRED and not has_time:
-        return f"{t.label}은(는) 기간 차원이 있어야 합니다"
+        return f"{korean.attach(t.label, '은')} 기간 차원이 있어야 합니다"
     if not strict:
         return None
     if measure_type not in t.measure_types:
-        return f"{t.label}은(는) {'·'.join(t.measure_types)} 지표만 받습니다"
+        return f"{korean.attach(t.label, '은')} {'·'.join(t.measure_types)} 지표만 받습니다"
     if n < t.dims_min:
-        return f"{t.label}은(는) 차원이 {t.dims_min}개 이상이어야 합니다"
+        return f"{korean.attach(t.label, '은')} 차원이 {t.dims_min}개 이상이어야 합니다"
     if t.time_axis == TIME_NONE and has_time:
-        return f"{t.label}은(는) 기간 차원을 쓰지 않습니다"
+        return f"{korean.attach(t.label, '은')} 기간 차원을 쓰지 않습니다"
     return None
 
 
@@ -305,3 +307,127 @@ def prompt_guide(chat_only: bool = False) -> str:
         f"- {t.key} ({t.label}, {contract_summary(t)}): 언제 고르는가 → {t.when}" for t in rows
     ]
     return head + "\n" + "\n".join(lines)
+
+
+# 템플릿마다 "표시할 내용" 에 이렇게 적으면 된다는 문장. 위젯 추가 대화상자가 고른 템플릿
+# 아래에 보여 주고, 누르면 그대로 채운다. 카탈로그에 있는 지표·차원으로만 적는다.
+# 모델 프롬프트 안내(when)와 달리 사람이 읽고 따라 쓰는 문장이라 따로 둔다.
+PROMPT_EXAMPLES: dict[str, tuple[str, ...]] = {
+    "STAT_CARD": (
+        "요구사항 이행률 현재 값과 목표",
+        "열린 이슈가 지금 몇 건인지",
+        "이슈 하나를 닫는 데 평균 며칠 걸리는지",
+    ),
+    "BULLET_CHART": (
+        "용역사별 이슈 처리율을 목표선과 나란히",
+        "요구사항 이행률이 목표 90% 에 얼마나 가까운지",
+        "산출물 승인률 vs 목표",
+    ),
+    "SPARKLINE": (
+        "월별 요구사항 이행률 잔추세",
+        "주별 열린 이슈 건수가 어떻게 남아 있는지 작은 추세선으로",
+        "월별 상태별 이슈 건수 잔추세",
+    ),
+    "LINE_CHART": (
+        "월별 시험 통과율 추이",
+        "주별 이슈 처리율이 오르고 있는지",
+        "월별 용역사별 이슈 건수 변화",
+    ),
+    "AREA_CHART": (
+        "월별 요구사항 이행률이 어떻게 올라왔는지",
+        "주별 이슈 처리율 추이를 면적으로",
+        "월별 산출물 승인률 추이",
+    ),
+    "CUMULATIVE_FLOW": (
+        "월별로 이슈가 쌓이는 속도와 닫히는 속도",
+        "주별 상태별 이슈 누적 흐름",
+        "월별 요구사항이 단계별로 어떻게 쌓여 가는지",
+    ),
+    "CALENDAR_HEATMAP": (
+        "날짜별 커밋과 머지리퀘스트 활동량",
+        "일별 이슈 등록 건수를 달력으로",
+        "일별 코드 활동이 뜸한 날이 언제인지",
+    ),
+    "BAR_CHART": (
+        "열린 이슈가 심각도별로 몇 건인지",
+        "우선순위별 요구사항 이행률",
+        "월별 이슈 건수",
+    ),
+    "HORIZONTAL_BAR_CHART": (
+        "산출물 22종 각각의 승인률",
+        "담당자별 열린 이슈 건수",
+        "용역사별 요구사항 이행률",
+    ),
+    "STACKED_BAR_CHART": (
+        "용역사별 열린 이슈를 심각도로 쌓아서",
+        "월별 이슈 건수를 상태로 쌓아서",
+        "우선순위별 요구사항을 상태로 쌓아서",
+    ),
+    "HEATMAP": (
+        "29110 활동과 산출물 유형별로 미제출이 어디에 몰려 있는지",
+        "용역사와 심각도별 열린 이슈 밀도",
+        "담당자와 상태별 이슈 건수",
+    ),
+    "PARETO": (
+        "열린 이슈가 어느 담당자에게 몰려 있는지",
+        "미제출 산출물이 어느 유형에 몰려 있는지",
+        "열린 리스크가 어느 상태에 몰려 있는지",
+    ),
+    "TREEMAP": (
+        "미제출 산출물을 유형별 크기로",
+        "열린 이슈를 담당자별 크기로",
+        "요구사항을 우선순위별 크기로",
+    ),
+    "PIE_CHART": (
+        "열린 리스크가 상태별로 몇 건인지",
+        "열린 이슈의 심각도 구성비",
+        "요구사항의 우선순위 구성비",
+    ),
+    "DONUT_CHART": (
+        "우선순위별 요구사항 비중과 전체 이행률",
+        "심각도별 열린 리스크 비중",
+        "유형별 미제출 산출물 비중",
+    ),
+    "STATUS_FLOW": (
+        "요구사항이 정의·구현·검증·인수 단계에 각각 몇 건 있는지",
+        "산출물이 미제출·제출·승인 상태에 각각 몇 건 있는지",
+        "이슈가 열림·진행·해결·종료 상태에 각각 몇 건 있는지",
+    ),
+    "RADAR_CHART": (
+        "29110 활동별 산출물 승인률이 고른지",
+        "용역사별 이슈 처리율이 고른지",
+        "우선순위별 요구사항 이행률 균형",
+    ),
+    "SLOPE_CHART": (
+        "용역사별 이슈 건수가 첫 달과 지금 사이에 어떻게 바뀌었는지",
+        "심각도별 열린 이슈가 지난달과 이번 달 사이에 어떻게 바뀌었는지",
+        "상태별 요구사항 건수의 처음과 지금",
+    ),
+    "BUMP_CHART": (
+        "월별로 심각도별 이슈 건수 순위가 어떻게 바뀌는지",
+        "월별 담당자별 열린 이슈 순위 변화",
+        "주별 용역사별 이슈 건수 순위",
+    ),
+    "PROGRESS_LIST": (
+        "용역사별 요구사항 이행률을 진행 막대로",
+        "산출물 유형별 승인률 진행 막대",
+        "우선순위별 요구사항 이행률 목록",
+    ),
+    "CHECKLIST": (
+        "산출물 22종이 승인됐는지 하나씩 점검표로",
+        "29110 활동별 산출물 승인 점검표",
+        "요구사항 우선순위별 이행 점검표",
+    ),
+    "DATA_TABLE": (
+        "담당자별 이슈 평균 처리일을 표로",
+        "용역사와 심각도별 이슈 건수 표",
+        "산출물 유형별 미제출 건수 표",
+    ),
+    "GANTT_SUMMARY": (
+        "사업별 WBS 진척률",
+    ),
+}
+
+
+def prompt_examples(template: str) -> tuple[str, ...]:
+    return PROMPT_EXAMPLES.get(template, ())

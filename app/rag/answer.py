@@ -11,8 +11,10 @@ from collections.abc import Iterator
 from dataclasses import dataclass, field
 from typing import Any
 
+from app.common import korean
 from app.config import settings
 from app.rag import blocks as blocks_mod
+from app.rag.routing import PreviousTurn, render_previous
 from app.rag.search import RetrievedChunk
 from app.semantic.models import WidgetDataResponse
 
@@ -21,13 +23,22 @@ SYSTEM_PROMPT = (
     "규칙:\n"
     "1. 수치는 '집계 값' 절에 제공된 값만 그대로 인용한다. 없는 수치는 만들지 않고, "
     "제공된 값을 더하거나 나누어 새 수치를 만들지도 않는다.\n"
+    "1-1. 집계 값 절에 '산출 근거' 가 있으면 값을 말한 뒤 그 근거를 한 문장으로 덧붙인다. "
+    "괄호의 분자·분모(예: 0건 / 41건)가 있으면 함께 말한다. 값이 0 이거나 없을 때는 그 이유가 "
+    "근거에 있으면 반드시 말한다.\n"
     "2. 사실은 '근거' 절의 내용에서만 가져온다. 근거에 없는 내용은 모른다고 말한다.\n"
     "3. 근거를 인용한 문장 끝에 해당 근거 번호를 [1] 처럼 붙인다. 번호는 근거 절의 번호만 쓴다.\n"
     "4. 제목·목록 기호 없이 문단으로 답한다. 인사말과 사족은 넣지 않는다.\n"
     "4-1. '그림 놓기' 절이 있으면 그 지시대로 본문에 [그림 N] 표식만 놓는다. "
     "표식 자리에 표나 차트가 그려진다. 그림에 담긴 항목을 본문에 옮겨 적거나 다시 나열하지 "
     "않는다. 본문은 건수와 요점 한두 문장이면 된다.\n"
-    '5. 출력은 {"answer": "<답변>"} 꼴의 JSON 객체 하나다. 생각 과정은 쓰지 않는다.'
+    '5. 출력은 {"answer": "<답변>"} 꼴의 JSON 객체 하나다. 생각 과정은 쓰지 않는다.\n'
+    "6. '앞 대화' 절이 있으면 이번 질문의 '그 방법', '그거', '흐름' 은 앞 대화의 주제다. "
+    "앞 답을 되풀이하지 말고 이번 질문이 새로 묻는 것만 답한다.\n"
+    "7. 절차·방법의 흐름·단계·순서를 그림이나 도식으로 보여 달라는 질문에는 화면 그림을 "
+    "그리지 않는다. 대신 산출 근거와 근거 절에 있는 절차를 '1) … → 2) … → 3) …' 처럼 한 줄에 "
+    "한 단계씩 순서대로 쓴다. 이때는 규칙 4 의 문단 제한을 두지 않는다. 근거에 없는 단계를 "
+    "지어내지 않는다."
 )
 
 # 생성 출력을 이 모양으로 묶는다. 경량 모델이 답 앞에 생각을 늘어놓는 길을 막는다.
@@ -41,6 +52,8 @@ _ESCAPES = {"n": "\n", "t": "\t", "r": "\r", "b": "\b", "f": "\f", "/": "/", "\\
 
 _FOOTNOTE = re.compile(r"\[\d{1,2}\]")
 _DATE = re.compile(r"\d{4}[-./]\d{1,2}[-./]\d{1,2}|\d{4}년|\d{1,2}월|\d{1,2}일")
+# 절차를 단계로 쓸 때의 번호("1) …", "2. …", "3단계"). 수치가 아니다
+_STEP = re.compile(r"(?:^|(?<=\s)|(?<=→)\s*)\d{1,2}(?:\)|\.\s|단계)")
 _NUMBER = re.compile(r"\d+(?:[.,]\d+)*")
 _THINK_OPEN = "<think>"
 _THINK_CLOSE = "</think>"
@@ -74,7 +87,11 @@ def aggregate_lines(data: WidgetDataResponse) -> list[str]:
             if value is not None:
                 labels.append(f"{col.label} {value}")
         head = ", ".join(labels) if labels else data.measureLabel
-        lines.append(f"- {head}: {format_value(row.values.get('value'))}{unit}")
+        line = f"- {head}: {format_value(row.values.get('value'))}{unit}"
+        num, den = row.values.get("numerator"), row.values.get("denominator")
+        if num is not None and den is not None:
+            line += f" ({format_value(num)}건 / {format_value(den)}건)"
+        lines.append(line)
     if data.total is not None and data.dimensions:
         lines.append(f"- 전체: {format_value(data.total.values.get('value'))}{unit}")
     if data.previousTotal is not None:
@@ -84,6 +101,9 @@ def aggregate_lines(data: WidgetDataResponse) -> list[str]:
         lines.append(f"- 목표: {format_value(data.target)}{unit}")
     if not lines:
         lines.append(f"- {data.measureLabel}: 집계된 값이 없음")
+    if data.basis:
+        # 왜 그 숫자인지. 모델은 이 문장을 근거로 값의 뜻을 풀어 말할 수 있다
+        lines.append(f"- 산출 근거: {data.basis}")
     return lines
 
 
@@ -105,8 +125,11 @@ def user_prompt(
     aggregate: AggregateContext | None,
     listing: str | None = None,
     blocks: list["blocks_mod.Block"] | None = None,
+    previous: list[PreviousTurn] | None = None,
 ) -> str:
     parts = [f"## 질문\n{question}"]
+    if previous:
+        parts.append("## 앞 대화 (마지막이 직전)\n" + render_previous(previous))
     if listing:
         parts.append("## 목록 범위\n" + listing)
     if aggregate is not None:
@@ -154,10 +177,12 @@ def snippet(chunk: RetrievedChunk, limit: int | None = None) -> str:
 
 
 def numbers_in(text: str) -> set[str]:
-    """본문의 숫자를 정규화한 문자열 집합으로. 각주 번호·그림 표식·날짜는 수치가 아니라 뺀다."""
+    """본문의 숫자를 정규화한 문자열 집합으로. 각주 번호·그림 표식·날짜·단계 번호는 수치가
+    아니라 뺀다."""
     body = blocks_mod.MARKER.sub(" ", text)
     body = _FOOTNOTE.sub(" ", body)
     body = _DATE.sub(" ", body)
+    body = _STEP.sub(" ", body)
     found: set[str] = set()
     for m in _NUMBER.finditer(body):
         found.add(_normalize(m.group(0)))
@@ -189,9 +214,10 @@ def _sort_key(token: str) -> tuple[float, str]:
 
 
 def guard_note(numbers: list[str]) -> str:
+    listed = ", ".join(numbers)
     return (
-        "\n\n※ 위 답변의 수치 " + ", ".join(numbers)
-        + " 은(는) 집계 값과 근거 원문에 없는 값입니다. 화면의 집계 값을 기준으로 보십시오."
+        f"\n\n※ 위 답변의 수치 {korean.attach(listed, '은')} 집계 값과 근거 원문에 없는 값입니다. "
+        "화면의 집계 값을 기준으로 보십시오."
     )
 
 

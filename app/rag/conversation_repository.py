@@ -171,6 +171,29 @@ def list_messages(cur: Any, conversation_id: str) -> list[dict[str, Any]]:
     )
 
 
+def last_turns(cur: Any, conversation_id: str, limit: int) -> list[dict[str, Any]]:
+    """답이 완성된 최근 질문·답 쌍. 오래된 것이 앞이다. 끊긴 답은 건너뛴다."""
+    rows = fetch_all(
+        cur,
+        """
+        select q.content as question, a.content as answer, a.measure_key, a.route_type,
+               a.rewritten_query
+          from message a
+          join lateral (
+            select content from message q
+             where q.conversation_id = a.conversation_id and q.role = 'USER' and q.seq < a.seq
+             order by q.seq desc limit 1
+          ) q on true
+         where a.conversation_id = %s and a.role = 'ASSISTANT' and a.status = 'COMPLETE'
+           and a.content <> ''
+         order by a.seq desc
+         limit %s
+        """,
+        (conversation_id, limit),
+    )
+    return list(reversed(rows))
+
+
 def message_owner(cur: Any, message_id: str) -> dict[str, Any] | None:
     """피드백 권한 확인용. 메시지가 속한 대화의 주인을 돌려준다."""
     return fetch_one(

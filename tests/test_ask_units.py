@@ -203,6 +203,53 @@ def _chunk(
     )
 
 
+def test_후속_질문은_앞_대화와_함께_모델에_가고_캐시되지_않는다():
+    previous = routing.PreviousTurn(
+        question="요구사항 이행률을 높이려면 어떻게 해야돼?",
+        answer="시험 결과서를 올려 검증완료로 바꿔야 합니다. " * 40,
+        measure_key="requirement_fulfillment_rate",
+    )
+    earlier = routing.PreviousTurn(
+        question="미제출 산출물 목록 보여줘", answer="46건입니다.", topic="미제출 산출물"
+    )
+    content = routing.user_content("흐름을 그림으로 보여줘", [earlier, previous])
+    assert content.startswith("## 앞 대화 (마지막이 직전)\n질문: 미제출 산출물 목록 보여줘")
+    assert "답 (주제어 미제출 산출물): 46건입니다." in content
+    assert "답 (지표 requirement_fulfillment_rate): 시험 결과서를" in content
+    assert content.endswith("## 이번 질문\n흐름을 그림으로 보여줘")
+    assert len(previous.excerpt()) <= routing.PREVIOUS_ANSWER_CHARS + 1  # 말줄임표
+    # 앞 대화가 없으면 질문 문장 그대로다(캐시 키와 같은 문자열)
+    assert routing.user_content("진척률은?", None) == "진척률은?"
+    assert routing.user_content("진척률은?", []) == "진척률은?"
+    # followUp 표식은 판정에 남고, 본문 프롬프트에도 앞 대화 절이 붙는다
+    choice = {"route": "AGGREGATE", "measure": "open_issue_count", "followUp": True}
+    assert routing.from_choice(_catalog(), choice).follow_up is True
+    assert routing.from_choice(_catalog(), {"route": "OVERVIEW"}).follow_up is False
+    prompt = answer.user_prompt("흐름을 그림으로 보여줘", [], None, previous=[previous])
+    assert "## 앞 대화 (마지막이 직전)\n질문: 요구사항 이행률을 높이려면" in prompt
+    assert "## 근거" in prompt
+
+
+def test_단계_번호는_수치가_아니다():
+    steps = "1) 시험 케이스에 코드를 적는다 → 2) 결과서를 올린다 → 3) 검증완료. 3단계면 끝."
+    assert answer.numbers_in(steps) == set()
+    # 문장 속 건수는 여전히 잡는다
+    assert answer.numbers_in("1) 결과서 3건을 올린다") == {"3"}
+
+
+def test_비율_지표는_분자_분모와_산출_근거를_같이_편다():
+    data = _data(
+        dimensions=[], columns=[WidgetColumn(key="value", label="요구사항 이행률", type="percent")],
+        rows=[WidgetRow(values={"value": 0.0, "numerator": 0, "denominator": 41})], total=None,
+    )
+    data.basis = "검증완료 요구사항 수를 전체로 나눈 값이다. 시험 결과가 없으면 0% 다."
+    lines = answer.aggregate_lines(data)
+    assert lines[0] == "- 이슈 건수: 0건 (0건 / 41건)"  # _data 도우미의 지표명·단위
+    assert lines[-1].startswith("- 산출 근거: 검증완료")
+    # 검문은 분자·분모 숫자도 근거로 안다
+    assert answer.ungrounded_numbers("검증된 요구사항이 0건이라 41건 중 0%입니다.", lines) == []
+
+
 def _data(dimensions, columns, rows, total) -> WidgetDataResponse:
     return WidgetDataResponse(
         measure="issue_count",

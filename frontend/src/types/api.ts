@@ -794,6 +794,8 @@ export interface WidgetSpec {
   title: string;
   query: WidgetQuery;
   options: WidgetOptions | null;
+  /** 만들 때 적은 의도. 고칠 때 다시 보여 준다. 값은 query 가 정한다 */
+  prompt?: string | null;
 }
 
 export interface WidgetColumn {
@@ -1091,6 +1093,83 @@ export interface DocumentUploadResponse {
   error: string | null;
 }
 
+/** 일별 스냅샷 한 줄. 그날 지표를 고정한 값이다. */
+export interface ProgressSnapshotResponse {
+  projectId: string;
+  snapshotDate: string;
+  level: string;
+  representativePct: number | null;
+  wbsActualPct: number | null;
+  wbsPlannedPct: number | null;
+  behindTaskCount: number;
+  issueResolvedCount: number;
+  issueTotalCount: number;
+  requirementVerifiedCount: number;
+  requirementTotalCount: number;
+  riskClosedCount: number;
+  riskTotalCount: number;
+  workProductSubmittedCount: number;
+  workProductApprovedCount: number;
+  workProductTotalCount: number;
+  createdAt: string;
+}
+
+/** 사업별 자동 수집 주기와 일별 스냅샷 시각. 서버 안 스케줄러가 읽는다. */
+export interface ProjectScheduleResponse {
+  projectId: string;
+  syncIntervalMinutes: number;
+  /** "HH:MM". 하루 한 번일 때 도는 시각 */
+  syncTime: string;
+  /** "HH:MM", 사업 시간대 */
+  snapshotTime: string;
+  /** 24 면 정한 시각에 하루 한 번. 작으면 그날 줄을 그 간격으로 다시 찍는다 */
+  snapshotIntervalHours: number;
+  snapshotOptions: { hours: number; label: string }[];
+  timezone: string;
+  options: { minutes: number; label: string }[];
+  minIntervalMinutes: number;
+  lastSnapshotDate: string | null;
+  nextSnapshotAt: string;
+  editable: boolean;
+  updatedAt: string | null;
+}
+
+/** 활동 한 줄. 알림과 활동 탭이 같은 것을 본다. */
+export interface ActivityEventResponse {
+  id: string;
+  projectId: string;
+  projectName: string;
+  occurredAt: string;
+  kind: string;
+  audience: 'CLIENT' | 'CONTRACTOR' | 'ALL';
+  actorLabel: string;
+  targetType: string | null;
+  targetKey: string | null;
+  summary: string;
+  detail: Record<string, unknown>;
+}
+
+export interface NotificationsResponse {
+  items: ActivityEventResponse[];
+  unread: number;
+  seenAt: string | null;
+}
+
+/** 서버 오류 기록 한 건. 최고관리자 화면용. */
+export interface ErrorLogResponse {
+  id: string;
+  occurredAt: string;
+  method: string;
+  path: string;
+  statusCode: number;
+  code: string;
+  message: string;
+  exception: string | null;
+  traceback: string | null;
+  username: string | null;
+  userName: string | null;
+}
+
 /** 자료 상세. 왼쪽 정보·설정, 오른쪽 추출 결과의 재료다. */
 export interface DocumentDetailResponse {
   id: string;
@@ -1331,6 +1410,8 @@ export interface WidgetTemplateResponse {
   chat: boolean;
   note: string;
   example: WidgetTemplateExample;
+  /** "표시할 내용" 에 이렇게 적으라는 예시 문장 */
+  prompts: string[];
   /** 쇼케이스용 예시 값. 계약에서 만든 결정적 값이라 사업이 없어도 그려진다 */
   sample: WidgetDataResponse;
 }

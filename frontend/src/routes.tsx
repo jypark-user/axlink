@@ -39,6 +39,9 @@ const CollectionPage = lazy(() =>
 const TemplatesPage = lazy(() =>
   import('@/features/templates/templates-page').then((m) => ({ default: m.TemplatesPage })),
 );
+const ErrorLogPage = lazy(() =>
+  import('@/features/admin/error-log-page').then((m) => ({ default: m.ErrorLogPage })),
+);
 const DocumentsPage = lazy(() =>
   import('@/features/documents/documents-page').then((m) => ({ default: m.DocumentsPage })),
 );
@@ -67,6 +70,9 @@ const IssuesPage = lazy(() =>
 );
 const SchedulePage = lazy(() =>
   import('@/features/schedule/schedule-page').then((m) => ({ default: m.SchedulePage })),
+);
+const SnapshotsPage = lazy(() =>
+  import('@/features/snapshots/snapshots-page').then((m) => ({ default: m.SnapshotsPage })),
 );
 const ReviewRequestsPage = lazy(() =>
   import('@/features/review-requests/review-requests-page').then((m) => ({
@@ -127,6 +133,14 @@ export function AppRoutes(): ReactNode {
             element={
               <SuspenseShell>
                 <TemplatesPage />
+                <Route
+                  path="/admin/errors"
+                  element={
+                    <SuspenseShell>
+                      <ErrorLogPage />
+                    </SuspenseShell>
+                  }
+                />
               </SuspenseShell>
             }
           />
@@ -232,39 +246,47 @@ export function AppRoutes(): ReactNode {
               </SuspenseShell>
             }
           />
+          <Route
+            path="dashboard"
+            element={
+              <SuspenseShell>
+                <DashboardPage />
+              </SuspenseShell>
+            }
+          />
+          <Route
+            path="traceability"
+            element={
+              <SuspenseShell>
+                <TraceabilityPage />
+              </SuspenseShell>
+            }
+          />
+          <Route
+            path="schedule"
+            element={
+              <SuspenseShell>
+                <SchedulePage />
+              </SuspenseShell>
+            }
+          />
+          <Route
+            path="snapshots"
+            element={
+              <SuspenseShell>
+                <SnapshotsPage />
+              </SuspenseShell>
+            }
+          />
+          <Route
+            path="issues"
+            element={
+              <SuspenseShell>
+                <IssuesPage />
+              </SuspenseShell>
+            }
+          />
           <Route element={<RequireRole allow={EXCEPT_CONTRACTOR} />}>
-            <Route
-              path="dashboard"
-              element={
-                <SuspenseShell>
-                  <DashboardPage />
-                </SuspenseShell>
-              }
-            />
-            <Route
-              path="traceability"
-              element={
-                <SuspenseShell>
-                  <TraceabilityPage />
-                </SuspenseShell>
-              }
-            />
-            <Route
-              path="schedule"
-              element={
-                <SuspenseShell>
-                  <SchedulePage />
-                </SuspenseShell>
-              }
-            />
-            <Route
-              path="issues"
-              element={
-                <SuspenseShell>
-                  <IssuesPage />
-                </SuspenseShell>
-              }
-            />
             <Route
               path="ask/:conversationId?"
               element={

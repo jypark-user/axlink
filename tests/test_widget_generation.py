@@ -82,6 +82,8 @@ def test_생성은_지표와_차원과_템플릿만_고르고_값은_집계에�
     assert body["spec"]["template"] == "PIE_CHART"
     assert body["spec"]["query"]["measure"] == "open_issue_count"
     assert body["spec"]["query"]["projectScope"] == [PID]
+    # 적은 의도는 명세에 남아 고칠 때 다시 보인다
+    assert body["spec"]["prompt"] == "심각도별 열린 이슈 보여줘"
     # 값은 모델 답에 없던 것이다. 집계에서 왔다.
     values = {r["values"]["d0"]: r["values"]["value"] for r in body["preview"]["rows"]}
     assert values["MAJOR"] >= 2

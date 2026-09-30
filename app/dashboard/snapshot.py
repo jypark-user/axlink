@@ -3,19 +3,20 @@
 추이는 지금 값을 세어서는 나오지 않는다. 오늘 세어 둔 값이 내일의 추이가 된다.
 같은 날 두 번 찍으면 나중 값이 이긴다. 수집이 더 들어온 뒤의 값이 그날의 사실이다.
 
-스케줄러는 두지 않는다. 수동 트리거(POST /projects/{id}/snapshots) 하나로 경로를 만들고,
-주기 실행은 운영 환경의 cron 이 그 엔드포인트를 부르는 것으로 한다.
+서버 안 스케줄러(app/scheduler.py)가 사업별 설정 시각에 매일 찍는다. 수동 트리거
+(POST /projects/{id}/snapshots)는 그대로 두어 시연·점검 때 바로 찍을 수 있다.
 """
 
 from datetime import date
 from typing import Any
 
+from app.activity import service as activity
 from app.auth import repository as auth_repo
 from app.auth.models import AuthPrincipal
 from app.common import errors
 from app.dashboard import service as progress_service
 from app.dashboard.models import ProgressSnapshotResponse
-from app.db import fetch_one
+from app.db import fetch_all, fetch_one
 
 
 def take(
@@ -26,11 +27,39 @@ def take(
     )
     if project_id not in allowed:
         raise errors.project_access_denied()
-    return take_unchecked(cur, project_id, at or date.today())
+    return take_unchecked(cur, project_id, at or date.today(), actor=principal)
 
 
-def take_unchecked(cur: Any, project_id: str, at: date) -> ProgressSnapshotResponse:
-    """접근 검사 없이 찍는다. 배치가 전 사업을 돌 때 쓴다."""
+def list_recent(
+    cur: Any, principal: AuthPrincipal, project_id: str, limit: int = 90
+) -> list[ProgressSnapshotResponse]:
+    """스냅샷 화면. 최근 것이 앞이다. 값이 어떻게 움직였는지 이 줄들만 봐도 읽히게 한다."""
+    allowed = auth_repo.allowed_project_ids(
+        cur, principal.role, principal.org_id, principal.user_id
+    )
+    if project_id not in allowed:
+        raise errors.project_access_denied()
+    rows = fetch_all(
+        cur,
+        """
+        select * from progress_snapshot
+         where project_id = %s
+         order by snapshot_date desc
+         limit %s
+        """,
+        (project_id, limit),
+    )
+    return [_response(r) for r in rows]
+
+
+def take_unchecked(
+    cur: Any, project_id: str, at: date, actor: AuthPrincipal | None = None
+) -> ProgressSnapshotResponse:
+    """접근 검사 없이 찍는다. 배치가 전 사업을 돌 때 쓴다. actor 가 없으면 스케줄러가 찍은 것이다.
+
+    찍은 사실은 활동에 남긴다(알림은 안 간다). 언제 어떤 값이 기록됐는지가 곧 진척 보고의
+    이력이고, "지난 보고 이후" 를 셀 때 이 줄이 기준점이 된다.
+    """
     progress = progress_service.compute(cur, project_id, at)
     counts = fetch_one(
         cur,
@@ -96,6 +125,7 @@ def take_unchecked(cur: Any, project_id: str, at: date) -> ProgressSnapshotRespo
             "wp_total": progress.workProduct.denominator or 0,
         },
     )
+    _record(cur, project_id, row, actor)
     return _response(row)
 
 
@@ -123,6 +153,25 @@ def _response(row: dict[str, Any]) -> ProgressSnapshotResponse:
         workProductApprovedCount=row["work_product_approved_count"],
         workProductTotalCount=row["work_product_total_count"],
         createdAt=row["created_at"].isoformat(),
+    )
+
+
+def _record(cur: Any, project_id: str, row: dict[str, Any], actor: AuthPrincipal | None) -> None:
+    rep = _num(row["representative_pct"])
+    planned = _num(row["wbs_planned_pct"])
+    parts = [f"진척 {rep:.1f}%" if rep is not None else "진척 없음"]
+    if planned is not None:
+        parts.append(f"계획 {planned:.1f}%")
+    parts.append(f"지연 {row['behind_task_count'] or 0}건")
+    activity.record(
+        cur, project_id=project_id, kind=activity.SNAPSHOT_TAKEN, audience=activity.LOG,
+        summary=f"일별 스냅샷 기록 {row['snapshot_date'].isoformat()}: " + " · ".join(parts),
+        actor=actor, actor_label=None if actor else "스케줄러",
+        target_type="SNAPSHOT", target_key=row["snapshot_date"].isoformat(),
+        detail={
+            "representativePct": rep, "wbsPlannedPct": planned,
+            "behindTaskCount": row["behind_task_count"], "level": row["level"],
+        },
     )
 
 
