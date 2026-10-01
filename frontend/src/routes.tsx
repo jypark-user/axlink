@@ -133,14 +133,14 @@ export function AppRoutes(): ReactNode {
             element={
               <SuspenseShell>
                 <TemplatesPage />
-                <Route
-                  path="/admin/errors"
-                  element={
-                    <SuspenseShell>
-                      <ErrorLogPage />
-                    </SuspenseShell>
-                  }
-                />
+              </SuspenseShell>
+            }
+          />
+          <Route
+            path="/admin/errors"
+            element={
+              <SuspenseShell>
+                <ErrorLogPage />
               </SuspenseShell>
             }
           />
