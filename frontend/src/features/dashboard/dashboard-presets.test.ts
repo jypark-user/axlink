@@ -51,11 +51,11 @@ describe('dashboard-presets', () => {
 
   it('남은 칸은 한 칸씩 돌아가며 나누고 마지막 줄의 원형 차트는 6까지만 넓힌다', () => {
     const grid = packGrid([
-      { template: 'STAT_CARD', title: 'a', measure: 'm' },
-      { template: 'STACKED_BAR_CHART', title: 'b', measure: 'm' },
-      { template: 'RADAR_CHART', title: 'c', measure: 'm' },
-      { template: 'DONUT_CHART', title: 'd', measure: 'm' },
-      { template: 'DONUT_CHART', title: 'e', measure: 'm' },
+      { template: 'STAT_CARD', title: 'a', intent: 'a', measure: 'm' },
+      { template: 'STACKED_BAR_CHART', title: 'b', intent: 'b', measure: 'm' },
+      { template: 'RADAR_CHART', title: 'c', intent: 'c', measure: 'm' },
+      { template: 'DONUT_CHART', title: 'd', intent: 'd', measure: 'm' },
+      { template: 'DONUT_CHART', title: 'e', intent: 'e', measure: 'm' },
     ]);
     // 3+6=9 → 남은 3칸을 번갈아: 카드 4(상한) · 막대 8. 높이는 막대 4에 맞춘다
     expect(grid.slice(0, 2).map((g) => [g.x, g.w, g.h])).toEqual([
@@ -64,7 +64,7 @@ describe('dashboard-presets', () => {
     ]);
     // 마지막 줄 4+4+4=12 는 그대로다
     expect(grid.slice(2).map((g) => g.w)).toEqual([4, 4, 4]);
-    const lone = packGrid([{ template: 'DONUT_CHART', title: 'd', measure: 'm' }]);
+    const lone = packGrid([{ template: 'DONUT_CHART', title: 'd', intent: 'd', measure: 'm' }]);
     expect(lone[0].w).toBe(6);
   });
 
