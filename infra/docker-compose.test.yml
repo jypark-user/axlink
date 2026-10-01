@@ -1,0 +1,39 @@
+# 시험용 DB. 개발 스택(docker-compose.yml, 프로젝트 axlink)과 따로 띄우고 따로 내린다.
+# 프로젝트 이름이 달라 네트워크·볼륨이 갈리고, container_name 을 두지 않아 이름도 겹치지 않는다.
+# 데이터는 tmpfs 라 띄울 때마다 비어 있다. 띄우는 법은 docs/00-management/로컬-실행.md 「테스트」.
+#
+#   docker compose -f infra/docker-compose.test.yml up -d postgres
+#   docker compose -f infra/docker-compose.test.yml run --rm flyway
+#   docker compose -f infra/docker-compose.test.yml down
+name: axlink-test
+
+services:
+  postgres:
+    image: pgvector/pgvector:pg16
+    environment:
+      POSTGRES_USER: axlink
+      POSTGRES_PASSWORD: axlink
+      POSTGRES_DB: axlink_test
+    # 이 PC 에서만 붙는다. 개발 DB 15432 와 겹치지 않게 15433 을 쓴다.
+    ports: ["127.0.0.1:15433:5432"]
+    tmpfs:
+      - /var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U axlink -d axlink_test"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+
+  flyway:
+    image: flyway/flyway:10
+    depends_on:
+      postgres:
+        condition: service_healthy
+    command: >
+      -url=jdbc:postgresql://postgres:5432/axlink_test
+      -user=axlink -password=axlink
+      -locations=filesystem:/flyway/sql
+      -connectRetries=10
+      migrate
+    volumes:
+      - ../db/migration:/flyway/sql:ro

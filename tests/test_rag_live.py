@@ -17,7 +17,7 @@ from app.ai.embedding import embedding_port
 from app.config import settings
 from app.db import tx
 from app.rag import indexing
-from tests.conftest import requires_db
+from tests.conftest import LIVE_ENABLED, requires_db
 
 PID = "c0000000-0000-4000-8000-000000000001"
 ROOT = Path(__file__).resolve().parents[1]
@@ -40,8 +40,12 @@ def _models_ready() -> bool:
     return {settings.llm_model.split(":")[0], settings.embedding_model.split(":")[0]} <= names
 
 
+# 실모델·실원천을 부른다. AXLINK_LIVE=1 일 때만 돈다(conftest). 꺼져 있으면 모델 확인 요청도
+# 보내지 않는다 — 아래 skipif 가 LIVE_ENABLED 에서 먼저 끊긴다.
+pytestmark = pytest.mark.live
+
 live = pytest.mark.skipif(
-    not _models_ready(),
+    not LIVE_ENABLED or not _models_ready(),
     reason=f"Ollama 에 {settings.llm_model} 과 {settings.embedding_model} 이 있어야 한다",
 )
 

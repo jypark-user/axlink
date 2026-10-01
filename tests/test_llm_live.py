@@ -11,6 +11,7 @@ import pytest
 
 from app.ai.llm import OllamaLlm
 from app.config import settings
+from tests.conftest import LIVE_ENABLED
 
 
 def _model_ready() -> bool:
@@ -22,8 +23,12 @@ def _model_ready() -> bool:
     return any(n.split(":")[0] == settings.llm_model.split(":")[0] for n in names)
 
 
+# 실모델·실원천을 부른다. AXLINK_LIVE=1 일 때만 돈다(conftest). 꺼져 있으면 모델 확인 요청도
+# 보내지 않는다 — 아래 skipif 가 LIVE_ENABLED 에서 먼저 끊긴다.
+pytestmark = pytest.mark.live
+
 live = pytest.mark.skipif(
-    not _model_ready(), reason=f"Ollama 에 {settings.llm_model} 이 있어야 한다"
+    not LIVE_ENABLED or not _model_ready(), reason=f"Ollama 에 {settings.llm_model} 이 있어야 한다"
 )
 
 

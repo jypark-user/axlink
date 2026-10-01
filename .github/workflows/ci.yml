@@ -23,7 +23,7 @@ jobs:
             || echo "::warning::traceability.csv 가 최신이 아닙니다. 재생성 후 커밋하세요."
 
   test:
-    name: 테스트
+    name: 테스트 (DB·모델 없음)
     runs-on: ubuntu-latest
     steps:
       # 규약 시험이 커밋 이력을 훑으므로 얕은 클론이면 안 된다.
@@ -36,5 +36,85 @@ jobs:
       - name: ruff
         run: ruff check app tests scripts
       - name: pytest
-        # DB·로컬 모델이 필요한 시험은 conftest 가 알아서 skip 한다.
-        run: pytest -q
+        # DB 시험(db)과 실모델 시험(live)은 여기서 고르지 않는다. DB 시험은 아래 작업이 돌린다.
+        run: pytest -q -m "not db and not live" --junitxml=test-results/backend-unit.xml
+      - name: 결과 보관
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: test-results-backend-unit
+          path: test-results/
+          retention-days: 90
+
+  test-db:
+    name: 테스트 (시험용 DB)
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: pgvector/pgvector:pg16
+        env:
+          POSTGRES_USER: axlink
+          POSTGRES_PASSWORD: axlink
+          POSTGRES_DB: axlink_test
+        ports: ["5432:5432"]
+        options: >-
+          --health-cmd "pg_isready -U axlink -d axlink_test"
+          --health-interval 5s --health-timeout 5s --health-retries 20
+    env:
+      AXLINK_DATABASE_URL: postgresql://axlink:axlink@localhost:5432/axlink_test
+      # 연결·마이그레이션 문제를 skip 하지 않고 실패로 끝낸다(tests/conftest.py).
+      AXLINK_REQUIRE_DB: "1"
+    steps:
+      - uses: actions/checkout@v4
+        with: { fetch-depth: 0 }
+      - uses: actions/setup-python@v5
+        with: { python-version: "3.12" }
+      - name: 의존성 설치
+        run: pip install -e ".[dev]"
+      - name: 마이그레이션
+        # 로컬과 같은 flyway 이미지로 빈 DB 를 최신까지 올린다. 실패하면 여기서 끝난다.
+        run: >
+          docker run --rm --network host
+          -v "$GITHUB_WORKSPACE/db/migration:/flyway/sql:ro"
+          flyway/flyway:10
+          -url=jdbc:postgresql://localhost:5432/axlink_test
+          -user=axlink -password=axlink
+          -locations=filesystem:/flyway/sql
+          -connectRetries=10
+          migrate
+      - name: pytest
+        run: pytest -q -m "db and not live" --junitxml=test-results/backend-db.xml
+      - name: 결과 보관
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: test-results-backend-db
+          path: test-results/
+          retention-days: 90
+
+  frontend:
+    name: 프런트 (빌드·시험)
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: frontend
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+      - name: 의존성 설치
+        run: npm ci
+      - name: 빌드 (tsc -b · vite)
+        run: npm run build
+      - name: vitest
+        run: npx vitest run --reporter=default --reporter=junit --outputFile.junit=../test-results/frontend.xml
+      - name: 결과 보관
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: test-results-frontend
+          path: test-results/
+          retention-days: 90

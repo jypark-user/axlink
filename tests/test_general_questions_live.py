@@ -1,11 +1,13 @@
-"""일반 질문 답변율 (ARC-015). Ollama 와 개발 DB 가 떠 있을 때만 돈다.
+"""일반 질문 답변율 (ARC-015). Ollama 와 시험용 DB 가 떠 있고 AXLINK_LIVE=1 일 때만 돈다.
 
 불특정 다수가 던질 질문은 특정 문서를 가리키지 않는다. "잘 되고 있어?", "문제 있어?",
 "뭐부터 봐야 해?" 같은 질문에 몇 개나 답하는지를 숫자로 재고, 경로·게이트를 손볼 때마다
 같은 세트로 다시 잰다. 본문 생성은 하지 않는다. 답을 만들 수 있는지는 판정과 근거 게이트,
 블록 유무에서 갈리므로 거기까지만 돌려 시간을 아낀다.
 
-    AXLINK_DATABASE_URL=...axlink pytest tests/test_general_questions_live.py -s
+    AXLINK_LIVE=1 AXLINK_DATABASE_URL=...axlink_test pytest tests/test_general_questions_live.py -s
+
+시험용 DB 에 색인된 문서가 있어야 답이 나온다. 개발 DB 에는 붙지 않는다(conftest).
 
 결과는 var/general_questions_report.md 에 남는다.
 """
@@ -25,7 +27,7 @@ from app.config import settings
 from app.db import tx
 from app.rag import entity_table, overview, route_cache, routing, search
 from app.semantic import catalog as catalog_module
-from tests.conftest import _db_reachable
+from tests.conftest import LIVE_ENABLED
 
 PID = "c0000000-0000-4000-8000-000000000001"
 ADMIN = AuthPrincipal(
@@ -169,9 +171,11 @@ def _models_ready() -> bool:
         return False
 
 
-pytestmark = pytest.mark.skipif(
-    not (_db_reachable() and _models_ready()), reason="Ollama 와 DB 가 떠 있어야 한다"
-)
+pytestmark = [
+    pytest.mark.live,
+    pytest.mark.db,
+    pytest.mark.skipif(not LIVE_ENABLED or not _models_ready(), reason="Ollama 가 떠 있어야 한다"),
+]
 
 
 @pytest.fixture(autouse=True)

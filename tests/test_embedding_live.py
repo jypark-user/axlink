@@ -11,6 +11,7 @@ import pytest
 
 from app.ai.embedding import OllamaEmbedding
 from app.config import settings
+from tests.conftest import LIVE_ENABLED
 
 
 def _model_ready() -> bool:
@@ -22,7 +23,13 @@ def _model_ready() -> bool:
     return any(n.split(":")[0] == settings.embedding_model for n in names)
 
 
-live = pytest.mark.skipif(not _model_ready(), reason="Ollama 에 bge-m3 가 있어야 한다")
+# 실모델·실원천을 부른다. AXLINK_LIVE=1 일 때만 돈다(conftest). 꺼져 있으면 모델 확인 요청도
+# 보내지 않는다 — 아래 skipif 가 LIVE_ENABLED 에서 먼저 끊긴다.
+pytestmark = pytest.mark.live
+
+live = pytest.mark.skipif(
+    not LIVE_ENABLED or not _model_ready(), reason="Ollama 에 bge-m3 가 있어야 한다"
+)
 
 
 @pytest.fixture(scope="module")
