@@ -50,6 +50,11 @@ select = ["E", "F", "I", "UP", "B", "SIM"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
+addopts = ["--strict-markers"]
+markers = [
+  "db: 시험용 DB(*_test)가 있어야 돈다. AXLINK_REQUIRE_DB=1 이면 DB 문제가 skip 이 아니라 실패다",
+  "live: 실모델·실원천을 부른다. AXLINK_LIVE=1 일 때만 돈다",
+]
 filterwarnings = [
   "error::DeprecationWarning",
   # starlette 가 내부에서 anyio 의 옛 별칭을 쓴다. 우리 코드로는 못 고치고,

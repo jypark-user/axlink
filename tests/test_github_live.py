@@ -16,6 +16,9 @@ from app.integration.adapter import github_connector as github
 _TOKEN = os.environ.get("AXLINK_GH_TOKEN")
 _REPO = os.environ.get("AXLINK_GH_REPO", "")
 
+# 실모델·실원천을 부른다. AXLINK_LIVE=1 일 때만 돈다(conftest).
+pytestmark = pytest.mark.live
+
 live = pytest.mark.skipif(not _TOKEN, reason="AXLINK_GH_TOKEN 이 있어야 실제 GitHub 를 검증한다")
 
 

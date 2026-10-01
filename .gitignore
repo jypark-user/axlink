@@ -25,6 +25,8 @@ bin/
 *.egg-info/
 .pytest_cache/
 .ruff_cache/
+# 시험 실행 결과(junit). CI 는 artifact 로 보관한다
+test-results/
 
 # 업로드 문서 원본 보관 위치 (AXLINK_DOCUMENT_ROOT)
 var/
