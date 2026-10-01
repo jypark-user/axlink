@@ -483,9 +483,31 @@ def test_목록_질문은_종류_전체를_근거로_답한다(client, conversat
     assert events[-1][1]["finishReason"] == "STOP"
 
 
+@pytest.fixture
+def seeded_risk() -> Iterator[str]:
+    """리스크 한 건. 이 시험이 기대는 행은 시험이 직접 만든다.
+
+    전에는 다른 시험(수집·승격)이 남긴 리스크에 기대어, 빈 시험 DB 에서 처음 돌면 표 대신
+    현황 그림으로 내려가 실패했다.
+    """
+    with tx() as cur:
+        cur.execute(
+            """
+            insert into risk (project_id, title, severity, status)
+            values (%s, %s, 'HIGH', 'OPEN')
+            returning id
+            """,
+            (PID, "Redmine 실서버 수집 시험 지연"),
+        )
+        rid = str(cur.fetchone()["id"])
+    yield rid
+    with tx() as cur:
+        cur.execute("delete from risk where id = %s", (rid,))
+
+
 @requires_db
 def test_색인에_없어도_표준_모델에_있으면_답한다(
-    client, conversation, indexed_entities, monkeypatch
+    client, conversation, indexed_entities, seeded_risk, monkeypatch
 ):
     """리스크는 색인 청크가 없다. 그래도 표준 모델에 행이 있으면 표로 답한다 (ARC-013).
 
@@ -501,6 +523,7 @@ def test_색인에_없어도_표준_모델에_있으면_답한다(
     assert scripted.stream_calls == 1
     block = next(d for e, d in events if e == "infographic")
     assert block["template"] == "DATA_TABLE" and block["data"]["rows"]
+    assert "Redmine 실서버 수집 시험 지연" in json.dumps(block["data"]["rows"], ensure_ascii=False)
 
 
 @requires_db
