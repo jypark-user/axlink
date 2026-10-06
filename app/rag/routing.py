@@ -22,7 +22,7 @@ OFF_TOPIC = "OFF_TOPIC"  # 사업과 무관한 질문. 현황으로도 내려가
 
 # 목록으로 물을 수 있는 색인 종류. 모델이 이 밖의 값을 주면 보통 문서 검색으로 간다.
 LISTABLE: dict[str, str] = {
-    "ISSUE": "이슈",
+    "ISSUE": "일반 이슈",
     "REQUIREMENT": "요구사항",
     "RISK": "리스크",
     "DOCUMENT_UPLOAD": "산출물",

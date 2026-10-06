@@ -1,7 +1,7 @@
 """사업 현황 블록 (ARC-015). 문서를 가리키지 않는 일반 질문의 답이다.
 
 "잘 되고 있어?", "문제 있어?", "뭐부터 봐야 해?" 는 문서에 적힌 사실이 아니라 표준 모델의
-지금 상태를 묻는 것이다. 진척률·심각도별 열린 이슈·지연 작업·미제출 산출물·열린 리스크를
+지금 상태를 묻는 것이다. 진척률·심각도별 열린 일반 이슈·지연 작업·미제출 산출물·열린 리스크를
 시맨틱 레이어로 뽑아 그림 몇 장으로 넘기고, 모델은 그 값만으로 요약을 쓴다(절대 규칙 1).
 
 근거 게이트에 막힌 문서 질문에도 이 그림을 붙인다. 다만 원질문의 답이 아니라 별도의
@@ -30,7 +30,7 @@ class OverviewSpec:
 # 순서가 곧 그림 순서다. 카탈로그에 없는 지표는 건너뛴다. 값이 없는 그림은 안 넣는다.
 SPECS: tuple[OverviewSpec, ...] = (
     OverviewSpec("progress_representative_pct", (), "STAT_CARD", "진척률"),
-    OverviewSpec("open_issue_count", ("issue_severity",), "BAR_CHART", "심각도별 열린 이슈"),
+    OverviewSpec("open_issue_count", ("issue_severity",), "BAR_CHART", "심각도별 열린 일반 이슈"),
     OverviewSpec("progress_behind_task_count", (), "STAT_CARD", "지연 작업"),
     OverviewSpec("work_product_missing_count", (), "STAT_CARD", "미제출 산출물"),
     OverviewSpec("open_risk_count", (), "STAT_CARD", "열린 리스크"),

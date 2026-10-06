@@ -36,12 +36,14 @@ class EntitySpec:
     open_clause: str | None
     closed_clause: str | None
     url_expr: str | None
+    # 무엇을 뺀 범위인지. 표 설명과 범위 줄에 붙는다
+    scope_note: str | None = None
 
 
 ENTITIES: dict[str, EntitySpec] = {
     "ISSUE": EntitySpec(
         key="ISSUE",
-        label="이슈",
+        label="일반 이슈",
         table="issue e",
         columns=(
             ("title", "제목", "e.title"),
@@ -63,6 +65,7 @@ ENTITIES: dict[str, EntitySpec] = {
         open_clause="e.status not in ('RESOLVED', 'CLOSED')",
         closed_clause="e.status in ('RESOLVED', 'CLOSED')",
         url_expr="e.external_url",
+        scope_note="요구사항으로 분류된 항목 제외",
     ),
     "REQUIREMENT": EntitySpec(
         key="REQUIREMENT",
@@ -72,7 +75,14 @@ ENTITIES: dict[str, EntitySpec] = {
             ("code", "코드", "coalesce(e.code, '-')"),
             ("title", "제목", "e.title"),
             ("priority", "중요도", "coalesce(e.priority, '-')"),
-            ("status", "상태", "e.status"),
+            (
+                "status",
+                "상태",
+                "case when e.status = 'IMPLEMENTED' and exists ("
+                "select 1 from tool_connection c where c.id = e.tool_connection_id "
+                "and c.tool = 'GITHUB') "
+                "then '원천 이슈 닫힘(구현·검증 완료를 뜻하지 않음)' else e.status end",
+            ),
         ),
         order_by="e.code nulls last, e.created_at",
         open_clause="e.status not in ('VERIFIED', 'ACCEPTED')",
@@ -141,9 +151,10 @@ class EntityTable:
     def scope_line(self) -> str:
         """본문이 건수를 말할 수 있게 범위를 한 줄로. 이 줄의 숫자는 검문의 근거가 된다."""
         shown = len(self.data.rows)
+        note = f" ({self.spec.scope_note})" if self.spec.scope_note else ""
         if shown >= self.total:
-            return f"{self.title} 전체 {self.total}건"
-        return f"{self.title} 총 {self.total}건 중 앞 {shown}건"
+            return f"{self.title} 전체 {self.total}건{note}"
+        return f"{self.title} 총 {self.total}건 중 앞 {shown}건{note}"
 
 
 def _where(spec: EntitySpec, status: str) -> str:
@@ -189,7 +200,7 @@ def build(
     columns = [WidgetColumn(key=key, label=label, type="string") for key, label, _ in spec.columns]
     data = WidgetDataResponse(
         measure=f"entity_{spec.key.lower()}",
-        measureLabel=spec.label,
+        measureLabel=f"{spec.label} ({spec.scope_note})" if spec.scope_note else spec.label,
         unit=None,
         dimensions=[],
         columns=columns,

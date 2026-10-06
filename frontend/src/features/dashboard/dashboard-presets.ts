@@ -51,14 +51,14 @@ export const DASHBOARD_PRESETS: DashboardPreset[] = [
       },
       {
         template: 'BULLET_CHART',
-        title: '용역사별 이슈 처리율 vs 목표',
+        title: '용역사별 일반 이슈 처리율 vs 목표',
         intent: '용역사별 이슈 처리율을 목표선(85%)과 나란히 보여줘',
         measure: 'issue_resolution_rate',
         dimensions: ['contractor_org'],
       },
       {
         template: 'SPARKLINE',
-        title: '상태별 이슈 잔추세',
+        title: '상태별 일반 이슈 잔추세',
         intent: '월별로 상태별 이슈 건수가 어떻게 남아 있는지 작은 추세선으로',
         measure: 'issue_count',
         dimensions: ['period_month', 'issue_status'],
@@ -73,14 +73,14 @@ export const DASHBOARD_PRESETS: DashboardPreset[] = [
       },
       {
         template: 'AREA_CHART',
-        title: '주별 이슈 처리율 추이',
+        title: '주별 일반 이슈 처리율 추이',
         intent: '주별 이슈 처리율이 오르고 있는지 내리고 있는지',
         measure: 'issue_resolution_rate',
         dimensions: ['period_week'],
       },
       {
         template: 'CUMULATIVE_FLOW',
-        title: '이슈 누적 흐름(쌓임 vs 닫힘)',
+        title: '일반 이슈 누적 흐름(쌓임 vs 닫힘)',
         intent: '월별로 이슈가 쌓이는 속도와 닫히는 속도를 누적 흐름으로',
         measure: 'issue_count',
         dimensions: ['period_month', 'issue_status'],
@@ -95,21 +95,21 @@ export const DASHBOARD_PRESETS: DashboardPreset[] = [
       // ③ 분포 — 어디에 몰렸나
       {
         template: 'BAR_CHART',
-        title: '심각도별 열린 이슈',
+        title: '심각도별 열린 일반 이슈',
         intent: '열린 이슈가 심각도별로 몇 건인지',
         measure: 'open_issue_count',
         dimensions: ['issue_severity'],
       },
       {
         template: 'PARETO',
-        title: '담당자별 열린 이슈 집중도',
+        title: '담당자별 열린 일반 이슈 집중도',
         intent: '열린 이슈가 어느 담당자에게 몰려 있는지 파레토로',
         measure: 'open_issue_count',
         dimensions: ['assignee'],
       },
       {
         template: 'STACKED_BAR_CHART',
-        title: '용역사 × 심각도별 이슈',
+        title: '용역사 × 심각도별 일반 이슈',
         intent: '용역사별 이슈를 심각도로 쌓아서',
         measure: 'issue_count',
         dimensions: ['contractor_org', 'issue_severity'],
@@ -160,14 +160,14 @@ export const DASHBOARD_PRESETS: DashboardPreset[] = [
       // ⑤ 변화 — 순위와 기울기
       {
         template: 'SLOPE_CHART',
-        title: '용역사별 이슈, 처음과 지금',
+        title: '용역사별 일반 이슈, 처음과 지금',
         intent: '용역사별 이슈 건수가 첫 달과 지금 사이에 어떻게 바뀌었는지',
         measure: 'issue_count',
         dimensions: ['period_month', 'contractor_org'],
       },
       {
         template: 'BUMP_CHART',
-        title: '심각도별 이슈 순위 변화',
+        title: '심각도별 일반 이슈 순위 변화',
         intent: '월별로 심각도별 이슈 건수 순위가 어떻게 바뀌는지',
         measure: 'issue_count',
         dimensions: ['period_month', 'issue_severity'],
@@ -196,7 +196,7 @@ export const DASHBOARD_PRESETS: DashboardPreset[] = [
       },
       {
         template: 'DATA_TABLE',
-        title: '담당자별 이슈 평균 처리일',
+        title: '담당자별 일반 이슈 평균 처리일',
         intent: '담당자별로 이슈 하나를 닫는 데 평균 며칠 걸리는지 표로',
         measure: 'issue_avg_resolution_days',
         dimensions: ['assignee'],
@@ -261,14 +261,14 @@ export const DASHBOARD_PRESETS: DashboardPreset[] = [
     widgets: [
       {
         template: 'STAT_CARD',
-        title: '이슈 평균 처리일',
+        title: '일반 이슈 평균 처리일',
         intent: '이슈 하나를 닫는 데 평균 며칠 걸리는지',
         measure: 'issue_avg_resolution_days',
       },
       // 용역사 안에서 심각도가 어떻게 갈리는지 — 막대 둘로 나눠 보면 비교가 안 된다.
       {
         template: 'STACKED_BAR_CHART',
-        title: '용역사 × 심각도별 열린 이슈',
+        title: '용역사 × 심각도별 열린 일반 이슈',
         intent: '용역사별 열린 이슈를 심각도로 쌓아서',
         measure: 'open_issue_count',
         dimensions: ['contractor_org', 'issue_severity'],
@@ -276,14 +276,14 @@ export const DASHBOARD_PRESETS: DashboardPreset[] = [
       // 담당자는 수가 많다 — 세로 막대는 이름이 겹쳐 읽히지 않는다.
       {
         template: 'HORIZONTAL_BAR_CHART',
-        title: '담당자별 열린 이슈',
+        title: '담당자별 열린 일반 이슈',
         intent: '담당자별 열린 이슈 건수를 가로 막대로',
         measure: 'open_issue_count',
         dimensions: ['assignee'],
       },
       {
         template: 'AREA_CHART',
-        title: '주별 이슈 처리율 추이',
+        title: '주별 일반 이슈 처리율 추이',
         intent: '주별 이슈 처리율이 오르고 있는지 내리고 있는지',
         measure: 'issue_resolution_rate',
         dimensions: ['period_week'],
@@ -291,7 +291,7 @@ export const DASHBOARD_PRESETS: DashboardPreset[] = [
       // 처리율이 한쪽만 낮으면 찌그러진 모양으로 바로 보인다.
       {
         template: 'RADAR_CHART',
-        title: '용역사별 이슈 처리율 균형',
+        title: '용역사별 일반 이슈 처리율 균형',
         intent: '용역사별 이슈 처리율이 고른지 레이더로',
         measure: 'issue_resolution_rate',
         dimensions: ['contractor_org'],

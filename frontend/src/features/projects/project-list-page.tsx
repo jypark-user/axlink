@@ -141,7 +141,8 @@ function projectColumns(role: Role | undefined): ColumnDef<ProjectSummaryRespons
 
   columns.push({
     id: 'alerts',
-    header: '이슈',
+    // 요청·시정·리스크 건수다. 수집한 이슈 수가 아니다
+    header: '요청·시정·리스크',
     cell: ({ row }) => {
       const {
         openCorrectionActionCount: ca,

@@ -42,7 +42,7 @@ FIELD_LABELS = {
 METRIC_KEYS = {
     "REPRESENTATIVE": "대표 진척률",
     "PROGRESS_WBS": "WBS 기반 진척률",
-    "PROGRESS_ISSUE": "이슈 해결률",
+    "PROGRESS_ISSUE": "일반 이슈 해결률",
     "PROGRESS_WORK_PRODUCT": "산출물 제출률",
 }
 

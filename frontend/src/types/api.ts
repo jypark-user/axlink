@@ -524,11 +524,49 @@ export interface TraceCell {
   externalUrl: string | null;
 }
 
+export type SourceState = 'OPEN' | 'CLOSED' | 'UNKNOWN' | 'NONE';
+
+export interface StatusCount {
+  status: RequirementStatus;
+  count: number;
+}
+
+/** 원천 하나의 이슈 상태. connectionId 가 null 이면 원천 연결 없이 들어온 요구사항 묶음이다. */
+export interface SourceStateSummary {
+  connectionId: string | null;
+  tool: string;
+  label: string;
+  total: number;
+  open: number;
+  closed: number;
+  unknown: number;
+}
+
+/** 요구사항 화면 요약. 목록 쪽과 상관없이 사업 전체를 서버가 센다. */
+export interface RequirementSummaryResponse {
+  total: number;
+  /** VERIFIED · ACCEPTED */
+  verified: number;
+  notVerified: number;
+  /** IMPLEMENTED 중 GitHub 원천 이슈가 닫혀서 붙은 건수. 구현·검증 완료를 뜻하지 않는다. */
+  implementedFromSourceClosed: number;
+  /** total 이 0 이면 null */
+  verifiedRate: number | null;
+  byStatus: StatusCount[];
+  sources: SourceStateSummary[];
+}
+
+/** 요구사항 상태의 출처. GitHub 이슈를 닫아 생긴 IMPLEMENTED 만 값이 있다. */
+export type RequirementStatusBasis = 'SOURCE_ISSUE_CLOSED';
+
 export interface TraceabilityRowResponse {
   requirementId: string;
   requirementCode: string;
   requirementTitle: string;
   requirementStatus: RequirementStatus;
+  requirementStatusBasis: RequirementStatusBasis | null;
+  /** 원천 이슈 상태. 수집한 원천 기록에서 읽는다. 원천 연결이 없으면 NONE. 내부 상태와 따로다. */
+  sourceState: SourceState;
   designs: TraceCell[];
   implementsList: TraceCell[];
   tests: TraceCell[];
@@ -546,12 +584,22 @@ export interface RequirementResponse {
   source: SourceRef;
   traceComplete: boolean;
   updatedAt: string;
+  statusBasis: RequirementStatusBasis | null;
 }
 
 export interface RequirementDetailResponse extends RequirementResponse {
   body: string;
   traceLinks: TraceLinkResponse[];
   history: EntityHistoryResponse[];
+}
+
+/** 일반 이슈 화면 카드. 목록 쪽과 상관없이 사업 전체를 서버가 센다. */
+export interface IssueSummaryResponse {
+  total: number;
+  open: number;
+  closed: number;
+  heavyOpen: number;
+  unassignedOpen: number;
 }
 
 export interface IssueResponse {

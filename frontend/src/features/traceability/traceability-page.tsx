@@ -1,54 +1,332 @@
-import { useMemo, useState, type ReactNode } from 'react';
+import { useEffect, useMemo, useState, type ReactNode } from 'react';
 import type { ColumnDef } from '@tanstack/react-table';
-import { ExternalLink } from 'lucide-react';
+import { ExternalLink, X } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
+import { Button } from '@/components/ui/button';
+import { Card, CardContent } from '@/components/ui/card';
 import { DataTable, SortableHeader } from '@/components/ui/data-table';
+import { SearchInput } from '@/components/ui/search-input';
 import { DataState } from '@/components/common/data-state';
+import { RequirementStatusBadge } from '@/components/common/requirement-status';
 import { PaginationBar } from '@/components/common/pagination-bar';
 import { PageHeader } from '@/components/layout/page-header';
 import { useProjectContext } from '@/components/layout/project-shell';
 import { api } from '@/lib/http';
-import { badgeVariantFor, label } from '@/lib/labels';
+import { label } from '@/lib/labels';
 import { toQueryString } from '@/lib/query';
 import { cn } from '@/lib/utils';
 import { useAsync } from '@/lib/use-async';
-import type { PageResponse, TraceCell, TraceLinkKind, TraceabilityRowResponse } from '@/types/api';
+import {
+  filterLabel,
+  filterParams,
+  implementedNote,
+  NO_FILTER,
+  rateText,
+  sameFilter,
+  sourceFilter,
+  sourceStateWord,
+  type RequirementFilter,
+} from '@/features/traceability/requirement-filter';
+import type {
+  PageResponse,
+  RequirementSummaryResponse,
+  SourceState,
+  SourceStateSummary,
+  TraceCell,
+  TraceLinkKind,
+  TraceabilityRowResponse,
+} from '@/types/api';
+
+const PAGE_SIZE = 20;
 
 export function TraceabilityPage(): ReactNode {
   const { project } = useProjectContext();
   const [page, setPage] = useState(0);
+  const [filter, setFilter] = useState<RequirementFilter>(NO_FILTER);
+  const [text, setText] = useState('');
+  const [q, setQ] = useState('');
+
+  // 찾기는 서버에서 한다. 표가 받은 한 쪽만 거르면 다른 쪽의 행은 못 찾는다.
+  useEffect(() => {
+    const t = setTimeout(() => {
+      setQ(text.trim());
+      setPage(0);
+    }, 300);
+    return () => clearTimeout(t);
+  }, [text]);
+
+  // 요약은 사업 전체를 서버가 센 값이다. 목록 조건·쪽과 상관없다.
+  const summary = useAsync<RequirementSummaryResponse>(
+    () => api.get<RequirementSummaryResponse>(`/projects/${project.id}/requirements/summary`),
+    [project.id],
+  );
   const state = useAsync<PageResponse<TraceabilityRowResponse>>(
     () =>
       api.get<PageResponse<TraceabilityRowResponse>>(
-        `/projects/${project.id}/traceability${toQueryString({ page, size: 20 })}`,
+        `/projects/${project.id}/traceability${toQueryString({
+          ...filterParams(filter),
+          q: q || undefined,
+          page,
+          size: PAGE_SIZE,
+        })}`,
       ),
-    [project.id, page],
+    [project.id, page, filter, q],
   );
 
   const columns = useMemo(() => buildColumns(), []);
+  const active = filterLabel(filter);
+  const narrowed = active !== null || q !== '';
+  const emptyText = narrowed ? '조건에 맞는 요구사항이 없습니다.' : '요구사항이 없습니다.';
+
+  // 같은 칸을 다시 누르면 푼다. 조건이 바뀌면 첫 쪽부터 본다.
+  const pick = (next: RequirementFilter) => {
+    setFilter(sameFilter(next, filter) ? NO_FILTER : next);
+    setPage(0);
+  };
+  const clear = () => {
+    setFilter(NO_FILTER);
+    setPage(0);
+  };
 
   return (
     <>
       <PageHeader
-        title="추적표"
-        description="요구사항 → 설계 · 구현 · 시험 연결 상태입니다. 끊긴 칸은 붉게 표시됩니다."
+        title="요구사항"
+        description="요구사항별 현황과 설계 · 구현 · 시험 추적 근거입니다. 끊긴 칸은 붉게 표시됩니다."
       />
-      <DataState state={state} onRetry={state.reload} empty={{ text: '요구사항이 없습니다.' }}>
-        {(data) => (
-          <>
-            <DataTable<TraceabilityRowResponse, unknown>
-              columns={columns}
-              data={data.content}
-              filterColumn="requirementTitle"
-              filterPlaceholder="요구사항으로 찾기"
-              paginated={false}
-              emptyText="요구사항이 없습니다."
-            />
-            <PaginationBar page={data} onChange={setPage} />
-          </>
-        )}
-      </DataState>
+      <div className="@container flex flex-col gap-5">
+        <DataState state={summary} onRetry={summary.reload}>
+          {(n) => <Summary n={n} filter={filter} onPick={pick} />}
+        </DataState>
+
+        <div className="flex flex-wrap items-center gap-3">
+          <SearchInput
+            value={text}
+            onValueChange={setText}
+            placeholder="코드·요구사항으로 찾기"
+            aria-label="코드·요구사항으로 찾기"
+            className="max-w-xs"
+          />
+          {active && (
+            <span className="inline-flex items-center gap-1 text-sm">
+              <span className="text-muted-foreground">현재 필터</span>
+              <Badge variant="primary">{active}</Badge>
+              <Button size="sm" variant="ghost" onClick={clear} aria-label="필터 해제">
+                <X className="size-4" /> 해제
+              </Button>
+            </span>
+          )}
+          {narrowed && state.data && (
+            <span className="text-muted-foreground text-sm">
+              조건에 맞는 {state.data.totalElements}건
+              {summary.data ? ` · 사업 전체 ${summary.data.total}건` : ''}
+            </span>
+          )}
+        </div>
+
+        <DataState state={state} onRetry={state.reload}>
+          {(data) =>
+            data.content.length === 0 ? (
+              <p className="text-muted-foreground py-10 text-center text-sm">{emptyText}</p>
+            ) : (
+              <>
+                <DataTable<TraceabilityRowResponse, unknown>
+                  columns={columns}
+                  data={data.content}
+                  paginated={false}
+                  emptyText={emptyText}
+                />
+                <PaginationBar page={data} onChange={setPage} />
+              </>
+            )
+          }
+        </DataState>
+      </div>
     </>
+  );
+}
+
+/** 목록 위 요약. 칸을 누르면 그 조건으로 목록을 거른다. */
+function Summary({
+  n,
+  filter,
+  onPick,
+}: {
+  n: RequirementSummaryResponse;
+  filter: RequirementFilter;
+  onPick: (f: RequirementFilter) => void;
+}): ReactNode {
+  const is = (f: RequirementFilter) => sameFilter(f, filter);
+  const linked = n.sources.filter((s) => s.connectionId !== null);
+  return (
+    <div className="flex flex-col gap-3">
+      <div className="grid grid-cols-1 gap-3 @xl:grid-cols-3">
+        <PickCard
+          term="전체 요구사항"
+          value={`${n.total}건`}
+          hint="사업 전체"
+          selected={filter.kind === 'all'}
+          onClick={() => onPick(NO_FILTER)}
+        />
+        <PickCard
+          term="검증 완료"
+          value={`${n.verified}건`}
+          hint={`${rateText(n.verifiedRate)} · 검증·인수 상태`}
+          selected={is({ kind: 'verified', value: true })}
+          onClick={() => onPick({ kind: 'verified', value: true })}
+        />
+        <PickCard
+          term="검증 미완료"
+          value={`${n.notVerified}건`}
+          hint="전체에서 검증 완료를 뺀 수"
+          selected={is({ kind: 'verified', value: false })}
+          onClick={() => onPick({ kind: 'verified', value: false })}
+        />
+      </div>
+
+      <Card className="gap-0 py-3">
+        <CardContent className="flex flex-col gap-2 px-4">
+          <p className="win-label">상태별 건수 (요구사항 상태)</p>
+          <div className="flex flex-wrap gap-1.5">
+            {n.byStatus.map((s) => (
+              <Chip
+                key={s.status}
+                selected={is({ kind: 'status', status: s.status })}
+                disabled={s.count === 0}
+                onClick={() => onPick({ kind: 'status', status: s.status })}
+              >
+                {label(s.status)} {s.count}
+              </Chip>
+            ))}
+          </div>
+          {n.implementedFromSourceClosed > 0 && (
+            <p className="text-muted-foreground text-xs">{implementedNote(n)}</p>
+          )}
+        </CardContent>
+      </Card>
+
+      <Card className="gap-0 py-3">
+        <CardContent className="flex flex-col gap-2 px-4">
+          <p className="win-label">원천 이슈 상태 (수집한 원천 기록 기준)</p>
+          <p className="text-muted-foreground text-xs">
+            요구사항 상태와 따로 셉니다. 원천 이슈 닫힘은 구현·검증 완료를 뜻하지 않습니다.
+            {linked.length > 1 && ' 원천마다 따로 세며 합치지 않습니다.'}
+          </p>
+          {n.sources.length === 0 && (
+            <p className="text-muted-foreground text-sm">요구사항이 없습니다.</p>
+          )}
+          {n.sources.map((s) => (
+            <SourceRow key={s.connectionId ?? 'none'} s={s} is={is} onPick={onPick} />
+          ))}
+        </CardContent>
+      </Card>
+    </div>
+  );
+}
+
+function SourceRow({
+  s,
+  is,
+  onPick,
+}: {
+  s: SourceStateSummary;
+  is: (f: RequirementFilter) => boolean;
+  onPick: (f: RequirementFilter) => void;
+}): ReactNode {
+  const none: RequirementFilter = {
+    kind: 'source',
+    connectionId: null,
+    sourceLabel: s.label,
+    state: 'NONE',
+  };
+  const states = (['OPEN', 'CLOSED', 'UNKNOWN'] as const).filter(
+    (st) => st !== 'UNKNOWN' || s.unknown > 0,
+  );
+  return (
+    <div className="flex flex-wrap items-center gap-1.5">
+      <span className="text-sm font-medium">{s.label}</span>
+      <span className="text-muted-foreground text-xs">요구사항 {s.total}건</span>
+      {s.connectionId === null ? (
+        <Chip selected={is(none)} onClick={() => onPick(none)}>
+          목록 보기
+        </Chip>
+      ) : (
+        states.map((st) => (
+          <Chip
+            key={st}
+            selected={is(sourceFilter(s, st))}
+            disabled={countOf(s, st) === 0}
+            onClick={() => onPick(sourceFilter(s, st))}
+          >
+            {sourceStateWord(st)} {countOf(s, st)}
+          </Chip>
+        ))
+      )}
+    </div>
+  );
+}
+
+function countOf(s: SourceStateSummary, st: Exclude<SourceState, 'NONE'>): number {
+  if (st === 'OPEN') return s.open;
+  if (st === 'CLOSED') return s.closed;
+  return s.unknown;
+}
+
+function PickCard({
+  term,
+  value,
+  hint,
+  selected,
+  onClick,
+}: {
+  term: string;
+  value: string;
+  hint: string;
+  selected: boolean;
+  onClick: () => void;
+}): ReactNode {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      aria-pressed={selected}
+      className={cn(
+        'bg-card hover:bg-accent rounded-md border px-4 py-3 text-left transition-colors',
+        selected ? 'border-primary ring-primary/40 ring-1' : 'border-border',
+      )}
+    >
+      <p className="win-label truncate">{term}</p>
+      <p className="tnum text-foreground mt-1 text-2xl font-semibold">{value}</p>
+      <p className="text-muted-foreground mt-0.5 text-xs font-semibold tracking-wide">{hint}</p>
+    </button>
+  );
+}
+
+function Chip({
+  selected,
+  disabled,
+  onClick,
+  children,
+}: {
+  selected: boolean;
+  disabled?: boolean;
+  onClick: () => void;
+  children: ReactNode;
+}): ReactNode {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      disabled={disabled}
+      aria-pressed={selected}
+      className={cn(
+        'tnum rounded-full border px-2.5 py-0.5 text-xs transition-colors',
+        selected ? 'border-primary bg-primary-muted text-primary' : 'border-border hover:bg-accent',
+        disabled && 'cursor-default opacity-50 hover:bg-transparent',
+      )}
+    >
+      {children}
+    </button>
   );
 }
 
@@ -62,19 +340,32 @@ function buildColumns(): ColumnDef<TraceabilityRowResponse, unknown>[] {
     {
       accessorKey: 'requirementTitle',
       header: ({ column }) => <SortableHeader column={column}>요구사항</SortableHeader>,
-      cell: ({ row }) => (
-        <span className="block max-w-sm truncate" title={row.original.requirementTitle}>
-          {row.original.requirementTitle}
-        </span>
-      ),
+      cell: ({ row }) => <TitleCell text={row.original.requirementTitle} />,
     },
     {
       accessorKey: 'requirementStatus',
       header: ({ column }) => <SortableHeader column={column}>상태</SortableHeader>,
       cell: ({ row }) => (
-        <Badge variant={badgeVariantFor(row.original.requirementStatus)}>
-          {label(row.original.requirementStatus)}
-        </Badge>
+        <RequirementStatusBadge
+          status={row.original.requirementStatus}
+          basis={row.original.requirementStatusBasis}
+        />
+      ),
+    },
+    {
+      // 원천 이슈의 열림·닫힘. 위 상태 칸과 따로 읽는다
+      accessorKey: 'sourceState',
+      header: '원천 이슈',
+      cell: ({ row }) => (
+        <span
+          className={cn(
+            'text-xs',
+            (row.original.sourceState === 'NONE' || row.original.sourceState === 'UNKNOWN') &&
+              'text-muted-foreground',
+          )}
+        >
+          {SOURCE_CELL[row.original.sourceState]}
+        </span>
       ),
     },
     {
@@ -105,6 +396,35 @@ function buildColumns(): ColumnDef<TraceabilityRowResponse, unknown>[] {
   ];
 }
 
+const SOURCE_CELL: Record<SourceState, string> = {
+  OPEN: '열림',
+  CLOSED: '닫힘',
+  UNKNOWN: '기록 없음',
+  NONE: '원천 연결 없음',
+};
+
+/** 요구사항 제목. 두 줄까지 보이고, 누르면 전체를 펼친다. 마우스를 올려도 전체가 보인다. */
+function TitleCell({ text }: { text: string }): ReactNode {
+  const [open, setOpen] = useState(false);
+  return (
+    <button
+      type="button"
+      onClick={() => setOpen((v) => !v)}
+      aria-expanded={open}
+      title={open ? undefined : text}
+      className={cn(
+        'block max-w-md text-left whitespace-normal break-keep hover:underline',
+        !open && 'line-clamp-2',
+      )}
+    >
+      {text}
+    </button>
+  );
+}
+
+/** 근거가 이만큼 넘으면 앞 몇 개만 두고 나머지는 '더 보기' 로 접는다. */
+const CELL_PREVIEW = 3;
+
 /** 표 뼈대는 DataTable 이 만든다 — 여기서는 칸 안쪽만 그린다. */
 function Cells({
   cells,
@@ -115,30 +435,47 @@ function Cells({
   kind: TraceLinkKind;
   broken: TraceLinkKind[];
 }): ReactNode {
+  const [all, setAll] = useState(false);
   const isBroken = broken.includes(kind);
+  const hidden = cells.length - CELL_PREVIEW;
+  const shown = all || hidden <= 0 ? cells : cells.slice(0, CELL_PREVIEW);
   return (
     <div className={cn('-mx-2 px-2 py-1', isBroken && 'bg-destructive/10')}>
       {cells.length === 0 ? (
         <span className="text-muted-foreground text-xs">없음</span>
       ) : (
-        <div className="flex flex-wrap gap-1">
-          {cells.map((c) => (
-            <Badge key={c.targetId} variant="outline" className="max-w-40 truncate">
+        // 근거는 한 줄에 하나. 긴 커밋 제목은 끝을 말줄임하고, 마우스를 올리면 전체가 보인다
+        <ul className="flex w-64 flex-col gap-0.5">
+          {shown.map((c) => (
+            <li key={c.targetId} className="min-w-0 text-xs" title={c.label}>
               {c.externalUrl ? (
                 <a
-                  className="inline-flex items-center gap-1 hover:underline"
+                  className="flex min-w-0 items-center gap-1 hover:underline"
                   href={c.externalUrl}
                   target="_blank"
                   rel="noreferrer"
                 >
-                  {c.label} <ExternalLink className="size-3" />
+                  <span className="truncate">{c.label}</span>
+                  <ExternalLink className="text-muted-foreground size-3 shrink-0" />
                 </a>
               ) : (
-                c.label
+                <span className="block truncate">{c.label}</span>
               )}
-            </Badge>
+            </li>
           ))}
-        </div>
+          {hidden > 0 && (
+            <li>
+              <button
+                type="button"
+                onClick={() => setAll((v) => !v)}
+                aria-expanded={all}
+                className="text-primary text-xs hover:underline"
+              >
+                {all ? '접기' : `외 ${hidden}건 더 보기`}
+              </button>
+            </li>
+          )}
+        </ul>
       )}
     </div>
   );

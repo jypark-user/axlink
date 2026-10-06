@@ -69,7 +69,10 @@ def test_처리_중_이슈만_고르면_닫힌_것은_안_들어온다(issues):
     assert open_table.total + closed_total == all_table.total
     # 상태가 표의 열로 들어가야 사람이 눈으로 확인할 수 있다
     assert [c.key for c in open_table.data.columns][:2] == ["title", "status"]
-    assert "처리 중 이슈" in open_table.title
+    assert "처리 중 일반 이슈" in open_table.title
+    # 무엇을 뺀 범위인지 표 설명과 범위 줄이 같이 말한다
+    assert open_table.data.measureLabel == "일반 이슈 (요구사항으로 분류된 항목 제외)"
+    assert open_table.scope_line.endswith("(요구사항으로 분류된 항목 제외)")
 
 
 @requires_db
