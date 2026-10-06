@@ -13,7 +13,7 @@ import pytest
 from app.ai.port import LlmResult
 from app.config import settings
 from app.db import tx
-from app.rag import answer, blocks, entity_table
+from app.rag import blocks, entity_table, number_guard
 from app.rag import service as ask_service
 from tests.conftest import requires_db
 
@@ -117,9 +117,9 @@ def test_안_쓴_그림은_끝에_붙는다():
 
 def test_표식의_번호는_수치로_세지_않는다():
     """[그림 1] 의 1 을 지어낸 수치로 보면 멀쩡한 답에 경고가 붙는다."""
-    assert answer.numbers_in("이슈 현황이다 [그림 1]") == set()
-    assert answer.ungrounded_numbers("[그림 2] 를 보라", ["근거"]) == []
-    assert answer.numbers_in("이슈 7건 [그림 1]") == {"7"}
+    assert number_guard.quantities("이슈 현황이다 [그림 1]") == []
+    assert number_guard.Checker([]).check("[그림 2] 를 보라") == []
+    assert number_guard.quantities("이슈 7건 [그림 1]") == [("7", "건")]
 
 
 def test_프롬프트에는_앞부분만_넣는다():

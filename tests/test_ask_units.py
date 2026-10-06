@@ -11,7 +11,7 @@ import httpx
 from app.ai import llm
 from app.ai.port import LlmResult
 from app.config import settings
-from app.rag import answer, routing, search
+from app.rag import answer, number_guard, routing, search
 from app.rag.search import RetrievedChunk
 from app.semantic.catalog import Catalog, DimensionDef, MeasureDef
 from app.semantic.models import WidgetColumn, WidgetDataResponse, WidgetRow
@@ -39,15 +39,18 @@ def test_게이트는_코사인_유사도로_본다():
 
 def test_숫자_추출은_각주와_날짜를_뺀다():
     text = "이행률은 42.5% 이고[1] 2026-09-14 기준 1,200건 중 3건이다. 9월 보고서 [2]"
-    assert answer.numbers_in(text) == {"42.5", "1200", "3"}
+    assert number_guard.quantities(text) == [("42.5", "%"), ("1200", "건"), ("3", "건")]
 
 
 def test_집계에_없는_숫자만_걸린다():
-    grounds = ["- 요구사항 이행률: 42.5%", "- 전체: 1200건"]
-    assert answer.ungrounded_numbers("이행률은 42.5% 로 1,200건 기준이다", grounds) == []
-    assert answer.ungrounded_numbers("이행률은 43% 로 1200건 기준이다", grounds) == ["43"]
+    facts = number_guard.facts_from_lines(
+        ["- 요구사항 이행률: 42.5%", "- 전체: 1200건"], "집계", subject="요구사항 이행률"
+    )
+    ck = number_guard.Checker(facts)
+    assert ck.check("이행률은 42.5% 로 1,200건 기준이다") == []
+    assert [v.value for v in ck.check("이행률은 43% 로 1200건 기준이다")] == ["43"]
     # 소수 표기가 달라도 같은 값이면 통과한다
-    assert answer.ungrounded_numbers("42.50% 이다", grounds) == []
+    assert ck.check("이행률은 42.50% 이다") == []
 
 
 def test_집계_줄은_차원_라벨과_값을_같이_적는다():
@@ -66,7 +69,8 @@ def test_집계_줄은_차원_라벨과_값을_같이_적는다():
     lines = answer.aggregate_lines(data)
     assert lines == ["- 이슈 상태 OPEN: 7건", "- 이슈 상태 CLOSED: 12건", "- 전체: 19건"]
     # 검문은 이 줄을 근거로 삼는다. 줄을 베낀 답은 통과한다.
-    assert answer.ungrounded_numbers("열린 이슈 7건, 닫힌 이슈 12건, 모두 19건", lines) == []
+    ck = number_guard.Checker(number_guard.facts_from_lines(lines, "집계", subject="이슈 건수"))
+    assert ck.check("열린 이슈 7건, 닫힌 이슈 12건, 모두 19건") == []
 
 
 def test_집계_값이_없으면_없다고_적는다():
@@ -232,9 +236,9 @@ def test_후속_질문은_앞_대화와_함께_모델에_가고_캐시되지_않
 
 def test_단계_번호는_수치가_아니다():
     steps = "1) 시험 케이스에 코드를 적는다 → 2) 결과서를 올린다 → 3) 검증완료. 3단계면 끝."
-    assert answer.numbers_in(steps) == set()
+    assert number_guard.quantities(steps) == []
     # 문장 속 건수는 여전히 잡는다
-    assert answer.numbers_in("1) 결과서 3건을 올린다") == {"3"}
+    assert number_guard.quantities("1) 결과서 3건을 올린다") == [("3", "건")]
 
 
 def test_비율_지표는_분자_분모와_산출_근거를_같이_편다():
@@ -246,8 +250,11 @@ def test_비율_지표는_분자_분모와_산출_근거를_같이_편다():
     lines = answer.aggregate_lines(data)
     assert lines[0] == "- 이슈 건수: 0건 (0건 / 41건)"  # _data 도우미의 지표명·단위
     assert lines[-1].startswith("- 산출 근거: 검증완료")
-    # 검문은 분자·분모 숫자도 근거로 안다
-    assert answer.ungrounded_numbers("검증된 요구사항이 0건이라 41건 중 0%입니다.", lines) == []
+    # 검문은 분자·분모 숫자와 산출 근거 문장의 숫자(0%)도 근거로 안다
+    ck = number_guard.Checker(number_guard.facts_from_lines(lines, "집계", subject="요구사항"))
+    assert ck.check("검증된 요구사항이 41건 중 0건이라 0%입니다.") == []
+    # 줄에 없는 비율은 나눗셈으로 만든 값이다
+    assert [v.reason for v in ck.check("검증된 요구사항은 100%입니다.")] == ["근거에 없는 값"]
 
 
 def _data(dimensions, columns, rows, total) -> WidgetDataResponse:
@@ -460,8 +467,9 @@ def test_목록_범위_줄은_전체인지_일부인지_말한다():
     assert "전체 3건" in answer.listing_scope("이슈", 3, 3)
     partial = answer.listing_scope("요구사항", 60, 80)
     assert "총 80건" in partial and "앞 60건" in partial
-    # 이 줄의 숫자는 근거로 친다 — 답변이 총 건수를 말해도 지어낸 숫자가 아니다.
-    assert answer.ungrounded_numbers("요구사항은 총 80건이다.", [partial]) == []
+    # 이 줄의 숫자는 근거로 친다. 답변이 총 건수를 말해도 지어낸 숫자가 아니다.
+    ck = number_guard.Checker(number_guard.facts_from_lines([partial], "목록 범위"))
+    assert ck.check("요구사항은 총 80건이다.") == []
 
 
 def test_목록_프롬프트는_범위_절을_근거_앞에_둔다():

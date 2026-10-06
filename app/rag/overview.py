@@ -4,11 +4,12 @@
 지금 상태를 묻는 것이다. 진척률·심각도별 열린 이슈·지연 작업·미제출 산출물·열린 리스크를
 시맨틱 레이어로 뽑아 그림 몇 장으로 넘기고, 모델은 그 값만으로 요약을 쓴다(절대 규칙 1).
 
-근거 게이트에 막힌 문서 질문도 여기로 내려온다. "맞는 문서는 못 찾았지만 지금 상태는 이렇다"
-가 "답을 만들지 않았다" 보다 낫다. 데이터가 아예 없는 사업에서만 예전처럼 막는다.
+근거 게이트에 막힌 문서 질문에도 이 그림을 붙인다. 다만 원질문의 답이 아니라 별도의
+"참고 현황" 으로만 보이고, 모델은 부르지 않는다(ARC-017). 데이터가 아예 없는 사업에서는
+근거 부족 안내로 끝난다.
 """
 
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from typing import Any
 
 from app.auth.models import AuthPrincipal
@@ -36,7 +37,17 @@ SPECS: tuple[OverviewSpec, ...] = (
 )
 MAX_BLOCKS = 4
 
-LEAD = "질문에 꼭 맞는 문서는 찾지 못했습니다. 지금 사업 현황으로 답합니다.\n\n"
+# 문서 근거가 막힌 질문에 붙이는 서버 문안(ARC-017). 원질문의 답이 아님을 먼저 말한다.
+REFERENCE_LEAD = (
+    "질문에 맞는 문서 근거를 찾지 못해 답변을 만들지 않았습니다.\n\n"
+    "아래는 질문과 별개로 보여 드리는 참고 현황입니다. 이 질문에 대한 답의 근거가 아닙니다.\n\n"
+)
+REFERENCE_TITLE = "참고 현황 · "
+
+
+def as_reference(made: list[blocks.Block]) -> list[blocks.Block]:
+    """현황 그림을 참고용으로 표시한다. 문서 답변의 근거처럼 보이지 않게 제목에 붙인다."""
+    return [replace(b, title=REFERENCE_TITLE + b.title) for b in made]
 
 
 def build(
