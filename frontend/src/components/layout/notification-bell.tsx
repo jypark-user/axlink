@@ -23,6 +23,8 @@ const KIND_LABEL: Record<string, string> = {
   DOCUMENT_UPLOADED: '문서',
   DELIVERABLE_SUBMITTED: '산출물 제출',
   DELIVERABLE_OVERDUE: '산출물 지연',
+  WORK_PRODUCT_APPROVED: '산출물 승인',
+  WORK_PRODUCT_REJECTED: '산출물 반려',
   SYNC_FAILED: '동기화 실패',
   SYNC_CHANGED: '동기화 변경',
   SNAPSHOT_TAKEN: '스냅샷 기록',

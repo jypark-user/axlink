@@ -10,8 +10,9 @@ from typing import Annotated
 from fastapi import APIRouter, Query
 
 from app.auth.deps import Principal
-from app.dashboard import service, snapshot
+from app.dashboard import completion, service, snapshot
 from app.dashboard.models import (
+    CompletionSummaryResponse,
     ProgressResponse,
     ProgressSnapshotResponse,
     WbsDeliverablesResponse,
@@ -23,6 +24,16 @@ router = APIRouter(prefix="/api/projects", tags=["progress"])
 
 # 기준일을 넘길 수 있게 둔다. 추이 화면이 과거 시점의 계획선을 다시 그릴 때 쓴다.
 BaseDate = Annotated[date | None, Query(description="기준일. 비우면 오늘")]
+
+
+@router.get("/{project_id}/wbs/completion", response_model=CompletionSummaryResponse)
+def wbs_completion(
+    project_id: str, principal: Principal, at: BaseDate = None
+) -> CompletionSummaryResponse:
+    """보고 진척률과 완료 확인율, 작업별 근거 사실(ARC-019). 시맨틱 지표와 같은 뷰를 읽는다."""
+    with tx() as cur:
+        service.require_project(cur, principal, project_id)
+        return CompletionSummaryResponse(**completion.summary(cur, project_id, at or date.today()))
 
 
 @router.get("/{project_id}/progress", response_model=ProgressResponse)

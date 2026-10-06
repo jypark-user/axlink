@@ -34,7 +34,9 @@ LLM_CONFIDENCE = 0.5  # 모델이 고른 유형은 규칙이 정한 것보다 �
 _PRIORITIES = ("MUST", "SHOULD", "COULD", "WONT")
 _PM_ACTIVITIES = ("PM_1", "PM_2", "PM_3", "PM_4")
 _SI_ACTIVITIES = ("SI_1", "SI_2", "SI_3", "SI_4", "SI_5", "SI_6")
-_CONFIRMABLE_STATUSES = ("DRAFT", "SUBMITTED", "APPROVED")
+# 확정은 문서를 산출물 한 버전으로 등록하는 일이다. 승인은 발주기관이 그 버전을 받아들이는
+# 다른 행위라 여기서 하지 않는다(work-products/{id}/approve).
+_CONFIRMABLE_STATUSES = ("DRAFT", "SUBMITTED")
 _MAX_REJECTED_RAW = 200
 
 _TYPE_SYSTEM = (
@@ -177,6 +179,10 @@ def _validate(req: StructuringConfirmRequest) -> dict[str, Any]:
         raise errors.validation_failed("제목은 1~500자여야 합니다.")
     if not version or len(version) > 40:
         raise errors.validation_failed("버전은 1~40자여야 합니다.")
+    if req.workProductStatus == "APPROVED":
+        raise errors.validation_failed(
+            "확정은 산출물 등록입니다. 승인은 발주기관이 산출물 화면에서 따로 합니다."
+        )
     if req.workProductStatus not in _CONFIRMABLE_STATUSES:
         raise errors.validation_failed(
             "확정 상태는 " + " · ".join(_CONFIRMABLE_STATUSES) + " 중 하나여야 합니다."

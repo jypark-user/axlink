@@ -7,6 +7,8 @@
 
 from __future__ import annotations
 
+import re
+import uuid
 from typing import Any
 
 from app.dashboard import wbs
@@ -23,25 +25,85 @@ def loaded_version(cur: Any, project_id: str) -> str | None:
     return None if row is None or row["work_product_id"] is None else str(row["work_product_id"])
 
 
+def name_key(name: str) -> str:
+    """작업명 비교 키. V46 의 wbs_item.name_key 생성식과 같아야 한다(btrim 은 공백만 깎는다)."""
+    return re.sub(r"[ \t\n\r\f\v]+", " ", name.strip(" ")).lower()
+
+
+def _decide_key(
+    prev: dict[str, Any] | None, *, name: str, weight: Any, restructured: bool
+) -> tuple[str | None, str]:
+    """이 행이 직전 계획의 같은 작업인지. (이어 갈 task_key 또는 None, 이유).
+
+    이을 수 있다는 증거가 모두 있을 때만 잇는다. 하나라도 모자라면 새 작업으로 보고
+    예전 확인을 승계하지 않는다(재확인 대상).
+    """
+    if prev is None:
+        return None, "NEW"
+    if not prev["active"]:
+        return None, "REAPPEARED"  # 한 번 빠졌다 돌아온 번호. 같은 작업이라는 증거가 없다
+    if (prev["weight"] is None) != (weight is None):
+        return None, "LEAF_CHANGED"  # 말단이 묶음이 됐거나(분할) 그 반대
+    if prev["name_key"] != name_key(name):
+        return None, "RENAMED"  # 번호만 같은 다른 작업일 수 있다
+    if weight is not None and restructured and float(prev["weight"]) != float(weight):
+        return None, "RESTRUCTURED"  # 형제 작업이 생기거나 빠지면서 가중치가 옮겨 갔다(병합·분할)
+    return str(prev["task_key"]), "CONTINUED"
+
+
 def replace_plan(cur: Any, project_id: str, work_product_id: str | None, plan: wbs.WbsPlan) -> None:
-    """계획 하나를 통째로 반영한다. 말단은 weight 가 있고 묶음은 없다."""
+    """계획 하나를 통째로 반영한다. 말단은 weight 가 있고 묶음은 없다.
+
+    번호(wbs_id)는 같아도 다른 작업일 수 있다. 작업의 정체는 task_key 로 따로 두고,
+    직전 계획과 같은 작업임이 확인될 때만 이어 간다(_decide_key).
+    """
+    prev = {
+        r["wbs_id"]: r
+        for r in fetch_all(
+            cur,
+            """
+            select wbs_id, task_key, name_key, weight, active, parent_wbs_id
+              from wbs_item where project_id = %s
+            """,
+            (project_id,),
+        )
+    }
+    # 부모마다 말단 구성이 바뀌었는가. 바뀐 자리의 가중치 변화는 단순 조정으로 보지 않는다
+    before: dict[str | None, set[str]] = {}
+    for r in prev.values():
+        if r["active"] and r["weight"] is not None:
+            before.setdefault(r["parent_wbs_id"], set()).add(r["wbs_id"])
+    after: dict[str | None, set[str]] = {}
+    for row in plan.rows:
+        after.setdefault(_parent_of(row.wbs_id), set()).add(row.wbs_id)
+    restructured = {k for k in set(before) | set(after) if before.get(k) != after.get(k)}
+
     seen: list[str] = []
     line = 0
     for group in plan.groups:
         line += 1
+        key, reason = _decide_key(
+            prev.get(group.wbs_id), name=group.name, weight=None, restructured=False
+        )
         _upsert(
             cur, project_id, work_product_id, line,
             wbs_id=group.wbs_id, name=group.name, deliverable=None,
             start=group.start, end=group.end, weight=None, declared_planned=None, actual=None,
+            task_key=key, key_reason=reason,
         )
         seen.append(group.wbs_id)
     for row in plan.rows:
         line += 1
+        key, reason = _decide_key(
+            prev.get(row.wbs_id), name=row.name, weight=row.weight,
+            restructured=_parent_of(row.wbs_id) in restructured,
+        )
         _upsert(
             cur, project_id, work_product_id, line,
             wbs_id=row.wbs_id, name=row.name, deliverable=row.deliverable,
             start=row.start, end=row.end, weight=row.weight,
             declared_planned=row.declared_planned, actual=row.actual,
+            task_key=key, key_reason=reason,
         )
         seen.append(row.wbs_id)
     cur.execute(
@@ -61,24 +123,27 @@ def _parent_of(wbs_id: str) -> str | None:
 def _upsert(
     cur: Any, project_id: str, work_product_id: str | None, line: int, *, wbs_id: str,
     name: str, deliverable: str | None, start, end, weight, declared_planned, actual,
+    task_key: str | None, key_reason: str,
 ) -> None:
+    key = task_key or str(uuid.uuid4())
     cur.execute(
         """
         insert into wbs_item (project_id, wbs_id, parent_wbs_id, name, deliverable, start_on,
                               end_on, weight, declared_planned, actual, line_no,
-                              work_product_id, active)
-        values (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, true)
+                              work_product_id, active, task_key, key_reason)
+        values (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, true, %s, %s)
         on conflict (project_id, wbs_id) do update set
           parent_wbs_id = excluded.parent_wbs_id, name = excluded.name,
           deliverable = excluded.deliverable, start_on = excluded.start_on,
           end_on = excluded.end_on, weight = excluded.weight,
           declared_planned = excluded.declared_planned, actual = excluded.actual,
           line_no = excluded.line_no, work_product_id = excluded.work_product_id,
-          active = true, updated_at = now()
+          active = true, task_key = excluded.task_key, key_reason = excluded.key_reason,
+          updated_at = now()
         """,
         (
             project_id, wbs_id, _parent_of(wbs_id), name[:500], deliverable, start, end,
-            weight, declared_planned, actual, line, work_product_id,
+            weight, declared_planned, actual, line, work_product_id, key, key_reason,
         ),
     )
 

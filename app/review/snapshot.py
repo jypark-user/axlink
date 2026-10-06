@@ -7,9 +7,11 @@
 보고·확인 시점에는 같은 함수를 다시 불러 "그때"와 "지금"을 나란히 놓는다(SWFR.WEB.005).
 """
 
+from datetime import date
 from typing import Any
 
 from app.auth.models import AuthPrincipal
+from app.dashboard import completion
 from app.dashboard import service as dashboard_service
 from app.db import fetch_all, fetch_one
 from app.review.models import ReviewStateChange, ReviewTargetOption
@@ -31,6 +33,17 @@ FIELD_LABELS = {
     "actual": "실적률",
     "declared_planned": "계획률",
     "deliverable": "연결 산출물",
+    "weight": "가중치",
+    "file_check": "파일 대조",
+    "file_rule": "대조 방법",
+    "file_ref": "대조된 파일",
+    "repo_revision": "저장소 기준",
+    "submission": "정식 제출",
+    "approval": "산출물 승인",
+    "product_version": "산출물 버전",
+    "plan_version": "WBS 계획서 버전",
+    "task_key": "작업 식별자",
+    "scope_hash": "작업 범위",
     "end": "종료일",
     "value": "값",
     "numerator": "분자",
@@ -118,10 +131,28 @@ def capture(
         match = next((r for r in rows if r.wbs_id == target_key), None)
         if match is None:
             raise ValueError("WBS 항목을 찾을 수 없습니다.")
+        # 근거는 지금 다시 대조한다(저장하지 않음). 저장된 판정은 화면을 연 때의 것이라 낡을
+        # 수 있다. 파일 대조·정식 제출·승인은 서로 다른 사실이다. 산출물 항목에 닿지 못하면
+        # 제출·승인은 UNKNOWN 으로 남긴다(completion.facts_from)
+        check = dashboard_service.judge_deliverables(cur, project_id, date.today())
+        judged = next((j for j in check.judgements if j.wbs_id == target_key), None)
+        facts = completion.facts_from(cur, judged, check.tree_sha)
+        item = completion.current_item(cur, project_id, wbs_id=target_key)
         return f"{match.wbs_id} {match.name.strip()}", {
             "actual": match.actual,
             "declared_planned": match.declared_planned,
             "deliverable": match.deliverable,
+            "weight": float(item["weight"]) if item else None,
+            "file_check": facts["file_check"],
+            "file_rule": facts["file_rule"],
+            "file_ref": facts["file_ref"],
+            "repo_revision": facts["repo_revision"],
+            "submission": facts["submission"],
+            "approval": facts["approval"],
+            "product_version": facts["product_version"],
+            "plan_version": item["plan_version"] if item else None,
+            "task_key": str(item["task_key"]) if item else None,
+            "scope_hash": item["scope_hash"] if item else None,
             "end": _iso(match.end),
         }
 
