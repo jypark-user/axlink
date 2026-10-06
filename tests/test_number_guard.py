@@ -1,0 +1,198 @@
+"""수치 검문 (QUR.RAG.002, ARC-017). 모델 없이 도는 단위 시험이다."""
+
+import pytest
+
+from app.rag import number_guard as g
+
+AS_OF = g.as_of_date("2026-10-02T03:00:00Z")  # 서울 10-02 12:00
+
+
+def _checker(question: str = "") -> g.Checker:
+    facts = g.facts_from_lines(
+        ["- 이슈 상태 OPEN: 7건", "- 이슈 상태 CLOSED: 12건", "- 전체: 19건"],
+        "집계",
+        subject="이슈 건수",
+        as_of=AS_OF,
+    )
+    facts += g.facts_from_lines(
+        ["- 대표 진척률: 29.7%", "- 산출 근거: 검증완료 요구사항 수를 전체로 나눈다 (0건 / 41건)"],
+        "그림 1",
+        subject="진척률 요구사항 이행률",
+        as_of=AS_OF,
+    )
+    facts += g.facts_from_chunk(1, "총사업비는 18,000,000원이다. 2026년 11월 30일까지 수행한다.")
+    subjects = g.DOMAIN_TERMS | g.keywords("이슈 건수 진척률 요구사항 이행률")
+    return g.Checker(facts, question=question, subjects=subjects)
+
+
+def _reasons(checker: g.Checker, sentence: str) -> list[str]:
+    return [f"{v.value}{v.unit}:{v.reason}" for v in checker.check(sentence)]
+
+
+# ---------------------------------------------------------------- 정상 응답
+
+
+@pytest.mark.parametrize(
+    "sentence",
+    [
+        "열린 이슈 7건, 닫힌 이슈 12건, 모두 19건입니다.",
+        "진척률은 29.7%입니다.",
+        "검증된 요구사항은 41건 중 0건입니다.",
+        "총사업비는 18,000,000원입니다[1].",
+        "사업비는 18,000,000원입니다.",
+    ],
+)
+def test_집계값과_출처있는_문서값은_통과한다(sentence):
+    assert _reasons(_checker(), sentence) == []
+
+
+def test_대상어가_없는_짧은_답은_질문의_대상어로_본다():
+    assert _reasons(_checker("진척률이 얼마나 돼?"), "29.7%입니다.") == []
+    assert _reasons(_checker("이슈는 몇 건이야?"), "그중 7건이 열려 있습니다.") == []
+
+
+def test_같은_지표를_다른_말로_불러도_통과한다():
+    assert _reasons(_checker(), "진행률은 29.7%입니다.") == []
+
+
+# ---------------------------------------------------------------- 차단
+
+
+def test_근거에_없는_값은_막는다():
+    assert _reasons(_checker(), "이슈는 모두 977건입니다.") == ["977건:근거에 없는 값"]
+
+
+def test_반올림한_값도_지어낸_값이다():
+    assert _reasons(_checker(), "진척률은 약 30%입니다.") == ["30%:근거에 없는 값"]
+
+
+def test_숫자가_같아도_단위가_다르면_막는다():
+    assert _reasons(_checker(), "진척률은 7%입니다.") == ["7%:단위 불일치"]
+
+
+def test_숫자가_같아도_대상이_다르면_막는다():
+    # 7건은 이슈의 값이다. 결함 7건이라고 말하면 안 된다
+    assert _reasons(_checker("결함은 몇 건이야?"), "결함은 7건입니다.") == ["7건:대상 불일치"]
+    assert _reasons(_checker(), "이슈 처리에 18,000,000원이 들었습니다.") == [
+        "18000000원:대상 불일치"
+    ]
+
+
+def test_기준_시점이_다르면_막는다():
+    assert _reasons(_checker(), "2026-09-01 기준 진척률은 29.7%입니다.") == [
+        "29.7%:기준 시점 불일치"
+    ]
+    # 같은 날이면 통과한다
+    assert _reasons(_checker(), "10월 2일 기준 진척률은 29.7%입니다.") == []
+
+
+def test_질문의_숫자는_근거가_아니다():
+    ck = _checker("진척률이 30% 넘었어?")
+    assert _reasons(ck, "네, 진척률은 30%를 넘었습니다.") == ["30%:근거에 없는 값"]
+
+
+def test_앞_답의_숫자도_근거가_아니다():
+    # 앞 답은 Fact 에 넣지 않는다. 같은 문장을 다시 써도 근거가 없으면 막힌다
+    ck = _checker("아까 말한 결함 수 다시 알려줘")
+    assert _reasons(ck, "결함은 23건입니다.") == ["23건:근거에 없는 값"]
+
+
+# ---------------------------------------------------------------- 오탐 방지
+
+
+@pytest.mark.parametrize(
+    "sentence",
+    [
+        "M4 는 2026-10-23 까지다.",
+        "10월 23일까지 마치고 10-23 에 보고한다.",
+        "10.23까지 올린다.",
+        "13:40 에 동기화했다.",
+        "v0.4 초안과 버전 2 문서를 본다.",
+        "SWFR.RAG.007 과 QUR.RAG.002, GH-23, ARC-010, V44 를 본다.",
+        "qwen3:8b 와 bge-m3 를 쓴다.",
+        "WBS 3.3 과 3.2절, 제3조, 5.2.1 항목을 본다.",
+        "PR #108 을 병합했다.",
+        "1) 시험을 만든다 → 2) 결과를 올린다. 3단계면 끝.",
+        "근거는 [1] 과 [2] 이고 [그림 1] 에 있다.",
+        "① 수집 ② 표준화 ③ 집계",
+    ],
+)
+def test_날짜_버전_번호는_수치로_보지_않는다(sentence):
+    assert g.quantities(sentence) == []
+    assert _reasons(_checker(), sentence) == []
+
+
+def test_목록_번호_뒤의_건수는_여전히_본다():
+    assert g.quantities("1) 결과서 3건을 올린다") == [("3", "건")]
+    assert g.quantities("이슈 1,200건, 진척 42.50%") == [("1200", "건"), ("42.5", "%")]
+
+
+# ---------------------------------------------------------------- 스트리밍
+
+
+def test_검사_전에는_숫자가_화면에_나가지_않는다():
+    gate = g.SentenceGate(_checker("이슈 몇 건?"))
+    shown = []
+    pieces = [
+        "현재 상황을 ",
+        "말씀드리면 열린 이슈는 ",
+        "9",
+        "77건입니다. ",
+        "닫힌 이슈는 12건입니다.",
+    ]
+    for piece in pieces:
+        shown.append(gate.feed(piece))
+    shown.append(gate.finish())
+    # 숫자가 없는 앞부분은 바로 나간다
+    assert shown[0] == "현재 상황을 " and shown[1] == "말씀드리면 열린 이슈는 "
+    # '9' 가 들어온 순간에는 아무것도 안 나간다. 문장이 끝날 때까지 들고 있는다
+    assert shown[2] == ""
+    # 지어낸 977건 문장은 안내 한 줄로 바뀐다. 977 은 어떤 조각에도 없다
+    assert shown[3].startswith(g.BLOCKED_NOTE)
+    assert all("977" not in s and "9" not in s for s in shown)
+    # 맞는 문장은 끝에 나간다
+    assert "".join(shown).endswith("닫힌 이슈는 12건입니다.")
+    assert gate.blocked == 1 and gate.violations[0].reason == "근거에 없는 값"
+
+
+def test_숫자가_조각_경계에_걸려도_합쳐서_본다():
+    gate = g.SentenceGate(_checker())
+    out = gate.feed("진척률은 29.") + gate.feed("7%입니다.") + gate.finish()
+    assert out == "진척률은 29.7%입니다."
+    assert gate.blocked == 0
+
+
+def test_통과한_문장은_원문_그대로_나간다():
+    gate = g.SentenceGate(_checker())
+    text = "열린 이슈 7건입니다.\n총사업비는 18,000,000원입니다[1]. 끝."
+    out = "".join(gate.feed(ch) for ch in text) + gate.finish()
+    assert out == text
+
+
+SPLIT_SAFE = [
+    "등록된 리스크입니다. \n[그림 1]",
+    "근거대로 답합니다[1]. 끝.",
+    "SWFR.RAG.007 은 v0.4 에서 WBS 3.3 으로 M4 에 잡혀 있다.",
+    "열린 이슈는 7건입니다[1].",
+]
+
+
+@pytest.mark.parametrize("text", SPLIT_SAFE)
+def test_표식과_식별자가_조각_경계에서_끊겨도_오탐하지_않는다(text):
+    """10-02 실측: '[그림 ' 과 '1]' 로 끊겨 와서 '1' 이 수치로 막혔다. 어디서 끊겨도 같아야 한다."""
+    # 한 글자씩(가장 잘게)
+    gate = g.SentenceGate(_checker("이슈 몇 건?"))
+    out = "".join(gate.feed(ch) for ch in text) + gate.finish()
+    assert out == text and gate.blocked == 0
+    # 두 조각으로 나눌 수 있는 모든 자리
+    for cut in range(1, len(text)):
+        gate = g.SentenceGate(_checker("이슈 몇 건?"))
+        out = gate.feed(text[:cut]) + gate.feed(text[cut:]) + gate.finish()
+        assert out == text and gate.blocked == 0, cut
+
+
+def test_지어낸_숫자는_한_글자씩_와도_한_번도_나가지_않는다():
+    gate = g.SentenceGate(_checker("이슈 몇 건?"))
+    shown = [gate.feed(ch) for ch in "열린 이슈는 977건입니다. "] + [gate.finish()]
+    assert all("9" not in s and "7" not in s for s in shown)
+    assert gate.blocked == 1

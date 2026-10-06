@@ -1,17 +1,15 @@
-"""답변 생성의 재료. 프롬프트 조립, 수치 검문, 근거 부족 문안.
+"""답변 생성의 재료. 프롬프트 조립과 근거 부족 문안.
 
 수치는 두 곳에서만 온다. 시맨틱 레이어의 집계 값과 근거 청크의 원문이다(QUR.RAG.002).
-프롬프트로 그렇게 지시하고, 생성이 끝난 뒤 답변의 숫자를 그 두 곳과 대조한다.
+프롬프트로 그렇게 지시하고, 내보내기 전에 문장마다 검사한다(number_guard, ARC-017).
 지시만으로는 경량 모델을 못 믿는다.
 """
 
 import json
-import re
 from collections.abc import Iterator
 from dataclasses import dataclass, field
 from typing import Any
 
-from app.common import korean
 from app.config import settings
 from app.rag import blocks as blocks_mod
 from app.rag.routing import PreviousTurn, render_previous
@@ -50,11 +48,6 @@ ANSWER_SCHEMA: dict[str, Any] = {
 _ANSWER_KEY = '"answer"'
 _ESCAPES = {"n": "\n", "t": "\t", "r": "\r", "b": "\b", "f": "\f", "/": "/", "\\": "\\", '"': '"'}
 
-_FOOTNOTE = re.compile(r"\[\d{1,2}\]")
-_DATE = re.compile(r"\d{4}[-./]\d{1,2}[-./]\d{1,2}|\d{4}년|\d{1,2}월|\d{1,2}일")
-# 절차를 단계로 쓸 때의 번호("1) …", "2. …", "3단계"). 수치가 아니다
-_STEP = re.compile(r"(?:^|(?<=\s)|(?<=→)\s*)\d{1,2}(?:\)|\.\s|단계)")
-_NUMBER = re.compile(r"\d+(?:[.,]\d+)*")
 _THINK_OPEN = "<think>"
 _THINK_CLOSE = "</think>"
 
@@ -171,54 +164,6 @@ def snippet(chunk: RetrievedChunk, limit: int | None = None) -> str:
         body = body[:cap].rstrip() + "…"
     where = location_label(chunk)
     return f"{where.strip(' ()')}\n{body}" if where else body
-
-
-# ---------------------------------------------------------------- 수치 검문
-
-
-def numbers_in(text: str) -> set[str]:
-    """본문의 숫자를 정규화한 문자열 집합으로. 각주 번호·그림 표식·날짜·단계 번호는 수치가
-    아니라 뺀다."""
-    body = blocks_mod.MARKER.sub(" ", text)
-    body = _FOOTNOTE.sub(" ", body)
-    body = _DATE.sub(" ", body)
-    body = _STEP.sub(" ", body)
-    found: set[str] = set()
-    for m in _NUMBER.finditer(body):
-        found.add(_normalize(m.group(0)))
-    return found
-
-
-def _normalize(token: str) -> str:
-    plain = token.replace(",", "")
-    try:
-        value = float(plain)
-    except ValueError:
-        return plain
-    return str(int(value)) if value.is_integer() else f"{value:g}"
-
-
-def ungrounded_numbers(answer: str, grounds: list[str]) -> list[str]:
-    """답변에는 있는데 집계 값·근거 원문·질문 어디에도 없는 숫자."""
-    allowed: set[str] = set()
-    for ground in grounds:
-        allowed |= numbers_in(ground)
-    return sorted(numbers_in(answer) - allowed, key=_sort_key)
-
-
-def _sort_key(token: str) -> tuple[float, str]:
-    try:
-        return (float(token), token)
-    except ValueError:
-        return (float("inf"), token)
-
-
-def guard_note(numbers: list[str]) -> str:
-    listed = ", ".join(numbers)
-    return (
-        f"\n\n※ 위 답변의 수치 {korean.attach(listed, '은')} 집계 값과 근거 원문에 없는 값입니다. "
-        "화면의 집계 값을 기준으로 보십시오."
-    )
 
 
 # ---------------------------------------------------------------- 문안

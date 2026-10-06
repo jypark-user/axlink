@@ -16,7 +16,7 @@ from app.ai.embedding import FakeEmbedding
 from app.ai.port import LlmResult
 from app.config import settings
 from app.db import tx
-from app.rag import indexing
+from app.rag import indexing, number_guard
 from app.rag import service as ask_service
 from tests.conftest import requires_db
 
@@ -335,24 +335,49 @@ def test_값이_하나인_집계는_그림_없이_글로만_답한다(client, co
 
 
 @requires_db
-def test_집계에_없는_숫자를_지어내면_표시가_붙는다(client, conversation, monkeypatch):
+def test_집계에_없는_숫자는_화면에_나가기_전에_막는다(client, conversation, monkeypatch):
+    """QUR.RAG.002, ARC-017. 지어낸 숫자는 어떤 조각에도 실리지 않고 저장도 안 된다."""
+    with tx() as cur:
+        expected = cur.execute(
+            "select count(*) as n from issue where project_id = %s", (PID,)
+        ).fetchone()["n"]
     scripted = ScriptedLlm(
         {"route": "AGGREGATE", "measure": "issue_count", "template": "STAT_CARD"},
-        "이슈는 모두 977건이고 그중 41건이 지연입니다.",
+        f"현재 이슈는 모두 {expected}건입니다. 그중 977건이 지연입니다. 확인해 보십시오.",
     )
     monkeypatch.setattr(ask_service, "llm_port", lambda: scripted)
     monkeypatch.setattr(settings, "rag_min_similarity", 0.99)
 
     conversation_id, token = conversation()
     events = _ask(client, token, conversation_id, "이슈 건수는?")
-    text = "".join(d["text"] for e, d in events if e == "delta")
-    assert "977" in text and "※" in text and "41" in text.split("※")[1]
+    deltas = [d["text"] for e, d in events if e == "delta"]
+    text = "".join(deltas)
+    assert all("977" not in piece for piece in deltas)  # 검사 전에도 나간 적이 없다
+    assert f"현재 이슈는 모두 {expected}건입니다." in text  # 맞는 문장은 그대로 나간다
+    assert number_guard.BLOCKED_NOTE in text and "확인해 보십시오." in text
     assert events[-1][1]["finishReason"] == "NUMBER_GUARD"
 
     messages = client.get(
         f"/api/conversations/{conversation_id}/messages", headers=_auth(token)
     ).json()
-    assert "※" in messages[1]["content"]  # 표시까지 저장된다
+    assert "977" not in messages[1]["content"]  # 저장 본문도 화면과 같다
+    assert number_guard.BLOCKED_NOTE in messages[1]["content"]
+
+
+@requires_db
+def test_질문에_나온_숫자를_그대로_말해도_근거가_아니다(client, conversation, monkeypatch):
+    scripted = ScriptedLlm(
+        {"route": "AGGREGATE", "measure": "issue_count", "template": "STAT_CARD"},
+        "네, 이슈는 500건이 넘습니다.",
+    )
+    monkeypatch.setattr(ask_service, "llm_port", lambda: scripted)
+    monkeypatch.setattr(settings, "rag_min_similarity", 0.99)
+
+    conversation_id, token = conversation()
+    events = _ask(client, token, conversation_id, "이슈가 500건 넘었어?")
+    text = "".join(d["text"] for e, d in events if e == "delta")
+    assert "500" not in text
+    assert events[-1][1]["finishReason"] == "NUMBER_GUARD"
 
 
 @requires_db

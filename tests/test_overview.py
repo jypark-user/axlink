@@ -124,12 +124,13 @@ def test_현황_질문은_현황_그림으로_답한다(client, conversation, mo
     # 프롬프트에 그림 절이 들어갔고, 서버가 쓴 안내문은 없다(현황 경로는 못 찾은 게 아니다)
     assert "## 그림 1" in scripted.prompts[0]
     text = "".join(d["text"] for e, d in events if e == "delta")
-    assert not text.startswith(overview.LEAD.strip()[:10])
+    assert not text.startswith(overview.REFERENCE_LEAD.strip()[:10])
 
 
 @requires_db
-def test_근거에_막힌_문서_질문은_현황으로_내려간다(client, conversation, monkeypatch):
-    scripted = _Scripted({"route": "DOCUMENT", "query": "걱정"}, "열린 이슈가 있습니다. [그림 1]")
+def test_근거에_막힌_문서_질문은_답하지_않고_참고_현황만_붙인다(client, conversation, monkeypatch):
+    """SWFR.RAG.007, ARC-017. 모델은 원질문에 답하지 않는다. 현황은 참고로만 보인다."""
+    scripted = _Scripted({"route": "DOCUMENT", "query": "걱정"}, "안 불려야 한다")
     monkeypatch.setattr(ask_service, "llm_port", lambda: scripted)
     monkeypatch.setattr(settings, "rag_min_similarity", 0.99)
 
@@ -137,9 +138,16 @@ def test_근거에_막힌_문서_질문은_현황으로_내려간다(client, con
     events = _ask(client, token, cid, "뭐가 제일 걱정이야?")
     assert events[0][1]["routing"]["type"] == "OVERVIEW"
     text = "".join(d["text"] for e, d in events if e == "delta")
-    assert text.startswith("질문에 꼭 맞는 문서는 찾지 못했습니다")
-    assert [d for e, d in events if e == "infographic"]
-    assert events[-1][1]["finishReason"] == "STOP"
+    assert text.startswith("질문에 맞는 문서 근거를 찾지 못해 답변을 만들지 않았습니다")
+    assert "참고 현황" in text and "답의 근거가 아닙니다" in text
+    assert "안 불려야" not in text
+    assert scripted.prompts == []  # 본문을 쓰는 모델 호출이 없다
+    made = [d for e, d in events if e == "infographic"]
+    assert made and all(b["title"].startswith(overview.REFERENCE_TITLE) for b in made)
+    # 그림 표식은 서버가 붙인다. 문서 출처는 없다
+    assert all(f"[그림 {b['slot']}]" in text for b in made)
+    assert next(d for e, d in events if e == "sources")["sources"] == []
+    assert events[-1][1]["finishReason"] == "NO_EVIDENCE"
     # 내려간 판정은 캐시하지 않는다. 다음엔 다시 묻는다
     with tx() as cur:
         n = cur.execute(

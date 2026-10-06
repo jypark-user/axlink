@@ -28,7 +28,16 @@ from app.common import errors, korean
 from app.common.paging import PageQuery, PageResponse
 from app.config import settings
 from app.db import tx
-from app.rag import answer, blocks, entity_table, overview, route_cache, routing, search
+from app.rag import (
+    answer,
+    blocks,
+    entity_table,
+    number_guard,
+    overview,
+    route_cache,
+    routing,
+    search,
+)
 from app.rag import conversation_repository as repo
 from app.rag.models import (
     AskRequest,
@@ -284,8 +293,8 @@ def stream(p: Prepared) -> Iterator[bytes]:
                 decision = routing.RouteDecision(
                     type=routing.DOCUMENT, rewritten=decision.rewritten
                 )
-            # 근거도 그림도 없으면 현황으로 내려간다. "답을 만들지 않았다" 보다 "맞는 문서는 없지만
-            # 지금 상태는 이렇다" 가 낫다. 데이터가 아예 없는 사업에서만 예전처럼 막는다.
+            # 근거도 그림도 없으면 참고 현황을 붙인다(ARC-017). 원질문의 답은 만들지 않는다.
+            # 현황 그림은 질문과 별개라는 표시와 함께 보이고, 모델은 부르지 않는다.
             used_fallback = False
             if (
                 decision.type == routing.DOCUMENT
@@ -293,7 +302,8 @@ def stream(p: Prepared) -> Iterator[bytes]:
                 and not block_list
                 and settings.rag_overview_fallback
             ):  # OFF_TOPIC 은 여기 오지 않는다. 무관한 질문에 현황을 내지 않는다
-                block_list.extend(overview.build(cur, p.principal, p.scope, 1))
+                made = overview.build(cur, p.principal, p.scope, 1)
+                block_list.extend(overview.as_reference(made))
                 used_fallback = bool(block_list)
             route_type = _route_type(decision.type, gate_ok)
             if used_overview or used_fallback:
@@ -336,13 +346,16 @@ def stream(p: Prepared) -> Iterator[bytes]:
             ),
         )
 
-        if used_fallback:
-            # 서버가 첫 줄을 쓴다. 문서를 못 찾았다는 말은 모델에게 맡기지 않는다
-            pieces.append(overview.LEAD)
-            yield _sse("delta", SseDeltaEvent(text=overview.LEAD))
         if decision.type == routing.OFF_TOPIC:
             # 사업과 무관한 질문. 현황으로 내려가면 날씨를 물었는데 진척률이 나온다
             text = answer.off_topic()
+            pieces.append(text)
+            yield _sse("delta", SseDeltaEvent(text=text))
+            finish_reason = "NO_EVIDENCE"
+        elif used_fallback:
+            # 근거 게이트(SWFR.RAG.007, ARC-017). 문서 근거가 없으니 원질문에 답하지 않는다.
+            # 참고 현황 그림만 서버 문안과 함께 붙인다. 출처·각주는 없다.
+            text = overview.REFERENCE_LEAD + blocks.append_missing("", block_list).lstrip()
             pieces.append(text)
             yield _sse("delta", SseDeltaEvent(text=text))
             finish_reason = "NO_EVIDENCE"
@@ -369,34 +382,38 @@ def stream(p: Prepared) -> Iterator[bytes]:
             prompt = answer.user_prompt(
                 p.question, chunks, aggregate, scope_line, block_list, previous
             )
+            # 수치 검문(QUR.RAG.002, ARC-017). 숫자가 든 문장은 검사를 통과해야 나간다.
+            gate = number_guard.SentenceGate(
+                number_guard.Checker(
+                    _facts(aggregate, block_list, chunks, scope_line),
+                    question=p.question,
+                    subjects=_subjects(aggregate, block_list),
+                )
+            )
             raw = llm.stream(answer.SYSTEM_PROMPT, prompt, json_schema=answer.ANSWER_SCHEMA)
             for piece in answer.decode_answer(answer.strip_think(raw)):
-                pieces.append(piece)
-                yield _sse("delta", SseDeltaEvent(text=piece))
+                text = gate.feed(piece)
+                if text:
+                    pieces.append(text)
+                    yield _sse("delta", SseDeltaEvent(text=text))
+            text = gate.finish()
+            if text:
+                pieces.append(text)
+                yield _sse("delta", SseDeltaEvent(text=text))
             # 본문이 표식을 안 쓴 그림은 끝에 붙인다. 만든 그림을 조용히 버리지 않는다.
             tail = blocks.append_missing("".join(pieces), block_list)
             if tail:
                 pieces.append(tail)
                 yield _sse("delta", SseDeltaEvent(text=tail))
             finish_reason = "STOP"
-            grounds = [p.question, *(c.content for c in chunks)]
-            # 앞 답의 숫자는 그때 이미 검문을 지났다
-            grounds.extend(t.answer for t in previous)
-            if scope_line:
-                grounds.append(scope_line)
-            if aggregate is not None:
-                grounds.extend(aggregate.lines)
-            for block in block_list:
-                grounds.extend(block.lines)
-                if block.note:
-                    grounds.append(block.note)
-            bad = answer.ungrounded_numbers("".join(pieces), grounds)
-            if bad:
-                # 지시를 어기고 만든 숫자는 지우지 못한다(이미 화면에 나갔다). 표시하고 남긴다.
-                note = answer.guard_note(bad)
-                pieces.append(note)
-                yield _sse("delta", SseDeltaEvent(text=note))
+            if gate.blocked:
+                # 막힌 문장은 화면에도 저장 본문에도 없다. 무엇이 왜 막혔는지만 남긴다
                 finish_reason = "NUMBER_GUARD"
+                log.info(
+                    "수치 검문이 문장 %d개를 막았다: %s",
+                    gate.blocked,
+                    ", ".join(f"{v.value}{v.unit}({v.reason})" for v in gate.violations),
+                )
 
         sources = [_source_from_chunk(i, c) for i, c in enumerate(chunks, 1)]
         yield _sse("sources", SseSourcesEvent(sources=sources))
@@ -543,6 +560,49 @@ def _message(row: dict[str, Any], sources: list[MessageSourceResponse]) -> Messa
         infographics=infographics,
         latencyMs=row.get("latency_ms"),
     )
+
+
+def _facts(
+    aggregate: answer.AggregateContext | None,
+    block_list: list[blocks.Block],
+    chunks: list[RetrievedChunk],
+    scope_line: str | None,
+) -> list[number_guard.Fact]:
+    """수치 검문이 근거로 인정하는 값. 질문과 앞 답의 숫자는 넣지 않는다(ARC-017)."""
+    facts: list[number_guard.Fact] = []
+    if aggregate is not None:
+        facts += number_guard.facts_from_lines(
+            aggregate.lines,
+            "집계",
+            subject=f"{aggregate.title} {aggregate.data.measureLabel}",
+            as_of=number_guard.as_of_date(aggregate.data.generatedAt),
+        )
+    for block in block_list:
+        lines = [*block.lines, *([block.note] if block.note else [])]
+        data = block.data
+        facts += number_guard.facts_from_lines(
+            lines,
+            f"그림 {block.slot}",
+            subject=f"{block.title} {getattr(data, 'measureLabel', '')}",
+            as_of=number_guard.as_of_date(getattr(data, "generatedAt", None)),
+        )
+    for no, chunk in enumerate(chunks, 1):
+        facts += number_guard.facts_from_chunk(no, chunk.content)
+    if scope_line:
+        facts += number_guard.facts_from_lines([scope_line], "목록 범위")
+    return facts
+
+
+def _subjects(
+    aggregate: answer.AggregateContext | None, block_list: list[blocks.Block]
+) -> frozenset[str]:
+    """수치의 대상어 사전. 기본 사전에 이번 답의 집계·그림 제목과 지표명을 더한다."""
+    names = []
+    if aggregate is not None:
+        names += [aggregate.title, aggregate.data.measureLabel]
+    for block in block_list:
+        names += [block.title, getattr(block.data, "measureLabel", "")]
+    return number_guard.DOMAIN_TERMS | number_guard.keywords(" ".join(names))
 
 
 def _source_row(footnote_no: int, chunk: RetrievedChunk) -> dict[str, Any]:
