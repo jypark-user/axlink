@@ -4,6 +4,7 @@
 ORM 을 쓰지 않는 이유 중 하나다(작업 규약 §1).
 """
 
+from dataclasses import dataclass
 from typing import Any
 
 from app.common.paging import PageQuery
@@ -359,16 +360,44 @@ _REQUIREMENT_COLUMNS = """
     r.id, r.project_id, r.code, r.title, r.priority, r.status, r.assignee,
     r.tool_connection_id, r.external_id, r.external_url, r.source_kind, r.updated_at,
     c.tool as tool_name,
+    {source_state} as source_state,
     exists (
       select 1 from trace_link tl
        where tl.to_type = 'REQUIREMENT' and tl.to_id = r.id
          and tl.link_kind = 'TESTS' and tl.status = 'ACTIVE'
     ) as trace_complete
 """
+# 원천 이슈 상태는 수집한 원천 기록에서 읽는다. 내부 상태(IMPLEMENTED 등)에서 역산하지 않는다.
+# 지금 요구사항을 만드는 원천은 GitHub 뿐이라 GitHub 의 state 만 읽는다. 다른 도구는 UNKNOWN
+_SOURCE_STATE = """
+    case
+      when r.tool_connection_id is null then 'NONE'
+      when c.tool = 'GITHUB' and ra.payload_jsonb ->> 'state' = 'open' then 'OPEN'
+      when c.tool = 'GITHUB' and ra.payload_jsonb ->> 'state' = 'closed' then 'CLOSED'
+      else 'UNKNOWN'
+    end
+"""
+_REQUIREMENT_COLUMNS = _REQUIREMENT_COLUMNS.replace("{source_state}", _SOURCE_STATE.strip())
 _REQUIREMENT_FROM = """
     from requirement r
     left join tool_connection c on c.id = r.tool_connection_id
+    left join raw_artifact ra
+      on ra.tool_connection_id = r.tool_connection_id and ra.external_id = r.external_id
 """
+
+VERIFIED_STATUSES = ("VERIFIED", "ACCEPTED")
+REQUIREMENT_STATUSES = ("DEFINED", "DESIGNED", "IMPLEMENTED", "VERIFIED", "ACCEPTED", "REJECTED")
+
+
+@dataclass(frozen=True)
+class RequirementFilter:
+    """요구사항 목록 조건. 요약 카드를 누르면 이 중 하나가 걸린다. 비어 있으면 사업 전체다."""
+
+    q: str | None = None
+    status: str | None = None
+    verified: bool | None = None
+    source_state: str | None = None  # OPEN | CLOSED | UNKNOWN | NONE
+    connection_id: str | None = None
 
 
 def _search(q: str | None) -> tuple[str, list[Any]]:
@@ -383,27 +412,86 @@ def _search(q: str | None) -> tuple[str, list[Any]]:
     return " and (r.code ilike %s or r.title ilike %s)", [like, like]
 
 
-def count_requirements(cur: Any, project_id: str, q: str | None) -> int:
-    where, params = _search(q)
+def _requirement_where(f: RequirementFilter) -> tuple[str, list[Any]]:
+    where, params = _search(f.q)
+    if f.status:
+        where += " and r.status = %s"
+        params.append(f.status)
+    if f.verified is not None:
+        where += f" and r.status {'' if f.verified else 'not '}in ('VERIFIED', 'ACCEPTED')"
+    if f.source_state:
+        where += f" and ({_SOURCE_STATE}) = %s"
+        params.append(f.source_state)
+    if f.connection_id:
+        where += " and r.tool_connection_id = %s"
+        params.append(f.connection_id)
+    return where, params
+
+
+def count_requirements(cur: Any, project_id: str, f: RequirementFilter) -> int:
+    where, params = _requirement_where(f)
     row = fetch_one(
         cur,
-        f"select count(*) as n from requirement r where r.project_id = %s {where}",
+        f"select count(*) as n {_REQUIREMENT_FROM} where r.project_id = %s {where}",
         (project_id, *params),
     )
     return int(row["n"]) if row else 0
 
 
+def requirement_summary(cur: Any, project_id: str) -> dict[str, Any]:
+    """요구사항 화면 요약. 목록과 같은 FROM·같은 사업 조건이고 쪽과 상관없다."""
+    totals = fetch_one(
+        cur,
+        f"""
+        select count(*) as total,
+               count(*) filter (where r.status in ('VERIFIED', 'ACCEPTED')) as verified,
+               -- mapping.requirement_status_basis 와 같은 규칙. GitHub 닫힘이 만든 IMPLEMENTED
+               count(*) filter (where r.status = 'IMPLEMENTED' and c.tool = 'GITHUB')
+                 as implemented_from_source_closed
+          {_REQUIREMENT_FROM}
+         where r.project_id = %s
+        """,
+        (project_id,),
+    )
+    by_status = fetch_all(
+        cur,
+        "select status, count(*) as n from requirement where project_id = %s group by status",
+        (project_id,),
+    )
+    sources = fetch_all(
+        cur,
+        f"""
+        select r.tool_connection_id as connection_id, c.tool, c.name, c.target_resource,
+               count(*) as total,
+               count(*) filter (where ({_SOURCE_STATE}) = 'OPEN') as open,
+               count(*) filter (where ({_SOURCE_STATE}) = 'CLOSED') as closed,
+               count(*) filter (where ({_SOURCE_STATE}) = 'UNKNOWN') as unknown
+          {_REQUIREMENT_FROM}
+         where r.project_id = %s
+         group by r.tool_connection_id, c.tool, c.name, c.target_resource
+         order by r.tool_connection_id is null, c.tool, c.name
+        """,
+        (project_id,),
+    )
+    return {
+        "total": int(totals["total"]),
+        "verified": int(totals["verified"]),
+        "implemented_from_source_closed": int(totals["implemented_from_source_closed"]),
+        "by_status": {r["status"]: int(r["n"]) for r in by_status},
+        "sources": sources,
+    }
+
 
 def search_requirements(
-    cur: Any, project_id: str, q: str | None, page: PageQuery
+    cur: Any, project_id: str, f: RequirementFilter, page: PageQuery
 ) -> list[dict[str, Any]]:
-    where, params = _search(q)
+    where, params = _requirement_where(f)
     return fetch_all(
         cur,
         f"""
         select {_REQUIREMENT_COLUMNS} {_REQUIREMENT_FROM}
          where r.project_id = %s {where}
-         order by r.code nulls last, r.created_at
+         order by r.code nulls last, r.created_at, r.id
          limit %s offset %s
         """,
         (project_id, *params, page.size, page.offset),
@@ -466,10 +554,38 @@ def count_issues(cur: Any, project_id: str, q: str | None, status: str | None) -
     return int(row["n"]) if row else 0
 
 
+# 이슈 화면 "심각·높음" 카드. ck_issue__severity 의 위 세 단계다
+HEAVY_SEVERITIES = ("BLOCKER", "CRITICAL", "MAJOR")
+
+
+def issue_summary(cur: Any, project_id: str) -> dict[str, int]:
+    """이슈 화면 카드 숫자. 목록과 같은 테이블·같은 사업 조건이고 페이지와 무관하다."""
+    row = fetch_one(
+        cur,
+        """
+        select count(*) as total,
+               count(*) filter (where status in ('OPEN', 'IN_PROGRESS')) as open,
+               count(*) filter (where status in ('RESOLVED', 'CLOSED')) as closed,
+               count(*) filter (where status in ('OPEN', 'IN_PROGRESS')
+                                  and severity = any(%s)) as heavy_open,
+               count(*) filter (where status in ('OPEN', 'IN_PROGRESS')
+                                  and nullif(btrim(assignee), '') is null) as unassigned_open
+          from issue
+         where project_id = %s
+        """,
+        (list(HEAVY_SEVERITIES), project_id),
+    )
+    return {k: int(row[k]) for k in ("total", "open", "closed", "heavy_open", "unassigned_open")}
+
+
 def search_issues(
     cur: Any, project_id: str, q: str | None, status: str | None, page: PageQuery
 ) -> list[dict[str, Any]]:
-    """열린 것이 위로, 그 안에서는 원천에서 최근 움직인 순서다. 감독이 볼 순서가 그렇다."""
+    """열린 것이 위로, 그 안에서는 원천에서 최근 움직인 순서다. 감독이 볼 순서가 그렇다.
+
+    끝의 id 는 동점 정리다. 한 번에 승격된 행은 시각이 같아서, 이게 없으면 쪽을 넘길 때
+    같은 행이 두 번 나오고 어떤 행은 한 번도 안 나온다.
+    """
     where, params = _issue_filter(q, status)
     return fetch_all(
         cur,
@@ -477,7 +593,7 @@ def search_issues(
         select {_ISSUE_COLUMNS} {_ISSUE_FROM}
          where i.project_id = %s {where}
          order by (i.status in ('RESOLVED', 'CLOSED')), i.source_updated_at desc nulls last,
-                  i.updated_at desc
+                  i.updated_at desc, i.id
          limit %s offset %s
         """,
         (project_id, *params, page.size, page.offset),

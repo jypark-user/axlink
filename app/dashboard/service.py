@@ -91,10 +91,11 @@ def compute(cur: Any, project_id: str, at: date) -> ProgressResponse:
         value=_ratio(issue_done, issue_total),
         numerator=issue_done,
         denominator=issue_total,
-        label="이슈 해결률",
+        label="일반 이슈 해결률",
         unit="건",
         kind=OBSERVED,
-        note=None if issue_total else "연동된 이슈가 없다",
+        # 요구사항으로 분류된 원천 이슈는 requirement 로 가서 분모에 없다. 범위를 같이 보인다
+        note="요구사항으로 분류된 항목 제외" if issue_total else "연동된 일반 이슈가 없다",
     )
     product_measure = ProgressMeasure(
         value=_ratio(product_done, product_total),

@@ -24,6 +24,7 @@ from app.standard import mapping, mapping_redmine, repository, work_product_type
 from app.standard.mapping_rules import MappingRules
 from app.standard.models import (
     IssueResponse,
+    IssueSummaryResponse,
     RequirementResponse,
     SourceRef,
     WorkProductChecklistResponse,
@@ -209,8 +210,9 @@ def list_requirements(
     if project_id not in allowed:
         raise errors.project_access_denied()
 
-    total = repository.count_requirements(cur, project_id, q)
-    rows = repository.search_requirements(cur, project_id, q, page)
+    f = repository.RequirementFilter(q=q)
+    total = repository.count_requirements(cur, project_id, f)
+    rows = repository.search_requirements(cur, project_id, f, page)
     content = [
         RequirementResponse(
             id=str(r["id"]),
@@ -224,10 +226,34 @@ def list_requirements(
             source=_source_ref(r),
             traceComplete=r["trace_complete"],
             updatedAt=r["updated_at"].isoformat(),
+            statusBasis=mapping.requirement_status_basis(r["status"], r["tool_name"]),
         )
         for r in rows
     ]
     return PageResponse.of(content, page, total)
+
+
+def _check_project(cur: Any, principal: AuthPrincipal, project_id: str) -> None:
+    allowed = auth_repo.allowed_project_ids(
+        cur, principal.role, principal.org_id, principal.user_id
+    )
+    if project_id not in allowed:
+        raise errors.project_access_denied()
+
+
+def issue_summary(
+    cur: Any, principal: AuthPrincipal, project_id: str
+) -> IssueSummaryResponse:
+    """이슈 화면 카드. 목록(list_issues)과 같은 권한 검사, 같은 사업 범위다."""
+    _check_project(cur, principal, project_id)
+    n = repository.issue_summary(cur, project_id)
+    return IssueSummaryResponse(
+        total=n["total"],
+        open=n["open"],
+        closed=n["closed"],
+        heavyOpen=n["heavy_open"],
+        unassignedOpen=n["unassigned_open"],
+    )
 
 
 def list_issues(
@@ -238,11 +264,7 @@ def list_issues(
     status: str | None,
     page: PageQuery,
 ) -> PageResponse[IssueResponse]:
-    allowed = auth_repo.allowed_project_ids(
-        cur, principal.role, principal.org_id, principal.user_id
-    )
-    if project_id not in allowed:
-        raise errors.project_access_denied()
+    _check_project(cur, principal, project_id)
 
     total = repository.count_issues(cur, project_id, q, status)
     rows = repository.search_issues(cur, project_id, q, status, page)

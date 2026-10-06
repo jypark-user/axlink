@@ -10,21 +10,30 @@ import { useProjectContext } from '@/components/layout/project-shell';
 import { api } from '@/lib/http';
 import { formatDateTime } from '@/lib/format';
 import { badgeVariantFor, label } from '@/lib/labels';
+import { fetchAllPages } from '@/lib/paging';
 import { toQueryString } from '@/lib/query';
 import { useAsync } from '@/lib/use-async';
-import type { IssueResponse, IssueStatus, PageResponse } from '@/types/api';
+import type { IssueResponse, IssueSummaryResponse, PageResponse } from '@/types/api';
 
-const OPEN_STATES: IssueStatus[] = ['OPEN', 'IN_PROGRESS'];
-/** 먼저 봐야 하는 심각도 — 도구마다 이름이 달라 넓게 잡는다. */
-const HEAVY = new Set(['BLOCKER', 'CRITICAL', 'HIGH', 'MAJOR']);
+/** 이 화면이 세는 범위. 요구사항 라벨이 붙은 원천 이슈는 요구사항으로 가서 여기 없다. */
+const GENERAL_ISSUE_SCOPE = '요구사항으로 분류된 항목 제외';
+const EMPTY_TEXT = '수집된 일반 이슈가 없습니다. 연동을 붙이면 도구의 이슈가 여기 쌓입니다.';
 
 export function IssuesPage(): ReactNode {
   const { project } = useProjectContext();
 
-  const state = useAsync<PageResponse<IssueResponse>>(
+  // 카드는 서버가 사업 전체를 센 값이다. 표가 받아 온 행 수와 상관없다.
+  const summary = useAsync<IssueSummaryResponse>(
+    () => api.get<IssueSummaryResponse>(`/projects/${project.id}/issues/summary`),
+    [project.id],
+  );
+  // 표는 검색·정렬을 손에서 하므로 끝까지 받는다.
+  const list = useAsync<IssueResponse[]>(
     () =>
-      api.get<PageResponse<IssueResponse>>(
-        `/projects/${project.id}/issues${toQueryString({ size: 100 })}`,
+      fetchAllPages((page, size) =>
+        api.get<PageResponse<IssueResponse>>(
+          `/projects/${project.id}/issues${toQueryString({ page, size })}`,
+        ),
       ),
     [project.id],
   );
@@ -33,50 +42,54 @@ export function IssuesPage(): ReactNode {
 
   return (
     <>
-      <PageHeader title="이슈" />
-      <DataState state={state} onRetry={state.reload}>
-        {(data) => {
-          const all = data.content;
-          const open = all.filter((i) => OPEN_STATES.includes(i.status));
-          const heavy = open.filter((i) => i.severity !== null && HEAVY.has(i.severity));
-          const unassigned = open.filter((i) => !i.assignee);
-          const done = all.length - open.length;
-
-          return (
-            <div className="@container flex flex-col gap-5">
-              <div className="grid grid-cols-2 gap-3 @2xl:grid-cols-4">
-                <MetricCard term="열린 이슈" value={open.length} hint={`전체 ${all.length}건`} />
-                <MetricCard
-                  term="심각·높음"
-                  value={heavy.length}
-                  hint="열린 것 중"
-                  tone={heavy.length > 0 ? 'text-destructive' : undefined}
-                />
-                <MetricCard
-                  term="담당 없음"
-                  value={unassigned.length}
-                  hint="열린 것 중"
-                  tone={unassigned.length > 0 ? 'text-warning' : undefined}
-                />
-                <MetricCard
-                  term="해결·닫힘"
-                  value={done}
-                  hint={all.length > 0 ? `${Math.round((done / all.length) * 100)}%` : '0%'}
-                />
-              </div>
-
-              <DataTable<IssueResponse, unknown>
-                columns={columns}
-                data={all}
-                filterColumn="title"
-                filterPlaceholder="이슈 제목으로 찾기"
-                pageSize={25}
-                emptyText="수집된 이슈가 없습니다. 연동을 붙이면 도구의 이슈가 여기 쌓입니다."
+      <PageHeader
+        title="일반 이슈"
+        description={`${GENERAL_ISSUE_SCOPE}. 요구사항은 사업 개요의 요구사항과 추적 화면에서 봅니다.`}
+      />
+      <div className="@container flex flex-col gap-5">
+        <DataState state={summary} onRetry={summary.reload}>
+          {(n) => (
+            <div className="grid grid-cols-2 gap-3 @2xl:grid-cols-4">
+              <MetricCard term="열린 일반 이슈" value={n.open} hint={`전체 ${n.total}건`} />
+              <MetricCard
+                term="심각·높음"
+                value={n.heavyOpen}
+                hint="열린 것 중"
+                tone={n.heavyOpen > 0 ? 'text-destructive' : undefined}
+              />
+              <MetricCard
+                term="담당 없음"
+                value={n.unassignedOpen}
+                hint="열린 것 중"
+                tone={n.unassignedOpen > 0 ? 'text-warning' : undefined}
+              />
+              <MetricCard
+                term="해결·닫힘"
+                value={n.closed}
+                hint={n.total > 0 ? `${Math.round((n.closed / n.total) * 100)}%` : '0%'}
               />
             </div>
-          );
-        }}
-      </DataState>
+          )}
+        </DataState>
+
+        <DataState
+          state={list}
+          onRetry={list.reload}
+          // 배열이 비면 DataState 가 표 대신 이 문구를 낸다
+          empty={{ text: EMPTY_TEXT }}
+        >
+          {(rows) => (
+            <DataTable<IssueResponse, unknown>
+              columns={columns}
+              data={rows}
+              filterColumn="title"
+              filterPlaceholder="이슈 제목으로 찾기"
+              pageSize={25}
+              emptyText={EMPTY_TEXT}
+            />
+          )}
+        </DataState>
+      </div>
     </>
   );
 }

@@ -68,6 +68,19 @@ def to_requirement(payload: dict[str, Any]) -> dict[str, Any]:
     }
 
 
+SOURCE_ISSUE_CLOSED = "SOURCE_ISSUE_CLOSED"
+
+
+def requirement_status_basis(status: str, tool: str | None) -> str | None:
+    """요구사항 상태의 출처. to_requirement 가 GitHub 닫힘으로 만든 IMPLEMENTED 만 짚는다.
+
+    다른 도구나 문서·수기로 들어온 상태는 이 규칙으로 생긴 게 아니라 None 이다.
+    """
+    if tool == "GITHUB" and status == "IMPLEMENTED":
+        return SOURCE_ISSUE_CLOSED
+    return None
+
+
 def to_issue(payload: dict[str, Any]) -> dict[str, Any]:
     closed = payload.get("state") == "closed"
     return {

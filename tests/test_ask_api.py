@@ -183,7 +183,7 @@ def test_추천_질문은_카탈로그_지표로_만든다(client, client_token)
     assert len(questions) >= 3 and any("이행률" in q for q in questions)
     # 조사는 라벨 끝소리에 맞춘다. "수은(는)" 같은 병기는 없다
     assert not any("(는)" in q or "(가)" in q for q in questions)
-    assert "열린 이슈 수는 지금 몇 건인가요?" in questions
+    assert "열린 일반 이슈 수는 지금 몇 건인가요?" in questions
     assert "요구사항 이행률은 현재 몇 퍼센트인가요?" in questions
 
 

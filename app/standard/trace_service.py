@@ -17,12 +17,15 @@ from app.auth import repository as auth_repo
 from app.auth.models import AuthPrincipal
 from app.common import errors
 from app.common.paging import PageQuery, PageResponse
-from app.standard import repository, trace_rules
+from app.standard import mapping, repository, trace_rules
 from app.standard.mapping_rules import MappingRules
 from app.standard.models import (
     EntityHistoryResponse,
     RequirementDetailResponse,
+    RequirementSummaryResponse,
     SourceRef,
+    SourceStateSummary,
+    StatusCount,
     TraceabilityRowResponse,
     TraceCell,
     TraceLinkResponse,
@@ -173,14 +176,60 @@ def _check_access(cur: Any, principal: AuthPrincipal, project_id: str) -> None:
         raise errors.project_access_denied()
 
 
+def requirement_summary(
+    cur: Any, principal: AuthPrincipal, project_id: str
+) -> RequirementSummaryResponse:
+    """요구사항 화면 요약. 추적표 목록과 같은 권한 검사, 같은 사업 범위다."""
+    _check_access(cur, principal, project_id)
+    n = repository.requirement_summary(cur, project_id)
+    total, verified = n["total"], n["verified"]
+    return RequirementSummaryResponse(
+        total=total,
+        verified=verified,
+        notVerified=total - verified,
+        implementedFromSourceClosed=n["implemented_from_source_closed"],
+        verifiedRate=verified / total if total else None,
+        byStatus=[
+            StatusCount(status=s, count=n["by_status"].get(s, 0))
+            for s in repository.REQUIREMENT_STATUSES
+        ],
+        sources=[_source_summary(s) for s in n["sources"]],
+    )
+
+
+def _source_summary(row: dict[str, Any]) -> SourceStateSummary:
+    if row["connection_id"] is None:
+        tool, label = "NONE", "원천 연결 없음(문서·수기)"
+    else:
+        tool = row["tool"]
+        label = f"{_TOOL_NAME.get(tool, tool)} {row['target_resource']}"
+    return SourceStateSummary(
+        connectionId=str(row["connection_id"]) if row["connection_id"] else None,
+        tool=tool,
+        label=label,
+        total=int(row["total"]),
+        open=int(row["open"]),
+        closed=int(row["closed"]),
+        unknown=int(row["unknown"]),
+    )
+
+
+_TOOL_NAME = {"GITHUB": "GitHub", "REDMINE": "Redmine"}
+
+
 def traceability_rows(
-    cur: Any, principal: AuthPrincipal, project_id: str, page: PageQuery
+    cur: Any,
+    principal: AuthPrincipal,
+    project_id: str,
+    page: PageQuery,
+    f: repository.RequirementFilter | None = None,
 ) -> PageResponse[TraceabilityRowResponse]:
     """요구사항 한 줄에 설계·구현·시험 칸. 메뉴와 AI 질의가 같은 함수를 쓴다."""
     _check_access(cur, principal, project_id)
 
-    total = repository.count_requirements(cur, project_id, None)
-    reqs = repository.search_requirements(cur, project_id, None, page)
+    f = f or repository.RequirementFilter()
+    total = repository.count_requirements(cur, project_id, f)
+    reqs = repository.search_requirements(cur, project_id, f, page)
     links = repository.links_to_requirements(cur, [str(r["id"]) for r in reqs])
     labels = repository.entity_labels(
         cur, {(lk["from_type"], str(lk["from_id"])) for lk in links}
@@ -203,6 +252,8 @@ def traceability_rows(
             requirementCode=r["code"] or "—",
             requirementTitle=r["title"],
             requirementStatus=r["status"],
+            requirementStatusBasis=mapping.requirement_status_basis(r["status"], r["tool_name"]),
+            sourceState=r["source_state"],
             designs=cells.get(str(r["id"]), {}).get("DESIGNS", []),
             implementsList=cells.get(str(r["id"]), {}).get("IMPLEMENTS", []),
             tests=cells.get(str(r["id"]), {}).get("TESTS", []),
@@ -247,6 +298,7 @@ def requirement_detail(
         ),
         traceComplete=row["trace_complete"],
         updatedAt=row["updated_at"].isoformat(),
+        statusBasis=mapping.requirement_status_basis(row["status"], row["tool_name"]),
         body=row["body"] or "",
         traceLinks=[
             TraceLinkResponse(

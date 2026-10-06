@@ -18,6 +18,7 @@ import { Button } from '@/components/ui/button';
 import { Progress } from '@/components/ui/progress';
 import { DataTable, SortableHeader } from '@/components/ui/data-table';
 import { DataState } from '@/components/common/data-state';
+import { RequirementStatusBadge } from '@/components/common/requirement-status';
 import { Tile } from '@/components/ui/page';
 import { Window } from '@/components/ui/window';
 import { RESOURCE_DOCK_ID } from '@/components/layout/app-shell';
@@ -488,7 +489,7 @@ const requirementColumns: ColumnDef<RequirementResponse, unknown>[] = [
     accessorKey: 'status',
     header: ({ column }) => <SortableHeader column={column}>상태</SortableHeader>,
     cell: ({ row }) => (
-      <Badge variant={badgeVariantFor(row.original.status)}>{label(row.original.status)}</Badge>
+      <RequirementStatusBadge status={row.original.status} basis={row.original.statusBasis} />
     ),
   },
 ];
