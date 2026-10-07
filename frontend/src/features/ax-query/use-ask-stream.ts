@@ -12,6 +12,8 @@ import type {
   SseInfographicEvent,
   SseSourcesEvent,
   SseStartEvent,
+  SseSuggestionsEvent,
+  SuggestionItem,
 } from '@/types/api';
 
 export type AskPhase = 'idle' | 'streaming' | 'finalizing' | 'aborted' | 'error';
@@ -24,6 +26,9 @@ export interface AskStreamState {
   infographics: SseInfographicEvent[];
   /** done 이벤트가 알려준 소요 시간(ms) */
   elapsedMs: number | null;
+  /** 답의 종류(done.finishReason) */
+  finishReason: string | null;
+  suggestions: SuggestionItem[];
   /** 지금 답을 받고 있는 대화. 다른 대화를 열면 이 값이 달라 그쪽엔 그리지 않는다 */
   conversationId: string | null;
   assistantMessageId: string | null;
@@ -55,6 +60,8 @@ export function useAskStream(onSettled: (conversationId: string) => void): AskSt
   const [sources, setSources] = useState<MessageSourceResponse[]>([]);
   const [infographics, setInfographics] = useState<SseInfographicEvent[]>([]);
   const [elapsedMs, setElapsedMs] = useState<number | null>(null);
+  const [finishReason, setFinishReason] = useState<string | null>(null);
+  const [suggestions, setSuggestions] = useState<SuggestionItem[]>([]);
   const [activeConversationId, setActiveConversationId] = useState<string | null>(null);
   const [assistantMessageId, setAssistantMessageId] = useState<string | null>(null);
   const [error, setError] = useState<ApiError | null>(null);
@@ -70,6 +77,8 @@ export function useAskStream(onSettled: (conversationId: string) => void): AskSt
     setSources([]);
     setInfographics([]);
     setElapsedMs(null);
+    setFinishReason(null);
+    setSuggestions([]);
     setActiveConversationId(null);
     setAssistantMessageId(null);
     setError(null);
@@ -96,6 +105,8 @@ export function useAskStream(onSettled: (conversationId: string) => void): AskSt
       setSources([]);
       setInfographics([]);
       setElapsedMs(null);
+      setFinishReason(null);
+      setSuggestions([]);
       setRouting(null);
       setError(null);
       setAssistantMessageId(null);
@@ -125,9 +136,15 @@ export function useAskStream(onSettled: (conversationId: string) => void): AskSt
             // 그림은 여러 장 올 수 있다. 같은 자리가 다시 오면 덮어쓴다.
             if (payload)
               setInfographics((prev) => [...prev.filter((b) => b.slot !== payload.slot), payload]);
+          } else if (event.event === 'suggestions') {
+            const payload = parse<SseSuggestionsEvent>(event.data);
+            if (payload) setSuggestions(payload.items);
           } else if (event.event === 'done') {
             const done = parse<SseDoneEvent>(event.data);
-            if (done) setElapsedMs(done.elapsedMs);
+            if (done) {
+              setElapsedMs(done.elapsedMs);
+              setFinishReason(done.finishReason);
+            }
             setPhase('finalizing');
             onSettled(conversationId);
             return;
@@ -164,6 +181,8 @@ export function useAskStream(onSettled: (conversationId: string) => void): AskSt
     sources,
     infographics,
     elapsedMs,
+    finishReason,
+    suggestions,
     conversationId: activeConversationId,
     assistantMessageId,
     error,

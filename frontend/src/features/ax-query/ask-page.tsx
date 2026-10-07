@@ -14,6 +14,7 @@ import { toQueryString } from '@/lib/query';
 import { cn } from '@/lib/utils';
 import { useAsync } from '@/lib/use-async';
 import { AnswerBody, SourceEvidence } from '@/features/ax-query/answer-body';
+import { ModelBadge, SuggestionChips, answerKindLabel } from '@/features/ax-query/answer-kind';
 import { ComposerActions } from '@/features/ax-query/composer-actions';
 import { ResourcePanel, type PanelView } from '@/features/ax-query/resource-panel';
 import { MentionMenu, useProjectMentions } from '@/features/ax-query/project-mentions';
@@ -26,6 +27,7 @@ import type {
   MessageSourceResponse,
   PageResponse,
   SuggestedQuestionsResponse,
+  SuggestionItem,
 } from '@/types/api';
 
 const MAX_INPUT_HEIGHT = 176;
@@ -216,7 +218,7 @@ export function AskPage(): ReactNode {
     if (el) el.scrollTop = el.scrollHeight;
   }, [messages.data, stream.draftText, pending]);
 
-  const send = async (text: string, resend = false) => {
+  const send = async (text: string, resend = false, hint: string | null = null) => {
     const body = text.trim();
     if (!body) return;
     const scope = mentions.scope.length > 0 ? mentions.scope : projectScope;
@@ -249,7 +251,7 @@ export function AskPage(): ReactNode {
         conversations.reload();
         void navigate(`${basePath}/${created.id}`, { replace: true });
       }
-      await stream.ask(target, { question: body, projectScope: scope });
+      await stream.ask(target, { question: body, projectScope: scope, hint });
     } catch (e) {
       // 못 보냈으면 건 말풍선을 걷고 쓰던 글을 돌려준다.
       setPending((prev) => prev.filter((b) => b.text !== body));
@@ -270,6 +272,9 @@ export function AskPage(): ReactNode {
     void send(next, true);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [stream.phase]);
+
+  // 권장 질문은 키를 같이 보낸다. 서버가 검증하고 다시 분류하지 않는다(같은 안내 반복 방지)
+  const pick = (item: SuggestionItem) => void send(item.question, false, item.hint);
 
   const openEvidence = (sources: MessageSourceResponse[]) => (footnoteNo: number) => {
     setPanelSources(sources);
@@ -299,6 +304,8 @@ export function AskPage(): ReactNode {
   );
   const pendingShown = pendingHere.length > 0;
   const isEmpty = list.length === 0 && !answering && !pendingShown;
+  // 이어 물을 질문은 마지막 답 아래에만 둔다. 지난 답의 것은 맥락이 지났다
+  const lastAssistantId = [...list].reverse().find((m) => m.role === 'ASSISTANT')?.id ?? null;
 
   const composer = (
     <div className="relative">
@@ -371,6 +378,7 @@ export function AskPage(): ReactNode {
           </Button>
         )}
       </form>
+      <ModelBadge />
     </div>
   );
 
@@ -431,6 +439,9 @@ export function AskPage(): ReactNode {
                 {m.routing && (
                   <p className="text-muted-foreground text-xs font-semibold tracking-wide mb-2">
                     {m.routing.type}
+                    {answerKindLabel(m.finishReason) && (
+                      <span className="ml-2 font-normal">· {answerKindLabel(m.finishReason)}</span>
+                    )}
                     {m.routing.routeCached && (
                       <span
                         className="ml-2 font-normal"
@@ -476,6 +487,14 @@ export function AskPage(): ReactNode {
                   ))}
                   <ElapsedLabel ms={m.latencyMs} />
                 </div>
+                {m.id === lastAssistantId && !answering && (
+                  <SuggestionChips
+                    items={m.suggestions ?? []}
+                    clarify={m.finishReason === 'CLARIFY'}
+                    onSelect={pick}
+                    disabled={stream.phase === 'streaming'}
+                  />
+                )}
               </div>
             ),
           )}
@@ -504,8 +523,19 @@ export function AskPage(): ReactNode {
                     onSelect={openEvidence(stream.sources)}
                   />
                   <div className="mt-3 flex items-center">
+                    {answerKindLabel(stream.finishReason) && (
+                      <span className="text-muted-foreground text-xs">
+                        {answerKindLabel(stream.finishReason)}
+                      </span>
+                    )}
                     <ElapsedLabel ms={stream.elapsedMs} />
                   </div>
+                  <SuggestionChips
+                    items={stream.suggestions}
+                    clarify={stream.finishReason === 'CLARIFY'}
+                    onSelect={pick}
+                    disabled
+                  />
                   {stream.phase === 'aborted' && (
                     <p className="text-muted-foreground text-xs font-semibold tracking-wide mt-2">
                       중지됨

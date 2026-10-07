@@ -370,7 +370,7 @@ WidgetQuery {measure, dimensions ≤ 2, filters, projectScope, limit}  ──▶
 | 축 | 지표 | 원천 |
 |---|---|---|
 | 진척 | `progress_representative_pct` `progress_wbs_pct` `progress_planned_pct` `progress_variance_pct` `progress_behind_task_count` | 스냅샷 |
-| 일정 | `schedule_variance_pct` | `progress_record` |
+| 일정 | `schedule_variance_pct` | 스냅샷 (V48, ARC-020) |
 | 품질 | `requirement_fulfillment_rate` `requirement_test_trace_rate` `issue_resolution_rate` `issue_count` `open_issue_count` `issue_avg_resolution_days` `issue_resolution_days_p50/p90` `open_risk_count` `test_pass_rate` `correction_overdue_count` `change_request_count` | 표준 엔터티 |
 | 산출물 | `work_product_approval_rate` `work_product_missing_count` `wbs_deliverable_submitted_rate` `wbs_deliverable_missing_count` `wbs_deliverable_overdue_count` | `work_product` · `wbs_item` |
 | 추이 | `snapshot_requirement_fulfillment_pct` `snapshot_risk_closed_pct` `snapshot_work_product_approval_pct` `progress_issue_pct` `progress_work_product_pct` | 스냅샷 |

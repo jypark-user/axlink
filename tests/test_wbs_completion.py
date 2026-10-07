@@ -181,6 +181,27 @@ def test_AT3_WBS_가_없으면_산출_불가_있고_확인이_없으면_0(client
 
 
 @requires_db
+def test_AT3b_확인이_없으면_시맨틱_지표도_0_이다(client, client_token, env):
+    """화면은 0% 인데 지표는 값 없음이라 AI 가 "값이 아직 없다" 고 답했다(V48)."""
+    token = client_token("r2")
+    spec = {"template": "STAT_CARD", "title": "완료 확인율",
+            "query": {"measure": "wbs_completion_rate", "dimensions": [],
+                      "filters": [], "projectScope": [PID]},
+            "options": {}}
+
+    def value():
+        res = client.post("/api/widgets/preview", json={"spec": spec}, headers=_auth(token))
+        assert res.status_code == 200, res.text
+        data = res.json()
+        row = data["total"] or (data["rows"][0] if data["rows"] else None)
+        return None if row is None else row["values"]["value"]
+
+    assert value() is None  # 말단 작업이 없으면 산출 불가
+    env.load(BASE)
+    assert value() == 0.0
+
+
+@requires_db
 def test_AT1_일반_확인_요청은_완료_확인율에_들지_않는다(client, client_token, env):
     env.load(BASE)
     r2, r3 = client_token("r2"), client_token("r3")

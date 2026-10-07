@@ -25,7 +25,7 @@ from app.auth.models import AuthPrincipal
 from app.common import errors
 from app.config import settings
 from app.db import tx
-from app.rag import entity_table, overview, route_cache, routing, search
+from app.rag import entity_table, intents, overview, route_cache, routing, search
 from app.semantic import catalog as catalog_module
 from tests.conftest import LIVE_ENABLED
 
@@ -204,6 +204,11 @@ def _answerable(cur, catalog, llm, question: str) -> dict:
         blocks += 1
     if d.type == routing.OVERVIEW:
         blocks += len(overview.build(cur, ADMIN, [PID]))
+    if d.type == routing.INTENT:
+        # 일정 질문은 WBS·스냅샷으로 답한다. 값이 있으면 답이 선다
+        blocks += 0 if intents.run(cur, d.intent, d.period, [PID]).status == intents.NO_DATA else 1
+    if d.type == routing.CLARIFY:
+        blocks += 1  # 되묻기는 막힌 답이 아니다. 선택지를 낸다
     if d.listing:
         entity = entity_table.FROM_SOURCE_TYPE.get(d.listing)
         table = entity_table.build(cur, entity, d.listing_status, [PID], 60) if entity else None
@@ -216,11 +221,6 @@ def _answerable(cur, catalog, llm, question: str) -> dict:
         gate_ok, sim = found.passes_gate(), found.max_similarity
     ok = bool(blocks) or gate_ok
     label = d.type if not d.listing else f"LIST:{d.listing}/{d.listing_status}"
-    # 서비스와 같은 규칙. 근거도 그림도 없는 문서 질문은 현황으로 내려간다
-    if not ok and d.type == routing.DOCUMENT and settings.rag_overview_fallback:
-        blocks = len(overview.build(cur, ADMIN, [PID]))
-        ok = bool(blocks)
-        label = "DOCUMENT→OVERVIEW" if ok else label
     return {
         "route": label,
         "measure": d.measure.key if d.measure else "",

@@ -25,6 +25,8 @@ SYSTEM_PROMPT = (
     "괄호의 분자·분모(예: 0건 / 41건)가 있으면 함께 말한다. 값이 0 이거나 없을 때는 그 이유가 "
     "근거에 있으면 반드시 말한다.\n"
     "2. 사실은 '근거' 절의 내용에서만 가져온다. 근거에 없는 내용은 모른다고 말한다.\n"
+    "2-1. 근거가 예상·가정('~하면 ~할 수 있다', 리스크·대응 계획)이면 일어난 일로 쓰지 않는다. "
+    "'리스크로 적힌 내용' 처럼 그 성격을 밝힌다.\n"
     "3. 근거를 인용한 문장 끝에 해당 근거 번호를 [1] 처럼 붙인다. 번호는 근거 절의 번호만 쓴다.\n"
     "4. 제목·목록 기호 없이 문단으로 답한다. 인사말과 사족은 넣지 않는다.\n"
     "4-1. '그림 놓기' 절이 있으면 그 지시대로 본문에 [그림 N] 표식만 놓는다. "
@@ -38,7 +40,10 @@ SYSTEM_PROMPT = (
     "7. 절차·방법의 흐름·단계·순서를 그림이나 도식으로 보여 달라는 질문에는 화면 그림을 "
     "그리지 않는다. 대신 산출 근거와 근거 절에 있는 절차를 '1) … → 2) … → 3) …' 처럼 한 줄에 "
     "한 단계씩 순서대로 쓴다. 이때는 규칙 4 의 문단 제한을 두지 않는다. 근거에 없는 단계를 "
-    "지어내지 않는다."
+    "지어내지 않는다.\n"
+    "8. 진척률·비율은 %, 두 백분율의 차이는 %p 로 구분해 쓴다. 값에 붙은 기준일을 함께 말한다. "
+    "'추정' 이라 적힌 값(계획 진척률)은 추정이라고 밝힌다. 줄에 '비교할 수 없음', '값을 씀' "
+    "같은 단서가 있으면 그대로 전한다."
 )
 
 # 생성 출력을 이 모양으로 묶는다. 경량 모델이 답 앞에 생각을 늘어놓는 길을 막는다.
@@ -89,6 +94,12 @@ def aggregate_lines(data: WidgetDataResponse) -> list[str]:
         lines.append(line)
     if data.total is not None and data.dimensions:
         lines.append(f"- 전체: {format_value(data.total.values.get('value'))}{unit}")
+    elif data.dimensions and unit == "건" and not data.truncated:
+        # 건수는 나눈 값을 더하면 전체다. 서버가 더해 준다. 모델이 더하면 수치 검문에 막힌다
+        # (10-07 "이슈가 몇 건이야?" 가 상태별 7·5 를 받아 12 를 만들어 막혔다)
+        values = [row.values.get("value") for row in data.rows]
+        if values and all(isinstance(v, int | float) for v in values):
+            lines.append(f"- 전체(항목 합): {format_value(sum(values))}{unit}")
     if data.previousTotal is not None:
         previous = format_value(data.previousTotal.values.get("value"))
         lines.append(f"- 직전 구간 전체: {previous}{unit}")
@@ -121,7 +132,9 @@ def user_prompt(
     listing: str | None = None,
     blocks: list["blocks_mod.Block"] | None = None,
     previous: list[PreviousTurn] | None = None,
+    values: tuple[str, list[str]] | None = None,
 ) -> str:
+    """values 는 그림 없이 줄로만 주는 값(일정 질문의 기간 비교 등). 집계 값과 같은 규칙이다."""
     parts = [f"## 질문\n{question}"]
     if previous:
         parts.append("## 앞 대화 (마지막이 직전)\n" + render_previous(previous))
@@ -132,6 +145,8 @@ def user_prompt(
         stamp = aggregate.data.generatedAt[:10]
         head = f"## 집계 값 ({aggregate.title}, 사업 {scope}개 범위, 기준 {stamp})"
         parts.append(head + "\n" + "\n".join(aggregate.lines))
+    if values is not None:
+        parts.append(f"## 집계 값 ({values[0]})\n" + "\n".join(values[1]))
     for block in blocks or []:
         parts.append(blocks_mod.prompt_section(block))
     if blocks:
@@ -195,16 +210,58 @@ def off_topic() -> str:
     )
 
 
-def insufficient_evidence(max_similarity: float, candidate_count: int) -> str:
-    if candidate_count == 0:
-        return (
-            "선택한 사업 범위에 색인된 문서·이슈가 없어 답할 근거가 없습니다. "
-            "문서를 올리거나 도구 연동으로 수집한 뒤 다시 질문해 주십시오."
-        )
+# 모델을 부르지 않고 서버가 쓰는 답. 이유를 하나로 뭉치지 않는다. 조회 오류를 데이터 없음으로
+# 말하지 않는다(SWFR.RAG.007).
+
+
+def no_documents() -> str:
     return (
-        "질문과 충분히 가까운 근거를 찾지 못해 답변을 만들지 않았습니다. "
+        "선택한 사업 범위에 올라온 문서·이슈가 아직 없어 문서 내용으로는 답할 수 없습니다. "
+        "문서를 올리거나 도구 연동으로 수집하면 답할 수 있습니다."
+    )
+
+
+def no_relevant_documents(max_similarity: float) -> str:
+    return (
+        "올라온 문서·이슈에서 이 질문과 맞는 내용을 찾지 못해 답변을 만들지 않았습니다. "
         f"(최고 유사도 {max_similarity:.2f}, 기준 {settings.rag_min_similarity:.2f}) "
-        "질문을 더 구체적으로 적거나 사업 범위를 바꿔 보십시오."
+        "질문을 더 구체적으로 적어 보십시오."
+    )
+
+
+def no_measure_data(label: str, basis: str | None) -> str:
+    text = f"{label} 값이 아직 없어 답할 수 없습니다."
+    if basis:
+        text += f" 이 값은 이렇게 산출합니다. {basis}"
+    return text
+
+
+def no_overview_data() -> str:
+    return (
+        "선택한 사업 범위에 진척·이슈·산출물·리스크 값이 아직 없어 현황을 요약할 수 없습니다. "
+        "도구 연동으로 수집하면 답할 수 있습니다."
+    )
+
+
+def unsupported() -> str:
+    return "이 질문에 맞는 조회 항목이 아직 없어 답하지 못했습니다."
+
+
+def query_error() -> str:
+    return (
+        "조회 중 오류가 나서 답하지 못했습니다. 값이 없다는 뜻은 아닙니다. "
+        "잠시 뒤 다시 시도해 주십시오."
+    )
+
+
+def clarify() -> str:
+    return "질문을 어느 쪽으로 볼지 정하기 어렵습니다. 아래에서 보려는 것을 골라 주십시오."
+
+
+def no_delay_reason() -> str:
+    return (
+        "지연 사유를 적은 문서·이슈는 찾지 못했습니다. 위 내용은 계획보다 늦은 작업까지만 "
+        "확인한 것입니다."
     )
 
 

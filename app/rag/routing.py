@@ -11,7 +11,7 @@ from typing import Any
 from app.ai.port import LlmPort
 from app.dashboard import generation
 from app.dashboard.widget_template import prompt_guide
-from app.rag import entity_table
+from app.rag import entity_table, intents
 from app.semantic.catalog import Catalog, MeasureDef
 
 DOCUMENT = "DOCUMENT"
@@ -19,6 +19,8 @@ AGGREGATE = "AGGREGATE"
 MIXED = "MIXED"
 OVERVIEW = "OVERVIEW"  # 사업 현황 요약. 문서를 가리키지 않는 일반 질문 (ARC-015)
 OFF_TOPIC = "OFF_TOPIC"  # 사업과 무관한 질문. 현황으로도 내려가지 않고 그렇다고 답한다
+INTENT = "INTENT"  # 일정 질문 묶음(intents). 지표 하나로 답이 안 서는 비교·목록
+CLARIFY = "CLARIFY"  # 두 뜻으로 읽히는 질문. 선택지를 내고 되묻는다
 
 # 목록으로 물을 수 있는 색인 종류. 모델이 이 밖의 값을 주면 보통 문서 검색으로 간다.
 LISTABLE: dict[str, str] = {
@@ -85,6 +87,115 @@ class RouteDecision:
     # 앞 대화에 기대는 후속 질문인가. 그러면 판정을 캐시하지 않는다. 같은 문장이 다른 대화에서
     # 다른 뜻이기 때문이다
     follow_up: bool = False
+    intent: str | None = None  # INTENT 일 때 intents 의 키
+    period: str | None = None  # 기간 변화의 비교 단위 WEEK | MONTH
+    options: list[str] = field(default_factory=list)  # CLARIFY 의 선택지 키
+    related: list[str] = field(default_factory=list)  # 이어서 볼 만한 질문 키. 권장 질문 재료
+
+
+# 권장 질문·선택지·누른 질문의 키. 모델이 고르고 서버가 다시 검증한다. 문장은 서버가 만든다.
+#   intent:<묶음>[:WEEK|MONTH]  measure:<지표>  overview  list:<종류>:<상태>
+OVERVIEW_KEY = "overview"
+LIST = "LIST"
+MAX_KEYS = 3
+
+
+@dataclass(frozen=True)
+class Target:
+    kind: str  # INTENT | AGGREGATE | OVERVIEW | LIST
+    key: str  # 정규화한 키
+    intent: str | None = None
+    period: str | None = None
+    measure: MeasureDef | None = None
+    listing: str | None = None
+    listing_status: str = entity_table.ALL
+
+
+def parse_key(catalog: Catalog, raw: object) -> Target | None:
+    """키 하나를 검증한다. 모르는 묶음·폐기된 지표·없는 종류면 None 이다."""
+    if not isinstance(raw, str):
+        return None
+    parts = [x.strip() for x in raw.strip().split(":")]
+    head = parts[0].lower()
+    if head == OVERVIEW_KEY and len(parts) == 1:
+        return Target(kind=OVERVIEW, key=OVERVIEW_KEY)
+    if head == "intent" and len(parts) in (2, 3):
+        intent = parts[1].upper()
+        if intent not in intents.INTENTS:
+            return None
+        period = None
+        if intent == intents.PROGRESS_CHANGE:
+            period = parts[2].upper() if len(parts) == 3 else intents.WEEK
+            if period not in intents.PERIODS:
+                return None
+        elif len(parts) == 3:
+            return None
+        key = f"intent:{intent}" + (f":{period}" if period else "")
+        return Target(kind=INTENT, key=key, intent=intent, period=period)
+    if head == "measure" and len(parts) == 2:
+        measure = catalog.measure(parts[1])
+        if measure is None:
+            return None
+        return Target(kind=AGGREGATE, key=f"measure:{measure.key}", measure=measure)
+    if head == "list" and len(parts) in (2, 3):
+        listing = parts[1].upper()
+        status = parts[2].upper() if len(parts) == 3 else entity_table.ALL
+        if listing not in LISTABLE or status not in entity_table.STATUSES:
+            return None
+        return Target(
+            kind=LIST, key=f"list:{listing}:{status}", listing=listing, listing_status=status
+        )
+    return None
+
+
+def _keys(catalog: Catalog, raw: object) -> list[str]:
+    """모델이 준 키 목록에서 검증을 통과한 것만, 순서를 지켜 겹침 없이."""
+    if not isinstance(raw, list):
+        return []
+    out: list[str] = []
+    for item in raw:
+        target = parse_key(catalog, item)
+        if target is not None and target.key not in out:
+            out.append(target.key)
+    return out
+
+
+def current_key(decision: "RouteDecision") -> str | None:
+    """이번 판정이 답하는 키. 권장 질문에서 같은 것을 다시 내지 않으려고 쓴다."""
+    if decision.type == INTENT and decision.intent:
+        return f"intent:{decision.intent}" + (f":{decision.period}" if decision.period else "")
+    if decision.type == AGGREGATE and decision.measure is not None:
+        return f"measure:{decision.measure.key}"
+    if decision.type == OVERVIEW:
+        return OVERVIEW_KEY
+    if decision.listing:
+        return f"list:{decision.listing}:{decision.listing_status}"
+    return None
+
+
+def from_target(target: Target, question: str | None = None) -> "RouteDecision":
+    """권장 질문을 눌렀을 때. 다시 분류하지 않는다. 재분류가 빗나가 같은 안내가 반복되지 않게."""
+    if target.kind == INTENT:
+        return RouteDecision(type=INTENT, intent=target.intent, period=target.period)
+    if target.kind == OVERVIEW:
+        return RouteDecision(type=OVERVIEW, rewritten=question)
+    if target.kind == LIST:
+        return RouteDecision(
+            type=DOCUMENT,
+            rewritten=question,
+            listing=target.listing,
+            listing_status=target.listing_status,
+        )
+    measure = target.measure
+    assert measure is not None
+    return RouteDecision(
+        type=AGGREGATE,
+        rewritten=question,
+        measure=measure,
+        dimensions=[],
+        template="STAT_CARD",
+        title=measure.label,
+    )
 
 
 def decide(
@@ -120,9 +231,31 @@ def from_choice(catalog: Catalog, choice: dict[str, Any] | None) -> RouteDecisio
         listing_status = entity_table.ALL
     follow_up = choice.get("followUp") is True
 
+    related = _keys(catalog, choice.get("related"))[:MAX_KEYS]
+
     route = str(choice.get("route") or "").strip().upper()
     measure_key = choice.get("measure")
     measure = catalog.measure(str(measure_key)) if measure_key else None
+    if route == INTENT:
+        intent = str(choice.get("intent") or "").strip().upper()
+        period = str(choice.get("period") or "").strip().upper()
+        target = parse_key(catalog, f"intent:{intent}:{period}" if period else f"intent:{intent}")
+        target = target or parse_key(catalog, f"intent:{intent}")
+        if target is not None:
+            return RouteDecision(
+                type=INTENT,
+                rewritten=rewritten,
+                intent=target.intent,
+                period=target.period,
+                follow_up=follow_up,
+                related=[k for k in related if k != target.key],
+            )
+    if route == CLARIFY:
+        options = _keys(catalog, choice.get("options"))[:MAX_KEYS]
+        if len(options) >= 2:
+            return RouteDecision(
+                type=CLARIFY, rewritten=rewritten, options=options, follow_up=follow_up
+            )
     if route == OFF_TOPIC and measure is None and listing is None:
         return RouteDecision(type=OFF_TOPIC, rewritten=rewritten, follow_up=follow_up)
     if route == OVERVIEW and measure is None:
@@ -132,6 +265,7 @@ def from_choice(catalog: Catalog, choice: dict[str, Any] | None) -> RouteDecisio
             listing=listing,
             listing_status=listing_status,
             follow_up=follow_up,
+            related=[k for k in related if k != OVERVIEW_KEY],
         )
     if route not in (AGGREGATE, OVERVIEW) or measure is None:
         # 집계로 못 셀 질문이어도 목록은 낼 수 있다. 둘은 따로 판정한다.
@@ -141,6 +275,7 @@ def from_choice(catalog: Catalog, choice: dict[str, Any] | None) -> RouteDecisio
             listing=listing,
             listing_status=listing_status,
             follow_up=follow_up,
+            related=related,
         )
 
     template = generation._template_of(choice)
@@ -158,6 +293,7 @@ def from_choice(catalog: Catalog, choice: dict[str, Any] | None) -> RouteDecisio
         listing=listing,
         listing_status=listing_status,
         follow_up=follow_up,
+        related=[k for k in related if k != f"measure:{measure.key}"],
     )
 
 
@@ -169,19 +305,58 @@ def system_prompt(catalog: Catalog) -> str:
     dimensions = "\n".join(
         f"- {d.key}: {d.label}. {d.description}" for d in catalog.active_dimensions()
     )
+    intent_keys = ", ".join(intents.INTENTS)
     return (
         "당신은 사업 관리 질의를 분류하는 도우미다. 수치를 만들지 않고 답도 쓰지 않는다. "
+        "일정·계획 대비 진척을 묻는 질문은 INTENT 로 분류한다(아래 일정 질문 절). "
         "질문이 아래 카탈로그의 지표로 셀 수 있는 것(진척률·건수·비율·추이)이면 AGGREGATE, "
-        "문서·이슈·회의록의 내용을 묻는 것이면 DOCUMENT, 사업이 전반적으로 어떤지를 묻는 "
-        '것("잘 되고 있어?", "문제 있어?", "현황 알려줘", "요약해 줘", "뭐가 걱정이야?")이면 '
-        "OVERVIEW 로 분류한다. 사업과 명백히 무관한 것(날씨, 일반 상식, 프로그래밍 문법, "
+        "문서·이슈·회의록의 내용을 묻는 것이면 DOCUMENT, 사업 전체 현황을 통틀어 요약해 "
+        '달라는 것("전체 현황 알려줘", "요약해 줘", "사업 잘 되고 있어?", "문제 있어?", '
+        '"뭐가 걱정이야?", "전체적으로 괜찮은 거야?", "오늘 확인해야 할 거 있어?")이면 OVERVIEW '
+        "로 분류한다. 일정·진척 하나만 묻는 질문은 OVERVIEW 가 아니다. "
+        '"이슈가 몇 건이야?", "결함이 얼마나 나왔어?" 처럼 건수를 묻는 것은 AGGREGATE 다. '
+        "지표는 질문의 대상(이슈·요구사항·리스크·산출물·진척)과 같은 대상의 것만 고른다. "
+        '"요구사항이 몇 개야?" 처럼 그 대상의 건수 지표가 없으면 다른 대상의 지표를 쓰지 않고 '
+        "그 종류의 목록(list, listFilter ALL)으로 낸다. 목록 표가 총 건수를 말한다. "
+        "사업과 명백히 무관한 것(날씨, 일반 상식, 프로그래밍 문법, "
         "잡담)만 OFF_TOPIC 이다. 사업의 목적·범위·인수 조건·연동 방식·이번 달 목표처럼 "
         "사업에 대해 묻는 것은 무관이 아니라 DOCUMENT 다. 헷갈리면 DOCUMENT 로 둔다.\n"
+        "## 일정 질문\n"
+        "- PLAN_VS_ACTUAL: 계획(예정) 대비 실제 진척. \"계획보다 늦고 있어?\", \"일정대로 "
+        "가고 있어?\", \"일정 지연되고 있나?\", \"예정보다 앞서 있어?\", \"계획 대비 몇 퍼센트 "
+        "차이야?\", \"예상 일정 대비 진척률 어때?\"\n"
+        "- BEHIND_TASKS: 계획보다 늦은 작업이 무엇인지·있는지. \"늦은 작업 뭐야?\", "
+        "\"지연된 작업 있어?\", \"지연된 작업 "
+        "목록\"\n"
+        "- PROGRESS_CHANGE: 지난주·지난달보다 얼마나 진행됐는지. period 는 WEEK 또는 MONTH. "
+        "\"지난주보다 얼마나 진행됐어?\"\n"
+        "- DELAY_CAUSE: 왜 늦어졌는지, 지연 사유·원인\n"
+        "진척률 값 하나나 추이 그림을 묻는 것(\"진척률 몇 퍼센트야?\", \"이번 달 진척 추세\")은 "
+        "AGGREGATE 다.\n"
+        "산출물 지표는 셋이 다르다. 파일이 올라왔는가는 제출률(progress_work_product_pct, "
+        "wbs_deliverable_submitted_rate), 발주기관이 작업 완료를 확인·인정했는가는 완료 확인율"
+        "(wbs_completion_rate)이다. \"산출물까지 확인된 진척\", \"완료가 확인된 작업\" 은 완료 "
+        "확인율이다.\n"
+        "## 되묻기\n"
+        "질문이 두 가지 이상으로 읽히고 앞 대화로도 정할 수 없을 때만 CLARIFY 로 하고 options 에 "
+        "후보 키 2~3개를 적는다(\"진도 괜찮아?\" 는 계획 대비 진척인지 전체 현황인지 갈린다). "
+        "한쪽이 분명하면 되묻지 않는다. 사업 전체가 괜찮은지·무엇을 볼지 묻는 질문은 되묻지 않고 "
+        "OVERVIEW 다. 분야를 말했으면(\"이슈 처리는 잘 되고 있어?\", \"품질은 어때?\") 그 분야 "
+        "지표(AGGREGATE)나 OVERVIEW 로 답하고 되묻지 않는다.\n"
+        "## 이어 볼 질문\n"
+        "어느 경로든 related 에 이 질문 다음에 볼 만한 키를 0~3개 적는다. 질문과 관련 있는 "
+        "것만 적고 억지로 채우지 않는다.\n"
+        f"키 형식: intent:<{intent_keys} 중 하나>, intent:PROGRESS_CHANGE:WEEK, "
+        "intent:PROGRESS_CHANGE:MONTH, measure:<지표 key>, overview, list:<종류>:<상태>\n"
         "출력은 JSON 객체 하나뿐이다. 설명을 붙이지 않는다.\n"
+        '일정: {"route": "INTENT", "intent": "<묶음>", "period": "<WEEK|MONTH>", '
+        '"query": "<검색용 핵심어>", "related": ["<키>"]}\n'
         '집계: {"route": "AGGREGATE", "measure": "<지표 key>", "dimensions": ["<차원 key>"], '
-        '"template": "<템플릿>", "title": "<한국어 제목>", "query": "<검색용 핵심어>"}\n'
-        '문서: {"route": "DOCUMENT", "query": "<검색용 핵심어>"}\n'
+        '"template": "<템플릿>", "title": "<한국어 제목>", "query": "<검색용 핵심어>", '
+        '"related": ["<키>"]}\n'
+        '문서: {"route": "DOCUMENT", "query": "<검색용 핵심어>", "related": ["<키>"]}\n'
         '현황: {"route": "OVERVIEW", "query": "<검색용 핵심어>"}\n'
+        '되묻기: {"route": "CLARIFY", "options": ["<키>", "<키>"]}\n'
         '무관: {"route": "OFF_TOPIC"}\n'
         '목록: {"route": "DOCUMENT", "list": "<종류>", "listFilter": "<상태>", '
         '"query": "<검색용 핵심어>"}\n'
@@ -189,6 +364,8 @@ def system_prompt(catalog: Catalog) -> str:
         '("이슈 목록", "요구사항 뭐가 있어", "등록된 리스크", "완료된 이슈는 뭐가 있어", '
         '"아직 작업이 안 된 이슈", "미제출 산출물 목록"). '
         "상태 조건이 붙어도 나열을 묻는 것이면 목록이다. "
+        '"심각한 이슈 있어?", "리스크 있어?", "가장 심각한 문제는 뭐야?" 처럼 그런 항목이 있는지 '
+        "묻는 것도 목록이다(열린 이슈·열린 리스크). 일정 질문이 아니다. "
         '"가장 급한 작업", "먼저 처리할 것", "우선순위가 높은 이슈" 처럼 무엇부터 할지 묻는 '
         "질문도 목록이다. 열린 이슈(list ISSUE, listFilter OPEN)를 심각도 순으로 받아 답한다. "
         "종류는 "
@@ -199,7 +376,8 @@ def system_prompt(catalog: Catalog) -> str:
         '"완료된", "닫힌", "처리된" 은 CLOSED 다. 조건이 없으면 ALL 이다.\n'
         "질문이 카탈로그 지표의 이름을 부르면(\"이행률\", \"처리율\", \"진척률\" 등) 값을 묻든, "
         "왜 그런지 묻든, 어떻게 올리는지 묻든 그 지표를 measure 로 고른다. 지표의 뜻과 움직이는 "
-        "조건이 집계 값 절에 함께 오기 때문이다. "
+        "조건이 집계 값 절에 함께 오기 때문이다. 단 계획·예정·일정과 견주는 질문은 지표 "
+        "이름이 있어도 일정 질문(INTENT)이 먼저다. "
         "지표 key 는 카탈로그에 있는 것만 쓴다. 맞는 지표가 없으면 DOCUMENT 다. "
         "차원은 0~2개이고 지표의 허용 차원에서만 고른다. 추이를 물으면 period_ 차원을 쓴다.\n"
         "입력에 '앞 대화' 절이 있으면 이번 질문이 그것을 가리키는지 본다. \"그 방법의 흐름을 "

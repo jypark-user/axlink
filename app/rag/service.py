@@ -24,7 +24,7 @@ from app.ai.embedding import embedding_port
 from app.ai.llm import llm_port
 from app.auth import repository as auth_repo
 from app.auth.models import AuthPrincipal
-from app.common import errors, korean
+from app.common import errors
 from app.common.paging import PageQuery, PageResponse
 from app.config import settings
 from app.db import tx
@@ -32,11 +32,13 @@ from app.rag import (
     answer,
     blocks,
     entity_table,
+    intents,
     number_guard,
     overview,
     route_cache,
     routing,
     search,
+    suggest,
 )
 from app.rag import conversation_repository as repo
 from app.rag.models import (
@@ -53,12 +55,14 @@ from app.rag.models import (
     SseDoneEvent,
     SseSourcesEvent,
     SseStartEvent,
+    SseSuggestionsEvent,
     SuggestedQuestionsResponse,
+    SuggestionItem,
 )
 from app.rag.search import RetrievedChunk
 from app.semantic import catalog as catalog_module
 from app.semantic import service as semantic
-from app.semantic.catalog import Catalog, MeasureDef
+from app.semantic.catalog import Catalog
 from app.semantic.models import WidgetOptions, WidgetQuery, WidgetSpec
 
 log = logging.getLogger(__name__)
@@ -77,16 +81,6 @@ _SUGGESTED_DOCUMENT_QUESTIONS = (
     "과업지시서에 정한 납품 산출물은 무엇인가요?",
     "최근 이슈에서 지연 사유로 적힌 내용은 무엇인가요?",
 )
-
-
-def _suggested_question(m: MeasureDef) -> str:
-    """단위에 맞는 물음. 건수는 "몇 건", 비율은 "몇 퍼센트". 조사는 라벨 끝소리로 고른다."""
-    subject = korean.attach(m.label, "은")
-    if m.unit == "건":
-        return f"{subject} 지금 몇 건인가요?"
-    if m.unit == "%":
-        return f"{subject} 현재 몇 퍼센트인가요?"
-    return f"{subject} 현재 얼마인가요?"
 
 
 # ---------------------------------------------------------------- 대화
@@ -154,7 +148,7 @@ def suggestions(
     _scope(_allowed(cur, principal), project_ids, require=False)
     catalog = catalog_module.load(cur)
     questions = [
-        _suggested_question(m)
+        suggest.measure_question(m)
         for key in _SUGGESTED_MEASURES
         if (m := catalog.measure(key)) is not None
     ]
@@ -176,6 +170,8 @@ class Prepared:
     started: float
     # 최근 질문·답. 후속 질문이 무엇을 가리키는지 판정과 본문이 같이 본다
     previous: list[routing.PreviousTurn] = field(default_factory=list)
+    # 권장 질문을 눌렀으면 그 키. 재분류하지 않고 이 대상으로 바로 답한다
+    target: routing.Target | None = None
 
 
 def prepare(cur: Any, principal: AuthPrincipal, conversation_id: str, req: AskRequest) -> Prepared:
@@ -187,6 +183,13 @@ def prepare(cur: Any, principal: AuthPrincipal, conversation_id: str, req: AskRe
     allowed = _allowed(cur, principal)
     requested = req.projectScope or list(conversation["project_scope"] or [])
     scope = _scope(allowed, requested, require=True)
+    catalog = catalog_module.load(cur)
+    target = None
+    if req.hint is not None:
+        # 눌린 권장 질문의 키. 화면이 보낸 값을 믿지 않고 카탈로그로 다시 검증한다
+        target = routing.parse_key(catalog, req.hint)
+        if target is None:
+            raise errors.validation_failed("권장 질문의 대상이 올바르지 않습니다.")
 
     previous = [
         routing.PreviousTurn(
@@ -207,116 +210,49 @@ def prepare(cur: Any, principal: AuthPrincipal, conversation_id: str, req: AskRe
         question=question,
         scope=scope,
         user_message_id=user_message_id,
-        catalog=catalog_module.load(cur),
+        catalog=catalog,
         started=time.monotonic(),
         previous=previous,
+        target=target,
     )
 
 
 def stream(p: Prepared) -> Iterator[bytes]:
-    """SSE 이벤트 순서: start → delta… → sources → (infographic) → done. 오류는 error 하나."""
+    """SSE 이벤트 순서: start → delta… → sources → (infographic) → (suggestions) → done.
+    오류는 error 하나. 답의 종류는 done 의 finishReason 이 말한다."""
     assistant_id: str | None = None
     pieces: list[str] = []
     try:
         llm = llm_port()
-        # 판정은 캐시를 먼저 본다(ARC-014). 값은 아래에서 매번 새로 뽑는다.
-        with tx() as cur:
-            routed = route_cache.decide(cur, p.catalog, llm, p.question, p.previous)
+        if p.target is not None:
+            # 권장 질문을 눌렀다. 키는 prepare 가 검증했다. 다시 분류하지 않는다
+            routed = route_cache.Routed(routing.from_target(p.target, p.question), cached=False)
+        else:
+            # 판정은 캐시를 먼저 본다(ARC-014). 값은 아래에서 매번 새로 뽑는다.
+            with tx() as cur:
+                routed = route_cache.decide(cur, p.catalog, llm, p.question, p.previous)
         decision = routed.decision
         query_text = decision.rewritten or p.question
-        query_vec = embedding_port().embed([p.question])[0]
+        # 일정 질문은 표준 모델과 WBS 로 답한다. 문서 검색은 지연 사유만 쓴다
+        searches = decision.type != routing.INTENT or decision.intent == intents.DELAY_CAUSE
+        query_vec = embedding_port().embed([p.question])[0] if searches else None
 
         with tx() as cur:
-            aggregate: answer.AggregateContext | None = None
-            block_list: list[blocks.Block] = []
-            if decision.type == routing.AGGREGATE:
-                aggregate, infographic = _aggregate(cur, p, decision)
-                if aggregate is None:
-                    decision = routing.RouteDecision(
-                        type=routing.DOCUMENT,
-                        rewritten=decision.rewritten,
-                        listing=decision.listing,
-                        listing_status=decision.listing_status,
-                    )
-                elif infographic is not None and blocks.worth_drawing(infographic.data):
-                    # 값이 하나뿐이면 문장이 그 숫자를 말한다. 그림은 붙이지 않는다. 값은
-                    # aggregate 로 프롬프트와 수치 검문에 그대로 들어간다(ARC-013 4-1).
-                    block_list.append(
-                        blocks.from_aggregate(
-                            len(block_list) + 1,
-                            infographic.template,
-                            infographic.title,
-                            infographic.data,
-                            aggregate.lines,
-                        )
-                    )
-            # 목록은 표준 모델에서 행을 꺼내 표로 그린다. 청크에는 상태가 없어 조건을 못 건다
-            # (ARC-013). 09.17 실측에서 닫힌 이슈가 "작업이 안 된" 목록에 섞였다.
-            table = None
-            if decision.listing:
-                entity = entity_table.FROM_SOURCE_TYPE.get(decision.listing)
-                table = (
-                    entity_table.build(
-                        cur, entity, decision.listing_status, p.scope, settings.rag_list_limit
-                    )
-                    if entity
-                    else None
-                )
-                if table is not None:
-                    block_list.append(blocks.from_entity(len(block_list) + 1, table))
-
-            # 사업 현황을 묻는 질문은 현황 그림으로 답한다(ARC-015)
-            used_overview = False
-            if decision.type == routing.OVERVIEW:
-                block_list.extend(overview.build(cur, p.principal, p.scope, len(block_list) + 1))
-                used_overview = bool(block_list)
-
-            # 근거를 어디서 찾을지. 표를 만들었으면 같은 목록을 청크로 또 넣지 않는다. 09.17
-            # 실측에서 요구사항 41건이 표와 청크 양쪽으로 들어가 프롬프트가 불어나 모델이
-            # 시간 초과로 끊겼다. 표가 답이고, 청크는 주제가 닿는 것만 출처로 붙인다.
-            if decision.listing and table is None:
-                found = search.list_by_source(
-                    cur,
-                    decision.listing,
-                    p.scope,
-                    settings.rag_list_limit,
-                    settings.rag_list_chars,
-                )
-            else:
-                found = search.search_with_vector(cur, query_vec, query_text, p.scope)
-
-            gate_ok = found.passes_gate()
-            chunks = found.chunks if gate_ok else []
-            # 무관하다고 했는데 문서 근거가 실제로 있으면 문서 질문이다. 모델이 "인수 조건이
-            # 뭐야" 를 무관으로 본 사례가 있어, 근거가 판정을 이긴다(ARC-015 3-3).
-            if decision.type == routing.OFF_TOPIC and gate_ok:
-                decision = routing.RouteDecision(
-                    type=routing.DOCUMENT, rewritten=decision.rewritten
-                )
-            # 근거도 그림도 없으면 참고 현황을 붙인다(ARC-017). 원질문의 답은 만들지 않는다.
-            # 현황 그림은 질문과 별개라는 표시와 함께 보이고, 모델은 부르지 않는다.
-            used_fallback = False
-            if (
-                decision.type == routing.DOCUMENT
-                and not gate_ok
-                and not block_list
-                and settings.rag_overview_fallback
-            ):  # OFF_TOPIC 은 여기 오지 않는다. 무관한 질문에 현황을 내지 않는다
-                made = overview.build(cur, p.principal, p.scope, 1)
-                block_list.extend(overview.as_reference(made))
-                used_fallback = bool(block_list)
-            route_type = _route_type(decision.type, gate_ok)
-            if used_overview or used_fallback:
-                route_type = routing.OVERVIEW
+            turn = _Turn(decision=decision)
+            _resolve(cur, p, turn, query_vec, query_text)
+            decision = turn.decision
+            chunks = turn.chunks
+            route_type = _route_type(turn)
             routing_info = QueryRouting(
                 type=route_type,
                 rewrittenQuery=decision.rewritten,
                 measureKey=decision.measure.key if decision.measure else None,
                 dimensions=list(decision.dimensions),
-                viz=block_list[0].template if block_list else None,
+                viz=turn.block_list[0].template if turn.block_list else None,
                 listing=decision.listing,
                 listingStatus=decision.listing_status if decision.listing else None,
                 routeCached=routed.cached,
+                intent=decision.intent if decision.type == routing.INTENT else None,
             )
             assistant_id = repo.insert_message(
                 cur,
@@ -328,7 +264,8 @@ def stream(p: Prepared) -> Iterator[bytes]:
                 route_type=route_type,
                 rewritten_query=decision.rewritten,
                 measure_key=routing_info.measureKey,
-                infographic=[b.as_event() for b in block_list] or None,
+                infographic=[b.as_event() for b in turn.block_list] or None,
+                suggestions=[s.model_dump() for s in turn.suggestions] or None,
             )
             repo.insert_sources(
                 cur, assistant_id, [_source_row(i, c) for i, c in enumerate(chunks, 1)]
@@ -346,48 +283,34 @@ def stream(p: Prepared) -> Iterator[bytes]:
             ),
         )
 
-        if decision.type == routing.OFF_TOPIC:
-            # 사업과 무관한 질문. 현황으로 내려가면 날씨를 물었는데 진척률이 나온다
-            text = answer.off_topic()
+        if turn.reason is not None:
+            # 모델을 부르지 않는 답. 근거 게이트(SWFR.RAG.007)·값 없음·되묻기·조회 오류
+            text = turn.text or ""
             pieces.append(text)
             yield _sse("delta", SseDeltaEvent(text=text))
-            finish_reason = "NO_EVIDENCE"
-        elif used_fallback:
-            # 근거 게이트(SWFR.RAG.007, ARC-017). 문서 근거가 없으니 원질문에 답하지 않는다.
-            # 참고 현황 그림만 서버 문안과 함께 붙인다. 출처·각주는 없다.
-            text = overview.REFERENCE_LEAD + blocks.append_missing("", block_list).lstrip()
-            pieces.append(text)
-            yield _sse("delta", SseDeltaEvent(text=text))
-            finish_reason = "NO_EVIDENCE"
-        elif decision.type == routing.DOCUMENT and not gate_ok and not block_list:
-            # 근거 게이트(SWFR.RAG.007). 모델을 부르지 않는다.
-            # 표가 만들어졌으면 근거가 있는 것이다. 표준 모델에서 꺼낸 행이라 색인이 비어
-            # 있어도 답할 수 있다(ARC-013). 청크 유사도만으로 막으면 될 답을 막는다.
-            if decision.listing:
-                text = answer.empty_listing(routing.LISTABLE[decision.listing])
-            else:
-                text = answer.insufficient_evidence(found.max_similarity, found.candidate_count)
-            pieces.append(text)
-            yield _sse("delta", SseDeltaEvent(text=text))
-            finish_reason = "NO_EVIDENCE"
+            finish_reason = turn.reason
         else:
             scope_line = None
             # 표를 만들었으면 범위는 표의 설명이 말한다. 두 번 말하면 모델이 둘을 더한다.
-            if decision.listing and decision.type == routing.DOCUMENT and table is None:
+            if decision.listing and decision.type == routing.DOCUMENT and turn.table is None:
                 scope_line = answer.listing_scope(
-                    routing.LISTABLE[decision.listing], len(chunks), found.candidate_count
+                    routing.LISTABLE[decision.listing], len(chunks), turn.found_count
                 )
             # 후속 질문에만 앞 대화를 준다. 주제가 선 질문에 앞 답을 주면 모델이 그걸 다시 말한다
             previous = p.previous if decision.follow_up else []
+            intent = turn.intent
+            values = None
+            if intent is not None and intent.table is None and intent.lines:
+                values = (intent.title, intent.lines)
             prompt = answer.user_prompt(
-                p.question, chunks, aggregate, scope_line, block_list, previous
+                p.question, chunks, turn.aggregate, scope_line, turn.block_list, previous, values
             )
             # 수치 검문(QUR.RAG.002, ARC-017). 숫자가 든 문장은 검사를 통과해야 나간다.
             gate = number_guard.SentenceGate(
                 number_guard.Checker(
-                    _facts(aggregate, block_list, chunks, scope_line),
+                    _facts(turn.aggregate, turn.block_list, chunks, scope_line, intent),
                     question=p.question,
-                    subjects=_subjects(aggregate, block_list),
+                    subjects=_subjects(turn.aggregate, turn.block_list, intent),
                 )
             )
             raw = llm.stream(answer.SYSTEM_PROMPT, prompt, json_schema=answer.ANSWER_SCHEMA)
@@ -400,15 +323,21 @@ def stream(p: Prepared) -> Iterator[bytes]:
             if text:
                 pieces.append(text)
                 yield _sse("delta", SseDeltaEvent(text=text))
+            # 값의 성격(추정)과 부분 답의 못 한 부분은 서버 문안이 말한다. 모델에게 맡기지 않는다
+            for extra in (turn.footnote, turn.notice):
+                if extra:
+                    text = "\n\n" + extra
+                    pieces.append(text)
+                    yield _sse("delta", SseDeltaEvent(text=text))
             # 본문이 표식을 안 쓴 그림은 끝에 붙인다. 만든 그림을 조용히 버리지 않는다.
-            tail = blocks.append_missing("".join(pieces), block_list)
+            tail = blocks.append_missing("".join(pieces), turn.block_list)
             if tail:
                 pieces.append(tail)
                 yield _sse("delta", SseDeltaEvent(text=tail))
-            finish_reason = "STOP"
+            finish_reason = PARTIAL if turn.notice else STOP
             if gate.blocked:
                 # 막힌 문장은 화면에도 저장 본문에도 없다. 무엇이 왜 막혔는지만 남긴다
-                finish_reason = "NUMBER_GUARD"
+                finish_reason = NUMBER_GUARD
                 log.info(
                     "수치 검문이 문장 %d개를 막았다: %s",
                     gate.blocked,
@@ -417,15 +346,19 @@ def stream(p: Prepared) -> Iterator[bytes]:
 
         sources = [_source_from_chunk(i, c) for i, c in enumerate(chunks, 1)]
         yield _sse("sources", SseSourcesEvent(sources=sources))
-        for block in block_list:
+        for block in turn.block_list:
             yield _sse_raw("infographic", block.as_event())
+        if turn.suggestions:
+            yield _sse("suggestions", SseSuggestionsEvent(items=turn.suggestions))
 
         elapsed = _elapsed(p)
         with tx() as cur:
-            repo.finish_message(cur, assistant_id, "".join(pieces).strip(), "COMPLETE", elapsed)
-            # 답을 만든 판정만 다음에 다시 쓴다. 근거가 없어 막히거나 현황으로 내려간 판정은
+            repo.finish_message(
+                cur, assistant_id, "".join(pieces).strip(), "COMPLETE", elapsed, finish_reason
+            )
+            # 답을 만든 판정만 다음에 다시 쓴다. 근거가 없어 막히거나 값이 없던 판정은
             # 틀렸을 수 있다(ARC-014).
-            if finish_reason != "NO_EVIDENCE" and not used_fallback:
+            if finish_reason in _ANSWERED:
                 route_cache.remember(cur, p.question, routed)
         done = SseDoneEvent(
             assistantMessageId=assistant_id, finishReason=finish_reason, elapsedMs=elapsed
@@ -443,36 +376,267 @@ def stream(p: Prepared) -> Iterator[bytes]:
         yield _sse_raw("error", {"code": "INTERNAL", "message": "답변 생성 중 오류가 났습니다."})
 
 
+# 답의 종류(done.finishReason). 모델이 쓴 답은 STOP·PARTIAL·NUMBER_GUARD, 나머지는 서버 문안이다.
+STOP = "STOP"
+PARTIAL = "PARTIAL"
+NUMBER_GUARD = "NUMBER_GUARD"
+CLARIFY = "CLARIFY"
+OFF_TOPIC = "OFF_TOPIC"
+NO_DOCUMENTS = "NO_DOCUMENTS"
+NO_RELEVANT_DOCUMENTS = "NO_RELEVANT_DOCUMENTS"
+NO_DATA = "NO_DATA"
+UNSUPPORTED = "UNSUPPORTED"
+QUERY_ERROR = "QUERY_ERROR"
+_ANSWERED = (STOP, PARTIAL, NUMBER_GUARD)
+
+
+class _QueryFailed(Exception):
+    """조회가 깨졌다. 값이 없는 것과 다르다. 사용자에게 데이터 없음으로 말하지 않는다."""
+
+
+@dataclass
+class _Turn:
+    """한 질문의 재료와 답의 종류. reason 이 서면 모델을 부르지 않고 text 를 내보낸다."""
+
+    decision: routing.RouteDecision
+    aggregate: answer.AggregateContext | None = None
+    block_list: list[blocks.Block] = field(default_factory=list)
+    table: entity_table.EntityTable | None = None
+    intent: intents.IntentResult | None = None
+    chunks: list[RetrievedChunk] = field(default_factory=list)
+    gate_ok: bool = False
+    found_count: int = 0
+    max_similarity: float = 0.0
+    reason: str | None = None
+    text: str | None = None
+    notice: str | None = None  # 모델 답 뒤에 붙는 서버 문안. 있으면 부분 답이다
+    footnote: str | None = None  # 모델 답 뒤에 붙는 서버 설명(계획선이 추정이라는 것 등)
+    suggestions: list[SuggestionItem] = field(default_factory=list)
+
+    def stop(self, reason: str, text: str) -> None:
+        self.reason, self.text = reason, text
+
+
+def _resolve(
+    cur: Any,
+    p: Prepared,
+    turn: _Turn,
+    query_vec: list[float] | None,
+    query_text: str,
+) -> None:
+    """판정대로 값을 뽑고 답의 종류를 정한다. 값은 전부 시맨틱 레이어·WBS·스냅샷에서 온다."""
+    decision = turn.decision
+    related = list(decision.related)
+
+    if decision.type == routing.CLARIFY:
+        options = suggest.build(cur, p.principal, p.scope, p.catalog, decision.options, set())
+        if options:
+            turn.suggestions = options
+            turn.stop(CLARIFY, answer.clarify())
+            return
+        # 고를 것이 남지 않았으면 되묻지 않는다. 문서에서 찾아본다
+        decision = turn.decision = routing.RouteDecision(
+            type=routing.DOCUMENT, rewritten=decision.rewritten
+        )
+
+    if decision.type == routing.INTENT:
+        assert decision.intent is not None
+        related = list(suggest.FOLLOWS.get(decision.intent, ())) + related
+        try:
+            with cur.connection.transaction():
+                result = intents.run(cur, decision.intent, decision.period, p.scope)
+        except Exception:  # noqa: BLE001 — 조회 오류는 값 없음과 다르게 알린다
+            log.exception("일정 질문 조회 실패 intent=%s", decision.intent)
+            turn.stop(QUERY_ERROR, answer.query_error())
+        else:
+            if result.server_text:
+                # 모델이 쓸 것이 없다. 있는 값과 없는 이유를 서버가 그대로 말한다
+                reason = PARTIAL if result.status == intents.PARTIAL else NO_DATA
+                turn.stop(reason, result.server_text)
+            elif result.status == intents.NO_DATA and decision.intent != intents.DELAY_CAUSE:
+                turn.stop(NO_DATA, result.notice or answer.unsupported())
+            elif result.status != intents.NO_DATA:
+                turn.intent = result
+                made = result.block(len(turn.block_list) + 1)
+                if made is not None:
+                    turn.block_list.append(made)
+                if result.status == intents.PARTIAL:
+                    turn.notice = result.notice
+                turn.footnote = result.footnote
+
+    if decision.type == routing.AGGREGATE:
+        assert decision.measure is not None
+        try:
+            aggregate, infographic = _aggregate(cur, p, decision)
+        except _QueryFailed:
+            turn.stop(QUERY_ERROR, answer.query_error())
+        else:
+            if aggregate is None:
+                turn.stop(UNSUPPORTED, answer.unsupported())
+            elif not overview.has_value(aggregate.data):
+                # 값이 없는 지표를 문서 경로로 돌리지 않는다. 무엇이 없는지 말한다
+                turn.stop(
+                    NO_DATA, answer.no_measure_data(decision.measure.label, aggregate.data.basis)
+                )
+            else:
+                turn.aggregate = aggregate
+                if infographic is not None and blocks.worth_drawing(infographic.data):
+                    # 값이 하나뿐이면 문장이 그 숫자를 말한다. 그림은 붙이지 않는다. 값은
+                    # aggregate 로 프롬프트와 수치 검문에 그대로 들어간다(ARC-013 4-1).
+                    turn.block_list.append(
+                        blocks.from_aggregate(
+                            len(turn.block_list) + 1,
+                            infographic.template,
+                            infographic.title,
+                            infographic.data,
+                            aggregate.lines,
+                        )
+                    )
+
+    if turn.reason is None:
+        _listing_and_overview(cur, p, turn)
+        _search(cur, p, turn, query_vec, query_text)
+        _decide_reason(turn)
+
+    if turn.reason not in (CLARIFY, OFF_TOPIC):
+        exclude = {routing.current_key(turn.decision)}
+        turn.suggestions = suggest.build(cur, p.principal, p.scope, p.catalog, related, exclude)
+
+
+def _listing_and_overview(cur: Any, p: Prepared, turn: _Turn) -> None:
+    decision = turn.decision
+    # 목록은 표준 모델에서 행을 꺼내 표로 그린다. 청크에는 상태가 없어 조건을 못 건다
+    # (ARC-013). 09.17 실측에서 닫힌 이슈가 "작업이 안 된" 목록에 섞였다.
+    if decision.listing:
+        entity = entity_table.FROM_SOURCE_TYPE.get(decision.listing)
+        if entity:
+            turn.table = entity_table.build(
+                cur, entity, decision.listing_status, p.scope, settings.rag_list_limit
+            )
+        if turn.table is not None:
+            turn.block_list.append(blocks.from_entity(len(turn.block_list) + 1, turn.table))
+    # 전체 현황을 묻는 질문은 현황 그림으로 답한다(ARC-015). 다른 질문에는 붙이지 않는다
+    if decision.type == routing.OVERVIEW:
+        turn.block_list.extend(overview.build(cur, p.principal, p.scope, len(turn.block_list) + 1))
+
+
+def _search(
+    cur: Any, p: Prepared, turn: _Turn, query_vec: list[float] | None, query_text: str
+) -> None:
+    """근거를 어디서 찾을지. 표를 만들었으면 같은 목록을 청크로 또 넣지 않는다. 09.17
+    실측에서 요구사항 41건이 표와 청크 양쪽으로 들어가 프롬프트가 불어나 모델이 시간 초과로
+    끊겼다. 표가 답이고, 청크는 주제가 닿는 것만 출처로 붙인다."""
+    decision = turn.decision
+    if decision.type == routing.INTENT and decision.intent != intents.DELAY_CAUSE:
+        return
+    if query_vec is None:
+        query_vec = embedding_port().embed([p.question])[0]
+    try:
+        with cur.connection.transaction():
+            if decision.listing and turn.table is None:
+                found = search.list_by_source(
+                    cur,
+                    decision.listing,
+                    p.scope,
+                    settings.rag_list_limit,
+                    settings.rag_list_chars,
+                )
+            else:
+                found = search.search_with_vector(cur, query_vec, query_text, p.scope)
+    except Exception:  # noqa: BLE001 — 조회 오류는 값 없음과 다르게 알린다
+        log.exception("문서 검색 실패 conversation=%s", p.conversation_id)
+        if not turn.block_list and turn.aggregate is None:
+            turn.stop(QUERY_ERROR, answer.query_error())
+        return
+    turn.gate_ok = found.passes_gate()
+    turn.chunks = found.chunks if turn.gate_ok else []
+    turn.found_count = found.candidate_count
+    turn.max_similarity = found.max_similarity
+    # 무관하다고 했는데 문서 근거가 실제로 있으면 문서 질문이다. 모델이 "인수 조건이
+    # 뭐야" 를 무관으로 본 사례가 있어, 근거가 판정을 이긴다(ARC-015 3-3).
+    if decision.type == routing.OFF_TOPIC and turn.gate_ok:
+        turn.decision = routing.RouteDecision(type=routing.DOCUMENT, rewritten=decision.rewritten)
+
+
+def _decide_reason(turn: _Turn) -> None:
+    """모델을 부를지. 근거도 값도 없으면 이유를 갈라 서버 문안으로 끝낸다. 질문과 무관한
+    고정 현황을 대신 붙이지 않는다(ARC-017 개정)."""
+    if turn.reason is not None:
+        return
+    decision = turn.decision
+    if turn.found_count == 0:
+        no_docs, no_docs_text = NO_DOCUMENTS, answer.no_documents()
+    else:
+        no_docs = NO_RELEVANT_DOCUMENTS
+        no_docs_text = answer.no_relevant_documents(turn.max_similarity)
+    if decision.type == routing.OFF_TOPIC:
+        # 사업과 무관한 질문. 현황으로 내려가면 날씨를 물었는데 진척률이 나온다
+        turn.stop(OFF_TOPIC, answer.off_topic())
+    elif decision.type == routing.DOCUMENT and not turn.gate_ok and not turn.block_list:
+        # 근거 게이트(SWFR.RAG.007). 모델을 부르지 않는다.
+        # 표가 만들어졌으면 근거가 있는 것이다. 표준 모델에서 꺼낸 행이라 색인이 비어
+        # 있어도 답할 수 있다(ARC-013).
+        if decision.listing:
+            turn.stop(NO_DATA, answer.empty_listing(routing.LISTABLE[decision.listing]))
+        else:
+            turn.stop(no_docs, no_docs_text)
+    elif decision.type == routing.OVERVIEW and not turn.block_list and not turn.gate_ok:
+        turn.stop(NO_DATA, answer.no_overview_data())
+    elif decision.type == routing.INTENT and decision.intent == intents.DELAY_CAUSE:
+        if turn.gate_ok:
+            return
+        if turn.intent is None:
+            turn.stop(no_docs, no_docs_text)
+        else:
+            # 늦은 작업까지는 확인했다. 사유는 근거가 없다고 서버가 말한다
+            turn.notice = answer.no_delay_reason()
+
+
 def _aggregate(
     cur: Any, p: Prepared, decision: routing.RouteDecision
 ) -> tuple[answer.AggregateContext | None, InfographicEvent | None]:
-    """모델이 고른 지표·차원·템플릿으로 시맨틱 레이어를 돌린다. 카탈로그 검증에서
-    막히면 집계를 포기한다. 값을 억지로 만들지 않는다."""
+    """모델이 고른 지표·차원·템플릿으로 시맨틱 레이어를 돌린다. 카탈로그 검증에서 막히면
+    차원을 빼고 한 번 더 본다. 그래도 막히면 집계를 포기한다. 값을 억지로 만들지 않는다.
+    조회 자체가 깨지면 _QueryFailed 다. 그것을 값 없음으로 말하지 않는다."""
     assert decision.measure is not None and decision.template is not None
-    spec = WidgetSpec(
-        template=decision.template,
-        title=decision.title,
-        query=WidgetQuery(
-            measure=decision.measure.key,
-            dimensions=list(decision.dimensions),
-            filters=[],
-            projectScope=list(p.scope),
-        ),
-        options=WidgetOptions(sort="desc"),
-    )
-    try:
-        data = semantic.run(cur, p.principal, spec)
-    except errors.ApiError as exc:
-        if exc.code == "CATALOG_VALIDATION_FAILED":
-            return None, None
-        raise
-    infographic = InfographicEvent(template=decision.template, title=decision.title, data=data)
-    return answer.AggregateContext.of(decision.title, data), infographic
+    attempts = [(decision.template, list(decision.dimensions))]
+    if decision.dimensions:
+        attempts.append(("STAT_CARD", []))
+    for template, dimensions in attempts:
+        spec = WidgetSpec(
+            template=template,
+            title=decision.title,
+            query=WidgetQuery(
+                measure=decision.measure.key,
+                dimensions=dimensions,
+                filters=[],
+                projectScope=list(p.scope),
+            ),
+            options=WidgetOptions(sort="desc"),
+        )
+        try:
+            with cur.connection.transaction():
+                data = semantic.run(cur, p.principal, spec)
+        except errors.ApiError as exc:
+            if exc.code == "CATALOG_VALIDATION_FAILED":
+                continue
+            raise
+        except Exception as exc:
+            log.exception("집계 조회 실패 measure=%s", decision.measure.key)
+            raise _QueryFailed from exc
+        infographic = InfographicEvent(template=template, title=decision.title, data=data)
+        return answer.AggregateContext.of(decision.title, data), infographic
+    return None, None
 
 
-def _route_type(decided: str, gate_ok: bool) -> str:
+def _route_type(turn: _Turn) -> str:
+    decided = turn.decision.type
+    if decided in (routing.INTENT, routing.CLARIFY):
+        return decided
     if decided == routing.AGGREGATE:
-        return routing.MIXED if gate_ok else routing.AGGREGATE
+        return routing.MIXED if turn.gate_ok else routing.AGGREGATE
+    if decided == routing.OVERVIEW and turn.block_list:
+        return routing.OVERVIEW
     return routing.DOCUMENT
 
 
@@ -559,6 +723,8 @@ def _message(row: dict[str, Any], sources: list[MessageSourceResponse]) -> Messa
         createdAt=_iso(row["created_at"]) or "",
         infographics=infographics,
         latencyMs=row.get("latency_ms"),
+        finishReason=row.get("finish_reason"),
+        suggestions=[SuggestionItem.model_validate(x) for x in row.get("suggestions_json") or []],
     )
 
 
@@ -567,9 +733,19 @@ def _facts(
     block_list: list[blocks.Block],
     chunks: list[RetrievedChunk],
     scope_line: str | None,
+    intent: intents.IntentResult | None = None,
 ) -> list[number_guard.Fact]:
     """수치 검문이 근거로 인정하는 값. 질문과 앞 답의 숫자는 넣지 않는다(ARC-017)."""
     facts: list[number_guard.Fact] = []
+    if intent is not None:
+        # 일정 값은 줄마다 기준일이 다를 수 있다(지난 스냅샷과 비교). 기준일을 모두 시점으로 둔다
+        lines = [*intent.lines, *([intent.note] if intent.note else [])]
+        facts += number_guard.facts_from_lines(
+            lines,
+            "일정",
+            subject=intent.title,
+            as_of=frozenset((d.year, d.month, d.day) for d in intent.dates),
+        )
     if aggregate is not None:
         facts += number_guard.facts_from_lines(
             aggregate.lines,
@@ -578,6 +754,8 @@ def _facts(
             as_of=number_guard.as_of_date(aggregate.data.generatedAt),
         )
     for block in block_list:
+        if intent is not None and block.data is intent.table:
+            continue  # 위에서 기준일과 함께 넣었다
         lines = [*block.lines, *([block.note] if block.note else [])]
         data = block.data
         facts += number_guard.facts_from_lines(
@@ -594,10 +772,12 @@ def _facts(
 
 
 def _subjects(
-    aggregate: answer.AggregateContext | None, block_list: list[blocks.Block]
+    aggregate: answer.AggregateContext | None,
+    block_list: list[blocks.Block],
+    intent: intents.IntentResult | None = None,
 ) -> frozenset[str]:
     """수치의 대상어 사전. 기본 사전에 이번 답의 집계·그림 제목과 지표명을 더한다."""
-    names = []
+    names = [intent.title] if intent is not None else []
     if aggregate is not None:
         names += [aggregate.title, aggregate.data.measureLabel]
     for block in block_list:
