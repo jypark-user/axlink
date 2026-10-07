@@ -16,6 +16,7 @@
 가리므로 **화면에는 셋을 함께 낸다**(절대 규칙 1 — 수치는 전부 이 집계에서만 나온다).
 """
 
+from dataclasses import dataclass
 from datetime import date
 from pathlib import Path
 from typing import Any
@@ -49,6 +50,14 @@ from app.standard import wbs_repository
 PLAN_TYPE = "PROJECT_PLAN"
 
 _NONE = "NONE"
+
+
+def require_project(cur: Any, principal: AuthPrincipal, project_id: str) -> None:
+    allowed = auth_repo.allowed_project_ids(
+        cur, principal.role, principal.org_id, principal.user_id
+    )
+    if project_id not in allowed:
+        raise errors.project_access_denied()
 
 
 def project_progress(
@@ -254,13 +263,19 @@ def _sort_key(wbs_id: str) -> tuple:
     return tuple(out)
 
 
-def refresh_deliverables(
-    cur: Any, project_id: str, at: date
-) -> dict[str, deliverable.Judgement]:
-    """말단 항목의 산출물을 지금 있는 파일·문서·산출물과 대조해 행에 남긴다(ARC-016 2단계).
+@dataclass(frozen=True)
+class DeliverableCheck:
+    """산출물 대조 한 번의 결과와 그때의 재료. 저장하지 않는다."""
 
-    조회 때마다 다시 한다. 재료(저장소 트리·문서·산출물)가 바뀌면 판정도 바뀌어야 하고,
-    36개 항목을 집합으로 맞추는 일이라 비싸지 않다.
+    items: list[dict[str, Any]]
+    judgements: list[deliverable.Judgement]
+    tree_sha: str | None  # 대조에 쓴 저장소 트리. 수집 전이면 None
+
+
+def judge_deliverables(cur: Any, project_id: str, at: date) -> DeliverableCheck:
+    """말단 항목의 산출물을 지금 있는 파일·문서·산출물과 대조한다. 읽기만 한다.
+
+    확인 요청 스냅샷도 이걸 부른다. 상태를 떠 두는 일이 판정 저장·활동 기록을 남기면 안 된다.
     """
     items = wbs_repository.list_items(cur, project_id)
     raw_tree = integration_repo.github_repo_tree(cur, project_id)
@@ -278,6 +293,19 @@ def refresh_deliverables(
         documents=wbs_repository.project_documents(cur, project_id),
         today=at,
     )
+    return DeliverableCheck(items, judgements, (tree.sha or None) if tree else None)
+
+
+def refresh_deliverables(
+    cur: Any, project_id: str, at: date
+) -> dict[str, deliverable.Judgement]:
+    """말단 항목의 산출물을 지금 있는 파일·문서·산출물과 대조해 행에 남긴다(ARC-016 2단계).
+
+    조회 때마다 다시 한다. 재료(저장소 트리·문서·산출물)가 바뀌면 판정도 바뀌어야 하고,
+    36개 항목을 집합으로 맞추는 일이라 비싸지 않다.
+    """
+    check = judge_deliverables(cur, project_id, at)
+    items, judgements = check.items, check.judgements
     changed = wbs_repository.save_judgements(cur, project_id, judgements)
     names = {i["wbs_id"]: i["name"] for i in items}
     for wbs_id, before, now in changed:

@@ -241,7 +241,7 @@ def test_overriding_the_suggested_type_is_recorded(client, as_pm, im001):
     res = client.post(
         f"/api/documents/{im001['id']}/draft/confirm",
         json=_confirm_body(draft, type="SOFTWARE_DESIGN", requirements=[], siActivity=None,
-                           workProductStatus="APPROVED"),
+                           workProductStatus="SUBMITTED"),
         headers=_auth(as_pm),
     )
     assert res.status_code == 200, res.text
@@ -250,8 +250,26 @@ def test_overriding_the_suggested_type_is_recorded(client, as_pm, im001):
 
     items = client.get(f"/api/projects/{PID}/work-products", headers=_auth(as_pm)).json()["items"]
     design = next(i for i in items if i["type"] == "SOFTWARE_DESIGN")
-    assert design["status"] == "APPROVED" and design["approvedAt"] and design["approvedBy"]
+    assert design["status"] == "SUBMITTED" and design["approvedAt"] is None
     assert design["siActivity"] == "SI_3"  # 활동을 안 주면 자리 것을 물려받는다
+
+
+@requires_db
+def test_확정으로는_승인할_수_없다(client, as_pm, im001):
+    """확정은 산출물 등록이다. 승인은 발주기관이 따로 한다.
+
+    용역사가 APPROVED 로 확정하던 길을 막는다.
+    """
+    draft = _draft(client, as_pm, im001["id"])
+    res = client.post(
+        f"/api/documents/{im001['id']}/draft/confirm",
+        json=_confirm_body(draft, workProductStatus="APPROVED"),
+        headers=_auth(as_pm),
+    )
+    assert res.status_code == 400
+    assert "승인" in res.json()["message"]
+    # 막혔으니 초안은 그대로 확인 대기다
+    assert _draft(client, as_pm, im001["id"])["status"] == "PROPOSED"
 
 
 @requires_db

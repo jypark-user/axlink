@@ -48,6 +48,12 @@ class Judgement:
     rule: str | None = None
     ref: str | None = None
     url: str | None = None
+    # 맞춘 근거가 산출물 항목이면 그 id. 저장소 파일만 맞았으면 None 이다(제출 여부를 모른다)
+    product_id: str | None = None
+
+
+def _id(value: Any) -> str | None:
+    return str(value) if value else None
 
 
 def _norm_path(value: str) -> str:
@@ -109,7 +115,7 @@ def judge(
             # 0) 항목에 직접 올린 문서. 이름이 달라도 그 항목의 산출물이다
             out.append(Judgement(
                 wbs_id, SUBMITTED, RULE_LINK, doc["original_filename"],
-                f"/api/documents/{doc['id']}/content",
+                f"/api/documents/{doc['id']}/content", _id(doc.get("work_product_id")),
             ))
             continue
         found = _match(deliverable, tree, product_paths, product_titles, product_by_type,
@@ -132,40 +138,45 @@ def _match(
     product_by_type: dict[str, dict],
     doc_names: dict[str, dict],
     type_names: dict[str, str],
-) -> tuple[str, str, str | None] | None:
+) -> tuple[str, str, str | None, str | None] | None:
     # 1) 저장소 경로. 경로 꼴일 때만 본다
     if _PATH_LIKE.search(deliverable):
         norm = _norm_path(deliverable)
         if tree is not None:
             hit = next((p for p in tree.paths if p.casefold() == norm), None)
             if hit is not None:
-                return RULE_PATH, hit, tree.url_for(hit)
+                return RULE_PATH, hit, tree.url_for(hit), None
             # 폴더를 적은 경우. 그 아래 파일이 하나라도 있으면 있는 것이다
             folder = norm.rstrip("/") + "/"
             inside = sorted(p for p in tree.paths if p.casefold().startswith(folder))
             if inside:
                 shown = deliverable.strip().replace("\\", "/").rstrip("/")
-                return RULE_PATH, f"{shown}/ ({len(inside)}개 파일)", tree.url_for(inside[0])
+                return (
+                    RULE_PATH, f"{shown}/ ({len(inside)}개 파일)", tree.url_for(inside[0]), None
+                )
         product = product_paths.get(norm)
         if product is not None:
-            return RULE_PATH, product["file_uri"], product.get("external_url")
+            return RULE_PATH, product["file_uri"], product.get("external_url"), _id(product["id"])
 
     # 2) 파일 이름. 올린 문서나 산출물 제목과 같으면
     stem = _stem(deliverable)
     if stem:
         doc = doc_names.get(stem)
         if doc is not None:
-            return RULE_NAME, doc["original_filename"], f"/api/documents/{doc['id']}/content"
+            return (
+                RULE_NAME, doc["original_filename"], f"/api/documents/{doc['id']}/content",
+                _id(doc.get("work_product_id")),
+            )
         product = product_titles.get(stem)
         if product is not None and product.get("status") not in (None, "NONE"):
-            return RULE_NAME, product["title"], product.get("external_url")
+            return RULE_NAME, product["title"], product.get("external_url"), _id(product["id"])
 
     # 3) 산출물 유형 이름. "사업수행계획서" 처럼 22종 이름이면 그 유형의 현행 산출물
     code = type_names.get(" ".join(deliverable.split()).casefold())
     if code is not None:
         product = product_by_type.get(code)
         if product is not None and product.get("status") not in (None, "NONE"):
-            return RULE_TYPE, DISPLAY_NAMES[code], product.get("external_url")
+            return RULE_TYPE, DISPLAY_NAMES[code], product.get("external_url"), _id(product["id"])
     return None
 
 

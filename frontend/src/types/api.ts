@@ -730,7 +730,84 @@ export interface AcceptanceRecordResponse {
 /** 확인 요청 · 조치 보고 (SWFR.WEB.004~006). AX Link 안에만 기록한다. */
 export type ReviewTargetType = 'WBS_ITEM' | 'WORK_PRODUCT' | 'ISSUE' | 'RISK' | 'METRIC';
 export type ReviewRequestStatus = 'REQUESTED' | 'REPORTED' | 'CONFIRMED';
-export type ReviewEventKind = 'REQUESTED' | 'REPORTED' | 'CONFIRMED' | 'REREQUESTED';
+export type ReviewEventKind =
+  'REQUESTED' | 'REPORTED' | 'CONFIRMED' | 'REREQUESTED' | 'COMPLETION_WITHDRAWN';
+
+/** GENERAL 은 일반 확인 요청, WBS_COMPLETION 은 WBS 작업 하나의 완료를 확인해 달라는 요청이다. */
+export type ReviewPurpose = 'GENERAL' | 'WBS_COMPLETION';
+
+export type EvidenceKind =
+  'WORK_PRODUCT' | 'DOCUMENT' | 'FILE' | 'COMMIT' | 'TEST' | 'DEMO' | 'MEETING' | 'OTHER';
+
+/** 완료 근거 한 줄. WORK_PRODUCT 는 등록된 산출물 버전 하나이고 서버가 버전·상태를 채운다. */
+export interface EvidenceItem {
+  kind: EvidenceKind;
+  ref: string;
+  note: string;
+  workProductId?: string | null;
+  version?: string | null;
+  statusAtReport?: string | null;
+}
+
+/** 완료 확인·철회 한 줄. 확인 당시 값이 고정돼 있다. */
+export interface CompletionRecord {
+  id: string;
+  kind: 'CONFIRMED' | 'WITHDRAWN';
+  decidedByName: string;
+  decidedAt: string;
+  wbsId: string;
+  weightAt: number;
+  planVersion: string | null;
+  reportedActual: number | null;
+  completionScope: string;
+  evidence: {
+    facts?: Record<string, unknown>;
+    reported?: EvidenceItem[];
+    work_products_at_confirm?: { workProductId: string; version: string | null; status: string }[];
+  };
+  note: string | null;
+}
+
+export type CompletionStatus = 'CONFIRMED' | 'RECONFIRM' | 'WITHDRAWN' | 'NONE';
+
+export interface CompletionItem {
+  wbsId: string;
+  taskKey: string;
+  name: string;
+  deliverable: string | null;
+  weight: number;
+  reportedActual: number | null;
+  keyReason: string;
+  fileCheck: string | null;
+  fileRef: string | null;
+  submission: string;
+  approval: string;
+  productVersion: string | null;
+  completionStatus: CompletionStatus;
+  predecessorConfirmed: boolean;
+  confirmedAt: string | null;
+  confirmedBy: string | null;
+  weightAtConfirm: number | null;
+  planVersionAtConfirm: string | null;
+  actualAtConfirm: number | null;
+  evidenceRevised: boolean;
+  openRequestId: string | null;
+  openRequestStatus: ReviewRequestStatus | null;
+}
+
+/** 보고 진척률과 완료 확인율. 분모가 없으면 비율은 null(산출 불가). */
+export interface CompletionSummaryResponse {
+  reportedPct: number | null;
+  completionRate: number | null;
+  basis: string;
+  leafCount: number;
+  confirmedCount: number;
+  reconfirmCount: number;
+  reported100Count: number;
+  reported100Pending: number;
+  inProgressCount: number;
+  items: CompletionItem[];
+}
 
 export interface ReviewTargetOption {
   key: string;
@@ -763,6 +840,7 @@ export interface ReviewRequestEventResponse {
   actorName: string;
   snapshot: Record<string, unknown>;
   createdAt: string;
+  evidence?: EvidenceItem[] | null;
 }
 
 export interface ReviewRequestResponse {
@@ -783,6 +861,8 @@ export interface ReviewRequestResponse {
   confirmedAt: string | null;
   rerequestCount: number;
   updatedAt: string;
+  purpose: ReviewPurpose;
+  completionScope: string | null;
 }
 
 export interface ReviewRequestDetailResponse extends ReviewRequestResponse {
@@ -790,6 +870,7 @@ export interface ReviewRequestDetailResponse extends ReviewRequestResponse {
   currentState: Record<string, unknown>;
   changes: ReviewStateChange[];
   events: ReviewRequestEventResponse[];
+  completionRecords: CompletionRecord[];
 }
 
 export interface GridItem {

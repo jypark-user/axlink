@@ -7,6 +7,7 @@ ORM 을 쓰지 않는 이유 중 하나다(작업 규약 §1).
 from dataclasses import dataclass
 from typing import Any
 
+from app.common import errors
 from app.common.paging import PageQuery
 from app.db import fetch_all, fetch_one
 from app.standard import work_product_type
@@ -227,9 +228,18 @@ def place_document_work_product(
     )
     same_version = fetch_one(
         cur,
-        "select id from work_product where project_id = %s and type = %s and version = %s",
+        """
+        select id, status from work_product
+         where project_id = %s and type = %s and version = %s
+        """,
         (project_id, rec["type"], rec["version"]),
     )
+    if same_version is not None and same_version["status"] == "APPROVED":
+        # 승인된 버전을 같은 버전 표기로 고쳐 쓰면 승인이 바뀐 파일에 붙은 것처럼 보인다
+        raise errors.ApiError(
+            409, "APPROVED_VERSION_LOCKED",
+            f"버전 {rec['version']} 은 승인된 버전이라 고쳐 쓸 수 없습니다. 새 버전으로 올리세요.",
+        )
 
     pm_activity = rec.get("pm_activity") or (current["pm_activity"] if current else None)
     si_activity = rec.get("si_activity") or (current["si_activity"] if current else None)
@@ -319,6 +329,41 @@ def upsert_document_requirement(
         ),
     )
     return str(row["id"])
+
+
+def work_product_for_review(cur: Any, work_product_id: str) -> dict[str, Any] | None:
+    return fetch_one(
+        cur,
+        """
+        select id, project_id, type, version, title, status, is_current
+          from work_product where id = %s
+        """,
+        (work_product_id,),
+    )
+
+
+def approve_work_product(cur: Any, work_product_id: str, user_id: str) -> None:
+    cur.execute(
+        """
+        update work_product
+           set status = 'APPROVED', approved_by_user_id = %s, approved_at = now(),
+               reject_reason = null, updated_at = now()
+         where id = %s
+        """,
+        (user_id, work_product_id),
+    )
+
+
+def reject_work_product(cur: Any, work_product_id: str, reason: str) -> None:
+    cur.execute(
+        """
+        update work_product
+           set status = 'REJECTED', approved_by_user_id = null, approved_at = null,
+               reject_reason = %s, updated_at = now()
+         where id = %s
+        """,
+        (reason, work_product_id),
+    )
 
 
 def list_work_product_versions(

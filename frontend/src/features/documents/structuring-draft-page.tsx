@@ -32,7 +32,8 @@ import {
 } from '@/types/api';
 
 const PRIORITIES: Priority[] = ['MUST', 'SHOULD', 'COULD', 'WONT'];
-const STATUSES: WorkProductStatus[] = ['DRAFT', 'SUBMITTED', 'APPROVED'];
+/** 확정은 산출물 등록이다. 승인은 발주기관이 산출물 화면에서 따로 한다. */
+const STATUSES: WorkProductStatus[] = ['DRAFT', 'SUBMITTED'];
 const NONE = 'NONE';
 
 export function StructuringDraftPage(): ReactNode {
@@ -172,6 +173,9 @@ export function StructuringDraftPage(): ReactNode {
                     ))}
                   </SelectContent>
                 </Select>
+                <p className="text-muted-foreground text-xs">
+                  승인은 확정과 별도로 발주기관이 산출물 화면에서 합니다.
+                </p>
               </div>
               <ActivitySelect
                 id="pmActivity"

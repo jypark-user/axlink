@@ -1,4 +1,4 @@
-import { useMemo, useRef, useState, type ChangeEvent, type ReactNode } from 'react';
+import { useCallback, useMemo, useRef, useState, type ChangeEvent, type ReactNode } from 'react';
 import { Link } from 'react-router-dom';
 import type { ColumnDef } from '@tanstack/react-table';
 import { Button } from '@/components/ui/button';
@@ -14,6 +14,8 @@ import { formatDate, formatDateTime } from '@/lib/format';
 import { useAsync } from '@/lib/use-async';
 import { cn } from '@/lib/utils';
 import { ALLOWED, rejectReason } from '@/features/documents/upload';
+import { useAuth } from '@/features/auth/auth-context';
+import { label } from '@/lib/labels';
 import type {
   DeliverableStatus,
   DocumentUploadResponse,
@@ -132,7 +134,11 @@ export function DeliverablesPage(): ReactNode {
         accept={ALLOWED.join(',')}
         onChange={upload}
       />
-      <DataState state={state} onRetry={reload} empty={{ text: 'WBS 가 없어 산출물 목록이 없습니다.' }}>
+      <DataState
+        state={state}
+        onRetry={reload}
+        empty={{ text: 'WBS 가 없어 산출물 목록이 없습니다.' }}
+      >
         {(data) => {
           const rows = data.items.filter((i) => inFilter(i, filter));
           const s = data.summary;
@@ -140,15 +146,15 @@ export function DeliverablesPage(): ReactNode {
           return (
             <>
               <p className="text-muted-foreground mb-3 text-sm">
-                산출물 <span className="tnum text-foreground font-medium">{s.submitted}</span>/{expected}개
-                제출
+                산출물 <span className="tnum text-foreground font-medium">{s.submitted}</span>/
+                {expected}개 제출
                 {s.overdue > 0 && (
                   <>
-                    {' '}· 지연{' '}
-                    <span className="tnum text-destructive font-medium">{s.overdue}</span>개
+                    {' '}
+                    · 지연 <span className="tnum text-destructive font-medium">{s.overdue}</span>개
                   </>
-                )}
-                {' '}· 기준일 {formatDate(data.baseDate)}
+                )}{' '}
+                · 기준일 {formatDate(data.baseDate)}
               </p>
               <Tabs value={filter} onValueChange={(next) => setFilter(next as Filter)}>
                 <TabsList>
@@ -174,7 +180,9 @@ export function DeliverablesPage(): ReactNode {
 
               <div className="mt-8">
                 <Button variant="ghost" size="sm" onClick={() => setShowChecklist((v) => !v)}>
-                  {showChecklist ? '인도 점검표 접기' : '인도 점검표 보기 (ISO/IEC 29110 산출물 22종)'}
+                  {showChecklist
+                    ? '인도 점검표 접기'
+                    : '인도 점검표 보기 (ISO/IEC 29110 산출물 22종)'}
                 </Button>
                 {showChecklist && <Checklist projectId={project.id} />}
               </div>
@@ -211,12 +219,16 @@ function buildColumns(
     {
       accessorKey: 'deliverable',
       // WBS 산출물 열에 적힌 이름이다. 실제 파일이 아직 없을 수 있어 "정한" 을 붙인다.
-      header: () => <span title="WBS 산출물 열에 적힌 이름. 실제 파일과 다를 수 있다">WBS 가 정한 산출물</span>,
+      header: () => (
+        <span title="WBS 산출물 열에 적힌 이름. 실제 파일과 다를 수 있다">WBS 가 정한 산출물</span>
+      ),
       cell: ({ row }) => (
         <span
           className={cn(
             'block max-w-[18rem] truncate text-sm',
-            row.original.status === 'SUBMITTED' ? 'text-muted-foreground' : 'text-muted-foreground/70 italic',
+            row.original.status === 'SUBMITTED'
+              ? 'text-muted-foreground'
+              : 'text-muted-foreground/70 italic',
           )}
           title={`WBS 에 적힌 이름: ${row.original.deliverable ?? ''}`}
         >
@@ -250,7 +262,13 @@ function buildColumns(
                 {pill}
               </Link>
             ) : item.url ? (
-              <a href={item.url} target="_blank" rel="noreferrer" className="w-fit" title="원천 저장소에서 보기">
+              <a
+                href={item.url}
+                target="_blank"
+                rel="noreferrer"
+                className="w-fit"
+                title="원천 저장소에서 보기"
+              >
                 {pill}
               </a>
             ) : (
@@ -292,7 +310,9 @@ function buildColumns(
       header: '유형',
       cell: ({ row }) =>
         row.original.productType ? (
-          <span className="text-muted-foreground font-mono text-xs">{row.original.productType}</span>
+          <span className="text-muted-foreground font-mono text-xs">
+            {row.original.productType}
+          </span>
         ) : (
           <span className="text-muted-foreground text-sm">-</span>
         ),
@@ -332,9 +352,42 @@ function buildColumns(
 
 /** 인도 점검표. 22종 분류로 무엇이 채워졌는지 본다. 사업의 산출물 목록은 위 WBS 표다. */
 function Checklist({ projectId }: { projectId: string }): ReactNode {
+  const { me } = useAuth();
+  const { toast } = useToast();
+  // 승인·반려는 발주기관만. 서버도 역할과 사업 접근을 다시 본다
+  const canApprove = me?.role === 'CLIENT' || me?.role === 'SUPER_ADMIN';
   const state = useAsync<WorkProductChecklistResponse>(
     () => api.get<WorkProductChecklistResponse>(`/projects/${projectId}/work-products`),
     [projectId],
+  );
+  const { reload } = state;
+  const decide = useCallback(
+    async (wp: WorkProductResponse, action: 'approve' | 'reject') => {
+      const name = `${wp.title ?? wp.displayName} ${wp.version ?? ''}`.trim();
+      let body: { reason: string } | undefined;
+      if (action === 'reject') {
+        const reason = window.prompt(`${name} 을(를) 반려하는 사유를 적어 주세요.`)?.trim();
+        if (!reason) return;
+        body = { reason };
+      } else if (!window.confirm(`${name} 을(를) 승인합니다. 이 버전에만 붙습니다.`)) {
+        return;
+      }
+      try {
+        await api.post(`/projects/${projectId}/work-products/${wp.id}/${action}`, body ?? {});
+        toast({
+          title: action === 'approve' ? '승인했습니다.' : '반려했습니다.',
+          variant: 'success',
+        });
+        reload();
+      } catch (err) {
+        toast({
+          title: action === 'approve' ? '승인하지 못했습니다.' : '반려하지 못했습니다.',
+          description: isApiError(err) ? err.message : undefined,
+          variant: 'error',
+        });
+      }
+    },
+    [projectId, reload, toast],
   );
   const columns = useMemo<ColumnDef<WorkProductResponse, unknown>[]>(
     () => [
@@ -350,7 +403,9 @@ function Checklist({ projectId }: { projectId: string }): ReactNode {
         accessorFn: (wp) => wp.title ?? wp.displayName,
         header: '제목',
         cell: ({ row }) => (
-          <span className={row.original.applicable ? 'text-foreground' : 'text-muted-foreground/60'}>
+          <span
+            className={row.original.applicable ? 'text-foreground' : 'text-muted-foreground/60'}
+          >
             {row.original.title ?? row.original.displayName}
           </span>
         ),
@@ -358,7 +413,19 @@ function Checklist({ projectId }: { projectId: string }): ReactNode {
       {
         accessorKey: 'status',
         header: '상태',
-        cell: ({ row }) => <span className="text-sm">{row.original.status}</span>,
+        cell: ({ row }) => {
+          const wp = row.original;
+          return (
+            <div className="flex flex-col gap-0.5 text-sm">
+              <span>{label(wp.status)}</span>
+              {wp.status === 'APPROVED' && wp.approvedAt && (
+                <span className="text-muted-foreground text-xs">
+                  {wp.approvedBy ?? '-'} · {formatDate(wp.approvedAt)}
+                </span>
+              )}
+            </div>
+          );
+        },
       },
       {
         accessorKey: 'version',
@@ -371,8 +438,36 @@ function Checklist({ projectId }: { projectId: string }): ReactNode {
         header: '활동',
         cell: ({ row }) => row.original.pmActivity ?? row.original.siActivity ?? '-',
       },
+      ...(canApprove
+        ? [
+            {
+              id: 'decide',
+              header: '승인',
+              cell: ({ row }: { row: { original: WorkProductResponse } }) => {
+                const wp = row.original;
+                if (wp.status !== 'SUBMITTED' && wp.status !== 'APPROVED') return null;
+                return (
+                  <div className="flex gap-1">
+                    {wp.status === 'SUBMITTED' && (
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        onClick={() => void decide(wp, 'approve')}
+                      >
+                        승인
+                      </Button>
+                    )}
+                    <Button size="sm" variant="ghost" onClick={() => void decide(wp, 'reject')}>
+                      반려
+                    </Button>
+                  </div>
+                );
+              },
+            } satisfies ColumnDef<WorkProductResponse, unknown>,
+          ]
+        : []),
     ],
-    [],
+    [canApprove, decide],
   );
   return (
     <DataState state={state} onRetry={state.reload}>

@@ -5,12 +5,13 @@
 
 from typing import Literal
 
-from fastapi import APIRouter, Query
+from fastapi import APIRouter, Query, Response
+from pydantic import BaseModel
 
 from app.auth.deps import Principal
 from app.common.paging import PageQuery, PageResponse
 from app.db import tx
-from app.standard import repository, service, trace_service
+from app.standard import approval, repository, service, trace_service
 from app.standard.models import (
     IssueResponse,
     IssueSummaryResponse,
@@ -109,6 +110,28 @@ def issue_summary(project_id: str, principal: Principal) -> IssueSummaryResponse
     """일반 이슈 화면 카드. 목록 페이지와 상관없이 사업 전체를 센다."""
     with tx() as cur:
         return service.issue_summary(cur, principal, project_id)
+
+
+class RejectRequest(BaseModel):
+    reason: str
+
+
+@router.post("/{project_id}/work-products/{work_product_id}/approve", status_code=204)
+def approve_work_product(project_id: str, work_product_id: str, principal: Principal) -> Response:
+    """발주기관이 현행 버전 하나를 승인한다. 문서 확정과 다른 행위다."""
+    with tx() as cur:
+        approval.approve(cur, principal, project_id, work_product_id)
+    return Response(status_code=204)
+
+
+@router.post("/{project_id}/work-products/{work_product_id}/reject", status_code=204)
+def reject_work_product(
+    project_id: str, work_product_id: str, req: RejectRequest, principal: Principal
+) -> Response:
+    """발주기관이 현행 버전 하나를 반려한다. 사유가 있어야 한다."""
+    with tx() as cur:
+        approval.reject(cur, principal, project_id, work_product_id, req.reason)
+    return Response(status_code=204)
 
 
 @router.get("/{project_id}/work-products", response_model=WorkProductChecklistResponse)

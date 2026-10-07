@@ -10,6 +10,7 @@ _SELECT = """
     select r.id, r.project_id, r.target_type, r.target_key, r.target_label, r.title, r.body,
            r.status, r.requested_at, r.snapshot_json, r.report_body, r.reported_at,
            r.report_snapshot_json, r.confirmed_at, r.rerequest_count, r.updated_at,
+           r.purpose, r.completion_scope, r.task_key,
            rq.name as requested_by_name, rp.name as reported_by_name, cf.name as confirmed_by_name
       from review_request r
       join app_user rq on rq.id = r.requested_by_user_id
@@ -29,18 +30,22 @@ def insert(
     requested_by: str,
     snapshot: dict[str, Any],
     now: datetime,
+    purpose: str = "GENERAL",
+    completion_scope: str | None = None,
+    task_key: str | None = None,
 ) -> str:
     row = fetch_one(
         cur,
         """
         insert into review_request
           (project_id, target_type, target_key, target_label, title, body,
-           requested_by_user_id, requested_at, snapshot_json)
-        values (%s, %s, %s, %s, %s, %s, %s, %s, %s)
+           requested_by_user_id, requested_at, snapshot_json,
+           purpose, completion_scope, task_key)
+        values (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
         returning id
         """,
         (project_id, target_type, target_key, target_label, title, body,
-         requested_by, now, Jsonb(snapshot)),
+         requested_by, now, Jsonb(snapshot), purpose, completion_scope, task_key),
     )
     return str(row["id"])
 
@@ -93,15 +98,19 @@ def mark_reported(
     )
 
 
-def mark_confirmed(cur: Any, request_id: str, actor: str, now: datetime) -> None:
-    cur.execute(
+def mark_confirmed(cur: Any, request_id: str, actor: str, now: datetime) -> bool:
+    """보고 상태일 때만 확인완료로 바꾼다. 이미 바뀌었으면(중복 클릭·재시도) False."""
+    row = fetch_one(
+        cur,
         """
         update review_request
            set status = 'CONFIRMED', confirmed_by_user_id = %s, confirmed_at = %s, updated_at = %s
-         where id = %s
+         where id = %s and status = 'REPORTED'
+        returning id
         """,
         (actor, now, now, request_id),
     )
+    return row is not None
 
 
 def mark_rerequested(
@@ -132,14 +141,113 @@ def insert_event(
     actor: str,
     snapshot: dict[str, Any],
     now: datetime,
+    evidence: list[dict[str, Any]] | None = None,
 ) -> None:
     cur.execute(
         """
         insert into review_request_event
-          (review_request_id, kind, body, actor_user_id, snapshot_json, created_at)
-        values (%s, %s, %s, %s, %s, %s)
+          (review_request_id, kind, body, actor_user_id, snapshot_json, created_at,
+           evidence_json)
+        values (%s, %s, %s, %s, %s, %s, %s)
         """,
-        (request_id, kind, body, actor, Jsonb(snapshot), now),
+        (request_id, kind, body, actor, Jsonb(snapshot), now,
+         Jsonb(evidence) if evidence is not None else None),
+    )
+
+
+def open_completion_request(cur: Any, task_key: str) -> bool:
+    row = fetch_one(
+        cur,
+        """
+        select 1 as ok from review_request
+         where task_key = %s and purpose = 'WBS_COMPLETION' and status in ('REQUESTED','REPORTED')
+         limit 1
+        """,
+        (task_key,),
+    )
+    return row is not None
+
+
+def work_product_in_project(
+    cur: Any, project_id: str, work_product_id: str
+) -> dict[str, Any] | None:
+    if not work_product_id:
+        return None
+    return fetch_one(
+        cur,
+        """
+        select id, type, title, version, status from work_product
+         where project_id = %s and id::text = %s and status <> 'NONE'
+        """,
+        (project_id, work_product_id),
+    )
+
+
+def work_products_by_id(cur: Any, ids: list[str]) -> list[dict[str, Any]]:
+    if not ids:
+        return []
+    return fetch_all(
+        cur,
+        "select id, version, status, approved_at from work_product where id = any(%s::uuid[])",
+        (ids,),
+    )
+
+
+def last_reported_evidence(cur: Any, request_id: str) -> list[dict[str, Any]]:
+    row = fetch_one(
+        cur,
+        """
+        select evidence_json from review_request_event
+         where review_request_id = %s and kind = 'REPORTED'
+         order by created_at desc, id desc limit 1
+        """,
+        (request_id,),
+    )
+    return (row or {}).get("evidence_json") or []
+
+
+def insert_completion_record(cur: Any, rec: dict[str, Any]) -> bool:
+    """완료 확인·철회 한 줄. 같은 요청의 같은 종류가 이미 있으면 False(중복 반영 안 함)."""
+    row = fetch_one(
+        cur,
+        """
+        insert into wbs_completion_record
+          (project_id, task_key, wbs_id, review_request_id, kind, decided_by_user_id, decided_at,
+           scope_hash, weight_at, plan_work_product_id, plan_version, reported_actual,
+           completion_scope, item_json, evidence_json, note)
+        values (%(project_id)s, %(task_key)s, %(wbs_id)s, %(review_request_id)s, %(kind)s,
+                %(decided_by)s, %(decided_at)s, %(scope_hash)s, %(weight_at)s,
+                %(plan_work_product_id)s, %(plan_version)s, %(reported_actual)s,
+                %(completion_scope)s, %(item_json)s, %(evidence_json)s, %(note)s)
+        on conflict (review_request_id, kind) do nothing
+        returning id
+        """,
+        {**rec, "item_json": Jsonb(rec["item_json"]), "evidence_json": Jsonb(rec["evidence_json"])},
+    )
+    return row is not None
+
+
+def latest_completion_record(cur: Any, task_key: str) -> dict[str, Any] | None:
+    return fetch_one(
+        cur,
+        """
+        select * from wbs_completion_record where task_key = %s
+         order by decided_at desc, id desc limit 1
+        """,
+        (task_key,),
+    )
+
+
+def completion_records(cur: Any, request_id: str) -> list[dict[str, Any]]:
+    return fetch_all(
+        cur,
+        """
+        select c.*, u.name as decided_by_name
+          from wbs_completion_record c join app_user u on u.id = c.decided_by_user_id
+         where c.review_request_id = %s
+         order by c.decided_at, c.id
+        """,
+        (request_id,),
     )
 
 
@@ -147,7 +255,8 @@ def list_events(cur: Any, request_id: str) -> list[dict[str, Any]]:
     return fetch_all(
         cur,
         """
-        select e.id, e.kind, e.body, e.snapshot_json, e.created_at, u.name as actor_name
+        select e.id, e.kind, e.body, e.snapshot_json, e.created_at, e.evidence_json,
+               u.name as actor_name
           from review_request_event e
           join app_user u on u.id = e.actor_user_id
          where e.review_request_id = %s

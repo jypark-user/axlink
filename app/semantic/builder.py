@@ -33,6 +33,8 @@ TIME_COLUMNS: dict[str, str] = {
     "progress_record": "e.period_end",
     "progress_snapshot": "e.snapshot_date",
     "wbs_item": "coalesce(e.end_on::timestamptz, e.updated_at)",
+    # 완료 확인 뷰(V46). 확인된 작업은 확인 시각, 아니면 작업 종료일
+    "v_wbs_completion": "coalesce(e.decided_at, e.end_on::timestamptz)",
 }
 
 _TIME_COL = "<TIME_COL>"

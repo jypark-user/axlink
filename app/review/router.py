@@ -10,7 +10,9 @@ from app.common.paging import PageQuery, PageResponse
 from app.db import tx
 from app.review import service
 from app.review.models import (
+    CompletionWithdrawRequest,
     ReviewBodyRequest,
+    ReviewConfirmRequest,
     ReviewRequestCreateRequest,
     ReviewRequestDetailResponse,
     ReviewRequestResponse,
@@ -67,9 +69,24 @@ def report(
 
 
 @router.post("/review-requests/{request_id}/confirm", response_model=ReviewRequestDetailResponse)
-def confirm(request_id: str, principal: Principal) -> ReviewRequestDetailResponse:
+def confirm(
+    request_id: str, principal: Principal, req: ReviewConfirmRequest | None = None
+) -> ReviewRequestDetailResponse:
+    """확인완료. 작업 완료 확인 요청이면 같은 트랜잭션에서 완료 확인 기록을 남긴다."""
     with tx() as cur:
-        return service.confirm(cur, principal, request_id)
+        return service.confirm(cur, principal, request_id, req or ReviewConfirmRequest())
+
+
+@router.post(
+    "/review-requests/{request_id}/withdraw-completion",
+    response_model=ReviewRequestDetailResponse,
+)
+def withdraw_completion(
+    request_id: str, req: CompletionWithdrawRequest, principal: Principal
+) -> ReviewRequestDetailResponse:
+    """완료 확인 철회. 기록을 지우지 않고 철회 한 줄을 더한다."""
+    with tx() as cur:
+        return service.withdraw_completion(cur, principal, request_id, req)
 
 
 @router.post("/review-requests/{request_id}/rerequest", response_model=ReviewRequestDetailResponse)

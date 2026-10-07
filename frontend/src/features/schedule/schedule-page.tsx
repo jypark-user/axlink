@@ -18,6 +18,7 @@ import {
 } from '@/features/schedule/schedule-views';
 import { toScheduleTasks } from '@/features/schedule/wbs-tasks';
 import type { WbsScheduleResponse } from '@/types/api';
+import { CompletionPanel } from '@/features/schedule/completion-panel';
 
 const VIEW_KEY = 'ax-link.schedule-view';
 
@@ -61,6 +62,7 @@ export function SchedulePage(): ReactNode {
   return (
     <>
       <PageHeader title="일정" description="용역사 WBS 기준의 작업 일정과 진척입니다." />
+      <CompletionPanel projectId={project.id} />
 
       <DataState state={state} onRetry={state.reload}>
         {(data) => {
@@ -95,7 +97,8 @@ export function SchedulePage(): ReactNode {
                   작업 {leaves.length}개
                   {late > 0 ? (
                     <>
-                      {' '}· 계획보다 늦은 작업{' '}
+                      {' '}
+                      · 계획보다 늦은 작업{' '}
                       <span className="tnum text-destructive font-medium">{late}</span>개
                     </>
                   ) : (
@@ -103,7 +106,8 @@ export function SchedulePage(): ReactNode {
                   )}
                   {expected > 0 && (
                     <>
-                      {' '}· 산출물 <span className="tnum">{dl.submitted}</span>/{expected}개 제출
+                      {/* 파일·문서가 있는지 대조한 결과다. 정식 제출·승인과 다르다 */} · 산출물
+                      파일 대조 <span className="tnum">{dl.submitted}</span>/{expected}개
                       {dl.overdue > 0 && (
                         <>
                           , 지연{' '}

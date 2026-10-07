@@ -281,3 +281,45 @@ class WidgetTemplateResponse(BaseModel):
 
 class WidgetTemplateListResponse(BaseModel):
     templates: list[WidgetTemplateResponse]
+
+
+class CompletionItem(BaseModel):
+    """WBS 말단 작업 하나의 근거 사실 넷과 완료 확인 상태."""
+
+    wbsId: str  # noqa: N815
+    taskKey: str  # noqa: N815
+    name: str
+    deliverable: str | None
+    weight: float
+    reportedActual: float | None  # noqa: N815
+    keyReason: str  # noqa: N815 — 작업 식별을 이었는가(CONTINUED) 새로 잡았는가
+    fileCheck: str | None  # noqa: N815 — MATCHED | MISSING | OVERDUE | NONE
+    fileRef: str | None  # noqa: N815
+    submission: str  # SUBMITTED | DRAFT | UNKNOWN
+    approval: str  # APPROVED | REJECTED | NOT_APPROVED | UNKNOWN
+    productVersion: str | None  # noqa: N815
+    completionStatus: str  # noqa: N815 — CONFIRMED | RECONFIRM | WITHDRAWN | NONE
+    predecessorConfirmed: bool  # noqa: N815 — 같은 번호의 예전 작업 확인이 승계되지 않았다
+    confirmedAt: str | None  # noqa: N815
+    confirmedBy: str | None  # noqa: N815
+    weightAtConfirm: float | None  # noqa: N815
+    planVersionAtConfirm: str | None  # noqa: N815
+    actualAtConfirm: float | None  # noqa: N815
+    evidenceRevised: bool  # noqa: N815 — 확인 뒤 근거 파일·버전이 바뀌었다
+    openRequestId: str | None  # noqa: N815
+    openRequestStatus: str | None  # noqa: N815
+
+
+class CompletionSummaryResponse(BaseModel):
+    """보고 진척률과 완료 확인율. 분모가 없으면 비율은 None(산출 불가)."""
+
+    reportedPct: float | None  # noqa: N815
+    completionRate: float | None  # noqa: N815
+    basis: str
+    leafCount: int  # noqa: N815
+    confirmedCount: int  # noqa: N815
+    reconfirmCount: int  # noqa: N815
+    reported100Count: int  # noqa: N815
+    reported100Pending: int  # noqa: N815
+    inProgressCount: int  # noqa: N815
+    items: list[CompletionItem]
