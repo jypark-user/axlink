@@ -43,6 +43,8 @@ class Settings(BaseSettings):
     # 처리 중 신호가 이만큼 없으면 멈춘 작업으로 보고 다시 대기열에 넣는다. 한도만큼 끊기면 실패다
     document_stale_seconds: int = 600
     document_max_attempts: int = 3
+    # 문서 색인 때 임베딩 한 번에 보내는 조각 수. 작을수록 그사이 질문의 임베딩이 덜 기다린다
+    document_embed_batch: int = 4
     # 생성 문맥 길이. 근거 청크 5개(각 최대 1000토큰)와 지시가 들어가야 한다.
     llm_num_ctx: int = 8192
     ollama_base_url: str = "http://localhost:11434"

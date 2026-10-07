@@ -68,7 +68,9 @@ class Prepared:
     result: IndexResult
 
 
-def prepare(cur: Any, port: EmbeddingPort, sources: list[IndexSource]) -> Prepared:
+def prepare(
+    cur: Any, port: EmbeddingPort, sources: list[IndexSource], batch: int | None = None
+) -> Prepared:
     """청크를 나누고 임베딩을 만든다. 읽기만 한다. 오래 걸리는 임베딩을 쓰기 트랜잭션 밖에서
     하려고 나눴다(GH-121). 문서 처리 작업자는 이것과 write 를 다른 트랜잭션에서 부른다."""
     result = IndexResult()
@@ -83,7 +85,12 @@ def prepare(cur: Any, port: EmbeddingPort, sources: list[IndexSource]) -> Prepar
         return Prepared(plan=[], vectors=[], result=result)
 
     texts = [draft.content for _, drafts in plan for draft in drafts]
-    vectors = port.embed(texts)
+    if batch:
+        # 작게 나눠 부른다. 임베딩 서버가 한 번에 하나씩 처리해서, 큰 묶음을 보내면 그동안 질문의
+        # 임베딩이 뒤에서 기다린다(10-07 실측: 32개 묶음 사이에 질문 첫 답이 53초 늦었다)
+        vectors = [v for i in range(0, len(texts), batch) for v in port.embed(texts[i : i + batch])]
+    else:
+        vectors = port.embed(texts)
     if len(vectors) != len(texts):
         raise errors.ApiError(
             503,

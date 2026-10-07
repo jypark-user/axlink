@@ -236,7 +236,7 @@ def _run_steps(
     port = embedding_port()
     try:
         with txf() as cur:
-            prepared = indexing.prepare(cur, port, [source])
+            prepared = indexing.prepare(cur, port, [source], settings.document_embed_batch)
         steps["chunks"] = sum(len(drafts) for _, drafts in prepared.plan)
         with txf() as cur:
             if not repository.lock_for_write(cur, document_id):
