@@ -57,12 +57,13 @@ def upsert_issue(
         insert into issue
           (project_id, issue_key, title, body, status, severity, assignee,
            source_created_at, source_updated_at, resolved_at,
-           tool_connection_id, external_id, external_url, source_kind)
-        values (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, 'TOOL')
+           tool_connection_id, external_id, external_url, source_kind, source_priority)
+        values (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, 'TOOL', %s)
         {_SOURCE_CONFLICT}
         do update set
            issue_key = excluded.issue_key, title = excluded.title, body = excluded.body,
            status = excluded.status, severity = excluded.severity,
+           source_priority = excluded.source_priority,
            assignee = excluded.assignee,
            source_created_at = excluded.source_created_at,
            source_updated_at = excluded.source_updated_at,
@@ -74,7 +75,7 @@ def upsert_issue(
             project_id, rec["issue_key"], rec["title"], rec["body"], rec["status"],
             rec["severity"], rec["assignee"], rec["source_created_at"],
             rec["source_updated_at"], rec["resolved_at"],
-            connection_id, external_id, rec["external_url"],
+            connection_id, external_id, rec["external_url"], rec.get("source_priority"),
         ),
     )
     return str(row["id"])
@@ -567,7 +568,7 @@ def create_checklist(cur: Any, project_id: str) -> int:
 
 _ISSUE_COLUMNS = """
     i.id, i.project_id, i.issue_key, i.title, i.status, i.severity, i.assignee,
-    i.resolved_at, i.source_updated_at, i.updated_at,
+    i.resolved_at, i.source_updated_at, i.updated_at, i.source_priority,
     i.tool_connection_id, i.external_id, i.external_url, i.source_kind,
     c.tool as tool_name
 """
@@ -614,13 +615,16 @@ def issue_summary(cur: Any, project_id: str) -> dict[str, int]:
                count(*) filter (where status in ('OPEN', 'IN_PROGRESS')
                                   and severity = any(%s)) as heavy_open,
                count(*) filter (where status in ('OPEN', 'IN_PROGRESS')
-                                  and nullif(btrim(assignee), '') is null) as unassigned_open
+                                  and nullif(btrim(assignee), '') is null) as unassigned_open,
+               count(*) filter (where status in ('OPEN', 'IN_PROGRESS')
+                                  and severity is null) as unspecified_open
           from issue
          where project_id = %s
         """,
         (list(HEAVY_SEVERITIES), project_id),
     )
-    return {k: int(row[k]) for k in ("total", "open", "closed", "heavy_open", "unassigned_open")}
+    keys = ("total", "open", "closed", "heavy_open", "unassigned_open", "unspecified_open")
+    return {k: int(row[k]) for k in keys}
 
 
 def search_issues(

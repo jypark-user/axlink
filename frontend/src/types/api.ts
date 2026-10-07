@@ -600,6 +600,8 @@ export interface IssueSummaryResponse {
   closed: number;
   heavyOpen: number;
   unassignedOpen: number;
+  /** 열린 것 중 심각도 미지정. 고위험에서 빼고 따로 센다 */
+  unspecifiedOpen: number;
 }
 
 export interface IssueResponse {
@@ -608,7 +610,10 @@ export interface IssueResponse {
   key: string;
   title: string;
   status: IssueStatus;
+  /** null 이면 원천에 심각도 근거가 없다(미지정) */
   severity: IssueSeverity | null;
+  /** 원천 우선순위 원문. 심각도와 다르다 */
+  sourcePriority?: string | null;
   assignee: string | null;
   resolvedAt: string | null;
   source: SourceRef;

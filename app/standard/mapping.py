@@ -88,7 +88,9 @@ def to_issue(payload: dict[str, Any]) -> dict[str, Any]:
         "title": (payload.get("title") or "").strip()[:500],
         "body": payload.get("body") or "",
         "status": "CLOSED" if closed else "OPEN",
-        "severity": "MAJOR",  # GitHub 이슈에는 심각도 개념이 없다. Redmine 에서 채운다.
+        # GitHub 이슈에는 심각도가 없다. 근거 없이 채우지 않는다(GH-116). 화면은 '미지정'
+        "severity": None,
+        "source_priority": None,
         "assignee": _login(payload.get("assignee")),
         "source_created_at": payload.get("created_at"),
         "source_updated_at": payload.get("updated_at"),

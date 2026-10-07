@@ -117,7 +117,8 @@ _ASSIGNEES = ("kim", None, " ")
 
 
 def _many_expected() -> dict[str, int]:
-    exp = {"total": MANY, "open": 0, "closed": 0, "heavyOpen": 0, "unassignedOpen": 0}
+    exp = {"total": MANY, "open": 0, "closed": 0, "heavyOpen": 0, "unassignedOpen": 0,
+           "unspecifiedOpen": 0}
     for n in range(MANY):
         status, sev, who = _STATUSES[n % 4], _SEVERITIES[n % 5], _ASSIGNEES[n % 3]
         if status in ("OPEN", "IN_PROGRESS"):
@@ -166,6 +167,7 @@ def test_카드는_100건을_넘어도_사업_전체를_센다(client, client_to
     exp["closed"] += len(before) - len(opened)
     exp["heavyOpen"] += sum(r["severity"] in ("BLOCKER", "CRITICAL", "MAJOR") for r in opened)
     exp["unassignedOpen"] += sum(not (r["assignee"] or "").strip() for r in opened)
+    exp["unspecifiedOpen"] += sum(r["severity"] is None for r in opened)
 
     assert got == exp
     assert got["total"] > 100
