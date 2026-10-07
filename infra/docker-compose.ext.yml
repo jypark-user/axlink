@@ -25,8 +25,9 @@ services:
     environment:
       AXLINK_API_UPSTREAM: http://api:8080
       AXLINK_BASE_PATH: /ax-link/
-      # 받을 호스트. 목록 밖 호스트는 421 이다. 전체 허용은 하지 않는다
-      AXLINK_SERVER_NAMES: dev.userinsight.co.kr localhost 127.0.0.1 192.168.0.50
+      # 받을 호스트. 목록 밖 호스트는 421 이다. 전체 허용은 하지 않는다. 기본 비밀번호 계정이
+      # 남아 있는 동안은 AXLINK_WEB_HOSTS 로 외부 호스트를 빼고 띄운다
+      AXLINK_SERVER_NAMES: ${AXLINK_WEB_HOSTS:-dev.userinsight.co.kr localhost 127.0.0.1 192.168.0.50}
       # 프록시 없이 직접 여는 주소. 첫 화면(/)을 /ax-link/ 로 보낸다
       AXLINK_LOCAL_NAMES: localhost 127.0.0.1 192.168.0.50
     # 컨테이너 안은 8080 이다(nginx 비특권). 바깥 주소는 그대로 5173 이다
