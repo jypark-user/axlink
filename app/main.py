@@ -54,12 +54,19 @@ async def lifespan(_: FastAPI) -> AsyncIterator[None]:
         from app import scheduler
 
         task, stop = scheduler.start()
+    # 문서 처리 작업자(GH-121). 업로드는 접수만 하고 추출·색인·초안은 여기서 뒤에서 한다
+    doc_task = doc_stop = None
+    if settings.document_processing == "background":
+        from app.document import worker
+
+        doc_task, doc_stop = worker.start()
     try:
         yield
     finally:
-        if stop is not None and task is not None:
-            stop.set()
-            task.cancel()
+        for s_, t_ in ((stop, task), (doc_stop, doc_task)):
+            if s_ is not None and t_ is not None:
+                s_.set()
+                t_.cancel()
         close_pool()
 
 

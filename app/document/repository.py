@@ -2,6 +2,8 @@
 
 from typing import Any
 
+from psycopg.types.json import Jsonb
+
 from app.common.paging import PageQuery
 from app.db import fetch_all, fetch_one
 
@@ -12,7 +14,9 @@ _COLUMNS = """
     u.name as uploaded_by,
     s.status as draft_status, s.work_product_id as draft_work_product_id,
     s.proposed_type, d.product_type, d.wbs_item_id,
-    w.wbs_id, w.name as wbs_name
+    w.wbs_id, w.name as wbs_name,
+    d.processing_state, d.processing_error, d.processing_attempts, d.processed_at,
+    d.processing_steps
 """
 _FROM = """
     from document_upload d
@@ -62,8 +66,8 @@ def insert(
         """
         insert into document_upload
           (project_id, uploaded_by_user_id, original_filename, stored_path,
-           content_type, file_ext, size_bytes, file_hash, status)
-        values (%s, %s, %s, %s, %s, %s, %s, %s, 'UPLOADED')
+           content_type, file_ext, size_bytes, file_hash, status, processing_state)
+        values (%s, %s, %s, %s, %s, %s, %s, %s, 'UPLOADED', 'QUEUED')
         returning id
         """,
         (
@@ -165,3 +169,140 @@ def count_by_stored_path(cur: Any, stored_path: str) -> int:
         (stored_path,),
     )
     return int(row["n"]) if row else 0
+
+
+# ---------------------------------------------------------------- 처리 대기열 (GH-121)
+# 접수된 문서의 추출·색인·초안 작업. processing_state 가 QUEUED → RUNNING → DONE | FAILED 다.
+
+_JOB_COLUMNS = (
+    "id::text as id, project_id::text as project_id, original_filename, stored_path, "
+    "file_ext, processing_attempts"
+)
+
+
+def claim_next(cur: Any) -> dict[str, Any] | None:
+    """가장 오래 기다린 접수 문서 하나를 처리 중으로 바꿔 가져간다. 여럿이 동시에 불러도
+    같은 문서를 두 번 가져가지 않는다(skip locked)."""
+    return fetch_one(
+        cur,
+        f"""
+        update document_upload
+           set processing_state = 'RUNNING', processing_attempts = processing_attempts + 1,
+               processing_started_at = now(), processing_heartbeat_at = now(),
+               processing_error = null, updated_at = now()
+         where id = (
+               select id from document_upload
+                where processing_state = 'QUEUED'
+                order by created_at
+                for update skip locked
+                limit 1)
+        returning {_JOB_COLUMNS}
+        """,
+    )
+
+
+def start(cur: Any, document_id: str) -> dict[str, Any] | None:
+    """그 문서를 바로 처리 중으로 바꾼다. 요청 안에서 처리하는 시험 실행에서 쓴다."""
+    return fetch_one(
+        cur,
+        f"""
+        update document_upload
+           set processing_state = 'RUNNING', processing_attempts = processing_attempts + 1,
+               processing_started_at = now(), processing_heartbeat_at = now(),
+               processing_error = null, updated_at = now()
+         where id = %s
+        returning {_JOB_COLUMNS}
+        """,
+        (document_id,),
+    )
+
+
+def lock_for_write(cur: Any, document_id: str) -> bool:
+    """쓰기 전에 문서 행을 잠근다. 처리 중에 지워졌으면 False 다. 지운 문서의 색인을
+    남기지 않는다."""
+    row = fetch_one(
+        cur, "select 1 as ok from document_upload where id = %s for update", (document_id,)
+    )
+    return row is not None
+
+
+def heartbeat(cur: Any, document_id: str, steps: dict[str, Any] | None = None) -> None:
+    cur.execute(
+        """
+        update document_upload
+           set processing_heartbeat_at = now(),
+               processing_steps = coalesce(%s, processing_steps)
+         where id = %s and processing_state = 'RUNNING'
+        """,
+        (Jsonb(steps) if steps is not None else None, document_id),
+    )
+
+
+def finish(cur: Any, document_id: str, steps: dict[str, Any]) -> None:
+    cur.execute(
+        """
+        update document_upload
+           set processing_state = 'DONE', processing_error = null, processed_at = now(),
+               processing_steps = %s, updated_at = now()
+         where id = %s
+        """,
+        (Jsonb(steps), document_id),
+    )
+
+
+def fail(cur: Any, document_id: str, message: str, steps: dict[str, Any]) -> None:
+    cur.execute(
+        """
+        update document_upload
+           set processing_state = 'FAILED', processing_error = %s, processed_at = now(),
+               processing_steps = %s, updated_at = now()
+         where id = %s
+        """,
+        (message[:1000], Jsonb(steps), document_id),
+    )
+
+
+def requeue(cur: Any, document_id: str) -> None:
+    """실패한 문서를 다시 대기열에 넣는다. 같은 파일을 다시 올렸을 때다."""
+    cur.execute(
+        """
+        update document_upload
+           set processing_state = 'QUEUED', processing_error = null, processing_attempts = 0,
+               updated_at = now()
+         where id = %s and processing_state = 'FAILED'
+        """,
+        (document_id,),
+    )
+
+
+def recover_abandoned(
+    cur: Any, stale_seconds: int, max_attempts: int, all_running: bool
+) -> tuple[int, int]:
+    """처리 중인 채 멈춘 작업을 되살린다. 재시작으로 끊겼거나 heartbeat 가 오래 없는 것이다.
+    시도가 한도에 닿았으면 실패로 남긴다. (다시 넣은 수, 실패로 둔 수)."""
+    stale = "true" if all_running else "processing_heartbeat_at < now() - make_interval(secs => %s)"
+    params: tuple[Any, ...] = () if all_running else (stale_seconds,)
+    failed = fetch_all(
+        cur,
+        f"""
+        update document_upload
+           set processing_state = 'FAILED', processed_at = now(), updated_at = now(),
+               processing_error = '처리가 ' || processing_attempts || '번 중단되어 멈췄습니다'
+                                  || '(재시작 또는 시간 초과). '
+                                  || '같은 파일을 다시 올리면 다시 처리합니다.'
+         where processing_state = 'RUNNING' and ({stale}) and processing_attempts >= %s
+        returning id
+        """,
+        (*params, max_attempts),
+    )
+    requeued = fetch_all(
+        cur,
+        f"""
+        update document_upload
+           set processing_state = 'QUEUED', updated_at = now()
+         where processing_state = 'RUNNING' and ({stale})
+        returning id
+        """,
+        params,
+    )
+    return len(requeued), len(failed)

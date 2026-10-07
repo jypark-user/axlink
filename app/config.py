@@ -36,6 +36,13 @@ class Settings(BaseSettings):
     llm_model: str = "qwen3:4b"
     llm_timeout: float = 120.0
     scheduler_enabled: bool = True  # 서버 안 스케줄러(일별 스냅샷·주기 수집). 시험에서 끈다
+    # 문서 처리(추출·색인·초안). background 는 API 안 작업자가 뒤에서, inline 은 업로드 요청
+    # 안에서 한다(시험용). 작업자 수는 동시에 처리하는 문서 수다. 임베딩이 CPU 를 다 쓴다(GH-121)
+    document_processing: str = "background"
+    document_workers: int = 1
+    # 처리 중 신호가 이만큼 없으면 멈춘 작업으로 보고 다시 대기열에 넣는다. 한도만큼 끊기면 실패다
+    document_stale_seconds: int = 600
+    document_max_attempts: int = 3
     # 생성 문맥 길이. 근거 청크 5개(각 최대 1000토큰)와 지시가 들어가야 한다.
     llm_num_ctx: int = 8192
     ollama_base_url: str = "http://localhost:11434"

@@ -55,18 +55,32 @@ def reindex(cur: Any, port: EmbeddingPort, sources: list[IndexSource]) -> IndexR
     청킹은 DB·모델 없이 도는 순수 계산이라, 청크 해시를 먼저 만들어 기존 것과 비교하면
     반복 수집에서 모델 호출을 통째로 건너뛸 수 있다.
     """
+    prepared = prepare(cur, port, sources)
+    return write(cur, port, prepared)
+
+
+@dataclass
+class Prepared:
+    """청크와 벡터까지 만든 것. 쓰기 전이라 DB 는 그대로다."""
+
+    plan: list[tuple[IndexSource, list[chunking.ChunkDraft]]]
+    vectors: list[list[float]]
+    result: IndexResult
+
+
+def prepare(cur: Any, port: EmbeddingPort, sources: list[IndexSource]) -> Prepared:
+    """청크를 나누고 임베딩을 만든다. 읽기만 한다. 오래 걸리는 임베딩을 쓰기 트랜잭션 밖에서
+    하려고 나눴다(GH-121). 문서 처리 작업자는 이것과 write 를 다른 트랜잭션에서 부른다."""
     result = IndexResult()
     plan: list[tuple[IndexSource, list[chunking.ChunkDraft]]] = []
     for source in sources:
         drafts = chunking.chunk(source.source_type, source.title, source.body)
         if drafts:
             plan.append((source, drafts))
+    if plan:
+        plan = _drop_unchanged(cur, plan, result, port.model_name())
     if not plan:
-        return result
-
-    plan = _drop_unchanged(cur, plan, result, port.model_name())
-    if not plan:
-        return result
+        return Prepared(plan=[], vectors=[], result=result)
 
     texts = [draft.content for _, drafts in plan for draft in drafts]
     vectors = port.embed(texts)
@@ -76,10 +90,17 @@ def reindex(cur: Any, port: EmbeddingPort, sources: list[IndexSource]) -> IndexR
             "AI_UNAVAILABLE",
             f"임베딩 개수 불일치 — {len(texts)}건 요청, {len(vectors)}건 응답",
         )
+    return Prepared(plan=plan, vectors=vectors, result=result)
 
+
+def write(cur: Any, port: EmbeddingPort, prepared: Prepared) -> IndexResult:
+    """대상마다 기존 청크를 지우고 새 청크를 넣는다. 한 트랜잭션 안이라 중간 상태가 안 보인다."""
+    result = prepared.result
+    if not prepared.plan:
+        return result
     rows: list[dict[str, Any]] = []
     cursor = 0
-    for source, drafts in plan:
+    for source, drafts in prepared.plan:
         repository.delete_by_source(cur, source.source_type, source.source_id)
         for draft in drafts:
             rows.append(
@@ -89,7 +110,7 @@ def reindex(cur: Any, port: EmbeddingPort, sources: list[IndexSource]) -> IndexR
                     "source_id": source.source_id,
                     "chunk_index": draft.chunk_index,
                     "content": draft.content,
-                    "embedding": vector.to_literal(vectors[cursor]),
+                    "embedding": vector.to_literal(prepared.vectors[cursor]),
                     "embedding_model": port.model_name(),
                     "token_count": draft.token_count,
                     "source_title": source.title[:500],
@@ -101,7 +122,7 @@ def reindex(cur: Any, port: EmbeddingPort, sources: list[IndexSource]) -> IndexR
             cursor += 1
 
     result.chunks = repository.insert_chunks(cur, rows)
-    result.sources = len(plan)
+    result.sources = len(prepared.plan)
     return result
 
 

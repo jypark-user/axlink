@@ -17,6 +17,7 @@ import { badgeVariantFor, label } from '@/lib/labels';
 import { toQueryString } from '@/lib/query';
 import { useAsync } from '@/lib/use-async';
 import { ALLOWED, rejectReason } from '@/features/documents/upload';
+import { isProcessing, ProcessingBadge } from '@/features/documents/processing';
 import type { DocumentUploadResponse, PageResponse } from '@/types/api';
 
 const documentColumns = (projectId: string): ColumnDef<DocumentUploadResponse, unknown>[] => [
@@ -43,8 +44,17 @@ const documentColumns = (projectId: string): ColumnDef<DocumentUploadResponse, u
     header: '상태',
     cell: ({ row }) => (
       <>
-        <Badge variant={badgeVariantFor(row.original.status)}>{label(row.original.status)}</Badge>
-        {row.original.error && (
+        {row.original.processingState === 'DONE' ? (
+          <Badge variant={badgeVariantFor(row.original.status)}>{label(row.original.status)}</Badge>
+        ) : (
+          <ProcessingBadge state={row.original.processingState} />
+        )}
+        {row.original.processingError && (
+          <p className="text-destructive text-xs font-semibold tracking-wide mt-1">
+            {row.original.processingError}
+          </p>
+        )}
+        {!row.original.processingError && row.original.error && (
           <p className="text-destructive text-xs font-semibold tracking-wide mt-1">
             {row.original.error}
           </p>
@@ -77,11 +87,6 @@ const documentColumns = (projectId: string): ColumnDef<DocumentUploadResponse, u
   },
 ];
 
-
-// 추출까지가 지금의 종착점이다. 정형화(STRUCTURED)가 붙기 전까지 EXTRACTED 를
-// 진행 중으로 보면 목록이 2초마다 영원히 다시 부른다.
-const PENDING: string[] = ['UPLOADED'];
-
 export function DocumentsPage(): ReactNode {
   const { project } = useProjectContext();
   const { toast } = useToast();
@@ -98,7 +103,8 @@ export function DocumentsPage(): ReactNode {
   );
   const { data, reload } = state;
 
-  const hasPending = (data?.content ?? []).some((d) => PENDING.includes(d.status));
+  // 접수됨·처리 중인 문서가 있으면 끝날 때까지 다시 부른다. 처리는 뒤에서 한다(GH-121)
+  const hasPending = (data?.content ?? []).some((d) => isProcessing(d.processingState));
   useEffect(() => {
     if (!hasPending) return;
     const timer = window.setInterval(reload, 2000);
@@ -121,7 +127,10 @@ export function DocumentsPage(): ReactNode {
       await api.upload<DocumentUploadResponse>(`/projects/${project.id}/documents`, form, (r) =>
         setProgress(Math.round(r * 100)),
       );
-      toast({ title: '올렸습니다. 문서를 읽고 색인합니다.', variant: 'success' });
+      toast({
+        title: '접수했습니다. 문서를 읽고 색인하는 동안 다른 화면을 써도 됩니다.',
+        variant: 'success',
+      });
       reload();
     } catch (err) {
       toast({
