@@ -477,3 +477,35 @@ def test_계획선이_없는_날의_지연_작업_수는_0_이_아니라_값_없
     values = [r["values"]["value"] for r in body["rows"]]
     total = (body["total"] or {}).get("values", {}).get("value")
     assert all(v is None for v in values) and total is None
+
+
+def _data(unit: str, rows: list[tuple[str, float]], truncated: bool = False):
+    from app.semantic.models import WidgetColumn, WidgetDataResponse, WidgetRow
+
+    return WidgetDataResponse(
+        measure="issue_count", measureLabel="일반 이슈 건수", unit=unit,
+        dimensions=["issue_status"],
+        columns=[WidgetColumn(key="d0", label="상태", type="string"),
+                 WidgetColumn(key="value", label="값", type="number")],
+        rows=[WidgetRow(values={"d0": k, "value": v}) for k, v in rows],
+        total=None, previousTotal=None, target=None, appliedProjectIds=[PID],
+        truncated=truncated, generatedAt="2026-10-07T01:00:00Z",
+    )
+
+
+def test_건수를_나눠_받으면_서버가_전체를_더해_준다():
+    """10-07 "이슈가 몇 건이야?": 상태별 7·5 를 받은 모델이 12 를 만들어 수치 검문에 막혔다."""
+    from app.rag import answer, number_guard
+
+    data = _data("건", [("OPEN", 7), ("CLOSED", 5)])
+    lines = answer.aggregate_lines(data)
+    assert "- 전체(항목 합): 12건" in lines
+    checker = number_guard.Checker(
+        number_guard.facts_from_lines(lines, "집계", subject="일반 이슈 건수"),
+        question="이슈가 몇 건이야?",
+    )
+    assert checker.check("일반 이슈는 모두 12건입니다.") == []
+    # 비율은 더하지 않는다. 잘린 목록도 더하지 않는다(합이 전체가 아니다)
+    rate = answer.aggregate_lines(_data("%", [("A", 50), ("B", 30)]))
+    cut = answer.aggregate_lines(_data("건", [("A", 1)], True))
+    assert not any("항목 합" in x for x in rate + cut)
