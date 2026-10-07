@@ -91,12 +91,15 @@
 
 | 구성 요소 | 실행 | 포트 | 비고 |
 |---|---|---|---|
-| React + Vite 프런트 | 호스트 | 5173 (개발) | `/api/*` 를 백엔드로 넘긴다. 납품은 정적 빌드 |
-| FastAPI 백엔드 | 호스트, uvicorn | 8080 | 화면 API · 수집 잡 · 스케줄러가 한 프로세스 |
+| React + Vite 프런트 | Docker(개발: Vite 서버, 운영: Nginx 정적 제공) | 5173 (개발) · 8088 (운영 기본) | `/api/*` 를 백엔드로 넘긴다 |
+| FastAPI 백엔드 | Docker, uvicorn worker 1개 | 8080 | 화면 API · 수집 잡 · 스케줄러가 한 프로세스. 그래서 컨테이너 하나만 띄운다 |
 | PostgreSQL 16 + pgvector | Docker | 15432 (호스트) / 5432 (컨테이너) | 표준 모델 · 임베딩 · 대화 · 설정 전부 |
 | Ollama | Docker | 11434 | 임베딩 `bge-m3`(1024차원). 생성 모델은 설정이 정한다 |
 | Redmine + PostgreSQL | Docker | 3000 | 샘플 원천. 납품 대상이 아니다 |
 | Flyway | Docker, 1회 실행 | - | `db/migration/V*.sql` 적용 |
+
+개발은 `infra/docker-compose.yml`, 운영은 `infra/docker-compose.prod.yml`(미리 빌드한 이미지)로 띄운다.
+기동 순서는 DB 준비 → Flyway 성공 → API 준비 → 웹이다. 시험 DB 는 별도 프로젝트(`infra/docker-compose.test.yml`)다.
 
 외부를 부르는 곳은 원천 도구(GitHub · Redmine)와 Ollama 뿐이다. 개발 PC 에서는 Ollama 가
 클라우드 모델(`gemma4:31b-cloud`)을 중계하지만, 납품 구성에서는 같은 자리에 온프레미스

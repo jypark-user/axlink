@@ -112,7 +112,7 @@ def embedding_port() -> EmbeddingPort:
     if settings.embedding_provider == "fake":
         return FakeEmbedding(settings.embedding_dimension)
     return OllamaEmbedding(
-        settings.ollama_base_url,
+        settings.embedding_base_url or settings.ollama_base_url,
         settings.embedding_model,
         settings.embedding_dimension,
         settings.embedding_batch,

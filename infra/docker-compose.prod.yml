@@ -1,0 +1,95 @@
+# AX Link 운영 스택 (Portainer 스택 또는 docker compose). 미리 빌드한 이미지만 쓴다.
+# 소스 마운트와 개발 PC 경로가 없다. 값은 infra/prod.env.example 을 보고 스택 환경변수로 넣는다.
+#
+#   docker compose -f infra/docker-compose.prod.yml --env-file prod.env up -d
+#
+# 기동 순서: postgres 준비 → migrate 성공 → api 준비 → web.
+# 절차와 미정 사항은 docs/40-manual/배포-운영-절차.md.
+
+x-logging: &logging
+  driver: json-file
+  options:
+    max-size: "10m"
+    max-file: "5"
+
+services:
+  postgres:
+    image: pgvector/pgvector:pg16
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: axlink
+      POSTGRES_PASSWORD: ${AXLINK_DB_PASSWORD:?AXLINK_DB_PASSWORD 가 필요하다}
+      POSTGRES_DB: axlink
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U axlink -d axlink"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+    logging: *logging
+
+  # 스키마 마이그레이션. 이미지에 db/migration 이 들어 있다. 적용 전에 validate 를 먼저 돈다.
+  migrate:
+    image: ${AXLINK_IMAGE_PREFIX:?AXLINK_IMAGE_PREFIX 가 필요하다}/axlink-migrate:${AXLINK_VERSION:?AXLINK_VERSION 이 필요하다}
+    restart: "no"
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      FLYWAY_URL: jdbc:postgresql://postgres:5432/axlink
+      FLYWAY_USER: axlink
+      FLYWAY_PASSWORD: ${AXLINK_DB_PASSWORD}
+    logging: *logging
+
+  # 스케줄러(일별 스냅샷·주기 수집)가 앱 안에 있어 컨테이너 하나, worker 하나로 돈다. 늘리지 않는다.
+  api:
+    image: ${AXLINK_IMAGE_PREFIX}/axlink-api:${AXLINK_VERSION}
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+      migrate:
+        condition: service_completed_successfully
+    environment:
+      AXLINK_ENV: production
+      AXLINK_DATABASE_URL: postgresql://axlink:${AXLINK_DB_PASSWORD}@postgres:5432/axlink
+      AXLINK_JWT_SECRET: ${AXLINK_JWT_SECRET:?AXLINK_JWT_SECRET 가 필요하다}
+      AXLINK_SECRET_KEY: ${AXLINK_SECRET_KEY:?AXLINK_SECRET_KEY 가 필요하다}
+      # 생성 모델 서버의 기본 주소. 관리 화면에서 저장한 주소(DB)가 있으면 그쪽을 쓴다.
+      AXLINK_OLLAMA_BASE_URL: ${AXLINK_OLLAMA_BASE_URL:-http://ollama:11434}
+      # 임베딩(bge-m3) 서버 주소
+      AXLINK_EMBEDDING_BASE_URL: ${AXLINK_EMBEDDING_BASE_URL:-http://ollama:11434}
+      AXLINK_LLM_MODEL: ${AXLINK_LLM_MODEL:-gemma4:31b-cloud}
+      AXLINK_CORS_ORIGINS: ${AXLINK_PUBLIC_ORIGIN:-http://localhost:8088}
+    volumes:
+      - documents:/data/documents
+    logging: *logging
+
+  web:
+    image: ${AXLINK_IMAGE_PREFIX}/axlink-web:${AXLINK_VERSION}
+    restart: unless-stopped
+    depends_on:
+      api:
+        condition: service_healthy
+    environment:
+      AXLINK_API_UPSTREAM: http://api:8080
+    ports:
+      - "${AXLINK_HTTP_BIND:-0.0.0.0}:${AXLINK_HTTP_PORT:-8088}:8080"
+    logging: *logging
+
+  # 같은 스택에 두는 Ollama. 다른 서버의 Ollama 를 쓰면 AXLINK_BUNDLED_OLLAMA=0 으로 끄고
+  # AXLINK_OLLAMA_BASE_URL·AXLINK_EMBEDDING_BASE_URL 을 그 서버로 준다.
+  ollama:
+    image: ollama/ollama:${AXLINK_OLLAMA_TAG:-0.33.1}
+    restart: unless-stopped
+    deploy:
+      replicas: ${AXLINK_BUNDLED_OLLAMA:-1}
+    volumes:
+      - ollama:/root/.ollama
+    logging: *logging
+
+volumes:
+  pgdata:
+  documents:
+  ollama:
