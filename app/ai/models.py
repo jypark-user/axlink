@@ -51,3 +51,12 @@ class LlmMeasureResponse(BaseModel):
     evalCount: int  # noqa: N815
     evalDurationSeconds: float  # noqa: N815
     measuredAt: str  # noqa: N815
+
+
+class AiRuntimeResponse(BaseModel):
+    """질의 화면이 보이는 지금의 답변 모델. 고정 응답이면 실모델 답이 아님을 알린다."""
+
+    llmProvider: str  # noqa: N815 — ollama | fake
+    model: str | None
+    fixed: bool  # 생성이나 임베딩이 고정 응답인가
+    codeVersion: str | None = None  # noqa: N815 — 실행 코드 이름표(AXLINK_BUILD_LABEL)

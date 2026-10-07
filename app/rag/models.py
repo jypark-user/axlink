@@ -6,13 +6,22 @@ from pydantic import BaseModel, Field
 
 from app.semantic.models import WidgetDataResponse
 
-RouteType = Literal["DOCUMENT", "AGGREGATE", "MIXED", "OVERVIEW"]
+RouteType = Literal["DOCUMENT", "AGGREGATE", "MIXED", "OVERVIEW", "INTENT", "CLARIFY"]
 MessageFeedback = Literal["UP", "DOWN"]
 
 
 class AskRequest(BaseModel):
     question: str = Field(min_length=1, max_length=4000)
     projectScope: list[str] = Field(default_factory=list)  # noqa: N815
+    # 권장 질문을 눌렀을 때 그 키. 서버가 카탈로그·권한으로 다시 검증하고 재분류하지 않는다
+    hint: str | None = Field(default=None, max_length=120)
+
+
+class SuggestionItem(BaseModel):
+    """이어 물을 질문 하나. 문장은 서버 틀이고 hint 는 누를 때 같이 보내는 키다."""
+
+    question: str
+    hint: str
 
 
 class ConversationCreateRequest(BaseModel):
@@ -46,6 +55,7 @@ class QueryRouting(BaseModel):
     listing: str | None = None  # 종류 전체를 나열한 경우 그 source_type
     listingStatus: str | None = None  # noqa: N815 — 목록의 상태 조건 (OPEN | CLOSED | ALL)
     routeCached: bool = False  # noqa: N815 — 판정을 캐시에서 가져왔는가 (ARC-014)
+    intent: str | None = None  # 일정 질문 묶음 키 (INTENT 일 때)
 
 
 class InfographicEvent(BaseModel):
@@ -88,6 +98,8 @@ class MessageResponse(BaseModel):
     createdAt: str  # noqa: N815
     infographics: list[InfographicEvent] = []
     latencyMs: int | None = None  # noqa: N815 — 답을 만드는 데 든 시간. 화면에 작게 보인다
+    finishReason: str | None = None  # noqa: N815 — 답의 종류. STOP·PARTIAL·NO_DATA 등
+    suggestions: list[SuggestionItem] = []
 
 
 class MessageFeedbackRequest(BaseModel):
@@ -112,6 +124,10 @@ class SseDeltaEvent(BaseModel):
 
 class SseSourcesEvent(BaseModel):
     sources: list[MessageSourceResponse]
+
+
+class SseSuggestionsEvent(BaseModel):
+    items: list[SuggestionItem]
 
 
 class SseDoneEvent(BaseModel):

@@ -1,7 +1,7 @@
 """사업 현황 경로 (ARC-015 · SWFR.RAG.005 · SWFR.RAG.007).
 
-문서를 가리키지 않는 일반 질문은 현황 그림으로 답한다. 근거 게이트에 막힌 질문도 그리로
-내려간다. 값은 전부 시맨틱 레이어에서 온다. 데이터가 없으면 예전처럼 막는다.
+전체 현황을 묻는 질문은 현황 그림으로 답한다. 근거 게이트에 막힌 질문에는 현황을 붙이지
+않는다(ARC-017 개정). 값은 전부 시맨틱 레이어에서 온다.
 """
 
 import json
@@ -124,31 +124,26 @@ def test_현황_질문은_현황_그림으로_답한다(client, conversation, mo
     # 프롬프트에 그림 절이 들어갔고, 서버가 쓴 안내문은 없다(현황 경로는 못 찾은 게 아니다)
     assert "## 그림 1" in scripted.prompts[0]
     text = "".join(d["text"] for e, d in events if e == "delta")
-    assert not text.startswith(overview.REFERENCE_LEAD.strip()[:10])
+    assert "찾지 못해" not in text
 
 
 @requires_db
-def test_근거에_막힌_문서_질문은_답하지_않고_참고_현황만_붙인다(client, conversation, monkeypatch):
-    """SWFR.RAG.007, ARC-017. 모델은 원질문에 답하지 않는다. 현황은 참고로만 보인다."""
+def test_근거에_막힌_문서_질문에는_무관한_현황을_붙이지_않는다(client, conversation, monkeypatch):
+    """SWFR.RAG.007. 모델은 원질문에 답하지 않는다. 고정 현황 그림을 대신 내지도 않는다."""
     scripted = _Scripted({"route": "DOCUMENT", "query": "걱정"}, "안 불려야 한다")
     monkeypatch.setattr(ask_service, "llm_port", lambda: scripted)
     monkeypatch.setattr(settings, "rag_min_similarity", 0.99)
 
     cid, token = conversation
     events = _ask(client, token, cid, "뭐가 제일 걱정이야?")
-    assert events[0][1]["routing"]["type"] == "OVERVIEW"
+    assert events[0][1]["routing"]["type"] == "DOCUMENT"
     text = "".join(d["text"] for e, d in events if e == "delta")
-    assert text.startswith("질문에 맞는 문서 근거를 찾지 못해 답변을 만들지 않았습니다")
-    assert "참고 현황" in text and "답의 근거가 아닙니다" in text
-    assert "안 불려야" not in text
+    assert "참고 현황" not in text and "안 불려야" not in text
     assert scripted.prompts == []  # 본문을 쓰는 모델 호출이 없다
-    made = [d for e, d in events if e == "infographic"]
-    assert made and all(b["title"].startswith(overview.REFERENCE_TITLE) for b in made)
-    # 그림 표식은 서버가 붙인다. 문서 출처는 없다
-    assert all(f"[그림 {b['slot']}]" in text for b in made)
+    assert not [d for e, d in events if e == "infographic"]
     assert next(d for e, d in events if e == "sources")["sources"] == []
-    assert events[-1][1]["finishReason"] == "NO_EVIDENCE"
-    # 내려간 판정은 캐시하지 않는다. 다음엔 다시 묻는다
+    assert events[-1][1]["finishReason"] in ("NO_DOCUMENTS", "NO_RELEVANT_DOCUMENTS")
+    # 막힌 판정은 캐시하지 않는다. 다음엔 다시 묻는다
     with tx() as cur:
         n = cur.execute(
             "select count(*) as n from route_cache where question like %s", ("%걱정%",)
@@ -167,7 +162,8 @@ def test_무관한_질문은_현황으로_내려가지_않는다(client, convers
     text = "".join(d["text"] for e, d in events if e == "delta")
     assert "사업" in text and "만 답합니다" in text
     assert not [d for e, d in events if e == "infographic"]
-    assert events[-1][1]["finishReason"] == "NO_EVIDENCE"
+    assert events[-1][1]["finishReason"] == "OFF_TOPIC"
+    assert not [d for e, d in events if e == "suggestions"]
     assert scripted.prompts == []
 
 
@@ -192,13 +188,15 @@ def test_무관_판정이어도_근거가_있으면_문서로_답한다(client, 
 
 
 @requires_db
-def test_현황_그림도_없으면_예전처럼_막는다(client, conversation, monkeypatch):
-    scripted = _Scripted({"route": "DOCUMENT", "query": "x"}, "안 불려야 한다")
+def test_현황을_물었는데_값이_없으면_값_없음으로_끝난다(client, conversation, monkeypatch):
+    scripted = _Scripted({"route": "OVERVIEW", "query": "현황"}, "안 불려야 한다")
     monkeypatch.setattr(ask_service, "llm_port", lambda: scripted)
     monkeypatch.setattr(settings, "rag_min_similarity", 0.99)
     monkeypatch.setattr(ask_service.overview, "build", lambda *a, **k: [])
 
     cid, token = conversation
-    events = _ask(client, token, cid, "아무거나")
-    assert events[-1][1]["finishReason"] == "NO_EVIDENCE"
+    events = _ask(client, token, cid, "전체 현황 요약해 줘")
+    assert events[-1][1]["finishReason"] == "NO_DATA"
+    text = "".join(d["text"] for e, d in events if e == "delta")
+    assert "현황을 요약할 수 없습니다" in text
     assert scripted.prompts == []

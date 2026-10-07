@@ -256,16 +256,18 @@ def test_문서_질문은_근거와_각주가_붙어_저장된다(
 def test_근거가_부족하면_모델을_부르지_않는다(client, conversation, indexed_document, monkeypatch):
     scripted = ScriptedLlm({"route": "DOCUMENT"}, "이 문장은 나오면 안 된다")
     monkeypatch.setattr(ask_service, "llm_port", lambda: scripted)
-    monkeypatch.setattr(settings, "rag_overview_fallback", False)  # 게이트 자체를 본다
     monkeypatch.setattr(settings, "rag_min_similarity", 0.99)
 
     conversation_id, token = conversation()
     events = _ask(client, token, conversation_id, "우주 정거장의 도킹 절차는?")
 
     text = "".join(d["text"] for e, d in events if e == "delta")
-    assert "근거" in text and "0.99" in text
+    assert "맞는 내용을 찾지 못해" in text and "0.99" in text
     assert next(d for e, d in events if e == "sources")["sources"] == []
-    assert events[-1][1]["finishReason"] == "NO_EVIDENCE"
+    # 문서가 있는데 맞는 것이 없다. 문서가 아예 없는 경우와 다른 종류로 끝난다
+    assert events[-1][1]["finishReason"] == "NO_RELEVANT_DOCUMENTS"
+    # 질문과 무관한 고정 현황 그림을 대신 붙이지 않는다
+    assert not [d for e, d in events if e == "infographic"]
     assert events[0][1]["retrievedChunkCount"] == 0
     assert scripted.stream_calls == 0
 
@@ -279,7 +281,6 @@ def test_근거가_부족하면_모델을_부르지_않는다(client, conversati
 def test_색인이_비어_있으면_그렇다고_답한다(client, conversation, monkeypatch):
     scripted = ScriptedLlm({"route": "DOCUMENT"}, "x")
     monkeypatch.setattr(ask_service, "llm_port", lambda: scripted)
-    monkeypatch.setattr(settings, "rag_overview_fallback", False)  # 게이트 자체를 본다
     with tx() as cur:
         empty = cur.execute(
             "select count(*) as n from doc_chunk where project_id = %s", (PID,)
@@ -290,7 +291,8 @@ def test_색인이_비어_있으면_그렇다고_답한다(client, conversation,
     conversation_id, token = conversation()
     events = _ask(client, token, conversation_id, "아무 질문")
     text = "".join(d["text"] for e, d in events if e == "delta")
-    assert "색인된 문서" in text and scripted.stream_calls == 0
+    assert "올라온 문서·이슈가 아직 없어" in text and scripted.stream_calls == 0
+    assert events[-1][1]["finishReason"] == "NO_DOCUMENTS"
 
 
 # ---------------------------------------------------------------- 질문 (집계 경로)
@@ -559,12 +561,11 @@ def test_청크도_표도_없으면_모델을_부르지_않는다(
     route = {"route": "DOCUMENT", "list": "RISK", "query": "리스크 목록"}
     scripted = ScriptedLlm(route, "안 불려야 한다")
     monkeypatch.setattr(ask_service, "llm_port", lambda: scripted)
-    monkeypatch.setattr(settings, "rag_overview_fallback", False)  # 게이트 자체를 본다
     monkeypatch.setattr(ask_service.entity_table, "build", lambda *a, **k: None)
 
     conversation_id, token = conversation()
     events = _ask(client, token, conversation_id, "리스크 목록")
     text = "".join(d["text"] for e, d in events if e == "delta")
     assert "리스크" in text and "없어" in text
-    assert events[-1][1]["finishReason"] == "NO_EVIDENCE"
+    assert events[-1][1]["finishReason"] == "NO_DATA"
     assert scripted.stream_calls == 0
