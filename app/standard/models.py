@@ -36,7 +36,8 @@ class IssueResponse(BaseModel):
     key: str
     title: str
     status: str
-    severity: str | None
+    severity: str | None  # None 이면 원천에 근거가 없다(미지정). 낮은 위험이라는 뜻이 아니다
+    sourcePriority: str | None = None  # noqa: N815 — 원천 우선순위 원문(Redmine '보통' 등)
     assignee: str | None
     resolvedAt: str | None  # noqa: N815
     source: SourceRef
@@ -54,6 +55,7 @@ class IssueSummaryResponse(BaseModel):
     closed: int  # RESOLVED · CLOSED
     heavyOpen: int  # noqa: N815 — 열린 것 중 BLOCKER · CRITICAL · MAJOR
     unassignedOpen: int  # noqa: N815 — 열린 것 중 담당 없음
+    unspecifiedOpen: int = 0  # noqa: N815 — 열린 것 중 심각도 미지정. 고위험에서 빼고 따로 센다
 
 
 class WorkProductResponse(BaseModel):

@@ -253,6 +253,7 @@ def issue_summary(
         closed=n["closed"],
         heavyOpen=n["heavy_open"],
         unassignedOpen=n["unassigned_open"],
+        unspecifiedOpen=n["unspecified_open"],
     )
 
 
@@ -276,6 +277,7 @@ def list_issues(
             title=r["title"],
             status=r["status"],
             severity=r["severity"],
+            sourcePriority=r["source_priority"],
             assignee=r["assignee"],
             resolvedAt=r["resolved_at"].isoformat() if r["resolved_at"] else None,
             source=_source_ref(r),

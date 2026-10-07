@@ -49,6 +49,8 @@ const LABELS: Record<string, string> = {
   MAJOR: '중대',
   MINOR: '경미',
   TRIVIAL: '사소',
+  // 원천에 심각도가 없다. 낮은 위험이라는 뜻이 아니다(GH-116)
+  UNSPECIFIED: '미지정',
   MUST: '필수',
   SHOULD: '권장',
   COULD: '선택',

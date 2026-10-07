@@ -54,7 +54,11 @@ export function IssuesPage(): ReactNode {
               <MetricCard
                 term="심각·높음"
                 value={n.heavyOpen}
-                hint="열린 것 중"
+                hint={
+                  n.unspecifiedOpen > 0
+                    ? `열린 것 중 · 심각도 미지정 ${n.unspecifiedOpen}건 별도`
+                    : '열린 것 중'
+                }
                 tone={n.heavyOpen > 0 ? 'text-destructive' : undefined}
               />
               <MetricCard
@@ -140,14 +144,25 @@ function buildColumns(): ColumnDef<IssueResponse, unknown>[] {
     {
       accessorKey: 'severity',
       header: ({ column }) => <SortableHeader column={column}>심각도</SortableHeader>,
-      cell: ({ row }) =>
-        row.original.severity ? (
-          <Badge variant={badgeVariantFor(row.original.severity)}>
-            {label(row.original.severity)}
-          </Badge>
-        ) : (
-          '-'
-        ),
+      cell: ({ row }) => (
+        <div className="flex flex-col items-start gap-0.5">
+          {row.original.severity ? (
+            <Badge variant={badgeVariantFor(row.original.severity)}>
+              {label(row.original.severity)}
+            </Badge>
+          ) : (
+            // 원천에 심각도가 없다. 낮다는 뜻이 아니다
+            <Badge variant="muted" title="원천에 심각도가 없어 지정하지 않았습니다">
+              미지정
+            </Badge>
+          )}
+          {row.original.sourcePriority && (
+            <span className="text-muted-foreground text-xs">
+              원천 우선순위 {row.original.sourcePriority}
+            </span>
+          )}
+        </div>
+      ),
     },
     {
       accessorKey: 'status',

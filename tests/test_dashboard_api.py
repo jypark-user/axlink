@@ -170,7 +170,8 @@ def test_위젯_값은_DB_집계와_같다(client, client_token, dashboard_id, s
     assert res.status_code == 200, res.text
     body = res.json()
     assert body["measure"] == "open_issue_count" and body["unit"] == "건"
-    assert [c["key"] for c in body["columns"]] == ["d0", "value"]
+    # 심각도 차원은 표시 이름(d0_label)도 낸다. 미지정을 '미지정'으로 보이기 위해서다(GH-116)
+    assert [c["key"] for c in body["columns"]] == ["d0", "d0_label", "value"]
     by_sev = {r["values"]["d0"]: r["values"]["value"] for r in body["rows"]}
 
     with tx() as cur:
