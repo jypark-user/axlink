@@ -11,6 +11,8 @@
 from dataclasses import dataclass
 from typing import Any
 
+from app.ai import embedding_guard
+from app.ai.embedding import embedding_port
 from app.ai.port import EmbeddingPort
 from app.config import settings
 from app.db import fetch_all
@@ -113,6 +115,7 @@ def search_with_vector(
     project_ids: list[str],
     top_k: int | None = None,
 ) -> SearchResult:
+    embedding_guard.require_match(cur, embedding_port().model_name())
     n = settings.rag_candidates
     by_vector = vector_candidates(cur, query_vec, project_ids, n)
     by_lexical = lexical_candidates(cur, query_vec, question, project_ids, n)

@@ -11,6 +11,7 @@ import hashlib
 from dataclasses import dataclass
 from typing import Any
 
+from app.ai import embedding_guard
 from app.ai.port import EmbeddingPort
 from app.common import errors
 from app.rag import chunking, repository, vector
@@ -67,6 +68,10 @@ def reindex(cur: Any, port: EmbeddingPort, sources: list[IndexSource]) -> IndexR
     plan = _drop_unchanged(cur, plan, result, port.model_name())
     if not plan:
         return result
+    # 다른 모델의 벡터가 이미 있으면 섞지 않는다(ARC-022)
+    embedding_guard.require_match(
+        cur, port.model_name(), [f"{s.source_type}:{s.source_id}" for s, _ in plan]
+    )
 
     texts = [draft.content for _, drafts in plan for draft in drafts]
     vectors = port.embed(texts)

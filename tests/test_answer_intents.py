@@ -509,3 +509,19 @@ def test_건수를_나눠_받으면_서버가_전체를_더해_준다():
     rate = answer.aggregate_lines(_data("%", [("A", 50), ("B", 30)]))
     cut = answer.aggregate_lines(_data("건", [("A", 1)], True))
     assert not any("항목 합" in x for x in rate + cut)
+
+
+@requires_db
+def test_검색_모델이_색인과_다르면_검색_멈춤으로_알린다(ask, monkeypatch):
+    """ARC-022. 조회 오류나 근거 없음과 섞지 않는다. 모델은 부르지 않는다."""
+    from app.ai import embedding_guard
+    from app.common import errors
+
+    def mismatch(*a, **k):
+        raise errors.ApiError(503, embedding_guard.MISMATCH, "검색 모델이 색인과 다릅니다")
+
+    monkeypatch.setattr(ask_service.search.embedding_guard, "require_match", mismatch)
+    ev, scripted = ask({"route": "DOCUMENT"}, "안 불려야 한다")
+    assert _finish(ev) == "SEARCH_DISABLED"
+    assert "문서 검색이 멈춰" in _text(ev)
+    assert scripted.stream_calls == 0

@@ -1505,7 +1505,15 @@ export interface LlmModelResponse {
   numCtx: number | null;
   numPredict: number;
   fetchedAt: string;
+  /** 서버가 알려준 용도. 안 알려주면 null */
+  capabilities: string[] | null;
+  /** ANSWER 답변용 · EMBEDDING 검색 전용 · UNKNOWN 확인 필요 (ARC-022) */
+  purpose: LlmModelPurpose;
+  /** 마지막 짧은 생성 확인 성공 시각 */
+  verifiedAt: string | null;
 }
+
+export type LlmModelPurpose = 'ANSWER' | 'EMBEDDING' | 'UNKNOWN';
 
 export interface LlmModelListResponse {
   baseUrl: string;
@@ -1522,6 +1530,29 @@ export interface LlmSettingResponse {
   requestTimeoutSeconds: number;
   updatedAt: string | null;
   models: LlmModelResponse[];
+  /** 지금 적용 중인 값의 출처. DB 저장값 또는 환경변수 기본값 */
+  source: 'DB' | 'ENV';
+  /** 이 모델이 쓰이는 곳 */
+  usedFor: string[];
+}
+
+/** 검색 모델(임베딩). 환경변수로 정하고 화면에서 바꾸지 않는다 (ARC-022) */
+export interface EmbeddingStatusResponse {
+  provider: string;
+  baseUrl: string;
+  model: string;
+  dimension: number;
+  columnDimension: number | null;
+  source: 'ENV';
+  /** 서버 목록에 있는가. 확인 못 하면 null */
+  serverHasModel: boolean | null;
+  serverCapabilities: string[] | null;
+  indexModels: { model: string; chunks: number }[];
+  /** 색인이 모두 지금 모델로 만들어졌는가 */
+  consistent: boolean;
+  /** 맞지 않을 때 이유. 문서 검색과 색인이 멈춰 있다 */
+  message: string | null;
+  changeBlockedReason: string;
 }
 
 export interface LlmSettingUpdateRequest {

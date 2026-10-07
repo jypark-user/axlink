@@ -11,8 +11,10 @@ from dataclasses import dataclass
 from datetime import UTC, datetime
 from typing import Any
 
-from app.ai import ollama_admin
+from app.ai import embedding_guard, ollama_admin
 from app.ai.models import (
+    EmbeddingIndexModel,
+    EmbeddingStatusResponse,
     LlmMeasureResponse,
     LlmModelListResponse,
     LlmModelParamsUpdateRequest,
@@ -69,7 +71,25 @@ def get_setting(cur: Any, principal: AuthPrincipal) -> LlmSettingResponse:
         requestTimeoutSeconds=settings.llm_timeout,
         updatedAt=_iso(row["updated_at"]) if row else None,
         models=[_to_response(m) for m in list_cached(cur, base_url)],
+        source="DB" if row else "ENV",
+        usedFor=["질문 분류", "답변 생성", "문서 초안"],
     )
+
+
+ANSWER = "ANSWER"
+EMBEDDING = "EMBEDDING"
+UNKNOWN = "UNKNOWN"
+
+
+def purpose_of(capabilities: list[str] | None) -> str:
+    """서버가 알려준 용도로 판단한다. 이름으로 짐작하지 않는다. 모르면 UNKNOWN(확인 필요)."""
+    if not capabilities:
+        return UNKNOWN
+    if "completion" in capabilities:
+        return ANSWER
+    if "embedding" in capabilities:
+        return EMBEDDING
+    return UNKNOWN
 
 
 def list_cached(cur: Any, base_url: str) -> list[dict[str, Any]]:
@@ -112,7 +132,7 @@ def replace_cache(
         for r in fetch_all(
             cur,
             """
-            select name, tok_per_sec, measured_at, num_ctx, num_predict
+            select name, tok_per_sec, measured_at, num_ctx, num_predict, verified_at
               from llm_model_cache where base_url = %s
             """,
             (base_url,),
@@ -126,8 +146,9 @@ def replace_cache(
             """
             insert into llm_model_cache
               (base_url, name, context_length, supports_tools, parameter_size, quantization,
-               tok_per_sec, measured_at, num_ctx, num_predict, fetched_at, updated_at)
-            values (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+               tok_per_sec, measured_at, num_ctx, num_predict, fetched_at, updated_at,
+               capabilities, verified_at)
+            values (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
             """,
             (
                 base_url, m.name, m.context_length, m.supports_tools, m.parameter_size,
@@ -138,6 +159,8 @@ def replace_cache(
                 old["num_ctx"] if old else (m.context_length or None),
                 old["num_predict"] if old else DEFAULT_NUM_PREDICT,
                 now, now,
+                list(m.capabilities) if m.capabilities is not None else None,
+                old["verified_at"] if old else None,
             ),
         )
 
@@ -193,10 +216,36 @@ def save_setting(
     """
     _require_admin(principal)
     base_url = req.baseUrl.strip().rstrip("/")
-    if _find(cur, base_url, req.model) is None:
+    found = _find(cur, base_url, req.model)
+    if found is None:
         raise errors.validation_failed(
             "목록에 없는 모델입니다. 서버 주소를 확인하고 목록을 새로 고치세요."
         )
+    if purpose_of(found["capabilities"]) == EMBEDDING:
+        raise errors.ApiError(
+            400,
+            "MODEL_ROLE_MISMATCH",
+            f"{req.model} 은(는) 서버가 임베딩 전용으로 알려준 모델이라 "
+            "답변 모델로 쓸 수 없습니다. 검색 모델은 아래 검색 모델 영역에서 봅니다.",
+        )
+    # 저장 전에 실제로 짧게 생성해 본다. 용도를 모르는 모델도 이 확인을 넘어야 저장된다
+    try:
+        rate = ollama_admin.measure_rate(base_url, req.model)
+    except errors.ApiError as exc:
+        raise errors.ApiError(
+            400,
+            "MODEL_CHECK_FAILED",
+            f"{req.model} 으로 짧은 생성을 해 보지 못해 저장하지 않았습니다. {exc.message}",
+        ) from exc
+    now = datetime.now(UTC)
+    cur.execute(
+        """
+        update llm_model_cache
+           set tok_per_sec = %s, measured_at = %s, verified_at = %s, updated_at = %s
+         where base_url = %s and name = %s
+        """,
+        (rate.tok_per_sec, now, now, now, base_url, req.model),
+    )
     cur.execute(
         """
         update llm_model_cache set num_ctx = %s, num_predict = %s, updated_at = now()
@@ -238,7 +287,70 @@ def _to_response(row: dict[str, Any]) -> LlmModelResponse:
         numCtx=row["num_ctx"],
         numPredict=row["num_predict"],
         fetchedAt=_iso(row["fetched_at"]) or "",
+        capabilities=list(row["capabilities"]) if row.get("capabilities") is not None else None,
+        purpose=purpose_of(row.get("capabilities")),
+        verifiedAt=_iso(row.get("verified_at")),
     )
+
+
+# ---------------------------------------------------------------- 검색 모델 (ARC-022)
+
+EMBEDDING_CHANGE_BLOCKED = (
+    "검색 모델은 환경변수(AXLINK_EMBEDDING_MODEL·AXLINK_OLLAMA_BASE_URL)로 정하고 여기서 바꾸지 "
+    "않습니다. 바꾸면 기존 색인과 다른 모델의 벡터가 섞이는데, 안전하게 다시 색인하는 기능이 아직 "
+    "없습니다."
+)
+
+
+def embedding_status(cur: Any, principal: AuthPrincipal) -> EmbeddingStatusResponse:
+    _require_admin(principal)
+    from app.ai.embedding import embedding_port
+    from app.rag import repository as rag_repo
+
+    base_url = settings.ollama_base_url.rstrip("/")
+    # 색인에 실제로 적히는 이름. 가짜 공급자면 fake 다
+    model = embedding_port().model_name()
+    has_model: bool | None = None
+    caps: list[str] | None = None
+    if settings.embedding_provider != "fake":
+        try:
+            listed = {m.name: m for m in ollama_admin.list_models(base_url)}
+            hit = listed.get(model) or listed.get(f"{model}:latest")
+            has_model = hit is not None
+            caps = list(hit.capabilities) if hit and hit.capabilities is not None else None
+        except errors.ApiError:
+            has_model = None
+    index = embedding_guard.index_models(cur)
+    reason = embedding_guard.mismatch(cur, _index_name(model, index))
+    return EmbeddingStatusResponse(
+        provider=settings.embedding_provider,
+        baseUrl=base_url,
+        model=model,
+        dimension=settings.embedding_dimension,
+        columnDimension=rag_repo.column_dimension(cur),
+        source="ENV",
+        serverHasModel=has_model,
+        serverCapabilities=caps,
+        indexModels=[EmbeddingIndexModel(model=r["model"], chunks=int(r["chunks"])) for r in index],
+        consistent=reason is None,
+        message=reason,
+        changeBlockedReason=EMBEDDING_CHANGE_BLOCKED,
+    )
+
+
+def _index_name(model: str, index: list[dict[str, Any]]) -> str:
+    """색인에 남은 이름과 같은 모델을 가리키면 그 이름을 쓴다(bge-m3 와 bge-m3:latest)."""
+    names = {r["model"] for r in index}
+    if model in names:
+        return model
+    if f"{model}:latest" in names:
+        return f"{model}:latest"
+    return model
+
+
+def reject_embedding_change(principal: AuthPrincipal) -> None:
+    _require_admin(principal)
+    raise errors.ApiError(409, "EMBEDDING_CHANGE_BLOCKED", EMBEDDING_CHANGE_BLOCKED)
 
 
 def _iso(value: datetime | None) -> str | None:

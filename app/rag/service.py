@@ -20,6 +20,7 @@ from typing import Any
 
 from pydantic import BaseModel
 
+from app.ai import embedding_guard
 from app.ai.embedding import embedding_port
 from app.ai.llm import llm_port
 from app.auth import repository as auth_repo
@@ -387,6 +388,8 @@ NO_RELEVANT_DOCUMENTS = "NO_RELEVANT_DOCUMENTS"
 NO_DATA = "NO_DATA"
 UNSUPPORTED = "UNSUPPORTED"
 QUERY_ERROR = "QUERY_ERROR"
+# 검색 모델과 색인이 달라 문서 검색을 멈춘 상태(ARC-022). 조회 오류와 다르게 알린다
+SEARCH_DISABLED = "SEARCH_DISABLED"
 _ANSWERED = (STOP, PARTIAL, NUMBER_GUARD)
 
 
@@ -543,6 +546,13 @@ def _search(
                 )
             else:
                 found = search.search_with_vector(cur, query_vec, query_text, p.scope)
+    except errors.ApiError as exc:
+        if exc.code != embedding_guard.MISMATCH:
+            raise
+        log.warning("문서 검색 멈춤 conversation=%s: %s", p.conversation_id, exc.message)
+        if not turn.block_list and turn.aggregate is None:
+            turn.stop(SEARCH_DISABLED, answer.search_disabled())
+        return
     except Exception:  # noqa: BLE001 — 조회 오류는 값 없음과 다르게 알린다
         log.exception("문서 검색 실패 conversation=%s", p.conversation_id)
         if not turn.block_list and turn.aggregate is None:
