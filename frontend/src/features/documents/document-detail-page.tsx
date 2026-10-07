@@ -8,6 +8,7 @@ import { DataState } from '@/components/common/data-state';
 import { useToast } from '@/components/common/toaster';
 import { PageHeader } from '@/components/layout/page-header';
 import { useProjectContext } from '@/components/layout/project-shell';
+import { ServerLink } from '@/components/common/server-link';
 import { api } from '@/lib/http';
 import { isApiError } from '@/lib/api-error';
 import { formatBytes, formatDateTime } from '@/lib/format';
@@ -113,9 +114,13 @@ export function DocumentDetailPage(): ReactNode {
                 <h2 className="text-muted-foreground text-xs font-semibold tracking-wide uppercase">
                   원본
                 </h2>
-                <a href={doc.downloadUrl} className="underline-offset-2 hover:underline">
+                <ServerLink
+                  url={doc.downloadUrl}
+                  filename={doc.fileName}
+                  className="underline-offset-2 hover:underline"
+                >
                   원본 파일 내려받기
-                </a>
+                </ServerLink>
                 {doc.originalUrl ? (
                   <a
                     href={doc.originalUrl}
@@ -217,7 +222,11 @@ export function DocumentDetailPage(): ReactNode {
               <h2 className="text-muted-foreground mb-2 text-xs font-semibold tracking-wide uppercase">
                 추출 결과
               </h2>
-              <DataState state={text} onRetry={text.reload} empty={{ text: '추출된 글이 없습니다.' }}>
+              <DataState
+                state={text}
+                onRetry={text.reload}
+                empty={{ text: '추출된 글이 없습니다.' }}
+              >
                 {(t) =>
                   t.text.trim() ? (
                     <div className="rounded border p-4">

@@ -27,6 +27,9 @@ CMD ["npx", "vite", "--host", "0.0.0.0", "--port", "5173", "--strictPort"]
 FROM deps AS build
 ARG AXLINK_VERSION=dev
 ARG AXLINK_REVISION=unknown
+# 앱이 놓일 경로. 외부 공개(/ax-link/)는 빌드 때 정해진다. 기동 때의 AXLINK_BASE_PATH 와 같아야 한다
+ARG AXLINK_BASE_PATH=/
+ENV AXLINK_BASE_PATH=${AXLINK_BASE_PATH}
 COPY frontend/ ./
 RUN npm run build \
  && printf '{"name":"axlink-web","version":"%s","revision":"%s"}\n' \
@@ -40,9 +43,13 @@ LABEL org.opencontainers.image.title="axlink-web" \
       org.opencontainers.image.version="${AXLINK_VERSION}" \
       org.opencontainers.image.revision="${AXLINK_REVISION}" \
       org.opencontainers.image.source="https://github.com/jypark-user/axlink"
-# API 주소는 기동 때 템플릿으로 넣는다(공식 이미지의 envsubst). 기본은 같은 스택의 api 서비스다.
-ENV AXLINK_API_UPSTREAM=http://api:8080
-COPY docker/nginx/default.conf.template /etc/nginx/templates/default.conf.template
+# 설정은 기동 때 docker/nginx/40-axlink-site.sh 가 만든다(API 주소·앱 경로·받을 호스트).
+ARG AXLINK_BASE_PATH=/
+ENV AXLINK_API_UPSTREAM=http://api:8080 \
+    AXLINK_BASE_PATH=${AXLINK_BASE_PATH} \
+    AXLINK_SERVER_NAMES="" \
+    AXLINK_LOCAL_NAMES=""
+COPY --chmod=0755 docker/nginx/40-axlink-site.sh /docker-entrypoint.d/40-axlink-site.sh
 COPY --from=build /web/dist /usr/share/nginx/html
 EXPOSE 8080
 HEALTHCHECK --interval=15s --timeout=5s --start-period=10s --retries=5 \

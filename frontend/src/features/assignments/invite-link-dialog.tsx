@@ -9,7 +9,7 @@ import { isApiError } from '@/lib/api-error';
 import type { ProjectInviteResponse } from '@/types/api';
 
 const inviteUrl = (token: string) =>
-  `${window.location.origin}/invite/accept?token=${encodeURIComponent(token)}`;
+  `${window.location.origin}${import.meta.env.BASE_URL}invite/accept?token=${encodeURIComponent(token)}`;
 
 /** 고를 것이 없다. 열리는 즉시 링크를 만들어 클립보드에 넣는다. */
 export function InviteLinkDialog({
