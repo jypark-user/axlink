@@ -80,7 +80,7 @@ export type ChunkSourceType =
   | 'DOCUMENT_UPLOAD';
 export type MessageRole = 'USER' | 'ASSISTANT';
 export type MessageFeedback = 'UP' | 'DOWN';
-export type RouteType = 'DOCUMENT' | 'AGGREGATE' | 'MIXED' | 'OVERVIEW';
+export type RouteType = 'DOCUMENT' | 'AGGREGATE' | 'MIXED' | 'OVERVIEW' | 'INTENT' | 'CLARIFY';
 export type WidgetTemplate =
   | 'STAT_CARD'
   | 'BAR_CHART'
@@ -600,6 +600,8 @@ export interface IssueSummaryResponse {
   closed: number;
   heavyOpen: number;
   unassignedOpen: number;
+  /** 열린 것 중 심각도 미지정. 고위험에서 빼고 따로 센다 */
+  unspecifiedOpen: number;
 }
 
 export interface IssueResponse {
@@ -608,7 +610,10 @@ export interface IssueResponse {
   key: string;
   title: string;
   status: IssueStatus;
+  /** null 이면 원천에 심각도 근거가 없다(미지정) */
   severity: IssueSeverity | null;
+  /** 원천 우선순위 원문. 심각도와 다르다 */
+  sourcePriority?: string | null;
   assignee: string | null;
   resolvedAt: string | null;
   source: SourceRef;
@@ -1090,6 +1095,27 @@ export interface SemanticCatalogResponse {
 export interface AskRequest {
   question: string;
   projectScope: string[];
+  /** 권장 질문을 눌렀을 때 그 키. 서버가 다시 검증하고 재분류하지 않는다 */
+  hint?: string | null;
+}
+
+/** 이어 물을 질문 하나. 문장은 서버가 만들고 hint 는 누를 때 같이 보낸다 */
+export interface SuggestionItem {
+  question: string;
+  hint: string;
+}
+
+export interface SseSuggestionsEvent {
+  items: SuggestionItem[];
+}
+
+/** 지금 답변 모델. fixed 면 고정 응답(시험용)이라 실제 모델 답이 아니다 */
+export interface AiRuntimeResponse {
+  llmProvider: string;
+  model: string | null;
+  fixed: boolean;
+  /** 실행 코드 이름표. 미리보기·배포를 띄울 때 넣는다 */
+  codeVersion?: string | null;
 }
 
 export interface ConversationCreateRequest {
@@ -1126,6 +1152,8 @@ export interface QueryRouting {
   listingStatus?: string | null;
   /** 판정을 라우팅 캐시에서 가져왔는가. 값은 그래도 매번 새로 뽑는다 */
   routeCached?: boolean;
+  /** 일정 질문 묶음 키 (INTENT 일 때) */
+  intent?: string | null;
 }
 
 /**
@@ -1169,6 +1197,9 @@ export interface MessageResponse {
   infographics: SseInfographicEvent[];
   /** 답을 만드는 데 든 시간(ms). 스트리밍 중이거나 옛 메시지면 null */
   latencyMs: number | null;
+  /** 답의 종류. STOP·PARTIAL·NO_DATA 등. 옛 메시지면 null */
+  finishReason?: string | null;
+  suggestions?: SuggestionItem[];
 }
 
 export interface MessageFeedbackRequest {

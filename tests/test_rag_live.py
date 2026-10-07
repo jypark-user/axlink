@@ -162,9 +162,9 @@ def test_문서_질문은_맞는_문서를_1순위로_문다(ask):
 @requires_db
 def test_관계없는_질문은_게이트에_막힌다(ask):
     result = ask("김치찌개 맛있게 끓이는 법 알려줘")
-    assert result["finish"] == "NO_EVIDENCE"
+    # 무관 판정이면 OFF_TOPIC, 문서 검색까지 갔으면 맞는 근거 없음. 어느 쪽이든 모델은 안 쓴다
+    assert result["finish"] in ("OFF_TOPIC", "NO_RELEVANT_DOCUMENTS")
     assert result["chunks"] == 0 and result["top"] == "-"
-    assert "근거" in result["text"]
 
 
 @live

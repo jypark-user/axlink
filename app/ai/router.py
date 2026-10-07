@@ -1,4 +1,4 @@
-"""/api/ai/* — LLM 모델 설정 (ARC-011). 플랫폼 관리자만 쓴다.
+"""/api/ai/* — LLM 모델 설정 (ARC-011). 설정은 플랫폼 관리자만, 지금 모델 확인은 누구나.
 
 모델 목록 조회는 저장 전에 즉시 부른다. 사용자가 주소를 입력하는 동안 프런트가 디바운스로
 부르므로 실패는 200 + error 문구다. 예외를 올리면 한 글자마다 오류 대화상자가 뜬다.
@@ -8,6 +8,7 @@ from fastapi import APIRouter, Query
 
 from app.ai import model_settings
 from app.ai.models import (
+    AiRuntimeResponse,
     LlmMeasureResponse,
     LlmModelListResponse,
     LlmModelParamsUpdateRequest,
@@ -16,9 +17,26 @@ from app.ai.models import (
     LlmSettingUpdateRequest,
 )
 from app.auth.deps import Principal
+from app.config import settings
 from app.db import tx
 
 router = APIRouter(prefix="/api/ai", tags=["ai"])
+
+
+@router.get("/runtime", response_model=AiRuntimeResponse)
+def runtime(principal: Principal) -> AiRuntimeResponse:
+    """로그인한 누구나. 주소는 내보내지 않고 공급자와 모델 이름만."""
+    fixed = settings.llm_provider == "fake" or settings.embedding_provider == "fake"
+    model = None
+    if settings.llm_provider != "fake":
+        with tx() as cur:
+            model = model_settings.runtime_config(cur).model
+    return AiRuntimeResponse(
+        llmProvider=settings.llm_provider,
+        model=model,
+        fixed=fixed,
+        codeVersion=settings.build_label,
+    )
 
 
 @router.get("/settings", response_model=LlmSettingResponse)

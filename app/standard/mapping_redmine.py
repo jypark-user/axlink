@@ -14,9 +14,6 @@ from app.standard.mapping_rules import MappingRules
 _DEFAULT_RULES = MappingRules()
 
 _STATUS = {"진행": "IN_PROGRESS", "해결": "RESOLVED"}
-_SEVERITY = {
-    "낮음": "MINOR", "보통": "MAJOR", "높음": "MAJOR", "긴급": "CRITICAL", "즉시": "BLOCKER",
-}
 _RISK_SEVERITY = {
     "낮음": "LOW", "보통": "MEDIUM", "높음": "HIGH", "긴급": "CRITICAL", "즉시": "CRITICAL",
 }
@@ -62,7 +59,10 @@ def to_issue(payload: dict[str, Any], base_url: str) -> dict[str, Any]:
         "title": (payload.get("subject") or "").strip()[:500],
         "body": payload.get("description") or "",
         "status": status,
-        "severity": _SEVERITY.get(_name(payload.get("priority")), "MAJOR"),
+        # 우선순위는 심각도가 아니다. 둘을 잇는 합의된 대응표가 없어 심각도는 비우고(GH-116)
+        # 우선순위는 원문 그대로 따로 남긴다
+        "severity": None,
+        "source_priority": _name(payload.get("priority")) or None,
         "assignee": _name(payload.get("assigned_to")) or None,
         "source_created_at": payload.get("created_on"),
         "source_updated_at": payload.get("updated_on"),

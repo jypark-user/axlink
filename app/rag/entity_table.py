@@ -38,6 +38,8 @@ class EntitySpec:
     url_expr: str | None
     # 무엇을 뺀 범위인지. 표 설명과 범위 줄에 붙는다
     scope_note: str | None = None
+    # 정렬 기준. 범위 줄에만 붙인다(표 제목에는 넣지 않음). 모델이 순서를 등급으로 읽지 않게
+    order_note: str | None = None
 
 
 ENTITIES: dict[str, EntitySpec] = {
@@ -48,7 +50,7 @@ ENTITIES: dict[str, EntitySpec] = {
         columns=(
             ("title", "제목", "e.title"),
             ("status", "상태", "e.status"),
-            ("severity", "심각도", "coalesce(e.severity, '-')"),
+            ("severity", "심각도", "coalesce(e.severity, '미지정')"),
             ("assignee", "담당", "coalesce(e.assignee, '-')"),
             (
                 "updated",
@@ -58,14 +60,22 @@ ENTITIES: dict[str, EntitySpec] = {
         ),
         # 급한 것이 위로. 심각도 순, 같으면 최근에 움직인 것. "가장 급한 작업" 이 이 순서를 읽는다
         order_by=(
+            # 심각도가 지정된 것을 심각도 순으로 먼저 두고, 미지정은 별도 묶음으로 뒤에 둔다.
+            # 미지정은 등급이 아니다. 중대·경미 사이에 끼우지 않는다(GH-116).
+            # 묶음 안에서는 최근 갱신순
+            "(e.severity is null), "
             "case e.severity when 'BLOCKER' then 0 when 'CRITICAL' then 1 when 'MAJOR' then 2 "
-            "when 'MINOR' then 3 when 'TRIVIAL' then 4 else 5 end, "
+            "when 'MINOR' then 3 when 'TRIVIAL' then 4 end, "
             "coalesce(e.source_updated_at, e.updated_at) desc nulls last"
         ),
         open_clause="e.status not in ('RESOLVED', 'CLOSED')",
         closed_clause="e.status in ('RESOLVED', 'CLOSED')",
         url_expr="e.external_url",
         scope_note="요구사항으로 분류된 항목 제외",
+        order_note=(
+            "심각도가 지정된 이슈를 심각도 순으로 먼저 두고, 심각도 미지정은 별도 묶음으로 뒤에 "
+            "최근 갱신순으로 둔다. 미지정은 위험 등급이 아니다"
+        ),
     ),
     "REQUIREMENT": EntitySpec(
         key="REQUIREMENT",
@@ -152,6 +162,8 @@ class EntityTable:
         """본문이 건수를 말할 수 있게 범위를 한 줄로. 이 줄의 숫자는 검문의 근거가 된다."""
         shown = len(self.data.rows)
         note = f" ({self.spec.scope_note})" if self.spec.scope_note else ""
+        if self.spec.order_note:
+            note += f". 정렬: {self.spec.order_note}"
         if shown >= self.total:
             return f"{self.title} 전체 {self.total}건{note}"
         return f"{self.title} 총 {self.total}건 중 앞 {shown}건{note}"

@@ -89,8 +89,8 @@ class Settings(BaseSettings):
     rag_list_chars: int = 160
     # 라우팅 캐시(ARC-014). 같은 질문의 판정을 모델에 다시 묻지 않는다. 값은 매번 새로 뽑는다.
     rag_route_cache: bool = True
-    # 근거를 못 찾은 질문을 사업 현황 요약으로 받는다(ARC-015). 끄면 예전처럼 "근거 부족" 이다.
-    rag_overview_fallback: bool = True
+    # 실행 중인 코드의 이름표. 미리보기·배포를 띄울 때 넣는다. 질의 화면에 모델과 같이 보인다
+    build_label: str | None = None
     # 일반 질문 답변율의 바닥. live 시험이 이 아래면 실패한다. 기준선을 잰 뒤 올린다.
     rag_general_answer_floor: float = 0.85  # 09.17 실측 100%. 판정이 흔들려 여유를 둔다
 

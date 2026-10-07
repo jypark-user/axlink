@@ -124,19 +124,21 @@ def insert_message(
     rewritten_query: str | None = None,
     measure_key: str | None = None,
     infographic: list[dict[str, Any]] | dict[str, Any] | None = None,
+    suggestions: list[dict[str, Any]] | None = None,
 ) -> str:
     row = fetch_one(
         cur,
         """
         insert into message
           (conversation_id, seq, role, content, status, route_type, rewritten_query,
-           measure_key, infographic_json)
-        values (%s, %s, %s, %s, %s, %s, %s, %s, %s)
+           measure_key, infographic_json, suggestions_json)
+        values (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
         returning id::text as id
         """,
         (
             conversation_id, seq, role, content, status, route_type, rewritten_query,
             measure_key, Jsonb(infographic) if infographic is not None else None,
+            Jsonb(suggestions) if suggestions is not None else None,
         ),
     )
     assert row is not None
@@ -144,15 +146,21 @@ def insert_message(
 
 
 def finish_message(
-    cur: Any, message_id: str, content: str, status: str, latency_ms: int
+    cur: Any,
+    message_id: str,
+    content: str,
+    status: str,
+    latency_ms: int,
+    finish_reason: str | None = None,
 ) -> None:
     cur.execute(
         """
         update message
-           set content = %s, status = %s, latency_ms = %s, updated_at = now()
+           set content = %s, status = %s, latency_ms = %s, finish_reason = %s,
+               updated_at = now()
          where id = %s
         """,
-        (content, status, latency_ms, message_id),
+        (content, status, latency_ms, finish_reason, message_id),
     )
 
 
@@ -162,7 +170,7 @@ def list_messages(cur: Any, conversation_id: str) -> list[dict[str, Any]]:
         """
         select id::text as id, conversation_id::text as conversation_id, seq, role, content,
                status, route_type, rewritten_query, measure_key, feedback, infographic_json,
-               created_at, latency_ms
+               created_at, latency_ms, finish_reason, suggestions_json
           from message
          where conversation_id = %s
          order by seq
