@@ -7,6 +7,17 @@
 # 이미지는 미리 만든다(docs/00-management/로컬-실행.md). DB·Ollama 포트는 여기서 더 열지 않는다.
 # 앞단 프록시는 /ax-link/ 만 이 PC 의 5173 으로 넘긴다. 프록시가 경로를 떼든 붙이든 같은 화면이 나온다.
 services:
+  # DB·Ollama 는 이 PC 안에서만 붙는다. 기본 compose 는 모든 인터페이스(0.0.0.0)에 열어
+  # 같은 네트워크(LAN)에서 개발 비밀번호 DB·인증 없는 Ollama 에 닿았다(방화벽의 Docker Desktop
+  # Backend 허용 규칙). 컨테이너끼리는 이름으로 붙어 영향이 없고, 호스트 도구·미리보기는 127.0.0.1 로 붙는다
+  postgres:
+    ports: !override
+      - "127.0.0.1:15432:5432"
+
+  ollama:
+    ports: !override
+      - "127.0.0.1:11434:11434"
+
   api:
     image: axlink-api:${AXLINK_VERSION:?AXLINK_VERSION 이 필요하다}
     pull_policy: never
