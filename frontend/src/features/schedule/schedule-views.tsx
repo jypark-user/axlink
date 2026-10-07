@@ -11,6 +11,7 @@ import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
 import { DataTable, SortableHeader } from '@/components/ui/data-table';
 import { cn } from '@/lib/utils';
+import { ServerLink } from '@/components/common/server-link';
 import { useThemeColors } from '@/lib/theme-color';
 import {
   DAY_MS,
@@ -362,13 +363,20 @@ function DeliverableCell({ task }: { task: ScheduleTask }): ReactNode {
   return (
     <span className="flex items-center gap-2">
       {task.deliverableUrl ? (
-        <a href={task.deliverableUrl} target="_blank" rel="noreferrer" className="underline-offset-2 hover:underline">
+        <ServerLink
+          url={task.deliverableUrl}
+          filename={task.deliverable ?? 'deliverable'}
+          className="underline-offset-2 hover:underline"
+        >
           {pill}
-        </a>
+        </ServerLink>
       ) : (
         pill
       )}
-      <span className="text-muted-foreground block max-w-[14rem] truncate text-xs" title={task.deliverable}>
+      <span
+        className="text-muted-foreground block max-w-[14rem] truncate text-xs"
+        title={task.deliverable}
+      >
         {task.deliverable}
       </span>
     </span>

@@ -2,7 +2,8 @@ import { ApiError } from '@/lib/api-error';
 import { tokenStore } from '@/lib/token-store';
 import type { LoginResponse, RefreshResponse } from '@/types/api';
 
-const BASE = '/api';
+// 앱 경로 아래의 /api 다. 외부 공개(/ax-link/)에서 도메인 맨 앞의 /api 로 새지 않게 한다.
+const BASE = `${import.meta.env.BASE_URL}api`;
 
 export type ApiInit = Omit<RequestInit, 'body'> & {
   body?: unknown;
