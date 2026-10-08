@@ -1,0 +1,53 @@
+# 개발 PC 를 외부 주소(https://dev.userinsight.co.kr/ax-link/)로 여는 덮어쓰기.
+# 웹은 Vite 개발 서버 대신 빌드본을 nginx 로 내고, API 는 운영 이미지로 돈다. 소스 반영(watch)은 없다.
+#
+#   AXLINK_VERSION=<태그> docker compose -f infra/docker-compose.yml -f infra/docker-compose.ext.yml \
+#     up -d --no-deps --no-build api web
+#
+# 이미지는 미리 만든다(docs/00-management/로컬-실행.md). DB·Ollama 포트는 여기서 더 열지 않는다.
+# 앞단 프록시는 /ax-link/ 만 이 PC 의 5173 으로 넘긴다. 프록시가 경로를 떼든 붙이든 같은 화면이 나온다.
+services:
+  # DB·Ollama 는 이 PC 안에서만 붙는다. 기본 compose 는 모든 인터페이스(0.0.0.0)에 열어
+  # 같은 네트워크(LAN)에서 개발 비밀번호 DB·인증 없는 Ollama 에 닿았다(방화벽의 Docker Desktop
+  # Backend 허용 규칙). 컨테이너끼리는 이름으로 붙어 영향이 없고, 호스트 도구·미리보기는 127.0.0.1 로 붙는다
+  postgres:
+    ports: !override
+      - "127.0.0.1:15432:5432"
+
+  ollama:
+    ports: !override
+      - "127.0.0.1:11434:11434"
+
+  api:
+    image: axlink-api:${AXLINK_VERSION:?AXLINK_VERSION 이 필요하다}
+    pull_policy: never
+    # 문서 볼륨 파일이 root 소유다(10-01 이관). 소유권을 정리하기 전까지는 root 로 돈다
+    user: "0:0"
+    environment:
+      # 운영 검사: JWT·연결 토큰 비밀값이 빠졌거나 개발 기본값이면 뜨지 않는다(.env)
+      AXLINK_ENV: production
+      AXLINK_APP_VERSION: ${AXLINK_VERSION}
+      AXLINK_BUILD_LABEL: ${AXLINK_VERSION}
+      AXLINK_CORS_ORIGINS: http://localhost:5173,http://192.168.0.50:5173,https://dev.userinsight.co.kr
+
+  web:
+    image: axlink-web:${AXLINK_VERSION}
+    pull_policy: never
+    environment:
+      AXLINK_API_UPSTREAM: http://api:8080
+      AXLINK_BASE_PATH: /ax-link/
+      # 받을 호스트. 목록 밖 호스트는 421 이다. 전체 허용은 하지 않는다. 기본 비밀번호 계정이
+      # 남아 있는 동안은 AXLINK_WEB_HOSTS 로 외부 호스트를 빼고 띄운다
+      AXLINK_SERVER_NAMES: ${AXLINK_WEB_HOSTS:-dev.userinsight.co.kr localhost 127.0.0.1 192.168.0.50}
+      # 프록시 없이 직접 여는 주소. 첫 화면(/)을 /ax-link/ 로 보낸다
+      AXLINK_LOCAL_NAMES: localhost 127.0.0.1 192.168.0.50
+    # 컨테이너 안은 8080 이다(nginx 비특권). 바깥 주소는 그대로 5173 이다
+    ports: !override
+      - "127.0.0.1:5173:8080"
+      - "192.168.0.50:5173:8080"
+    healthcheck:
+      test: ["CMD", "wget", "-q", "-O", "/dev/null", "http://127.0.0.1:8080/version.json"]
+      interval: 15s
+      timeout: 5s
+      start_period: 10s
+      retries: 5
