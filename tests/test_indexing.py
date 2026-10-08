@@ -124,8 +124,14 @@ def test_reindex_refreshes_when_embedding_model_differs(source_id):
     가짜 벡터가 실제 모델 이름을 달고 들어간 뒤 재수집으로도 안 지워졌던 사고의 재발 방지다."""
     with tx() as cur:
         indexing.reindex(cur, NamedEmbedding("fake"), [_source(source_id, _LONG_BODY)])
+        # 다른 모델로 만든 것처럼 이름만 바꾼다. 시험 DB 의 다른 청크는 fake 라서 새로
+        # bge-m3 로 색인하면 섞임으로 막힌다
+        cur.execute(
+            "update doc_chunk set embedding_model = 'bge-m3' where source_id = %s", (source_id,)
+        )
 
-    port = NamedEmbedding("bge-m3")
+    # 이 소스의 낡은 벡터만 다른 모델이면 갈아 끼우는 것은 막지 않는다(ARC-022)
+    port = NamedEmbedding("fake")
     with tx() as cur:
         again = indexing.reindex(cur, port, [_source(source_id, _LONG_BODY)])
         models = cur.execute(
@@ -133,7 +139,7 @@ def test_reindex_refreshes_when_embedding_model_differs(source_id):
         ).fetchall()
     assert again.unchanged == 0
     assert again.chunks > 1
-    assert [m["embedding_model"] for m in models] == ["bge-m3"]
+    assert [m["embedding_model"] for m in models] == ["fake"]
 
     # 같은 모델로 한 번 더 — 이제는 건너뛴다.
     with tx() as cur:
@@ -150,3 +156,36 @@ def test_requirement_indexes_as_one_chunk(source_id):
             [_source(source_id, "요구사항 본문이다.", "REQUIREMENT")],
         )
     assert result.chunks == 1
+
+
+@requires_db
+def test_다른_모델의_색인이_있으면_색인과_검색을_멈춘다(source_id):
+    """ARC-022. 차원이 같아도 다른 모델 벡터를 섞지 않는다. API 는 멈추지 않고 이 둘만 멈춘다."""
+    from app.ai import embedding_guard
+    from app.ai.embedding import embedding_port
+    from app.common import errors
+    from app.rag import search
+
+    port = FakeEmbedding(1024)
+    with tx() as cur:
+        indexing.reindex(cur, port, [_source(source_id, _LONG_BODY)])
+        cur.execute(
+            "update doc_chunk set embedding_model = 'other-model' where source_id = %s",
+            (source_id,),
+        )
+    other = str(uuid.uuid4())
+    try:
+        with tx() as cur:
+            with pytest.raises(errors.ApiError) as exc:
+                indexing.reindex(cur, port, [_source(other, "새 문서 " * 50)])
+            assert exc.value.code == embedding_guard.MISMATCH
+            assert "other-model" in exc.value.message
+            assert embedding_guard.mismatch(cur, embedding_port().model_name()) is not None
+            with pytest.raises(errors.ApiError):
+                search.search_with_vector(cur, port.embed(["질문"])[0], "질문", [PID])
+    finally:
+        with tx() as cur:
+            cur.execute("delete from doc_chunk where source_id = %s", (other,))
+    with tx() as cur:
+        cur.execute("delete from doc_chunk where source_id = %s", (source_id,))
+        assert embedding_guard.mismatch(cur, embedding_port().model_name()) is None

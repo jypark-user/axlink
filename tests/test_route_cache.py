@@ -36,6 +36,30 @@ def test_카탈로그_버전은_프롬프트_전체를_따른다(monkeypatch):
     assert route_cache.catalog_version(cat) != before
 
 
+def test_서버나_모델_설정이_바뀌면_버전이_바뀐다():
+    """ARC-022. 모델 이름만 보면 같은 이름의 다른 서버나 문맥 길이를 바꾼 뒤에도 앞 판정을 쓴다."""
+    from app.ai.llm import FakeLlm, OllamaLlm
+
+    cat = _catalog()
+    base = OllamaLlm("http://a:11434", "m", 10, num_ctx=8192, num_predict=2000).identity()
+    versions = {
+        route_cache.catalog_version(cat, base),
+        route_cache.catalog_version(cat, OllamaLlm("http://b:11434", "m", 10, num_ctx=8192,
+                                                    num_predict=2000).identity()),
+        route_cache.catalog_version(cat, OllamaLlm("http://a:11434", "m2", 10, num_ctx=8192,
+                                                    num_predict=2000).identity()),
+        route_cache.catalog_version(cat, OllamaLlm("http://a:11434", "m", 10, num_ctx=4096,
+                                                    num_predict=2000).identity()),
+        route_cache.catalog_version(cat, OllamaLlm("http://a:11434", "m", 10, num_ctx=8192,
+                                                    num_predict=900).identity()),
+    }
+    assert len(versions) == 5
+    # 시간 제한은 판정에 영향이 없어 버전에 넣지 않는다
+    same = OllamaLlm("http://a:11434", "m", 99, num_ctx=8192, num_predict=2000).identity()
+    assert route_cache.catalog_version(cat, same) == route_cache.catalog_version(cat, base)
+    assert FakeLlm().identity() == ""
+
+
 class _Counting:
     def __init__(self, route: dict, text: str = "답") -> None:
         self.route, self.text = route, text

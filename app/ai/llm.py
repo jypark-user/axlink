@@ -65,6 +65,10 @@ class OllamaLlm:
         self._num_ctx = num_ctx
         self._num_predict = num_predict
 
+    def identity(self) -> str:
+        """판정을 바꿀 수 있는 설정 전부. 라우팅 캐시가 이 값이 바뀌면 다시 묻는다(ARC-022)."""
+        return f"{self._url}|{self._model}|{self._num_ctx}|{self._num_predict}"
+
     def _payload(
         self,
         messages: list[dict[str, str]],
@@ -211,6 +215,9 @@ class FakeLlm:
     ) -> LlmResult:
         digest = hashlib.sha256(f"{system}\x1f{user}".encode()).hexdigest()[:12]
         return LlmResult(text=f"[fake:{digest}] {user[:80]}", model="fake")
+
+    def identity(self) -> str:
+        return ""
 
     def stream(
         self, system: str, user: str, *, json_schema: dict[str, Any] | None = None

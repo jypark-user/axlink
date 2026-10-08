@@ -509,3 +509,54 @@ def test_건수를_나눠_받으면_서버가_전체를_더해_준다():
     rate = answer.aggregate_lines(_data("%", [("A", 50), ("B", 30)]))
     cut = answer.aggregate_lines(_data("건", [("A", 1)], True))
     assert not any("항목 합" in x for x in rate + cut)
+
+
+@requires_db
+def test_검색_모델이_색인과_다르면_검색_멈춤으로_알린다(ask, monkeypatch):
+    """ARC-022. 조회 오류나 근거 없음과 섞지 않는다. 모델은 부르지 않는다."""
+    from app.ai import embedding_guard
+    from app.common import errors
+
+    def mismatch(*a, **k):
+        raise errors.ApiError(503, embedding_guard.MISMATCH, "검색 모델이 색인과 다릅니다")
+
+    monkeypatch.setattr(ask_service.search.embedding_guard, "require_match", mismatch)
+    ev, scripted = ask({"route": "DOCUMENT"}, "안 불려야 한다")
+    assert _finish(ev) == "SEARCH_DISABLED"
+    assert "문서 검색이 멈춰" in _text(ev)
+    assert scripted.stream_calls == 0
+
+
+@requires_db
+def test_검색이_멈춰도_집계_질문은_값으로_답한다(ask, monkeypatch):
+    """ARC-022 기능 격리. 열린 이슈 수는 DB 집계라 임베딩 불일치와 상관없이 답해야 한다."""
+    from app.ai import embedding_guard
+    from app.common import errors
+
+    keys = ("GH-8811", "GH-8812")
+    with tx() as cur:
+        for key in keys:
+            cur.execute(
+                """
+                insert into issue (project_id, issue_key, title, status, severity,
+                                   source_kind, source_updated_at)
+                values (%s, %s, '격리 시험 이슈', 'OPEN', 'MAJOR', 'MANUAL', '2026-09-01T00:00:00Z')
+                """,
+                (PID, key),
+            )
+    calls = []
+
+    def mismatch(*a, **k):
+        calls.append(1)
+        raise errors.ApiError(503, embedding_guard.MISMATCH, "검색 모델이 색인과 다릅니다")
+
+    monkeypatch.setattr(ask_service.search.embedding_guard, "require_match", mismatch)
+    try:
+        route = {"route": "AGGREGATE", "measure": "open_issue_count", "template": "STAT_CARD"}
+        ev, scripted = ask(route, "열린 이슈가 있습니다", question="열린 이슈 몇 건이야")
+        assert _finish(ev) not in ("SEARCH_DISABLED", "NO_DATA", "QUERY_ERROR")
+        assert scripted.stream_calls == 1  # 값을 받아 모델이 문장을 썼다
+        assert calls  # 문서 검색은 실제로 막혔다
+    finally:
+        with tx() as cur:
+            cur.execute("delete from issue where issue_key = any(%s)", (list(keys),))

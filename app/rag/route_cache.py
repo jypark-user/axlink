@@ -31,10 +31,14 @@ def normalize(question: str) -> str:
     return _TRAILING.sub("", " ".join(question.split())).strip()
 
 
-def catalog_version(catalog: Catalog) -> str:
-    """판정은 시스템 프롬프트에 달려 있다. 그 문장 전체의 해시가 버전이다. 지표·차원·템플릿
-    안내 중 무엇이 바뀌어도 버전이 바뀐다."""
-    return hashlib.sha256(routing.system_prompt(catalog).encode("utf-8")).hexdigest()
+def catalog_version(catalog: Catalog, llm_identity: str = "") -> str:
+    """판정은 시스템 프롬프트와 그것을 읽는 모델에 달려 있다. 지표·차원·템플릿 안내 중 무엇이
+    바뀌어도, 서버 주소·모델·문맥 길이·생성 한도 중 무엇이 바뀌어도 버전이 바뀐다. 모델 이름만
+    보면 같은 이름의 다른 서버나 설정을 바꾼 뒤에도 앞 판정을 다시 쓴다(ARC-022)."""
+    text = routing.system_prompt(catalog)
+    if llm_identity:
+        text += "\x1f" + llm_identity
+    return hashlib.sha256(text.encode("utf-8")).hexdigest()
 
 
 def key_of(question: str, version: str) -> str:
@@ -74,7 +78,8 @@ def decide(
     if not settings.rag_route_cache:
         return Routed(routing.decide(catalog, llm, question, previous), cached=False)
 
-    version = catalog_version(catalog)
+    identity = getattr(llm, "identity", None)
+    version = catalog_version(catalog, identity() if callable(identity) else "")
     key = key_of(question, version)
     row = fetch_one(cur, "select choice_json from route_cache where key_hash = %s", (key,))
     if row is not None:

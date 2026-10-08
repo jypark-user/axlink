@@ -10,8 +10,10 @@ from collections.abc import Iterator
 from dataclasses import dataclass, field
 from typing import Any
 
+from app.common.korean import attach
 from app.config import settings
 from app.rag import blocks as blocks_mod
+from app.rag import collection
 from app.rag.routing import PreviousTurn, render_previous
 from app.rag.search import RetrievedChunk
 from app.semantic.models import WidgetDataResponse
@@ -229,6 +231,25 @@ def no_relevant_documents(max_similarity: float) -> str:
     )
 
 
+def no_collected_data(label: str, state: str) -> str:
+    """건수를 셀 자료를 아직 믿을 수 없을 때. 0건이라고 말하지 않는다(GH-127)."""
+    subject = attach(label, "을")
+    if state == collection.NOT_CONNECTED:
+        return (
+            f"선택한 사업에 연동한 도구가 없어 {subject} 셀 자료를 수집하지 않았습니다. "
+            "0건이라는 뜻은 아닙니다. 도구를 연동하고 수집하면 답할 수 있습니다."
+        )
+    if state == collection.COLLECT_FAILED:
+        return (
+            f"마지막 수집이 실패해 {subject} 믿고 셀 수 없습니다. 0건이라는 뜻은 아닙니다. "
+            "동기화 화면에서 실패 이유를 확인해 주십시오."
+        )
+    return (
+        f"도구는 연동돼 있지만 아직 수집이 끝나지 않아 {subject} 셀 수 없습니다. "
+        "첫 수집이 끝나면 답할 수 있습니다."
+    )
+
+
 def no_measure_data(label: str, basis: str | None) -> str:
     text = f"{label} 값이 아직 없어 답할 수 없습니다."
     if basis:
@@ -245,6 +266,13 @@ def no_overview_data() -> str:
 
 def unsupported() -> str:
     return "이 질문에 맞는 조회 항목이 아직 없어 답하지 못했습니다."
+
+
+def search_disabled() -> str:
+    return (
+        "지금은 문서 검색이 멈춰 있어 문서 근거로 답하지 못했습니다. 검색 모델과 색인이 맞지 "
+        "않습니다. 관리자가 설정의 검색 모델 영역에서 원인을 볼 수 있습니다."
+    )
 
 
 def query_error() -> str:
