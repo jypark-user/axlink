@@ -4,6 +4,9 @@
 #     --build-arg AXLINK_VERSION=0.1.0 --build-arg AXLINK_REVISION=$(git rev-parse --short HEAD) \
 #     -t axlink-web:0.1.0 .
 #
+# Git Bash 에서는 먼저 `export MSYS_NO_PATHCONV=1`. 안 하면 AXLINK_BASE_PATH=/ax-link/ 가
+# C:/Program Files/Git/ax-link/ 로 바뀌어 들어온다(10-07 흰 화면). 지금은 빌드가 그 자리에서 멈춘다.
+#
 # dev 단계는 Vite 개발 서버다(infra/docker-compose.yml). prod 단계는 빌드 결과를 Nginx 로 낸다.
 
 FROM node:24-bookworm-slim AS deps
@@ -31,7 +34,9 @@ ARG AXLINK_REVISION=unknown
 ARG AXLINK_BASE_PATH=/
 ENV AXLINK_BASE_PATH=${AXLINK_BASE_PATH}
 COPY frontend/ ./
+# 빌드 뒤 자산 경로를 검사한다. 앱 경로 밖을 부르면 이미지를 만들지 않는다(scripts/check-build.mjs)
 RUN npm run build \
+ && node scripts/check-build.mjs dist \
  && printf '{"name":"axlink-web","version":"%s","revision":"%s"}\n' \
       "${AXLINK_VERSION}" "${AXLINK_REVISION}" > dist/version.json
 

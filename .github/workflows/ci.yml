@@ -109,6 +109,19 @@ jobs:
         run: npm ci
       - name: 빌드 (tsc -b · vite)
         run: npm run build
+      - name: 빌드 결과 검사 (앱 경로 /)
+        run: npm run check:build
+      - name: 외부 경로 빌드와 검사 (/ax-link/)
+        env:
+          AXLINK_BASE_PATH: /ax-link/
+        run: npx vite build --outDir dist-ax-link && node scripts/check-build.mjs dist-ax-link
+      - name: 잘못된 앱 경로는 빌드가 멈춘다
+        env:
+          AXLINK_BASE_PATH: "C:/Program Files/Git/ax-link/"
+        run: |
+          if npx vite build --outDir dist-bad; then
+            echo "호스트 경로를 앱 경로로 받았는데 빌드가 통과했다"; exit 1
+          fi
       - name: vitest
         run: npx vitest run --reporter=default --reporter=junit --outputFile.junit=../test-results/frontend.xml
       - name: 결과 보관
