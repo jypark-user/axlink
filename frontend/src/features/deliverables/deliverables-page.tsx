@@ -103,7 +103,10 @@ export function DeliverablesPage(): ReactNode {
     setUploadingFor(wbsId);
     try {
       await api.upload<DocumentUploadResponse>(`/projects/${project.id}/documents`, form);
-      toast({ title: `${wbsId} 항목의 산출물로 올렸습니다.`, variant: 'success' });
+      toast({
+        title: `${wbsId} 항목의 산출물로 접수했습니다. 읽기·색인은 뒤에서 합니다.`,
+        variant: 'success',
+      });
       reload();
     } catch (err) {
       toast({

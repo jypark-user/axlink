@@ -1238,6 +1238,9 @@ export interface DocumentChunkResponse {
   content: string;
 }
 
+/** 문서 처리 작업 상태(GH-121). 접수됨 · 처리 중 · 완료 · 실패 */
+export type DocumentProcessingState = 'QUEUED' | 'RUNNING' | 'DONE' | 'FAILED';
+
 export interface DocumentUploadResponse {
   id: string;
   projectId: string;
@@ -1251,6 +1254,8 @@ export interface DocumentUploadResponse {
   draftAvailable: boolean;
   workProductId: string | null;
   error: string | null;
+  processingState: DocumentProcessingState;
+  processingError: string | null;
 }
 
 /** 일별 스냅샷 한 줄. 그날 지표를 고정한 값이다. */
@@ -1351,6 +1356,10 @@ export interface DocumentDetailResponse {
   workProductId: string | null;
   downloadUrl: string;
   originalUrl: string | null;
+  processingState: DocumentProcessingState;
+  processingError: string | null;
+  /** 단계별 걸린 시간(초)·쪽수·청크 수. 처리 중에도 지금까지의 값이 온다 */
+  processingSteps: Record<string, number | null> | null;
 }
 
 export interface DocumentUpdateRequest {

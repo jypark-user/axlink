@@ -46,13 +46,15 @@ def list_documents(
     response_model=DocumentUploadResponse,
     status_code=201,
 )
-async def upload_document(
+def upload_document(
     project_id: str,
     principal: Principal,
     file: Annotated[UploadFile, File()],
     wbsId: Annotated[str | None, Form()] = None,  # noqa: N803  WBS 항목에 바로 붙여 올릴 때
 ) -> DocumentUploadResponse:
-    content = await file.read()
+    """접수만 한다. 추출·색인·초안은 작업자가 뒤에서 한다(GH-121). 동기 함수라 FastAPI 가
+    스레드에서 돌린다. async 로 두고 안에서 막히는 일을 하면 API 전체가 멈춘다."""
+    content = file.file.read()
     with tx() as cur:
         return service.upload(
             cur, principal, project_id, file.filename or "", content, wbs_id=wbsId

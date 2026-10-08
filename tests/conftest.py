@@ -31,6 +31,8 @@ settings.embedding_provider = "fake"
 settings.llm_provider = "fake"
 # 서버 안 스케줄러는 시험에서 끈다. 회차는 test_scheduler 가 시계를 주입해 직접 돌린다.
 settings.scheduler_enabled = False
+# 시험은 업로드 요청 안에서 처리를 끝낸다. 뒤에서 처리하는 길은 test_document_worker.py 가 본다
+settings.document_processing = "inline"
 
 
 def _is_test_db() -> bool:

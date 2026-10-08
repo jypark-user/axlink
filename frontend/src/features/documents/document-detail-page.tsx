@@ -14,6 +14,7 @@ import { isApiError } from '@/lib/api-error';
 import { formatBytes, formatDateTime } from '@/lib/format';
 import { badgeVariantFor, label } from '@/lib/labels';
 import { useAsync } from '@/lib/use-async';
+import { isProcessing, ProcessingBadge } from '@/features/documents/processing';
 import type {
   DocumentDetailResponse,
   DocumentTextResponse,
@@ -47,6 +48,19 @@ export function DocumentDetailPage(): ReactNode {
     () => api.get<WorkProductChecklistResponse>(`/projects/${project.id}/work-products`),
     [project.id],
   );
+
+  // 접수됨·처리 중이면 끝날 때까지 다시 부른다. 처리는 뒤에서 한다(GH-121)
+  const processing = isProcessing(detail.data?.processingState);
+  const { reload: reloadDetail } = detail;
+  const { reload: reloadText } = text;
+  useEffect(() => {
+    if (!processing) return;
+    const timer = window.setInterval(() => {
+      reloadDetail();
+      reloadText();
+    }, 3000);
+    return () => window.clearInterval(timer);
+  }, [processing, reloadDetail, reloadText]);
 
   const [wbsId, setWbsId] = useState('');
   const [productType, setProductType] = useState('');
@@ -89,6 +103,7 @@ export function DocumentDetailPage(): ReactNode {
             description={
               <span className="flex flex-wrap items-center gap-2">
                 <Badge variant={badgeVariantFor(doc.status)}>{label(doc.status)}</Badge>
+                {doc.processingState !== 'DONE' && <ProcessingBadge state={doc.processingState} />}
                 <span className="text-muted-foreground text-sm">
                   {formatBytes(doc.fileSize)} · {doc.uploadedBy} · {formatDateTime(doc.uploadedAt)}
                 </span>
@@ -104,9 +119,22 @@ export function DocumentDetailPage(): ReactNode {
           <div className="grid gap-6 lg:grid-cols-[minmax(0,20rem)_minmax(0,1fr)]">
             {/* 왼쪽: 정보와 설정 */}
             <aside className="flex flex-col gap-5">
-              {doc.error && (
+              {doc.processingError && (
+                <p className="text-destructive rounded border border-destructive/30 p-3 text-sm">
+                  {doc.processingError}
+                </p>
+              )}
+              {!doc.processingError && doc.error && (
                 <p className="text-destructive rounded border border-destructive/30 p-3 text-sm">
                   {doc.error}
+                </p>
+              )}
+              {isProcessing(doc.processingState) && (
+                <p className="text-muted-foreground rounded border p-3 text-sm">
+                  {doc.processingState === 'QUEUED'
+                    ? '접수했습니다. 앞 문서가 끝나면 읽기 시작합니다.'
+                    : '읽고 색인하는 중입니다. 다른 화면을 써도 됩니다.'}
+                  {stepsText(doc.processingSteps)}
                 </p>
               )}
 
@@ -243,4 +271,15 @@ export function DocumentDetailPage(): ReactNode {
       )}
     </DataState>
   );
+}
+
+/** 처리 단계에서 지금까지 알게 된 것. 쪽수·청크 수·걸린 시간 */
+function stepsText(steps: Record<string, number | null> | null): string {
+  if (!steps) return '';
+  const bits: string[] = [];
+  if (steps.pages) bits.push(`${steps.pages}쪽`);
+  if (steps.chunks) bits.push(`조각 ${steps.chunks}개`);
+  if (steps.extract_s != null) bits.push(`읽기 ${steps.extract_s}초`);
+  if (steps.index_s != null) bits.push(`색인 ${steps.index_s}초`);
+  return bits.length ? ` (${bits.join(' · ')})` : '';
 }

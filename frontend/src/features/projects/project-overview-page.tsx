@@ -19,6 +19,7 @@ import { Progress } from '@/components/ui/progress';
 import { DataTable, SortableHeader } from '@/components/ui/data-table';
 import { DataState } from '@/components/common/data-state';
 import { RequirementStatusBadge } from '@/components/common/requirement-status';
+import { isProcessing } from '@/features/documents/processing';
 import { Tile } from '@/components/ui/page';
 import { Window } from '@/components/ui/window';
 import { RESOURCE_DOCK_ID } from '@/components/layout/app-shell';
@@ -227,7 +228,8 @@ function ProjectDetailSummary({
   );
 
   const files = documents.data?.content ?? [];
-  const reading = files.some((d) => READING.includes(d.status));
+  // 처리는 뒤에서 한다(GH-121). 접수됨·처리 중인 자료가 있으면 따라간다
+  const reading = files.some((d) => isProcessing(d.processingState) || READING.includes(d.status));
   const indexedCount = files.filter((d) => INDEXED.includes(d.status)).length;
   const { reload } = documents;
 
@@ -390,9 +392,17 @@ function ProjectDetailSummary({
                   {formatBytes(file.fileSize)} · {formatDateTime(file.uploadedAt)}
                 </span>
               </span>
-              {READING.includes(file.status) && (
+              {isProcessing(file.processingState) && (
                 <span className="text-muted-foreground text-xs font-semibold tracking-wide shrink-0">
-                  읽는 중
+                  {file.processingState === 'QUEUED' ? '접수됨' : '읽는 중'}
+                </span>
+              )}
+              {file.processingState === 'FAILED' && (
+                <span
+                  className="text-destructive text-xs font-semibold tracking-wide shrink-0"
+                  title={file.processingError ?? undefined}
+                >
+                  처리 실패
                 </span>
               )}
               <Button
