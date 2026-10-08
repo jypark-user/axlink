@@ -1,5 +1,7 @@
 """문서 DTO. 필드명은 프런트 types/api.ts 의 DocumentUploadResponse 와 1:1 이다."""
 
+from typing import Any
+
 from pydantic import BaseModel
 
 
@@ -16,6 +18,9 @@ class DocumentUploadResponse(BaseModel):
     draftAvailable: bool  # noqa: N815
     workProductId: str | None  # noqa: N815
     error: str | None
+    # 처리 작업 상태(GH-121). QUEUED 접수됨 · RUNNING 처리 중 · DONE 완료 · FAILED 실패
+    processingState: str = "DONE"  # noqa: N815
+    processingError: str | None = None  # noqa: N815
 
 
 class DocumentDetailResponse(BaseModel):
@@ -40,6 +45,10 @@ class DocumentDetailResponse(BaseModel):
     workProductId: str | None  # noqa: N815  확정돼 22종 항목에 들어갔으면 그 항목
     downloadUrl: str  # noqa: N815
     originalUrl: str | None  # noqa: N815  원천 도구 링크. 올린 문서는 없다
+    processingState: str = "DONE"  # noqa: N815
+    processingError: str | None = None  # noqa: N815
+    # 단계별 걸린 시간(초)·쪽수·청크 수. 처리 중에도 지금까지의 값이 보인다
+    processingSteps: dict[str, Any] | None = None  # noqa: N815
 
 
 class DocumentUpdateRequest(BaseModel):

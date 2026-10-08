@@ -5,6 +5,7 @@ import { SearchInput } from '@/components/ui/search-input';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Window } from '@/components/ui/window';
 import { cn } from '@/lib/utils';
+import { appHref } from '@/lib/app-path';
 import type { MessageSourceResponse } from '@/types/api';
 
 /** 자료 칸에 펼 수 있는 것. ax-pms 의 PanelView 와 같은 구성이다. */
@@ -274,7 +275,7 @@ function EvidenceViewer({
                       {url && (
                         <a
                           className="text-primary text-sm inline-flex items-center gap-1 hover:underline"
-                          href={url}
+                          href={appHref(url)}
                           target="_blank"
                           rel="noreferrer"
                         >

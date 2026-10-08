@@ -7,6 +7,7 @@ import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { DataState } from '@/components/common/data-state';
 import { useToast } from '@/components/common/toaster';
 import { PageHeader } from '@/components/layout/page-header';
+import { ServerLink } from '@/components/common/server-link';
 import { useProjectContext } from '@/components/layout/project-shell';
 import { api } from '@/lib/http';
 import { isApiError } from '@/lib/api-error';
@@ -102,7 +103,10 @@ export function DeliverablesPage(): ReactNode {
     setUploadingFor(wbsId);
     try {
       await api.upload<DocumentUploadResponse>(`/projects/${project.id}/documents`, form);
-      toast({ title: `${wbsId} 항목의 산출물로 올렸습니다.`, variant: 'success' });
+      toast({
+        title: `${wbsId} 항목의 산출물로 접수했습니다. 읽기·색인은 뒤에서 합니다.`,
+        variant: 'success',
+      });
       reload();
     } catch (err) {
       toast({
@@ -262,15 +266,14 @@ function buildColumns(
                 {pill}
               </Link>
             ) : item.url ? (
-              <a
-                href={item.url}
-                target="_blank"
-                rel="noreferrer"
+              <ServerLink
+                url={item.url}
+                filename={item.deliverable ?? 'deliverable'}
                 className="w-fit"
                 title="원천 저장소에서 보기"
               >
                 {pill}
-              </a>
+              </ServerLink>
             ) : (
               <span className="w-fit">{pill}</span>
             )}

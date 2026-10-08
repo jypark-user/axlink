@@ -1,0 +1,27 @@
+# 이미지에 들어가면 안 되는 것. 비밀값(.env)과 로컬 실행 산출물, 호스트 전용 의존성.
+.git
+.github
+.claude
+.env
+.env.*
+!.env.example
+**/.venv
+**/venv
+**/node_modules
+**/__pycache__
+**/*.py[cod]
+**/.pytest_cache
+**/.ruff_cache
+**/*.tsbuildinfo
+frontend/dist
+build
+dist
+*.egg-info
+var
+test-results
+_to_delete
+docs
+tests
+infra
+scripts
+CLAUDE.md

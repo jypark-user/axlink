@@ -43,6 +43,9 @@ from app.standard.router import router as standard_router
 
 @asynccontextmanager
 async def lifespan(_: FastAPI) -> AsyncIterator[None]:
+    # 운영에서 비밀값이 빠진 채 뜨면 누구나 토큰을 위조하거나, 재기동 뒤 인증정보를 못 푼다
+    if problems := settings.production_problems():
+        raise RuntimeError("운영 설정이 빠졌다: " + "; ".join(problems))
     pool()
     # 임베딩 차원이 컬럼과 어긋난 채 뜨면 색인은 되는데 검색이 조용히 망가진다.
     # 기동 때 막는 편이 낫다.
@@ -54,12 +57,19 @@ async def lifespan(_: FastAPI) -> AsyncIterator[None]:
         from app import scheduler
 
         task, stop = scheduler.start()
+    # 문서 처리 작업자(GH-121). 업로드는 접수만 하고 추출·색인·초안은 여기서 뒤에서 한다
+    doc_task = doc_stop = None
+    if settings.document_processing == "background":
+        from app.document import worker
+
+        doc_task, doc_stop = worker.start()
     try:
         yield
     finally:
-        if stop is not None and task is not None:
-            stop.set()
-            task.cancel()
+        for s_, t_ in ((stop, task), (doc_stop, doc_task)):
+            if s_ is not None and t_ is not None:
+                s_.set()
+                t_.cancel()
         close_pool()
 
 
@@ -97,4 +107,4 @@ app.include_router(schedule_router)
 
 @app.get("/api/health", tags=["health"])
 def health() -> dict[str, str]:
-    return {"status": "UP"}
+    return {"status": "UP", "version": settings.app_version}

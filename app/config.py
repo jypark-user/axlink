@@ -4,6 +4,8 @@ from datetime import timedelta
 
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
+DEV_JWT_SECRET = "dev-only-change-me-in-production-please-32bytes"
+
 
 class Settings(BaseSettings):
     model_config = SettingsConfigDict(env_prefix="AXLINK_", env_file=".env", extra="ignore")
@@ -13,8 +15,12 @@ class Settings(BaseSettings):
     db_pool_min: int = 1
     db_pool_max: int = 10
 
+    # 실행 환경(AXLINK_ENV). production 이면 아래 비밀값이 기본값이거나 비어 있을 때
+    # 기동하지 않는다.
+    env: str = "development"
+
     # 개발 기본값이다. 운영에서는 AXLINK_JWT_SECRET 을 반드시 주입한다.
-    jwt_secret: str = "dev-only-change-me-in-production-please-32bytes"
+    jwt_secret: str = DEV_JWT_SECRET
     jwt_issuer: str = "ax-link"
     access_ttl_seconds: int = 30 * 60
     refresh_ttl_days: int = 14
@@ -36,13 +42,29 @@ class Settings(BaseSettings):
     llm_model: str = "qwen3:4b"
     llm_timeout: float = 120.0
     scheduler_enabled: bool = True  # 서버 안 스케줄러(일별 스냅샷·주기 수집). 시험에서 끈다
+    # 문서 처리(추출·색인·초안). background 는 API 안 작업자가 뒤에서, inline 은 업로드 요청
+    # 안에서 한다(시험용). 작업자 수는 동시에 처리하는 문서 수다. 임베딩이 CPU 를 다 쓴다(GH-121)
+    document_processing: str = "background"
+    document_workers: int = 1
+    # 처리 중 신호가 이만큼 없으면 멈춘 작업으로 보고 다시 대기열에 넣는다. 한도만큼 끊기면 실패다
+    document_stale_seconds: int = 600
+    document_max_attempts: int = 3
+    # 문서 색인 때 임베딩 한 번에 보내는 조각 수. 작을수록 그사이 질문의 임베딩이 덜 기다린다
+    document_embed_batch: int = 4
     # 생성 문맥 길이. 근거 청크 5개(각 최대 1000토큰)와 지시가 들어가야 한다.
     llm_num_ctx: int = 8192
+    # 생성 모델 서버의 기본 주소. 관리 화면에서 고른 주소(DB llm_setting)가 있으면 그쪽이 이긴다.
     ollama_base_url: str = "http://localhost:11434"
+    # 임베딩 서버 주소. 비우면 ollama_base_url 을 쓴다. 생성은 클라우드 모델을 거치고 임베딩은
+    # 로컬 bge-m3 로 두는 구성처럼 두 서버가 다를 때 따로 준다.
+    embedding_base_url: str = ""
     embedding_model: str = "bge-m3"
     embedding_dimension: int = 1024  # doc_chunk.embedding 컬럼 차원과 반드시 같아야 한다
     embedding_batch: int = 32
     embedding_timeout: float = 120.0  # 배치 임베딩은 커넥터 호출보다 오래 걸린다
+
+    # 배포 버전. 이미지가 빌드 때 넣고 /api/health 가 돌려준다. 호스트 실행은 dev 다.
+    app_version: str = "dev"
 
     # 저장소에서 함께 수집할 산출물 파일. "경로=산출물유형" 을 쉼표로 잇는다.
     # WBS 는 도구가 아니라 커밋된 파일로 관리하므로(작업 규약 §2) 여기를 거쳐 들어온다.
@@ -94,6 +116,17 @@ class Settings(BaseSettings):
         """{저장소 경로: 산출물 유형}. 빈 설정이면 파일을 수집하지 않는다."""
         pairs = (item.split("=", 1) for item in self.collect_files.split(",") if "=" in item)
         return {path.strip(): kind.strip() for path, kind in pairs if path.strip()}
+
+    def production_problems(self) -> list[str]:
+        """운영에서 빠지면 안 되는 비밀값 중 빠진 것. 개발 환경이면 늘 빈 목록이다."""
+        if self.env != "production":
+            return []
+        problems = []
+        if self.jwt_secret == DEV_JWT_SECRET or len(self.jwt_secret) < 32:
+            problems.append("AXLINK_JWT_SECRET 이 개발 기본값이거나 32자보다 짧다")
+        if not self.secret_key:
+            problems.append("AXLINK_SECRET_KEY 가 없다 (저장된 도구 인증정보를 풀 수 없게 된다)")
+        return problems
 
     @property
     def cors_origin_list(self) -> list[str]:
