@@ -31,7 +31,7 @@ def project():
             cur,
             """
             insert into project (client_org_id, name, start_date, end_date, description)
-            select client_org_id, '건수 시험 사업', start_date, end_date, ''
+            select client_org_id, '건수 시험 사업', start_date, end_date, '건수 질문 시험용 사업'
               from project where id = %s
             returning id
             """,
