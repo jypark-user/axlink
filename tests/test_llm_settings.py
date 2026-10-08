@@ -170,6 +170,10 @@ def test_세_번_이어도_잘리면_범위를_줄이라고_멈춘다(monkeypatc
 _TAGS = [
     ollama_admin.DiscoveredModel("qwen3:4b", 40960, True, "4.0B", "Q4_K_M"),
     ollama_admin.DiscoveredModel("gemma3:1b", 0, False, "1.0B", "Q4_0"),
+    ollama_admin.DiscoveredModel("bge-m3:latest", 8192, False, "566M", "F16", ("embedding",)),
+    ollama_admin.DiscoveredModel(
+        "gemma4:e4b", 131072, True, "8.0B", "Q4_K_M", ("completion", "tools", "vision")
+    ),
 ]
 
 
@@ -280,4 +284,95 @@ def test_목록에_없는_모델은_고를_수_없다(client, admin_headers, fak
 @requires_db
 def test_관리자가_아니면_못_본다(client, client_token):
     res = client.get("/api/ai/settings", headers={"Authorization": f"Bearer {client_token('r2')}"})
+    assert res.status_code == 403
+
+
+# --- 모델 용도 (ARC-022) ---------------------------------------------------------
+
+
+def test_용도는_서버가_알려준_capabilities_로만_판단한다():
+    assert model_settings.purpose_of(["completion", "tools"]) == "ANSWER"
+    assert model_settings.purpose_of(["embedding"]) == "EMBEDDING"
+    # 이름이 embed 같아도, 안 알려주면 모른다
+    assert model_settings.purpose_of(None) == "UNKNOWN"
+    assert model_settings.purpose_of([]) == "UNKNOWN"
+    assert model_settings.purpose_of(["vision"]) == "UNKNOWN"
+
+
+def test_capabilities_를_안_주는_서버는_모름으로_남긴다():
+    assert ollama_admin.parse_tag({"name": "old", "details": {}}).capabilities is None
+    m = ollama_admin.parse_tag({"name": "bge-m3", "details": {}, "capabilities": ["embedding"]})
+    assert m.capabilities == ("embedding",)
+
+
+@requires_db
+def test_목록에_용도가_실린다(client, admin_headers, fake_ollama):
+    body = client.post(
+        "/api/ai/models/refresh", params={"baseUrl": _BASE}, headers=admin_headers
+    ).json()
+    by_name = {m["name"]: m for m in body["models"]}
+    assert by_name["bge-m3:latest"]["purpose"] == "EMBEDDING"
+    assert by_name["gemma4:e4b"]["purpose"] == "ANSWER"
+    assert by_name["qwen3:4b"]["purpose"] == "UNKNOWN"
+
+
+@requires_db
+def test_임베딩_전용_모델은_답변_모델로_저장되지_않는다(client, admin_headers, fake_ollama):
+    from app.db import fetch_one, tx
+
+    client.post("/api/ai/models/refresh", params={"baseUrl": _BASE}, headers=admin_headers)
+    res = client.put(
+        "/api/ai/settings",
+        json={"baseUrl": _BASE, "model": "bge-m3:latest", "numPredict": 100},
+        headers=admin_headers,
+    )
+    assert res.status_code == 400 and res.json()["code"] == "MODEL_ROLE_MISMATCH"
+    with tx() as cur:
+        assert fetch_one(cur, "select 1 from llm_setting where base_url = %s", (_BASE,)) is None
+
+
+@requires_db
+def test_짧은_생성이_안_되면_저장하지_않는다(client, admin_headers, fake_ollama, monkeypatch):
+    def boom(base, model):
+        raise errors.ApiError(503, "AI_UNAVAILABLE", "생성 실패")
+
+    monkeypatch.setattr(model_settings.ollama_admin, "measure_rate", boom)
+    client.post("/api/ai/models/refresh", params={"baseUrl": _BASE}, headers=admin_headers)
+    res = client.put(
+        "/api/ai/settings",
+        json={"baseUrl": _BASE, "model": "qwen3:4b", "numPredict": 100},
+        headers=admin_headers,
+    )
+    assert res.status_code == 400 and res.json()["code"] == "MODEL_CHECK_FAILED"
+
+
+@requires_db
+def test_저장하면_확인_시각과_출처가_남는다(client, admin_headers, fake_ollama):
+    client.post("/api/ai/models/refresh", params={"baseUrl": _BASE}, headers=admin_headers)
+    res = client.put(
+        "/api/ai/settings",
+        json={"baseUrl": _BASE, "model": "qwen3:4b", "numPredict": 100},
+        headers=admin_headers,
+    )
+    assert res.status_code == 200, res.text
+    got = res.json()
+    assert got["source"] == "DB" and "답변 생성" in got["usedFor"]
+    me = next(m for m in got["models"] if m["name"] == "qwen3:4b")
+    assert me["verifiedAt"] is not None and me["tokPerSec"] == 18.6
+
+
+@requires_db
+def test_검색_모델은_현황만_보이고_바꾸지_못한다(client, admin_headers):
+    got = client.get("/api/ai/embedding", headers=admin_headers)
+    assert got.status_code == 200, got.text
+    body = got.json()
+    assert body["source"] == "ENV" and body["dimension"] == body["columnDimension"]
+    assert body["changeBlockedReason"]
+    put = client.put("/api/ai/embedding", json={"model": "other"}, headers=admin_headers)
+    assert put.status_code == 409 and put.json()["code"] == "EMBEDDING_CHANGE_BLOCKED"
+
+
+@requires_db
+def test_검색_모델_현황은_관리자만(client, client_token):
+    res = client.get("/api/ai/embedding", headers={"Authorization": f"Bearer {client_token('r2')}"})
     assert res.status_code == 403

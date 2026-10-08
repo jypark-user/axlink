@@ -408,6 +408,7 @@ def test_융합은_RRF_로_후보를_고르고_코사인으로_줄을_세운다(
     monkeypatch.setattr(
         search, "lexical_candidates", lambda *a, **k: [rows["lex"], rows["both"]]
     )
+    monkeypatch.setattr(search.embedding_guard, "require_match", lambda *a, **k: None)
     found = search.search_with_vector(None, [0.0], "q", ["p"], top_k=3)
     assert [c.id for c in found.chunks] == ["top", "v2", "v3"]
     assert found.max_similarity == 0.663 and found.candidate_count == 5

@@ -19,6 +19,7 @@ import { formatDateTime } from '@/lib/format';
 import { useAsync } from '@/lib/use-async';
 import { cn } from '@/lib/utils';
 import type {
+  EmbeddingStatusResponse,
   LlmMeasureResponse,
   LlmModelListResponse,
   LlmModelResponse,
@@ -32,22 +33,106 @@ const DEBOUNCE_MS = 500;
 const ctxText = (m: LlmModelResponse | null): string =>
   m === null || m.numCtx === null ? '' : String(m.numCtx);
 
+/** 목록에 붙이는 용도 표시. 이름으로 짐작하지 않고 서버가 알려준 용도만 쓴다. */
+const PURPOSE_TAG: Record<LlmModelResponse['purpose'], string> = {
+  ANSWER: '',
+  EMBEDDING: ' · 검색 전용(고를 수 없음)',
+  UNKNOWN: ' · 용도 확인 필요',
+};
+
+/** 답변 모델로 처음 고를 것. 검색 전용은 건너뛴다. */
+const firstAnswerModel = (list: LlmModelResponse[]): LlmModelResponse | undefined =>
+  list.find((m) => m.purpose === 'ANSWER') ?? list.find((m) => m.purpose !== 'EMBEDDING');
+
 /**
- * Ollama 모델별 토큰 설정 (ARC-011). 플랫폼 관리자만 연다.
+ * AI 모델 설정 (ARC-011 · ARC-022). 플랫폼 관리자만 연다.
  *
- * 서버 주소를 치는 동안 모델 목록을 받아오고, 모델을 고르면 그 모델에 저장된
- * 문맥 길이·생성 토큰을 불러온다. 값은 코드가 아니라 모델 캐시 레코드에 있다.
+ * 답변 모델과 검색 모델을 나눠 보인다. 답변 모델은 서버 주소를 치는 동안 목록을 받아오고,
+ * 모델을 고르면 그 모델에 저장된 문맥 길이·생성 토큰을 불러온다. 검색 모델은 색인과 묶여
+ * 있어 여기서 바꾸지 않고 현황만 보인다.
  */
 export function LlmSettingsSection(): ReactNode {
   const state = useAsync<LlmSettingResponse>(() => api.get<LlmSettingResponse>('/ai/settings'), []);
   return (
+    <div className="flex flex-col gap-2">
+      <SectionTitle title="답변 모델" hint="질문을 해석하고 답과 문서 초안을 쓰는 모델입니다." />
+      <DataState state={state} onRetry={state.reload}>
+        {(setting) => (
+          <LlmSettingsForm
+            key={setting.updatedAt ?? 'init'}
+            setting={setting}
+            onSaved={state.reload}
+          />
+        )}
+      </DataState>
+      <Separator className="my-2" />
+      <SectionTitle
+        title="검색 모델"
+        hint="문서를 벡터로 바꿔 색인하고, 질문과 비슷한 문서를 찾는 모델(임베딩)입니다."
+      />
+      <EmbeddingStatusPanel />
+    </div>
+  );
+}
+
+function SectionTitle({ title, hint }: { title: string; hint: string }): ReactNode {
+  return (
+    <div>
+      <h3 className="text-sm font-semibold">{title}</h3>
+      <p className={HINT}>{hint}</p>
+    </div>
+  );
+}
+
+function EmbeddingStatusPanel(): ReactNode {
+  const state = useAsync<EmbeddingStatusResponse>(
+    () => api.get<EmbeddingStatusResponse>('/ai/embedding'),
+    [],
+  );
+  return (
     <DataState state={state} onRetry={state.reload}>
-      {(setting) => (
-        <LlmSettingsForm
-          key={setting.updatedAt ?? 'init'}
-          setting={setting}
-          onSaved={state.reload}
-        />
+      {(e) => (
+        <div className="flex flex-col gap-2 py-2 text-sm">
+          <dl className="grid grid-cols-[7rem_1fr] gap-x-3 gap-y-1">
+            <dt className="text-muted-foreground">적용 모델</dt>
+            <dd className="font-mono">{e.model}</dd>
+            <dt className="text-muted-foreground">서버</dt>
+            <dd className="font-mono break-all">
+              {e.provider === 'fake' ? '가짜 구현체(시험용)' : e.baseUrl}
+              {e.serverHasModel === false && (
+                <span className="text-destructive"> · 서버 목록에 없음</span>
+              )}
+              {e.serverHasModel === null && e.provider !== 'fake' && (
+                <span className="text-muted-foreground"> · 서버 확인 못 함</span>
+              )}
+            </dd>
+            <dt className="text-muted-foreground">차원</dt>
+            <dd>
+              {e.dimension}
+              {e.columnDimension !== null && e.columnDimension !== e.dimension
+                ? ` (색인 칸은 ${e.columnDimension}, 맞지 않음)`
+                : ''}
+            </dd>
+            <dt className="text-muted-foreground">정한 곳</dt>
+            <dd>환경변수 AXLINK_EMBEDDING_MODEL</dd>
+            <dt className="text-muted-foreground">색인 모델</dt>
+            <dd>
+              {e.indexModels.length === 0
+                ? '색인된 문서가 없습니다.'
+                : e.indexModels
+                    .map((m) => `${m.model} ${m.chunks.toLocaleString('ko-KR')}조각`)
+                    .join(', ')}
+            </dd>
+          </dl>
+          {e.consistent ? (
+            <p className="rounded bg-emerald-500/10 p-2 text-xs text-emerald-700 dark:text-emerald-300">
+              색인이 모두 지금 검색 모델로 만들어졌습니다. 문서 검색과 색인이 정상입니다.
+            </p>
+          ) : (
+            <p className="rounded bg-destructive/10 p-2 text-xs text-destructive">{e.message}</p>
+          )}
+          <p className={HINT}>{e.changeBlockedReason}</p>
+        </div>
       )}
     </DataState>
   );
@@ -102,7 +187,9 @@ function LlmSettingsForm({
       } else {
         setListStatus(`모델 ${res.models.length}개를 받아왔습니다.`);
       }
-      const keep = res.models.find((m) => m.name === currentModel) ?? res.models[0];
+      const keep =
+        res.models.find((m) => m.name === currentModel && m.purpose !== 'EMBEDDING') ??
+        firstAnswerModel(res.models);
       setModelName(keep?.name ?? '');
       if (keep) {
         setNumCtx(ctxText(keep));
@@ -205,8 +292,15 @@ function LlmSettingsForm({
     limit: setting.requestTimeoutSeconds,
   });
 
+  const embeddingOnly = selected?.purpose === 'EMBEDDING';
+
   return (
     <div className="flex flex-col gap-5 py-3">
+      <p className={HINT}>
+        지금 적용: <span className="font-mono text-foreground">{setting.model}</span> (
+        {setting.source === 'DB' ? '저장된 설정' : '저장한 적 없음, 환경변수 기본값'}).{' '}
+        {setting.usedFor.join('·')}에 같은 모델을 씁니다.
+      </p>
       {setting.provider !== 'ollama' && (
         <p className="rounded bg-muted p-2 text-xs">
           지금은 <code className="font-mono">{setting.provider}</code> 구현체로 돌고 있어 이 설정이
@@ -249,10 +343,11 @@ function LlmSettingsForm({
           </SelectTrigger>
           <SelectContent>
             {models.map((m) => (
-              <SelectItem key={m.name} value={m.name}>
+              <SelectItem key={m.name} value={m.name} disabled={m.purpose === 'EMBEDDING'}>
                 {m.name}
                 {m.parameterSize ? ` · ${m.parameterSize}` : ''}
                 {m.quantization ? ` · ${m.quantization}` : ''}
+                {PURPOSE_TAG[m.purpose]}
               </SelectItem>
             ))}
           </SelectContent>
@@ -269,7 +364,19 @@ function LlmSettingsForm({
               : ' · 생성 속도 미측정'}
           </p>
         )}
-        {selected && !selected.supportsTools && (
+        {embeddingOnly && (
+          <p className="rounded bg-destructive/10 p-2 text-xs text-destructive">
+            서버가 이 모델을 검색(임베딩) 전용으로 알려 왔습니다. 답변 모델로 저장할 수 없습니다.
+          </p>
+        )}
+        {selected?.purpose === 'UNKNOWN' && (
+          <p className="rounded bg-muted p-2 text-xs">
+            서버가 이 모델의 용도를 알려 주지 않았습니다(확인 필요). 저장할 때 짧은 생성을 해 보고,
+            되면 저장합니다.
+            {selected.verifiedAt ? ` 마지막 확인 ${formatDateTime(selected.verifiedAt)}.` : ''}
+          </p>
+        )}
+        {selected && !embeddingOnly && !selected.supportsTools && (
           <p className="rounded bg-destructive/10 p-2 text-xs text-destructive">
             ⚠ 이 모델은 도구 호출을 지원하지 않습니다. 에이전트가 도구 호출로 동작한다면 이 모델로는
             동작하지 않습니다. AX Link 의 질의·초안·위젯 선택은 도구 호출을 쓰지 않아 지금 기능에는
@@ -347,9 +454,14 @@ function LlmSettingsForm({
           {setting.updatedAt
             ? `마지막 저장 ${formatDateTime(setting.updatedAt)}`
             : '아직 저장한 적이 없습니다. 환경변수 기본값으로 돕니다.'}
+          {' · '}저장 전에 그 모델로 짧은 생성을 해 보고, 안 되면 저장하지 않습니다.
         </span>
-        <Button type="button" disabled={!selected || saving} onClick={() => void save()}>
-          {saving ? '저장 중…' : '저장'}
+        <Button
+          type="button"
+          disabled={!selected || embeddingOnly || saving}
+          onClick={() => void save()}
+        >
+          {saving ? '확인·저장 중…' : '저장'}
         </Button>
       </div>
     </div>

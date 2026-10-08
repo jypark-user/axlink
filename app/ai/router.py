@@ -9,6 +9,8 @@ from fastapi import APIRouter, Query
 from app.ai import model_settings
 from app.ai.models import (
     AiRuntimeResponse,
+    EmbeddingStatusResponse,
+    EmbeddingUpdateRequest,
     LlmMeasureResponse,
     LlmModelListResponse,
     LlmModelParamsUpdateRequest,
@@ -49,6 +51,19 @@ def get_settings(principal: Principal) -> LlmSettingResponse:
 def put_settings(req: LlmSettingUpdateRequest, principal: Principal) -> LlmSettingResponse:
     with tx() as cur:
         return model_settings.save_setting(cur, principal, req)
+
+
+@router.get("/embedding", response_model=EmbeddingStatusResponse)
+def get_embedding(principal: Principal) -> EmbeddingStatusResponse:
+    """검색 모델 현황과 색인 모델. 관리자가 검색이 멈춘 원인을 여기서 본다."""
+    with tx() as cur:
+        return model_settings.embedding_status(cur, principal)
+
+
+@router.put("/embedding")
+def put_embedding(req: EmbeddingUpdateRequest, principal: Principal) -> None:
+    """검색 모델은 화면에서 바꾸지 않는다. 안전한 재색인이 생기기 전까지 409."""
+    model_settings.reject_embedding_change(principal)
 
 
 @router.post("/models/refresh", response_model=LlmModelListResponse)

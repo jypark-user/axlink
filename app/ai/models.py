@@ -15,6 +15,11 @@ class LlmModelResponse(BaseModel):
     numCtx: int | None  # noqa: N815
     numPredict: int  # noqa: N815
     fetchedAt: str  # noqa: N815
+    # 서버가 알려준 용도. 없으면 null(모름)
+    capabilities: list[str] | None = None
+    # ANSWER 답변 모델로 쓸 수 있음 · EMBEDDING 검색(임베딩) 전용 · UNKNOWN 확인 필요
+    purpose: str = "UNKNOWN"
+    verifiedAt: str | None = None  # noqa: N815 — 마지막 짧은 생성 확인 성공
 
 
 class LlmModelListResponse(BaseModel):
@@ -31,6 +36,37 @@ class LlmSettingResponse(BaseModel):
     requestTimeoutSeconds: float  # noqa: N815
     updatedAt: str | None  # noqa: N815
     models: list[LlmModelResponse]
+    # 실제 요청에 쓰이는 값과 그 출처. DB 설정이 있으면 그것, 없으면 환경변수 기본값이다
+    source: str = "DB"  # DB | ENV
+    # 이 모델이 쓰이는 곳. 질문 분류와 답변 생성이 같은 모델을 쓴다
+    usedFor: list[str] = []  # noqa: N815
+
+
+class EmbeddingIndexModel(BaseModel):
+    model: str
+    chunks: int
+
+
+class EmbeddingStatusResponse(BaseModel):
+    """검색 모델(임베딩). 환경변수로 정해지고 화면에서는 바꾸지 않는다(ARC-022)."""
+
+    provider: str
+    baseUrl: str  # noqa: N815
+    model: str
+    dimension: int
+    columnDimension: int | None  # noqa: N815 — doc_chunk.embedding 컬럼 차원
+    source: str  # ENV
+    serverHasModel: bool | None  # noqa: N815 — 서버 목록에 있는가. 확인 못 하면 null
+    serverCapabilities: list[str] | None  # noqa: N815
+    indexModels: list[EmbeddingIndexModel]  # noqa: N815 — 색인에 쓰인 모델과 조각 수
+    consistent: bool  # 색인이 모두 지금 모델로 만들어졌는가
+    message: str | None  # 맞지 않으면 그 이유. 검색·색인이 멈춰 있다
+    changeBlockedReason: str  # noqa: N815 — 화면에서 바꿀 수 없는 이유
+
+
+class EmbeddingUpdateRequest(BaseModel):
+    model: str = Field(min_length=1)
+    baseUrl: str | None = None  # noqa: N815
 
 
 class LlmSettingUpdateRequest(BaseModel):

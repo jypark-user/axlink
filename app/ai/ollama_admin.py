@@ -25,6 +25,8 @@ class DiscoveredModel:
     supports_tools: bool
     parameter_size: str | None
     quantization: str | None
+    # 서버가 알려준 용도(completion·embedding·tools 등). 안 알려주면 None(모름)
+    capabilities: tuple[str, ...] | None = None
 
 
 @dataclass(frozen=True)
@@ -55,13 +57,15 @@ def list_models(base_url: str) -> list[DiscoveredModel]:
 def parse_tag(item: dict[str, Any]) -> DiscoveredModel:
     """/api/tags 의 모델 한 건. context_length 와 capabilities 는 Ollama 0.6 이후에만 온다."""
     details = item.get("details") or {}
-    capabilities = [str(c) for c in item.get("capabilities") or []]
+    raw = item.get("capabilities")
+    capabilities = [str(c) for c in raw or []]
     return DiscoveredModel(
         name=str(item["name"]),
         context_length=_int(details.get("context_length")),
         supports_tools="tools" in capabilities,
         parameter_size=_str(details.get("parameter_size")),
         quantization=_str(details.get("quantization_level")),
+        capabilities=tuple(capabilities) if raw is not None else None,
     )
 
 
