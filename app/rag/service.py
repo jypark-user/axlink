@@ -31,6 +31,7 @@ from app.db import tx
 from app.rag import (
     answer,
     blocks,
+    collection,
     entity_table,
     intents,
     number_guard,
@@ -474,10 +475,17 @@ def _resolve(
             if aggregate is None:
                 turn.stop(UNSUPPORTED, answer.unsupported())
             elif not overview.has_value(aggregate.data):
-                # 값이 없는 지표를 문서 경로로 돌리지 않는다. 무엇이 없는지 말한다
-                turn.stop(
-                    NO_DATA, answer.no_measure_data(decision.measure.label, aggregate.data.basis)
-                )
+                # 값이 없는 지표를 문서 경로로 돌리지 않는다. 무엇이 없는지 말한다.
+                # 수집한 건수가 비었으면 0건이거나 셀 자료가 없는 것이다. 둘을 가른다(GH-127)
+                counted, reason_text = _empty_count(cur, p, decision)
+                if counted is not None:
+                    turn.aggregate = counted
+                else:
+                    turn.stop(
+                        NO_DATA,
+                        reason_text
+                        or answer.no_measure_data(decision.measure.label, aggregate.data.basis),
+                    )
             else:
                 turn.aggregate = aggregate
                 if infographic is not None and blocks.worth_drawing(infographic.data):
@@ -590,6 +598,38 @@ def _decide_reason(turn: _Turn) -> None:
         else:
             # 늦은 작업까지는 확인했다. 사유는 근거가 없다고 서버가 말한다
             turn.notice = answer.no_delay_reason()
+
+
+def _empty_count(
+    cur: Any, p: Prepared, decision: routing.RouteDecision
+) -> tuple[answer.AggregateContext | None, str | None]:
+    """건수 지표가 비었을 때. 차원으로 묶으면 행이 없어도 전체는 0 이다(심각도별 막대가 빈
+    목록이던 10-07 사례). 차원 없이 다시 세고, 수집이 끝난 사업만 0건으로 답한다. 수집 상태를
+    믿을 수 없으면 0 을 말하지 않고 이유를 돌려준다. 수집 표가 아니면 둘 다 None."""
+    measure = decision.measure
+    assert measure is not None
+    if measure.value_type != "COUNT" or measure.base_table not in collection.COLLECTED_TABLES:
+        return None, None
+    state = collection.status(cur, list(p.scope))
+    if state != collection.COLLECTED:
+        return None, answer.no_collected_data(measure.label, state)
+    spec = WidgetSpec(
+        template="STAT_CARD",
+        title=decision.title,
+        query=WidgetQuery(
+            measure=measure.key, dimensions=[], filters=[], projectScope=list(p.scope)
+        ),
+        options=WidgetOptions(sort="desc"),
+    )
+    try:
+        with cur.connection.transaction():
+            data = semantic.run(cur, p.principal, spec)
+    except Exception as exc:
+        log.exception("건수 다시 세기 실패 measure=%s", measure.key)
+        raise _QueryFailed from exc
+    if not overview.has_value(data):
+        return None, None
+    return answer.AggregateContext.of(decision.title, data), None
 
 
 def _aggregate(
