@@ -174,10 +174,13 @@ def scan_docs(known: set[str]) -> tuple[dict[str, set], dict[str, set], list[str
             continue
         info = design_refs.parse(text, known)
         name = info.doc_id or md.stem
+        # 문서 하나는 요구사항마다 한 번만 적는다. 같은 코드를 여러 곳에서 가리키면 한정어를 모은다
+        qualifiers: dict[str, set[str]] = defaultdict(set)
         for ref in info.refs:
-            tags = [t for t in ("초안" if info.status == design_refs.DRAFT else None,
-                                ref.qualifier) if t]
-            designs[ref.code].add(f"{name}({','.join(tags)})" if tags else name)
+            qualifiers[ref.code].update([ref.qualifier] if ref.qualifier else [])
+        for code, quals in qualifiers.items():
+            tags = (["초안"] if info.status == design_refs.DRAFT else []) + sorted(quals)
+            designs[code].add(f"{name}({','.join(tags)})" if tags else name)
 
     return designs, tests, violations
 
