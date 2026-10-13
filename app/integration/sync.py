@@ -235,7 +235,8 @@ def _collect_design_docs(
             stats["docFailed"] += 1
             continue
         payload = {
-            "repo": target, "path": path, "commit_sha": commit, "blob_sha": got.get("sha") or blob,
+            # 비교 기준은 트리의 blob SHA 다(같은 커밋이면 contents 의 sha 와 같다)
+            "repo": target, "path": path, "commit_sha": commit, "blob_sha": blob,
             "html_url": f"{html_base}{path}" if html_base else got.get("htmlUrl"),
             "text": text, "deleted": False,
         }

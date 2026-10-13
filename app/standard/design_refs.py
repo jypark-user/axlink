@@ -58,7 +58,11 @@ def _codes(text: str, known: set[str]) -> list[tuple[str, str | None]]:
         code, ranged, paren = m.group(1), m.group(2), m.group(4)
         if ranged or code not in known:
             continue
-        qualifier = next((q for q in _QUALIFIERS if paren and q in paren), None)
+        # 괄호 한정어(`CODE`(미결)) 또는 코드 바로 뒤의 한정어(CODE 미결)
+        tail = text[m.end(): m.end() + 8]
+        qualifier = next(
+            (q for q in _QUALIFIERS if (paren and q in paren) or tail.lstrip().startswith(q)), None
+        )
         if (code, qualifier) not in out:
             out.append((code, qualifier))
     return out

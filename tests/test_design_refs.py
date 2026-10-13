@@ -1,6 +1,7 @@
 """저장소 설계 문서의 명시적 참조 판별 (ARC-024 2-1). DB 없이 돈다."""
 
 from app.standard import design_refs as d
+from app.standard import trace_rules
 
 KNOWN = {"SWFR.CON.002", "SWFR.CON.005", "SWFR.PIP.003", "SWFR.PIP.007", "SWFR.RAG.007",
          "QUR.WEB.001", "SWFR.CON.001", "SWFR.CON.007"}
@@ -95,3 +96,15 @@ def test_경로_패턴():
     assert d.match_any("design/a/b.md", ["design/**/*.md"])
     assert d.match_any("design/b.md", ["design/**/*.md"])
     assert not d.match_any("x.md", [])
+
+
+def test_코드_바로_뒤의_한정어도_읽는다():
+    info = d.parse("# 설계서 (IM-903)\n\n### 13.3 일정 준수율 (SWFR.PIP.007 미결)\n", KNOWN)
+    assert [(r.code, r.qualifier) for r in info.refs] == [("SWFR.PIP.007", "미결")]
+
+
+def test_같은_요구사항을_여러_곳에서_가리키면_미결_참조가_앞선다():
+    text = ("# 설계서 (IM-903)\n\n## 12. 요구사항 대응표\n\n| 요구사항 | 절 |\n|---|---|\n"
+            "| SWFR.PIP.007 일정 | 13.3 |\n\n### 13.3 일정 준수율 (SWFR.PIP.007 미결)\n")
+    evidence = trace_rules.design_doc_evidence({"text": text, "path": "x.md"}, KNOWN)
+    assert evidence[0].meta["qualifier"] == "미결"

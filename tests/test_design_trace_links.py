@@ -87,6 +87,7 @@ DRAFT = """# SW 설계서 시험 (IM-903)
 class _Repo:
     def __init__(self) -> None:
         self.cid = ""
+        self.job = ""
 
     def connect(self, cur) -> None:
         cur.execute("select organization_id from app_user where username = 'r3'")
@@ -97,11 +98,12 @@ class _Repo:
             {"designDocPaths": DESIGN},
         )
         self.cid = str(conn["id"])
+        # 수집 잡은 연결마다 하나만 돌 수 있다(uq_sync_job__running). 시험은 한 잡을 같이 쓴다
+        self.job = integ_repo.insert_sync_job(cur, self.cid, "BACKFILL", None, datetime.now(UTC))
 
     def load(self, cur, items: list[tuple[str, str, dict]]) -> None:
-        job = integ_repo.insert_sync_job(cur, self.cid, "BACKFILL", None, datetime.now(UTC))
         for external_id, kind, payload in items:
-            integ_repo.upsert_raw_artifact(cur, self.cid, external_id, kind, payload, job)
+            integ_repo.upsert_raw_artifact(cur, self.cid, external_id, kind, payload, self.job)
         cur.execute("select * from tool_connection where id = %s", (self.cid,))
         standard.promote_connection(cur, cur.fetchone(), embedding_port())
 

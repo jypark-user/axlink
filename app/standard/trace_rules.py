@@ -287,7 +287,10 @@ def design_doc_evidence(payload: dict[str, Any], known_codes: set[str]) -> list[
     info = design_refs.parse(payload["text"], known_codes)
     base = payload.get("html_url") or ""
     out: list[Evidence] = []
-    for ref in info.refs:
+    # 한 문서는 요구사항마다 링크 하나다. 같은 코드를 여러 곳에서 가리키면 한정어("미결")가 붙은
+    # 참조를 앞에 둔다. 대응표 행이 먼저 잡혀 미결 표시가 사라지는 것을 막는다
+    ordered = sorted(info.refs, key=lambda r: (r.qualifier is None, r.line_no))
+    for ref in ordered:
         meta = {
             "repo": payload.get("repo"), "path": payload.get("path"),
             "commitSha": payload.get("commit_sha"), "blobSha": payload.get("blob_sha"),
