@@ -132,3 +132,79 @@ def test_근거_원문은_길이를_자른다():
     long_line = "[SWFR.CON.004] " + "가" * 500
     found = tr.commit_evidence(_commit(long_line), KNOWN, PATHS)
     assert len(found[0].text) == 300 and found[0].text.endswith("…")
+
+
+# --- 변경 분류 (ARC-024 2-3) ---------------------------------------------------
+
+DESIGN = ["docs/20-design/*.md"]
+
+
+def test_변경_파일을_모르면_지금_규칙을_그대로_쓴다():
+    assert tr.change_link_kinds("test(rag): 시험  [X]", None, DESIGN) == (["TESTS"], None)
+    assert tr.change_link_kinds("docs: 문서  [X]", None, DESIGN) == (["IMPLEMENTS"], None)
+
+
+def test_변경_파일이_관계를_정한다():
+    kinds = tr.change_link_kinds
+    assert kinds("feat: x", ["app/a.py"], DESIGN) == (["IMPLEMENTS"], None)
+    assert kinds("feat: x", ["tests/test_a.py"], DESIGN) == (["TESTS"], None)
+    assert kinds("docs: x", ["docs/20-design/ARC-024.md"], DESIGN) == (["DESIGNS"], None)
+    # 섞이면 관계가 여럿이다
+    assert kinds("feat: x", ["app/a.py", "tests/test_a.py", "docs/20-design/ARC-1.md"],
+                 DESIGN) == (["IMPLEMENTS", "TESTS", "DESIGNS"], None)
+    # 제목이 test 여도 코드만 바꿨으면 시험 연결이 아니다
+    assert kinds("test: x", ["app/a.py"], DESIGN) == (["IMPLEMENTS"], None)
+    # 관리·매뉴얼 문서만 바꾼 변경은 구현으로 세지 않는다
+    got, reason = kinds("docs: WBS 갱신", ["docs/00-management/WBS.xlsx"], DESIGN)
+    assert got == [] and "문서만" in reason
+    # 설계 경로를 설정하지 않은 저장소에서는 설계 문서도 그냥 문서다
+    assert kinds("docs: x", ["docs/20-design/ARC-1.md"], [])[0] == []
+
+
+def test_시험_파일_관례():
+    cat = tr.file_category
+    assert cat("frontend/src/a.test.tsx", []) == "test"
+    assert cat("pkg/foo_test.py", []) == "test"
+    assert cat("README.md", []) == "doc"
+    assert cat("infra/docker-compose.yml", []) == "code"
+
+
+def test_문서만_바꾼_커밋의_근거는_제외로_남는다():
+    payload = {"commit": {"message": "docs: 대장 갱신  [SWFR.CON.002]"},
+               "files": [{"filename": "docs/00-management/a.md"}]}
+    found, dropped = tr.commit_evidence_with_exclusions(
+        payload, {"SWFR.CON.002"}, set(), DESIGN)
+    assert found == []
+    assert [(x.target, x.link_kind) for x in dropped] == [(("REQ", "SWFR.CON.002"), "IMPLEMENTS")]
+
+
+def test_설계_문서와_코드를_함께_바꾼_커밋은_두_관계다():
+    payload = {"commit": {"message": "feat: x  [SWFR.CON.002]"},
+               "files": ["app/a.py", "docs/20-design/ARC-024.md"]}
+    found = tr.commit_evidence(payload, {"SWFR.CON.002"}, set(), DESIGN)
+    assert sorted(e.link_kind for e in found) == ["DESIGNS", "IMPLEMENTS"]
+
+
+def test_병합_커밋_번호():
+    merge = {"commit": {"message": "Merge pull request #12 from a/b\n\nfeat: x"},
+             "parents": [{}, {}]}
+    assert tr.merged_pr_number(merge) == "12"
+    assert tr.merged_pr_number({**merge, "parents": [{}]}) is None
+    other = {"commit": {"message": "Merge branch 'main' into x"}, "parents": [{}, {}]}
+    assert tr.merged_pr_number(other) is None
+
+
+def test_설계_문서_근거는_위치와_상태를_남긴다():
+    payload = {
+        "repo": "o/r", "path": "docs/20-design/ARC-007.md", "commit_sha": "c" * 40,
+        "blob_sha": "b" * 40, "html_url": "https://github.com/o/r/blob/" + "c" * 40 +
+        "/docs/20-design/ARC-007.md",
+        "text": "# ARC-007 규칙\n\n| | |\n|---|---|\n| 상태 | **초안** |\n"
+                "| 관련 | SWFR.CON.002 |\n",
+    }
+    (e,) = tr.design_doc_evidence(payload, {"SWFR.CON.002"})
+    assert (e.kind, e.link_kind, e.target) == ("DOC_REQ_REF", "DESIGNS", ("REQ", "SWFR.CON.002"))
+    assert e.url.endswith("ARC-007.md#L6")
+    assert e.meta["docStatus"] == "DRAFT" and e.meta["line"] == 6
+    assert e.meta["commitSha"] == "c" * 40 and e.meta["blobSha"] == "b" * 40
+    assert tr.design_doc_evidence({**payload, "deleted": True}, {"SWFR.CON.002"}) == []

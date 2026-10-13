@@ -170,13 +170,18 @@ def _html_base(base_url: str) -> str:
 def _fetch_tree(
     base_url: str, target_resource: str, headers: dict[str, str]
 ) -> Iterator[tuple[str, dict]]:
-    """저장소 파일 목록 한 장. 한 번에 다 받고(recursive) 경로만 남긴다.
+    """저장소 파일 목록 한 장. 한 번에 다 받고(recursive) 경로와 blob SHA 를 남긴다.
 
     갱신 필터가 없으니 매번 받는다. 내용이 같으면 적재 단계가 거른다. 트리가 잘리면
     (아주 큰 저장소) truncated 를 그대로 남겨 판정이 "없다" 고 단정하지 않게 한다.
+
+    HEAD 커밋 SHA 를 먼저 받아 그 커밋의 트리를 읽는다. 설계 문서 근거가 "어느 커밋의 몇째 줄" 을
+    가리키려면 트리 SHA 가 아니라 커밋 SHA 가 필요하다(ARC-024). 못 받으면 HEAD 로 읽는다.
     """
-    url = _repo_url(base_url, target_resource) + ITEM_PATHS["tree"]
+    repo = _repo_url(base_url, target_resource)
     with httpx.Client(timeout=settings.connector_timeout) as client:
+        commit_sha = _head_commit(client, repo, headers)
+        url = f"{repo}/git/trees/{commit_sha or 'HEAD'}"
         res = _get(client, url, headers, params={"recursive": "1"})
     if res.status_code == 403:
         if res.headers.get("X-RateLimit-Remaining") == "0":
@@ -188,13 +193,77 @@ def _fetch_tree(
         raise errors.ApiError(502, "TOOL_UNREACHABLE", f"GitHub 오류 {res.status_code}")
     body = res.json()
     sha = str(body.get("sha") or "")
-    paths = [e["path"] for e in body.get("tree") or [] if e.get("type") == "blob" and e.get("path")]
+    blobs = {
+        e["path"]: str(e.get("sha") or "")
+        for e in body.get("tree") or [] if e.get("type") == "blob" and e.get("path")
+    }
     yield "tree:HEAD", {
         "sha": sha,
+        "commit": commit_sha,
         "truncated": bool(body.get("truncated")),
-        "paths": paths,
-        "html_url": f"{_html_base(base_url)}/{target_resource}/blob/{sha}/",
+        "paths": list(blobs),
+        "blobs": blobs,
+        "html_url": f"{_html_base(base_url)}/{target_resource}/blob/{commit_sha or sha}/",
     }
+
+
+def _head_commit(client: httpx.Client, repo: str, headers: dict[str, str]) -> str | None:
+    """기본 브랜치 HEAD 의 커밋 SHA. 실패하면 None(트리는 HEAD 로 그대로 읽는다)."""
+    res = _get(client, f"{repo}/commits/HEAD", {**headers, "Accept": "application/vnd.github.sha"})
+    if res.status_code >= 400:
+        return None
+    text = res.text.strip()
+    return text if len(text) == 40 else None
+
+
+def remaining(res: httpx.Response) -> int | None:
+    value = res.headers.get("X-RateLimit-Remaining")
+    return int(value) if value and value.isdigit() else None
+
+
+def fetch_change_files(
+    base_url: str, target_resource: str, token: str, kind: str, ident: str
+) -> tuple[list[str] | None, int | None]:
+    """커밋·PR 하나의 변경 파일 이름(ARC-024 2-3). (파일 목록, 남은 호출 수).
+
+    못 받으면 (None, 남은 수)다. 실패를 "바뀐 파일 없음" 으로 읽지 않게 None 과 [] 를 나눈다.
+    PR 은 100개씩 3쪽(300개)까지 본다. 그보다 많으면 None 으로 둔다(일부만 보고 판정하지 않는다).
+    """
+    headers = _headers(token)
+    repo = _repo_url(base_url, target_resource)
+    with httpx.Client(timeout=settings.connector_timeout) as client:
+        if kind == "commit":
+            res = _get(client, f"{repo}/commits/{ident}", headers)
+            left = remaining(res)
+            _raise_limit(res)
+            if res.status_code >= 400:
+                return None, left
+            body = res.json()
+            files = body.get("files")
+            if not isinstance(files, list) or len(files) >= 300:
+                return None, left  # 300 개에서 잘린다. 일부만으로 판정하지 않는다
+            return [str(f.get("filename")) for f in files if f.get("filename")], left
+        names: list[str] = []
+        left = None
+        for page in (1, 2, 3):
+            res = _get(client, f"{repo}/pulls/{ident}/files", headers,
+                       params={"per_page": 100, "page": page})
+            left = remaining(res)
+            _raise_limit(res)
+            if res.status_code >= 400:
+                return None, left
+            batch = res.json()
+            if not isinstance(batch, list):
+                return None, left
+            names += [str(f.get("filename")) for f in batch if f.get("filename")]
+            if len(batch) < 100:
+                return names, left
+        return None, left
+
+
+def _raise_limit(res: httpx.Response) -> None:
+    if res.status_code == 429 or (res.status_code == 403 and remaining(res) == 0):
+        raise errors.ApiError(429, "TOOL_RATE_LIMITED", "GitHub 레이트리밋에 걸렸습니다.")
 
 
 def fetch_file(
@@ -215,8 +284,7 @@ def fetch_file(
         res = _get(client, url, headers, params)
         if res.status_code == 404:
             return None  # 아직 안 올렸을 수 있다. 실패가 아니라 없는 것이다.
-        if res.status_code == 403 and res.headers.get("X-RateLimit-Remaining") == "0":
-            raise errors.ApiError(429, "TOOL_RATE_LIMITED", "GitHub 레이트리밋에 걸렸습니다.")
+        _raise_limit(res)
         if res.status_code >= 400:
             raise errors.ApiError(502, "TOOL_UNREACHABLE", f"GitHub 오류 {res.status_code}")
 
@@ -274,3 +342,8 @@ class GitHubConnector:
         self, base_url: str, target: str, secret: str, path: str, ref: str | None = None,
     ) -> dict[str, Any] | None:
         return fetch_file(base_url, target, secret, path, ref)
+
+    def fetch_change_files(
+        self, base_url: str, target: str, secret: str, kind: str, ident: str,
+    ) -> tuple[list[str] | None, int | None]:
+        return fetch_change_files(base_url, target, secret, kind, ident)

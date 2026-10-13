@@ -23,7 +23,12 @@ from datetime import date
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
+# 설계 근거 판별은 앱과 같은 함수를 쓴다(ARC-024 4절). 두 결과가 다르면 원천이 다른 것이다.
+sys.path.insert(0, str(ROOT))
+from app.standard import design_refs  # noqa: E402
+
 DOCS = ROOT / "docs"
+DESIGN_GLOBS = ["docs/20-design/*.md"]
 OUT = DOCS / "traceability.csv"
 REQUIREMENTS = DOCS / "10-requirements" / "IM-001-요구사항정의서.md"
 # 파일럿 원본은 참고자료지 납품 산출물이 아니다(CLAUDE.md 1절). 추적표에 섞지 않는다.
@@ -140,24 +145,20 @@ def scan_commits(known: set[str]) -> tuple[dict[str, set], dict[str, set], list[
 def scan_docs(known: set[str]) -> tuple[dict[str, set], dict[str, set], list[str]]:
     """docs/ 마크다운에서 요구사항 <-> 설계·시험 연결을 읽는다.
 
-    문서가 자기 ID를 첫 헤딩에 달고 있으면(ARC-002 같은 설계 결정 기록) 그 문서가
-    언급한 요구사항 전부에 연결한다. 그 외에는 같은 줄에 함께 나온 것만 연결한다 —
-    한 문서에 있다는 이유만으로 엮으면 근거 없는 추적관계가 된다(QUR.PIP.001).
+    설계는 docs/20-design/ 문서의 명시적 참조 세 꼴(머리 표 관련 행, 요구사항 대응표, 절 제목
+    괄호)만 읽는다(ARC-024). 문서 어딘가에 코드가 나왔다는 이유만으로 잇지 않는다. 초안 문서와
+    "미결" 한정어는 설계 ID 옆에 괄호로 남긴다(예: `IM-003(초안)`, `ARC-006(미결)`).
+    시험(TST)은 지금처럼 같은 줄에 함께 나온 것만 잇는다.
     """
     designs: dict[str, set] = defaultdict(set)
     tests: dict[str, set] = defaultdict(set)
     violations: list[str] = []
 
-    def link(rid: str, ids: set[str]) -> None:
-        designs[rid].update(i for i in ids if i.startswith(("ARC-", "DSN-")))
-        tests[rid].update(i for i in ids if i.startswith("TST-"))
-
     for md in markdown_files():
-        lines = md.read_text(encoding="utf-8", errors="ignore").splitlines()
-        heading = next((ln for ln in lines if ln.startswith("# ")), "")
-        own = set(ARTIFACT_RE.findall(heading))
-
+        text = md.read_text(encoding="utf-8", errors="ignore")
+        lines = text.splitlines()
         rel = md.relative_to(ROOT).as_posix()
+
         for no, line in enumerate(lines, 1):
             reqs = set(REQ_RE.findall(line))
             if not reqs:
@@ -167,7 +168,16 @@ def scan_docs(known: set[str]) -> tuple[dict[str, set], dict[str, set], list[str
                 if known and rid not in known:
                     violations.append(f"{rel}:{no} 정의되지 않은 요구사항 ID {rid}")
                     continue
-                link(rid, own | inline)
+                tests[rid].update(i for i in inline if i.startswith("TST-"))
+
+        if not design_refs.match_any("docs/" + md.relative_to(DOCS).as_posix(), DESIGN_GLOBS):
+            continue
+        info = design_refs.parse(text, known)
+        name = info.doc_id or md.stem
+        for ref in info.refs:
+            tags = [t for t in ("초안" if info.status == design_refs.DRAFT else None,
+                                ref.qualifier) if t]
+            designs[ref.code].add(f"{name}({','.join(tags)})" if tags else name)
 
     return designs, tests, violations
 

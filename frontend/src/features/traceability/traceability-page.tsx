@@ -92,7 +92,7 @@ export function TraceabilityPage(): ReactNode {
     <>
       <PageHeader
         title="요구사항"
-        description="요구사항별 현황과 설계 · 구현 · 시험 추적 근거입니다. 끊긴 칸은 붉게 표시됩니다."
+        description="요구사항별 현황과 설계 근거 · 구현 관련 변경 · 시험 연결입니다. 연결은 완료·통과 증거가 아닙니다. 끊긴 칸은 붉게 표시됩니다."
       />
       <div className="@container flex flex-col gap-5">
         <DataState state={summary} onRetry={summary.reload}>
@@ -370,14 +370,14 @@ function buildColumns(): ColumnDef<TraceabilityRowResponse, unknown>[] {
     },
     {
       id: 'designs',
-      header: '설계',
+      header: '설계 근거',
       cell: ({ row }) => (
         <Cells cells={row.original.designs} kind="DESIGNS" broken={row.original.brokenAt} />
       ),
     },
     {
       id: 'implements',
-      header: '구현',
+      header: '구현 관련 변경',
       cell: ({ row }) => (
         <Cells
           cells={row.original.implementsList}
@@ -388,7 +388,7 @@ function buildColumns(): ColumnDef<TraceabilityRowResponse, unknown>[] {
     },
     {
       id: 'tests',
-      header: '시험',
+      header: '시험 연결',
       cell: ({ row }) => (
         <Cells cells={row.original.tests} kind="TESTS" broken={row.original.brokenAt} />
       ),
@@ -425,6 +425,19 @@ function TitleCell({ text }: { text: string }): ReactNode {
 /** 근거가 이만큼 넘으면 앞 몇 개만 두고 나머지는 '더 보기' 로 접는다. */
 const CELL_PREVIEW = 3;
 
+/**
+ * 빈 칸 문구. "없음" 은 설계·구현·시험이 없다는 판정처럼 읽힌다. 여기서 아는 것은 연결된 근거가
+ * 없다는 사실뿐이다(ARC-024). 구현 칸은 구현 완료가 아니라 관련 변경, 시험 칸은 통과가 아니라 연결이다.
+ */
+const EMPTY_TEXT: Partial<Record<TraceLinkKind, string>> = {
+  DESIGNS: '연결된 설계 근거 없음',
+  IMPLEMENTS: '연결된 구현 관련 변경 없음',
+  TESTS: '연결된 시험 없음',
+};
+
+/** 문서가 스스로 선언한 상태. 승인·설계 완료와 같지 않다. */
+const DOC_STATUS_TAG: Record<string, string> = { DRAFT: '초안', UNKNOWN: '상태 미표기' };
+
 /** 표 뼈대는 DataTable 이 만든다 — 여기서는 칸 안쪽만 그린다. */
 function Cells({
   cells,
@@ -442,27 +455,44 @@ function Cells({
   return (
     <div className={cn('-mx-2 px-2 py-1', isBroken && 'bg-destructive/10')}>
       {cells.length === 0 ? (
-        <span className="text-muted-foreground text-xs">없음</span>
+        <span className="text-muted-foreground text-xs">{EMPTY_TEXT[kind] ?? '연결 없음'}</span>
       ) : (
         // 근거는 한 줄에 하나. 긴 커밋 제목은 끝을 말줄임하고, 마우스를 올리면 전체가 보인다
         <ul className="flex w-64 flex-col gap-0.5">
-          {shown.map((c) => (
-            <li key={c.targetId} className="min-w-0 text-xs" title={c.label}>
-              {c.externalUrl ? (
-                <a
-                  className="flex min-w-0 items-center gap-1 hover:underline"
-                  href={c.externalUrl}
-                  target="_blank"
-                  rel="noreferrer"
-                >
-                  <span className="truncate">{c.label}</span>
-                  <ExternalLink className="text-muted-foreground size-3 shrink-0" />
-                </a>
-              ) : (
-                <span className="block truncate">{c.label}</span>
-              )}
-            </li>
-          ))}
+          {shown.map((c) => {
+            const tags = [
+              c.docStatus ? DOC_STATUS_TAG[c.docStatus] : undefined,
+              c.qualifier ?? undefined,
+            ].filter((t): t is string => Boolean(t));
+            const name = c.section ? `${c.label} · ${c.section}` : c.label;
+            return (
+              <li key={c.targetId} className="min-w-0 text-xs" title={name}>
+                <span className="flex min-w-0 items-center gap-1">
+                  {c.externalUrl ? (
+                    <a
+                      className="flex min-w-0 items-center gap-1 hover:underline"
+                      href={c.externalUrl}
+                      target="_blank"
+                      rel="noreferrer"
+                    >
+                      <span className="truncate">{name}</span>
+                      <ExternalLink className="text-muted-foreground size-3 shrink-0" />
+                    </a>
+                  ) : (
+                    <span className="block truncate">{name}</span>
+                  )}
+                  {tags.map((t) => (
+                    <span
+                      key={t}
+                      className="text-muted-foreground shrink-0 rounded border px-1 text-[10px]"
+                    >
+                      {t}
+                    </span>
+                  ))}
+                </span>
+              </li>
+            );
+          })}
           {hidden > 0 && (
             <li>
               <button

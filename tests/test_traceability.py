@@ -99,14 +99,19 @@ def test_정의되지_않은_ID_는_문서에서도_걸린다(tmp_path, monkeypa
     doc = tmp_path / "20-design" / "임시.md"
     doc.parent.mkdir(parents=True)
     doc.write_text(
-        "# 임시 ARC-009\n\n`SWFR.CON.004` 와 `SWFR.CON.099` 를 다룬다.\n", encoding="utf-8"
+        "# ARC-009 임시\n\n| | |\n|---|---|\n| 상태 | **초안** |\n"
+        "| 관련 | `SWFR.CON.004` |\n\n"
+        "본문에서 `SWFR.CON.005` 와 `SWFR.CON.099` 를 지나가듯 다룬다.\n",
+        encoding="utf-8",
     )
     monkeypatch.setattr(tr, "DOCS", tmp_path)
     monkeypatch.setattr(tr, "ROOT", tmp_path)
 
-    designs, _, violations = tr.scan_docs({"SWFR.CON.004"})
+    designs, _, violations = tr.scan_docs({"SWFR.CON.004", "SWFR.CON.005"})
 
-    assert designs["SWFR.CON.004"] == {"ARC-009"}
+    # 관련 행만 설계 근거다. 초안이면 표시가 붙는다(ARC-024). 본문 언급은 근거가 아니다
+    assert designs["SWFR.CON.004"] == {"ARC-009(초안)"}
+    assert "SWFR.CON.005" not in designs
     assert "SWFR.CON.099" not in designs
     assert len(violations) == 1 and "SWFR.CON.099" in violations[0]
 

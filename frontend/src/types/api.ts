@@ -59,10 +59,13 @@ export type TraceEntityType =
   | 'RISK'
   | 'CODE_CHANGE'
   | 'CHANGE_REQUEST'
-  | 'CORRECTION_ACTION';
+  | 'CORRECTION_ACTION'
+  /** 저장소 설계 문서(수집한 원본). 등록 산출물(WORK_PRODUCT)과 다르다 (ARC-024) */
+  | 'REPO_DOCUMENT';
 export type TraceLinkKind = 'DESIGNS' | 'IMPLEMENTS' | 'TESTS' | 'DELIVERS';
 export type TraceLinkOrigin = 'AUTO' | 'MANUAL';
-export type TraceLinkStatus = 'ACTIVE' | 'BROKEN';
+/** SUPERSEDED 는 분류 정정으로 대체·제외됨, BROKEN 은 원천 근거가 사라짐 */
+export type TraceLinkStatus = 'ACTIVE' | 'BROKEN' | 'SUPERSEDED';
 export type CodeChangeKind = 'COMMIT' | 'MERGE_REQUEST' | 'PIPELINE' | 'RELEASE' | 'TAG';
 export type AcceptanceRecordStatus = 'ISSUED' | 'VOIDED';
 export type DocumentStatus =
@@ -508,6 +511,12 @@ export interface TraceLinkResponse {
   /** 근거 원문의 위치(커밋·이슈 링크) */
   externalUrl: string | null;
   createdAt: string;
+  /** 근거 위치(설계 문서의 경로·커밋·blob·줄·절·문서 상태) */
+  evidenceMeta?: Record<string, unknown> | null;
+  /** 대체·제외·끊김의 사유 */
+  statusReason?: string | null;
+  statusChangedAt?: string | null;
+  supersededBy?: string | null;
 }
 
 export interface TraceLinkCreateRequest {
@@ -522,6 +531,13 @@ export interface TraceCell {
   targetId: string;
   label: string;
   externalUrl: string | null;
+  /** 출발점 종류. REPO_DOCUMENT 는 저장소 설계 문서 */
+  sourceType?: TraceEntityType | null;
+  /** 문서에 선언된 상태. 발주기관 승인과 다르다 */
+  docStatus?: 'CONFIRMED' | 'DRAFT' | 'UNKNOWN' | null;
+  section?: string | null;
+  /** 참조에 붙은 한정어("미결" 등) */
+  qualifier?: string | null;
 }
 
 export type SourceState = 'OPEN' | 'CLOSED' | 'UNKNOWN' | 'NONE';

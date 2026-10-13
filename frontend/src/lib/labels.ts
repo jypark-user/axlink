@@ -56,6 +56,8 @@ const LABELS: Record<string, string> = {
   COULD: '선택',
   WONT: '제외',
   BROKEN: '끊김',
+  SUPERSEDED: '분류 정정',
+  REPO_DOCUMENT: '저장소 설계 문서',
   AUTO: '자동',
   MANUAL: '수동',
   INVITED: '초대됨',
