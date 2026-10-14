@@ -552,12 +552,22 @@ export interface RequirementSummaryResponse {
   implementedFromSourceClosed: number;
   /** total 이 0 이면 null */
   verifiedRate: number | null;
+  /** 발주기관이 상태를 지정한 요구사항 수 */
+  decided: number;
   byStatus: StatusCount[];
   sources: SourceStateSummary[];
 }
 
-/** 요구사항 상태의 출처. GitHub 이슈를 닫아 생긴 IMPLEMENTED 만 값이 있다. */
-export type RequirementStatusBasis = 'SOURCE_ISSUE_CLOSED';
+/** 상태의 출처. SOURCE_ISSUE_CLOSED = GitHub 이슈 닫힘, CLIENT_DECIDED = 발주기관 지정 */
+export type RequirementStatusBasis = 'SOURCE_ISSUE_CLOSED' | 'CLIENT_DECIDED';
+
+/** 발주기관이 사유와 함께 지정한 요구사항 상태(ARC-025). 근거 상태와 따로 남는다. */
+export interface RequirementDecision {
+  status: RequirementStatus;
+  reason: string;
+  decidedBy: string | null;
+  decidedAt: string;
+}
 
 export interface TraceabilityRowResponse {
   requirementId: string;
@@ -565,6 +575,9 @@ export interface TraceabilityRowResponse {
   requirementTitle: string;
   requirementStatus: RequirementStatus;
   requirementStatusBasis: RequirementStatusBasis | null;
+  /** 근거가 정한 상태. 지정이 없으면 requirementStatus 와 같다 */
+  requirementEvidenceStatus: RequirementStatus | null;
+  requirementDecision: RequirementDecision | null;
   /** 원천 이슈 상태. 수집한 원천 기록에서 읽는다. 원천 연결이 없으면 NONE. 내부 상태와 따로다. */
   sourceState: SourceState;
   designs: TraceCell[];
@@ -585,6 +598,8 @@ export interface RequirementResponse {
   traceComplete: boolean;
   updatedAt: string;
   statusBasis: RequirementStatusBasis | null;
+  evidenceStatus: RequirementStatus | null;
+  decision: RequirementDecision | null;
 }
 
 export interface RequirementDetailResponse extends RequirementResponse {

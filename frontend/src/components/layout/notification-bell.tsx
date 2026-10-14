@@ -28,6 +28,8 @@ const KIND_LABEL: Record<string, string> = {
   SYNC_FAILED: '동기화 실패',
   SYNC_CHANGED: '동기화 변경',
   SNAPSHOT_TAKEN: '스냅샷 기록',
+  REQUIREMENT_STATUS_DECIDED: '요구사항 상태 지정',
+  REQUIREMENT_STATUS_REVERTED: '요구사항 지정 해제',
 };
 
 const POLL_MS = 60_000;
@@ -44,6 +46,8 @@ export function pathFor(e: ActivityEventResponse): string {
       return `${base}/deliverables`;
     case 'SYNC_JOB':
       return `${base}/collection`;
+    case 'REQUIREMENT':
+      return `${base}/traceability`;
     default:
       return base;
   }

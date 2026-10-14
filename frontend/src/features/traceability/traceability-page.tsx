@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState, type ReactNode } from 'react';
 import type { ColumnDef } from '@tanstack/react-table';
-import { ExternalLink, X } from 'lucide-react';
+import { ExternalLink, PencilLine, X } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
@@ -16,6 +16,8 @@ import { label } from '@/lib/labels';
 import { toQueryString } from '@/lib/query';
 import { cn } from '@/lib/utils';
 import { useAsync } from '@/lib/use-async';
+import { useAuth } from '@/features/auth/auth-context';
+import { StatusDecisionDialog } from '@/features/traceability/status-decision-dialog';
 import {
   filterLabel,
   filterParams,
@@ -41,6 +43,10 @@ const PAGE_SIZE = 20;
 
 export function TraceabilityPage(): ReactNode {
   const { project } = useProjectContext();
+  const { me } = useAuth();
+  // 요구사항 상태 지정은 발주기관이 한다(ARC-025). 용역사는 지정 결과와 사유만 본다
+  const canDecide = me?.role === 'CLIENT' || me?.role === 'SUPER_ADMIN';
+  const [deciding, setDeciding] = useState<TraceabilityRowResponse | null>(null);
   const [page, setPage] = useState(0);
   const [filter, setFilter] = useState<RequirementFilter>(NO_FILTER);
   const [text, setText] = useState('');
@@ -73,7 +79,7 @@ export function TraceabilityPage(): ReactNode {
     [project.id, page, filter, q],
   );
 
-  const columns = useMemo(() => buildColumns(), []);
+  const columns = useMemo(() => buildColumns(canDecide ? setDeciding : null), [canDecide]);
   const active = filterLabel(filter);
   const narrowed = active !== null || q !== '';
   const emptyText = narrowed ? '조건에 맞는 요구사항이 없습니다.' : '요구사항이 없습니다.';
@@ -142,6 +148,17 @@ export function TraceabilityPage(): ReactNode {
           }
         </DataState>
       </div>
+      <StatusDecisionDialog
+        projectId={project.id}
+        row={deciding}
+        onOpenChange={(open) => {
+          if (!open) setDeciding(null);
+        }}
+        onSaved={() => {
+          summary.reload();
+          state.reload();
+        }}
+      />
     </>
   );
 }
@@ -171,7 +188,9 @@ function Summary({
         <PickCard
           term="검증 완료"
           value={`${n.verified}건`}
-          hint={`${rateText(n.verifiedRate)} · 검증·인수 상태`}
+          hint={`${rateText(n.verifiedRate)} · 검증·인수 상태${
+            n.decided > 0 ? ` · 발주기관 지정 ${n.decided}건 포함` : ''
+          }`}
           selected={is({ kind: 'verified', value: true })}
           onClick={() => onPick({ kind: 'verified', value: true })}
         />
@@ -330,7 +349,9 @@ function Chip({
   );
 }
 
-function buildColumns(): ColumnDef<TraceabilityRowResponse, unknown>[] {
+function buildColumns(
+  onDecide: ((row: TraceabilityRowResponse) => void) | null,
+): ColumnDef<TraceabilityRowResponse, unknown>[] {
   return [
     {
       accessorKey: 'requirementCode',
@@ -345,12 +366,7 @@ function buildColumns(): ColumnDef<TraceabilityRowResponse, unknown>[] {
     {
       accessorKey: 'requirementStatus',
       header: ({ column }) => <SortableHeader column={column}>상태</SortableHeader>,
-      cell: ({ row }) => (
-        <RequirementStatusBadge
-          status={row.original.requirementStatus}
-          basis={row.original.requirementStatusBasis}
-        />
-      ),
+      cell: ({ row }) => <StatusCell row={row.original} onDecide={onDecide} />,
     },
     {
       // 원천 이슈의 열림·닫힘. 위 상태 칸과 따로 읽는다
@@ -394,6 +410,40 @@ function buildColumns(): ColumnDef<TraceabilityRowResponse, unknown>[] {
       ),
     },
   ];
+}
+
+/** 상태 칸. 지정이 있으면 근거 상태와 사유를 함께 보이고, 발주기관에게는 지정 버튼을 둔다. */
+function StatusCell({
+  row,
+  onDecide,
+}: {
+  row: TraceabilityRowResponse;
+  onDecide: ((row: TraceabilityRowResponse) => void) | null;
+}): ReactNode {
+  const decision = row.requirementDecision;
+  const evidence = row.requirementEvidenceStatus;
+  return (
+    <div className="flex flex-col items-start gap-1">
+      <span title={decision ? `지정 사유: ${decision.reason}` : undefined}>
+        <RequirementStatusBadge status={row.requirementStatus} basis={row.requirementStatusBasis} />
+      </span>
+      {decision && evidence && evidence !== row.requirementStatus && (
+        <span className="text-muted-foreground text-[11px] leading-none">
+          근거: {label(evidence)}
+        </span>
+      )}
+      {onDecide && (
+        <button
+          type="button"
+          onClick={() => onDecide(row)}
+          className="text-primary inline-flex items-center gap-1 text-[11px] hover:underline"
+          aria-label={`${row.requirementCode} 상태 지정`}
+        >
+          <PencilLine className="size-3" /> {decision ? '지정 변경' : '상태 지정'}
+        </button>
+      )}
+    </div>
+  );
 }
 
 const SOURCE_CELL: Record<SourceState, string> = {
