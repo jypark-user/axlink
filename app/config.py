@@ -72,6 +72,13 @@ class Settings(BaseSettings):
     # 파일을 읽을 브랜치. 비우면 저장소 기본 브랜치를 본다.
     collect_ref: str = ""
 
+    # 커밋·PR 의 변경 파일을 받아 분류에 쓴다(ARC-024). 기본은 끔 — 켜면 GitHub 호출이 는다.
+    # 저장소 설계 문서 수집은 연결 매핑 규칙 designDocPaths 가 있을 때만 돈다.
+    collect_change_files: bool = False
+    change_files_fetch_limit: int = 100   # 한 번 수집에서 새로 받을 커밋·PR 수 상한
+    design_doc_fetch_limit: int = 100     # 한 번 수집에서 새로 받을 설계 문서 수 상한
+    github_min_remaining: int = 200       # 남은 호출 한도가 이보다 낮으면 상세 조회를 멈춘다
+
     # 업로드 문서 원본 보관 위치. 폐쇄망 온프레미스라 오브젝트 스토리지를 전제하지 않는다.
     # 운영에서는 NAS 마운트 경로를 AXLINK_DOCUMENT_ROOT 로 준다.
     document_root: str = "var/documents"

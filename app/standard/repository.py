@@ -7,6 +7,8 @@ ORM 을 쓰지 않는 이유 중 하나다(작업 규약 §1).
 from dataclasses import dataclass
 from typing import Any
 
+from psycopg.types.json import Jsonb
+
 from app.common import errors
 from app.common.paging import PageQuery
 from app.db import fetch_all, fetch_one
@@ -741,7 +743,7 @@ def raw_artifacts_with_entities(cur: Any, connection_id: str) -> list[dict[str, 
     return fetch_all(
         cur,
         """
-        select ra.external_id, ra.object_kind, ra.payload_jsonb,
+        select ra.id as raw_id, ra.external_id, ra.object_kind, ra.payload_jsonb,
                r.id as requirement_id, i.id as issue_id, k.id as risk_id,
                c.id as code_change_id,
                coalesce(r.external_url, i.external_url, k.external_url, c.external_url)
@@ -765,6 +767,7 @@ def raw_artifacts_with_entities(cur: Any, connection_id: str) -> list[dict[str, 
 def upsert_auto_trace_link(
     cur: Any, project_id: str, from_type: str, from_id: str, to_type: str, to_id: str,
     link_kind: str, evidence_kind: str, evidence_text: str, evidence_url: str | None,
+    evidence_meta: dict[str, Any] | None = None,
 ) -> str | None:
     """같은 변이 있으면 근거만 갱신하고 살린다. 사람이 만든 링크는 건드리지 않는다."""
     row = fetch_one(
@@ -772,13 +775,19 @@ def upsert_auto_trace_link(
         """
         insert into trace_link
           (project_id, from_type, from_id, to_type, to_id, link_kind,
-           origin, status, evidence_kind, evidence_text, evidence_url)
-        values (%s, %s, %s, %s, %s, %s, 'AUTO', 'ACTIVE', %s, %s, %s)
+           origin, status, evidence_kind, evidence_text, evidence_url, evidence_meta)
+        values (%s, %s, %s, %s, %s, %s, 'AUTO', 'ACTIVE', %s, %s, %s, %s)
         on conflict on constraint uq_trace_link__edge do update set
            status = 'ACTIVE',
+           status_reason = case when trace_link.status = 'ACTIVE'
+                                then trace_link.status_reason end,
+           status_changed_at = case when trace_link.status = 'ACTIVE'
+                                    then trace_link.status_changed_at else now() end,
+           superseded_by = null,
            evidence_kind = excluded.evidence_kind,
            evidence_text = excluded.evidence_text,
            evidence_url = excluded.evidence_url,
+           evidence_meta = excluded.evidence_meta,
            updated_at = now()
          where trace_link.origin = 'AUTO'
         returning id
@@ -786,31 +795,71 @@ def upsert_auto_trace_link(
         (
             project_id, from_type, from_id, to_type, to_id, link_kind,
             evidence_kind, evidence_text, evidence_url,
+            Jsonb(evidence_meta) if evidence_meta is not None else None,
         ),
     )
     return str(row["id"]) if row else None
 
 
-def break_stale_auto_links(cur: Any, project_id: str, keep_ids: list[str]) -> int:
-    """이번 생성에서 근거가 다시 확인되지 않은 자동 링크는 끊긴 것으로 표시한다.
+def close_stale_auto_links(
+    cur: Any, project_id: str, keep_ids: list[str],
+    replaced: dict[tuple[str, str, str, str], list[tuple[str, str]]],
+    excluded: dict[tuple[str, str, str, str], str],
+    deleted_docs: set[str],
+) -> tuple[int, int]:
+    """이번에 다시 확인되지 않은 자동 링크를 닫는다. (끊김 수, 대체·제외 수).
 
-    지우지 않는다. 언제 근거가 사라졌는지가 남아야 감독 기록이 된다.
+    같은 출발·도착에 다른 관계가 새로 생겼으면 대체, 분류 규칙이 뺐으면 제외(둘 다 SUPERSEDED),
+    그 밖은 원천 근거가 사라진 끊김(BROKEN)이다. 지우지 않는다. 옛 링크의 관계·근거·만든 시각은
+    그대로 남는다(ARC-024 2-5). 수동 링크는 대상이 아니다.
     """
-    cur.execute(
+    rows = fetch_all(
+        cur,
         """
-        update trace_link
-           set status = 'BROKEN', updated_at = now()
+        select id, from_type, from_id, to_type, to_id, link_kind from trace_link
          where project_id = %s and origin = 'AUTO' and status = 'ACTIVE'
            and not (id = any(%s::uuid[]))
         """,
         (project_id, keep_ids),
     )
-    return cur.rowcount
+    broken = superseded = 0
+    for r in rows:
+        key = (r["from_type"], str(r["from_id"]), r["to_type"], str(r["to_id"]))
+        if key in replaced:
+            new_kinds = ", ".join(sorted({k for _, k in replaced[key]}))
+            status, by = "SUPERSEDED", replaced[key][0][0]
+            reason = f"분류 정정으로 대체: {r['link_kind']} → {new_kinds}"
+        elif key in excluded:
+            status, by, reason = "SUPERSEDED", None, f"분류 정정으로 제외: {excluded[key]}"
+        elif r["from_type"] == "REPO_DOCUMENT" and str(r["from_id"]) in deleted_docs:
+            status, by, reason = "BROKEN", None, "원천 문서가 저장소에서 삭제됨"
+        else:
+            status, by, reason = "BROKEN", None, "원천 근거가 다시 확인되지 않음"
+        cur.execute(
+            """
+            update trace_link
+               set status = %s, status_reason = %s, superseded_by = %s,
+                   status_changed_at = now(), updated_at = now()
+             where id = %s
+            """,
+            (status, reason, by, r["id"]),
+        )
+        if status == "BROKEN":
+            broken += 1
+        else:
+            superseded += 1
+    return broken, superseded
+
+
+def break_stale_auto_links(cur: Any, project_id: str, keep_ids: list[str]) -> int:
+    """이전 이름. 대체·제외 판단 없이 모두 끊김으로 닫는다."""
+    return close_stale_auto_links(cur, project_id, keep_ids, {}, {}, set())[0]
 
 
 _LINK_COLUMNS = """
     tl.id, tl.project_id, tl.from_type, tl.from_id, tl.to_type, tl.to_id, tl.link_kind,
-    tl.origin, tl.status, tl.evidence_kind, tl.evidence_text, tl.evidence_url, tl.created_at
+    tl.origin, tl.status, tl.evidence_kind, tl.evidence_text, tl.evidence_url, tl.created_at,
+    tl.evidence_meta, tl.status_reason, tl.status_changed_at, tl.superseded_by
 """
 
 
@@ -860,6 +909,17 @@ def entity_labels(
         "WORK_PRODUCT": "coalesce(title, type)",
     }
     for entity_type, ids in by_type.items():
+        if entity_type == "REPO_DOCUMENT":
+            # 저장소 설계 문서는 원본이 곧 출발점이다. 표시 이름은 경로, 링크는 그 커밋의 파일
+            rows = fetch_all(
+                cur,
+                "select id, payload_jsonb->>'path' as label, payload_jsonb->>'html_url' as url "
+                "from raw_artifact where id = any(%s::uuid[])",
+                (ids,),
+            )
+            for r in rows:
+                out[(entity_type, str(r["id"]))] = (r["label"] or "?", r["url"])
+            continue
         table = _ENTITY_TABLE.get(entity_type)
         if table is None:
             continue
