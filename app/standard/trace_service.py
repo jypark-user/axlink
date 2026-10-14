@@ -17,7 +17,7 @@ from app.auth import repository as auth_repo
 from app.auth.models import AuthPrincipal
 from app.common import errors
 from app.common.paging import PageQuery, PageResponse
-from app.standard import mapping, repository, trace_rules
+from app.standard import repository, requirement_decision, trace_rules
 from app.standard.mapping_rules import MappingRules
 from app.standard.models import (
     EntityHistoryResponse,
@@ -189,6 +189,7 @@ def requirement_summary(
         notVerified=total - verified,
         implementedFromSourceClosed=n["implemented_from_source_closed"],
         verifiedRate=verified / total if total else None,
+        decided=n["decided"],
         byStatus=[
             StatusCount(status=s, count=n["by_status"].get(s, 0))
             for s in repository.REQUIREMENT_STATUSES
@@ -252,7 +253,9 @@ def traceability_rows(
             requirementCode=r["code"] or "—",
             requirementTitle=r["title"],
             requirementStatus=r["status"],
-            requirementStatusBasis=mapping.requirement_status_basis(r["status"], r["tool_name"]),
+            requirementStatusBasis=requirement_decision.status_basis(r),
+            requirementEvidenceStatus=r["evidence_status"],
+            requirementDecision=requirement_decision.decision_of(r),
             sourceState=r["source_state"],
             designs=cells.get(str(r["id"]), {}).get("DESIGNS", []),
             implementsList=cells.get(str(r["id"]), {}).get("IMPLEMENTS", []),
@@ -298,7 +301,9 @@ def requirement_detail(
         ),
         traceComplete=row["trace_complete"],
         updatedAt=row["updated_at"].isoformat(),
-        statusBasis=mapping.requirement_status_basis(row["status"], row["tool_name"]),
+        statusBasis=requirement_decision.status_basis(row),
+        evidenceStatus=row["evidence_status"],
+        decision=requirement_decision.decision_of(row),
         body=row["body"] or "",
         traceLinks=[
             TraceLinkResponse(

@@ -88,7 +88,9 @@ ENTITIES: dict[str, EntitySpec] = {
             (
                 "status",
                 "상태",
-                "case when e.status = 'IMPLEMENTED' and exists ("
+                "case when e.decided_status is not null "
+                "then e.status || '(발주기관 지정)' "
+                "when e.status = 'IMPLEMENTED' and exists ("
                 "select 1 from tool_connection c where c.id = e.tool_connection_id "
                 "and c.tool = 'GITHUB') "
                 "then '원천 이슈 닫힘(구현·검증 완료를 뜻하지 않음)' else e.status end",

@@ -25,14 +25,17 @@ def upsert_requirement(
         cur,
         f"""
         insert into requirement
-          (project_id, code, title, body, priority, status, assignee,
+          (project_id, code, title, body, priority, status, evidence_status, assignee,
            source_created_at, source_updated_at,
            tool_connection_id, external_id, external_url, source_kind)
-        values (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, 'TOOL')
+        values (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, 'TOOL')
         {_SOURCE_CONFLICT}
         do update set
            code = excluded.code, title = excluded.title, body = excluded.body,
-           priority = excluded.priority, status = excluded.status,
+           priority = excluded.priority,
+           -- 수집은 근거 상태만 바꾼다. 발주기관 지정이 있으면 지금 상태는 지정대로 둔다(ARC-025)
+           evidence_status = excluded.evidence_status,
+           status = coalesce(requirement.decided_status, excluded.evidence_status),
            assignee = excluded.assignee,
            source_created_at = excluded.source_created_at,
            source_updated_at = excluded.source_updated_at,
@@ -41,7 +44,7 @@ def upsert_requirement(
         """,
         (
             project_id, rec["code"], rec["title"], rec["body"], rec["priority"], rec["status"],
-            rec["assignee"], rec["source_created_at"], rec["source_updated_at"],
+            rec["status"], rec["assignee"], rec["source_created_at"], rec["source_updated_at"],
             connection_id, external_id, rec["external_url"],
         ),
     )
@@ -311,9 +314,9 @@ def upsert_document_requirement(
         cur,
         """
         insert into requirement
-          (project_id, code, title, body, priority, status,
+          (project_id, code, title, body, priority, status, evidence_status,
            work_product_id, document_upload_id, source_kind)
-        values (%s, %s, %s, %s, %s, 'DEFINED', %s, %s, 'DOCUMENT')
+        values (%s, %s, %s, %s, %s, 'DEFINED', 'DEFINED', %s, %s, 'DOCUMENT')
         on conflict (project_id, code) where code is not null
         do update set
            title = excluded.title, body = excluded.body, priority = excluded.priority,
@@ -405,6 +408,8 @@ def current_work_product(
 _REQUIREMENT_COLUMNS = """
     r.id, r.project_id, r.code, r.title, r.priority, r.status, r.assignee,
     r.tool_connection_id, r.external_id, r.external_url, r.source_kind, r.updated_at,
+    coalesce(r.evidence_status, r.status) as evidence_status,
+    r.decided_status, r.decided_reason, r.decided_at, du.name as decided_by_name,
     c.tool as tool_name,
     {source_state} as source_state,
     exists (
@@ -429,6 +434,7 @@ _REQUIREMENT_FROM = """
     left join tool_connection c on c.id = r.tool_connection_id
     left join raw_artifact ra
       on ra.tool_connection_id = r.tool_connection_id and ra.external_id = r.external_id
+    left join app_user du on du.id = r.decided_by_user_id
 """
 
 VERIFIED_STATUSES = ("VERIFIED", "ACCEPTED")
@@ -491,6 +497,7 @@ def requirement_summary(cur: Any, project_id: str) -> dict[str, Any]:
         f"""
         select count(*) as total,
                count(*) filter (where r.status in ('VERIFIED', 'ACCEPTED')) as verified,
+               count(*) filter (where r.decided_status is not null) as decided,
                -- mapping.requirement_status_basis 와 같은 규칙. GitHub 닫힘이 만든 IMPLEMENTED
                count(*) filter (where r.status = 'IMPLEMENTED' and c.tool = 'GITHUB')
                  as implemented_from_source_closed
@@ -522,6 +529,7 @@ def requirement_summary(cur: Any, project_id: str) -> dict[str, Any]:
     return {
         "total": int(totals["total"]),
         "verified": int(totals["verified"]),
+        "decided": int(totals["decided"]),
         "implemented_from_source_closed": int(totals["implemented_from_source_closed"]),
         "by_status": {r["status"]: int(r["n"]) for r in by_status},
         "sources": sources,
@@ -872,6 +880,48 @@ def entity_labels(
         for r in rows:
             out[(entity_type, str(r["id"]))] = (r["label"], r["external_url"])
     return out
+
+
+def set_requirement_decision(
+    cur: Any, requirement_id: str, status: str, reason: str, user_id: str
+) -> None:
+    """발주기관 지정. 지금 상태도 지정 상태로 맞춘다(ck_requirement__decided_effective)."""
+    cur.execute(
+        """
+        update requirement
+           set decided_status = %s, decided_reason = %s, decided_by_user_id = %s,
+               decided_at = now(), status = %s, updated_at = now()
+         where id = %s
+        """,
+        (status, reason, user_id, status, requirement_id),
+    )
+
+
+def clear_requirement_decision(cur: Any, requirement_id: str) -> None:
+    """지정을 거두고 근거 상태로 돌아간다."""
+    cur.execute(
+        """
+        update requirement
+           set decided_status = null, decided_reason = null, decided_by_user_id = null,
+               decided_at = null, status = coalesce(evidence_status, status), updated_at = now()
+         where id = %s
+        """,
+        (requirement_id,),
+    )
+
+
+def insert_entity_history(
+    cur: Any, *, entity_type: str, entity_id: str, project_id: str, field: str,
+    from_value: str | None, to_value: str | None, actor: str,
+) -> None:
+    cur.execute(
+        """
+        insert into entity_history
+            (entity_type, entity_id, project_id, field, from_value, to_value, actor)
+        values (%s, %s, %s, %s, %s, %s, %s)
+        """,
+        (entity_type, entity_id, project_id, field, from_value, to_value, actor[:120]),
+    )
 
 
 def get_requirement(cur: Any, project_id: str, requirement_id: str) -> dict[str, Any] | None:

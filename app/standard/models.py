@@ -1,6 +1,6 @@
 """표준 모델 조회 DTO. 프런트 types/api.ts 와 필드가 1:1 이어야 한다."""
 
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 
 class SourceRef(BaseModel):
@@ -10,6 +10,15 @@ class SourceRef(BaseModel):
     connectionId: str | None  # noqa: N815 — 프런트 계약 필드명
     externalId: str | None  # noqa: N815
     externalUrl: str | None  # noqa: N815
+
+
+class RequirementDecision(BaseModel):
+    """발주기관이 사유와 함께 지정한 상태(ARC-025). 근거 상태와 따로 남는다."""
+
+    status: str
+    reason: str
+    decidedBy: str | None  # noqa: N815 — 지정한 사람 이름. 계정이 지워졌으면 None
+    decidedAt: str  # noqa: N815
 
 
 class RequirementResponse(BaseModel):
@@ -23,9 +32,12 @@ class RequirementResponse(BaseModel):
     source: SourceRef
     traceComplete: bool  # noqa: N815
     updatedAt: str  # noqa: N815
-    # 상태가 어디서 왔는지. GitHub 이슈를 닫아 생긴 IMPLEMENTED 는 SOURCE_ISSUE_CLOSED 다.
-    # 구현·검증을 확인했다는 뜻이 아니어서 화면이 따로 설명한다. 그 밖에는 None
+    # 상태가 어디서 왔는지. GitHub 이슈를 닫아 생긴 IMPLEMENTED 는 SOURCE_ISSUE_CLOSED,
+    # 발주기관이 지정한 상태는 CLIENT_DECIDED 다. 그 밖에는 None
     statusBasis: str | None = None  # noqa: N815
+    # 근거가 정한 상태. 지정이 없으면 status 와 같다
+    evidenceStatus: str | None = None  # noqa: N815
+    decision: RequirementDecision | None = None
 
 
 class IssueResponse(BaseModel):
@@ -143,6 +155,7 @@ class RequirementSummaryResponse(BaseModel):
     # IMPLEMENTED 중 GitHub 원천 이슈가 닫혀서 붙은 것. 구현·검증을 확인했다는 뜻이 아니다
     implementedFromSourceClosed: int  # noqa: N815
     verifiedRate: float | None  # noqa: N815 — total 이 0 이면 None(산출 불가)
+    decided: int = 0  # 발주기관이 상태를 지정한 요구사항 수(ARC-025)
     byStatus: list[StatusCount]  # noqa: N815
     sources: list[SourceStateSummary]
 
@@ -155,6 +168,8 @@ class TraceabilityRowResponse(BaseModel):
     requirementTitle: str  # noqa: N815
     requirementStatus: str  # noqa: N815
     requirementStatusBasis: str | None = None  # noqa: N815 — RequirementResponse.statusBasis 와 같다
+    requirementEvidenceStatus: str | None = None  # noqa: N815 — RequirementResponse.evidenceStatus
+    requirementDecision: RequirementDecision | None = None  # noqa: N815
     # 원천 이슈 상태. OPEN | CLOSED | UNKNOWN, 원천 연결이 없으면 NONE. 내부 상태와 따로다
     sourceState: str = "NONE"  # noqa: N815
     designs: list[TraceCell]
@@ -179,3 +194,16 @@ class RequirementDetailResponse(RequirementResponse):
     body: str
     traceLinks: list[TraceLinkResponse]  # noqa: N815
     history: list[EntityHistoryResponse]
+
+
+class RequirementDecisionRequest(BaseModel):
+    """발주기관 상태 지정. 사유는 반드시 적는다."""
+
+    status: str
+    reason: str = Field(min_length=1, max_length=1000)
+
+
+class RequirementDecisionRevertRequest(BaseModel):
+    """지정을 거두고 근거 상태로 되돌린다. 되돌리는 사유도 남긴다."""
+
+    reason: str = Field(min_length=1, max_length=1000)
