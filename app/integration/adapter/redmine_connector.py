@@ -21,6 +21,18 @@ from app.config import settings
 from app.integration.port import ProbeResult
 
 ITEM_KINDS = ("issue", "version", "tracker")
+# 이 항목이 막히면 수집 전체를 실패로 본다. 버전·트래커만 받고 성공으로 끝나면 안 된다
+REQUIRED_KINDS = ("issue",)
+
+
+def external_id(kind: str, item: dict[str, Any]) -> str:
+    """원본 키. Redmine 은 일감·버전·트래커에 번호를 각각 1부터 매긴다.
+
+    번호만 쓰면 같은 연결 안에서 버전 7 이 일감 7 을 덮는다. 버전·트래커에는 종류를 붙인다.
+    일감은 번호 그대로 둔다. 표준 이슈의 external_id 와 추적 링크 해석(RM-번호)이 이 값을 쓴다.
+    """
+    ident = str(item.get("id"))
+    return ident if kind == "issue" else f"{kind}:{ident}"
 
 
 def _headers(secret: str) -> dict[str, str]:
@@ -124,7 +136,7 @@ def fetch_items(
                 raise errors.ApiError(502, "TOOL_UNREACHABLE", f"Redmine 오류 {res.status_code}")
             batch = res.json().get(key) or []
             for item in batch:
-                yield str(item.get("id")), item
+                yield external_id(kind, item), item
             if len(batch) < per_page:
                 return
 
@@ -141,6 +153,7 @@ class RedmineConnector:
 
     tool = "REDMINE"
     item_kinds = ITEM_KINDS
+    required_kinds = REQUIRED_KINDS
 
     def verify(self, base_url: str, target: str, secret: str) -> ProbeResult:
         return verify(base_url, target, secret)
