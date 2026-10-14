@@ -111,17 +111,27 @@ class TraceLinkResponse(BaseModel):
     toLabel: str  # noqa: N815
     linkKind: str  # noqa: N815
     origin: str  # AUTO | MANUAL
-    status: str  # ACTIVE | BROKEN
+    status: str  # ACTIVE | BROKEN | SUPERSEDED
     evidenceKind: str | None  # noqa: N815
     evidenceText: str | None  # noqa: N815
     externalUrl: str | None  # noqa: N815
     createdAt: str  # noqa: N815
+    # 근거 위치(설계 문서의 경로·커밋·blob·줄·절·문서 상태 등, ARC-024)
+    evidenceMeta: dict | None = None  # noqa: N815
+    statusReason: str | None = None  # noqa: N815 — 대체·제외·끊김의 사유
+    statusChangedAt: str | None = None  # noqa: N815
+    supersededBy: str | None = None  # noqa: N815
 
 
 class TraceCell(BaseModel):
     targetId: str  # noqa: N815
     label: str
     externalUrl: str | None  # noqa: N815
+    # 출발점 종류. REPO_DOCUMENT 는 저장소 설계 문서, WORK_PRODUCT 는 등록 산출물이다
+    sourceType: str | None = None  # noqa: N815
+    docStatus: str | None = None  # noqa: N815 — 문서에 선언된 상태 CONFIRMED·DRAFT·UNKNOWN
+    section: str | None = None  # 근거가 있는 절
+    qualifier: str | None = None  # 참조에 붙은 한정어("미결" 등)
 
 
 class StatusCount(BaseModel):

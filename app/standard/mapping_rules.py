@@ -13,7 +13,7 @@ from typing import Any
 
 from app.common import errors
 
-_KNOWN = {"requirementLabel", "riskTracker", "reqIdField"}
+_KNOWN = {"requirementLabel", "riskTracker", "reqIdField", "designDocPaths"}
 
 
 @dataclass(frozen=True)
@@ -21,6 +21,9 @@ class MappingRules:
     requirement_label: str = "유형: 요구사항"  # GitHub — 이 라벨이 붙은 이슈가 요구사항
     risk_tracker: str = "리스크"               # Redmine — 이 트래커가 risk 로 승격
     req_id_field: str = "REQ ID"               # Redmine — 도구 횡단 접착 커스텀 필드
+    # 저장소 설계 문서 경로 패턴(쉼표로 나눔, ARC-024). 기본은 비어 있다. 다른 업체 저장소가
+    # 우리와 같은 경로를 쓴다고 가정하지 않는다. 비어 있으면 설계 문서를 수집하지 않는다
+    design_doc_paths: str = ""
 
     @classmethod
     def from_json(cls, raw: Any) -> "MappingRules":
@@ -47,11 +50,18 @@ class MappingRules:
             requirement_label=cleaned.get("requirementLabel", cls.requirement_label),
             risk_tracker=cleaned.get("riskTracker", cls.risk_tracker),
             req_id_field=cleaned.get("reqIdField", cls.req_id_field),
+            design_doc_paths=cleaned.get("designDocPaths", cls.design_doc_paths),
         )
+
+    @property
+    def design_globs(self) -> list[str]:
+        return [p.strip() for p in self.design_doc_paths.split(",") if p.strip()]
 
     def to_json(self) -> dict[str, str]:
         return {
             "requirementLabel": self.requirement_label,
             "riskTracker": self.risk_tracker,
             "reqIdField": self.req_id_field,
+            # 비어 있으면 적지 않는다. 빈 문자열은 from_json 이 오타로 거른다
+            **({"designDocPaths": self.design_doc_paths} if self.design_doc_paths else {}),
         }

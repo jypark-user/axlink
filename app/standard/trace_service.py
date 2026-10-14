@@ -30,7 +30,7 @@ from app.standard.models import (
     TraceCell,
     TraceLinkResponse,
 )
-from app.standard.trace_rules import Evidence
+from app.standard.trace_rules import Evidence, Exclusion
 
 _TOOL_PREFIX = {"GITHUB": "GH", "REDMINE": "RM"}
 
@@ -38,7 +38,8 @@ _TOOL_PREFIX = {"GITHUB": "GH", "REDMINE": "RM"}
 @dataclass
 class BuildResult:
     active: int = 0     # 이번에 근거가 확인된 링크(신규 + 유지)
-    broken: int = 0     # 근거가 사라져 끊긴 것으로 표시한 링크
+    broken: int = 0     # 원천 근거가 사라져 끊긴 것으로 표시한 링크
+    superseded: int = 0  # 분류 정정으로 다른 링크에 대체됐거나 제외된 링크(ARC-024 2-5)
     unresolved: int = 0  # 근거는 있으나 가리킨 대상이 표준 모델에 없어 만들지 않은 것
     by_evidence: dict[str, int] = field(default_factory=dict)
 
@@ -67,6 +68,8 @@ def build_project_links(cur: Any, project_id: str) -> BuildResult:
 
     result = BuildResult()
     planned: dict[_Edge, tuple[Evidence, str | None]] = {}
+    excluded: dict[tuple[str, str, str, str], str] = {}
+    deleted_docs: set[str] = set()
 
     def resolve(target: tuple[str, str]) -> tuple[str, str] | None:
         ref, value = target
@@ -82,10 +85,19 @@ def build_project_links(cur: Any, project_id: str) -> BuildResult:
 
     for connection in connections:
         rules = MappingRules.from_json(connection.get("mapping_rules_json"))
-        for raw in repository.raw_artifacts_with_entities(cur, str(connection["id"])):
-            for source, evidence in _evidence_of(
-                connection["tool"], raw, rules, known_codes, known_paths
-            ):
+        raws = repository.raw_artifacts_with_entities(cur, str(connection["id"]))
+        pr_refs = _pull_request_refs(raws, rules, known_codes, known_paths)
+        for raw in raws:
+            if raw["object_kind"] == "design_doc" and (raw["payload_jsonb"] or {}).get("deleted"):
+                deleted_docs.add(str(raw["raw_id"]))
+            found, dropped = _evidence_of(
+                connection["tool"], raw, rules, known_codes, known_paths, pr_refs
+            )
+            for source, ex in dropped:
+                target = resolve(ex.target)
+                if target is not None:
+                    excluded[(source[0], source[1], target[0], target[1])] = ex.reason
+            for source, evidence in found:
                 target = resolve(evidence.target)
                 if target is None:
                     result.unresolved += 1
@@ -94,38 +106,81 @@ def build_project_links(cur: Any, project_id: str) -> BuildResult:
                 if edge is None:
                     continue
                 # 같은 변에 근거가 여럿이면 먼저 찾은 것을 남긴다. 원본 순서가 곧 우선순위다.
-                planned.setdefault(edge, (evidence, raw["external_url"]))
+                planned.setdefault(edge, (evidence, evidence.url or raw["external_url"]))
 
     kept: list[str] = []
+    replaced: dict[tuple[str, str, str, str], list[tuple[str, str]]] = {}
     for edge, (evidence, url) in planned.items():
         link_id = repository.upsert_auto_trace_link(
             cur, project_id, edge.from_type, edge.from_id, edge.to_type, edge.to_id,
-            edge.link_kind, evidence.kind, evidence.text, url,
+            edge.link_kind, evidence.kind, evidence.text, url, evidence.meta,
         )
         if link_id is None:
             continue  # 같은 변을 사람이 만들어 두었다. 자동 근거로 덮지 않는다.
         kept.append(link_id)
+        replaced.setdefault(
+            (edge.from_type, edge.from_id, edge.to_type, edge.to_id), []
+        ).append((link_id, edge.link_kind))
         result.active += 1
         result.by_evidence[evidence.kind] = result.by_evidence.get(evidence.kind, 0) + 1
 
-    result.broken = repository.break_stale_auto_links(cur, project_id, kept)
+    result.broken, result.superseded = repository.close_stale_auto_links(
+        cur, project_id, kept, replaced, excluded, deleted_docs
+    )
     return result
+
+
+def _pull_request_refs(
+    raws: list[dict[str, Any]], rules: MappingRules, known_codes: set[str], known_paths: set[str]
+) -> dict[str, set[tuple[tuple[str, str], str]]]:
+    """PR 번호 → 그 PR 이 가진 (참조, 관계). 병합 커밋이 PR 과 실제로 겹치는지 보려고 쓴다."""
+    out: dict[str, set[tuple[tuple[str, str], str]]] = {}
+    for raw in raws:
+        if raw["object_kind"] != "pull_request" or not raw["code_change_id"]:
+            continue
+        payload = raw["payload_jsonb"] or {}
+        found, _ = trace_rules.pull_request_evidence_with_exclusions(
+            payload, known_codes, known_paths, rules.design_globs
+        )
+        out[str(payload.get("number"))] = {(e.target, e.link_kind) for e in found}
+    return out
 
 
 def _evidence_of(
     tool: str, raw: dict[str, Any], rules: MappingRules,
     known_codes: set[str], known_paths: set[str],
-) -> list[tuple[tuple[str, str], Evidence]]:
-    """원본 하나에서 (출발점, 근거) 쌍을 뽑는다. 승격되지 않은 원본은 출발점이 없다."""
+    pr_refs: dict[str, set[tuple[tuple[str, str], str]]] | None = None,
+) -> tuple[list[tuple[tuple[str, str], Evidence]], list[tuple[tuple[str, str], Exclusion]]]:
+    """원본 하나에서 (출발점, 근거) 쌍과 분류가 일부러 뺀 근거를 뽑는다.
+
+    승격되지 않은 원본은 출발점이 없다. 저장소 설계 문서는 승격하지 않고 원본 자체가 출발점이다.
+    """
     payload, kind = raw["payload_jsonb"], raw["object_kind"]
+    dropped: list[Exclusion] = []
 
     if tool == "GITHUB":
-        if kind == "commit" and raw["code_change_id"]:
+        if kind == "design_doc":
+            source = ("REPO_DOCUMENT", str(raw["raw_id"]))
+            found = trace_rules.design_doc_evidence(payload, known_codes)
+        elif kind == "commit" and raw["code_change_id"]:
             source = ("CODE_CHANGE", str(raw["code_change_id"]))
-            found = trace_rules.commit_evidence(payload, known_codes, known_paths)
+            found, dropped = trace_rules.commit_evidence_with_exclusions(
+                payload, known_codes, known_paths, rules.design_globs
+            )
+            pr = trace_rules.merged_pr_number(payload)
+            if pr is not None and pr in (pr_refs or {}):
+                # 같은 PR 이 같은 참조·관계를 이미 가진 것만 뺀다. PR 에 없는 근거는 남긴다
+                same = pr_refs[pr]
+                dropped += [
+                    Exclusion(e.target, e.link_kind, f"병합 커밋: PR #{pr} 와 같은 근거")
+                    for e in found if (e.target, e.link_kind) in same
+                ]
+                found = [e for e in found if (e.target, e.link_kind) not in same]
         elif kind == "pull_request" and raw["code_change_id"]:
             source = ("CODE_CHANGE", str(raw["code_change_id"]))
-            found = trace_rules.pull_request_evidence(payload, known_codes, known_paths)
+            found, dropped = trace_rules.pull_request_evidence_with_exclusions(
+                payload, known_codes, known_paths, rules.design_globs
+            )
         elif kind == "issue" and raw["requirement_id"]:
             source = ("REQUIREMENT", str(raw["requirement_id"]))
             found = trace_rules.requirement_issue_evidence(payload, known_paths)
@@ -133,18 +188,18 @@ def _evidence_of(
             source = ("ISSUE", str(raw["issue_id"]))
             found = trace_rules.github_issue_evidence(payload, known_codes, known_paths)
         else:
-            return []
+            return [], []
     elif tool == "REDMINE" and kind == "issue":
         if raw["issue_id"]:
             source = ("ISSUE", str(raw["issue_id"]))
         elif raw["risk_id"]:
             source = ("RISK", str(raw["risk_id"]))
         else:
-            return []
+            return [], []
         found = trace_rules.redmine_issue_evidence(payload, rules, known_codes, known_paths)
     else:
-        return []
-    return [(source, e) for e in found]
+        return [], []
+    return [(source, e) for e in found], [(source, x) for x in dropped]
 
 
 def _edge(
@@ -239,10 +294,21 @@ def traceability_rows(
     cells: dict[str, dict[str, list[TraceCell]]] = {}
     broken: dict[str, list[str]] = {}
     for lk in links:
+        if lk["status"] == "SUPERSEDED":
+            # 분류 정정으로 대체·제외된 링크는 칸에서 뺀다. 상세 목록에는 사유와 함께 남는다
+            continue
         rid = str(lk["to_id"])
         label, url = labels.get((lk["from_type"], str(lk["from_id"])), ("?", None))
+        meta = lk.get("evidence_meta") or {}
+        if lk["from_type"] == "REPO_DOCUMENT":
+            label = meta.get("docId") or label
+            url = lk["evidence_url"] or url  # 그 커밋의 그 줄
         cells.setdefault(rid, {}).setdefault(lk["link_kind"], []).append(
-            TraceCell(targetId=str(lk["from_id"]), label=label, externalUrl=url)
+            TraceCell(
+                targetId=str(lk["from_id"]), label=label, externalUrl=url,
+                sourceType=lk["from_type"], docStatus=meta.get("docStatus"),
+                section=meta.get("section"), qualifier=meta.get("qualifier"),
+            )
         )
         if lk["status"] == "BROKEN" and lk["link_kind"] not in broken.setdefault(rid, []):
             broken[rid].append(lk["link_kind"])
@@ -322,6 +388,12 @@ def requirement_detail(
                 evidenceText=lk["evidence_text"],
                 externalUrl=lk["evidence_url"],
                 createdAt=lk["created_at"].isoformat(),
+                evidenceMeta=lk.get("evidence_meta"),
+                statusReason=lk.get("status_reason"),
+                statusChangedAt=(
+                    lk["status_changed_at"].isoformat() if lk.get("status_changed_at") else None
+                ),
+                supersededBy=str(lk["superseded_by"]) if lk.get("superseded_by") else None,
             )
             for lk in links
         ],

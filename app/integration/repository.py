@@ -341,3 +341,46 @@ def redmine_issue_payloads(cur: Any, project_id: str) -> list[dict[str, Any]]:
         (project_id,),
     )
     return [{**(r["payload"] or {}), "_base_url": r["base_url"]} for r in rows]
+
+
+def raw_payload(cur: Any, connection_id: str, external_id: str) -> dict[str, Any] | None:
+    row = fetch_one(
+        cur,
+        "select payload_jsonb from raw_artifact where tool_connection_id = %s and external_id = %s",
+        (connection_id, external_id),
+    )
+    return None if row is None else row["payload_jsonb"]
+
+
+def raw_payloads_by_kind(cur: Any, connection_id: str, kind: str) -> dict[str, dict[str, Any]]:
+    rows = fetch_all(
+        cur,
+        "select external_id, payload_jsonb from raw_artifact "
+        "where tool_connection_id = %s and object_kind = %s",
+        (connection_id, kind),
+    )
+    return {r["external_id"]: r["payload_jsonb"] for r in rows}
+
+
+def raw_changes_without_files(cur: Any, connection_id: str) -> list[dict[str, Any]]:
+    """변경 파일을 아직 받지 않은 커밋·PR. 최근 것부터(새 분류가 먼저 쓰인다)."""
+    return fetch_all(
+        cur,
+        """
+        select external_id, object_kind, payload_jsonb from raw_artifact
+         where tool_connection_id = %s and object_kind in ('commit', 'pull_request')
+           and not (payload_jsonb ? 'files')
+         order by fetched_at desc, external_id
+        """,
+        (connection_id,),
+    )
+
+
+def count_changes_with_files(cur: Any, connection_id: str) -> int:
+    row = fetch_one(
+        cur,
+        "select count(*) as n from raw_artifact where tool_connection_id = %s "
+        "and object_kind in ('commit', 'pull_request') and payload_jsonb ? 'files'",
+        (connection_id,),
+    )
+    return int(row["n"]) if row else 0

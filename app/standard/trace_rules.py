@@ -12,6 +12,7 @@ import re
 from dataclasses import dataclass
 from typing import Any
 
+from app.standard import design_refs
 from app.standard.mapping_rules import MappingRules
 
 # 요구사항 코드의 꼴. 우리 체계(SWFR.CON.004)뿐 아니라 점으로 이어진 대문자 묶음이면 후보로
@@ -44,6 +45,9 @@ CUSTOM_FIELD = "CUSTOM_FIELD"
 ISSUE_RELATION = "ISSUE_RELATION"
 
 
+DOC_REQ_REF = "DOC_REQ_REF"
+
+
 @dataclass(frozen=True)
 class Evidence:
     """근거 하나. target 은 아직 표준 모델의 id 가 아니라 원문에 적힌 참조다."""
@@ -52,6 +56,18 @@ class Evidence:
     text: str
     target: tuple[str, str]  # ("REQ", 코드) | ("GH", 번호) | ("RM", 번호) | ("FILE", 경로)
     link_kind: str
+    # 근거 위치(설계 문서의 경로·커밋·줄 등). 대부분의 근거는 원문 URL 하나로 충분해 비어 있다
+    meta: dict[str, Any] | None = None
+    url: str | None = None  # 원본 URL 대신 쓸 주소(설계 문서의 그 줄)
+
+
+@dataclass(frozen=True)
+class Exclusion:
+    """분류 규칙이 일부러 뺀 근거. 옛 링크를 '끊김'이 아니라 '제외'로 표시하려고 남긴다."""
+
+    target: tuple[str, str]
+    link_kind: str
+    reason: str
 
 
 def _clip(text: str) -> str:
@@ -102,10 +118,65 @@ def file_paths(text: str, known_paths: set[str]) -> list[tuple[str, str]]:
 
 
 def commit_link_kind(message: str) -> str:
-    """커밋 제목의 유형이 test 면 시험, 아니면 구현이다."""
+    """변경 파일을 모를 때의 분류. 커밋 제목의 유형이 test 면 시험, 아니면 구현이다."""
     first = (message or "").strip().splitlines()[0] if (message or "").strip() else ""
     matched = _COMMIT_TYPE.match(first)
     return TESTS if matched and matched.group(1) == "test" else IMPLEMENTS
+
+
+# 변경 파일 분류(ARC-024 2-3). 경로 관례만 쓴다. 관례를 벗어나면 "코드"로 읽힌다.
+_TEST_FILE = re.compile(
+    r"(^|/)(tests?)/|(^|/)test_[^/]+\.py$|_test\.py$|\.(test|spec)\.[cm]?[jt]sx?$"
+)
+_DOC_EXT = (".md", ".txt", ".docx", ".doc", ".xlsx", ".xls", ".pptx", ".pdf", ".hwp", ".hwpx",
+            ".csv")
+
+
+def file_category(path: str, design_globs: list[str]) -> str:
+    """'design' | 'test' | 'doc' | 'code'."""
+    if design_globs and design_refs.match_any(path, design_globs):
+        return "design"
+    if _TEST_FILE.search(path):
+        return "test"
+    if path.startswith("docs/") or path.lower().endswith(_DOC_EXT):
+        return "doc"
+    return "code"
+
+
+def change_link_kinds(
+    title: str, files: list[str] | None, design_globs: list[str]
+) -> tuple[list[str], str | None]:
+    """변경 하나가 요구사항에 어떤 관계로 이어지는가. (관계 목록, 아무것도 없을 때 사유).
+
+    변경 파일을 모르면 지금 규칙(제목 유형)을 그대로 쓴다. 알면 파일이 말한다. 섞여 있으면
+    관계가 여럿이다. 제목 유형(docs·test)만으로는 정하지 않는다.
+    """
+    if files is None:
+        return [commit_link_kind(title)], None
+    cats = {file_category(f, design_globs) for f in files}
+    order = (("code", IMPLEMENTS), ("test", TESTS), ("design", DESIGNS))
+    kinds = [kind for cat, kind in order if cat in cats]
+    if kinds:
+        return kinds, None
+    if cats == {"doc"}:
+        return [], "관리·매뉴얼 문서만 바꾼 변경이라 구현으로 세지 않음"
+    return [], "변경 파일이 없음"
+
+
+def _files_of(payload: dict[str, Any]) -> list[str] | None:
+    files = payload.get("files")
+    if not isinstance(files, list):
+        return None
+    return [str(f.get("filename") or f) if isinstance(f, dict) else str(f) for f in files]
+
+
+def merged_pr_number(payload: dict[str, Any]) -> str | None:
+    """`Merge pull request #n` 병합 커밋이면 n. 아니면 None."""
+    message = (payload.get("commit") or {}).get("message") or ""
+    if len(payload.get("parents") or []) < 2:
+        return None
+    m = re.match(r"^Merge pull request #(\d+)\b", message.strip())
+    return m.group(1) if m else None
 
 
 def _kind_by_name(name: str | None) -> str:
@@ -153,20 +224,85 @@ def _from_text(
     return found
 
 
+def _change_evidence(
+    text: str, title: str, files: list[str] | None, design_globs: list[str],
+    known_codes: set[str], known_paths: set[str],
+) -> tuple[list[Evidence], list[Exclusion]]:
+    kinds, reason = change_link_kinds(title, files, design_globs)
+    found: list[Evidence] = []
+    excluded: list[Exclusion] = []
+    refs = _from_text(text, IMPLEMENTS, known_codes, known_paths, True)
+    for e in refs:
+        if e.link_kind == DELIVERS:
+            found.append(e)  # 산출물 경로 근거는 분류와 무관하게 납품으로 잇는다
+            continue
+        if not kinds:
+            excluded.append(Exclusion(e.target, IMPLEMENTS, reason or "분류 제외"))
+            continue
+        for kind in kinds:
+            found.append(Evidence(e.kind, e.text, e.target, kind))
+    return found, excluded
+
+
 def commit_evidence(
-    payload: dict[str, Any], known_codes: set[str], known_paths: set[str]
+    payload: dict[str, Any], known_codes: set[str], known_paths: set[str],
+    design_globs: list[str] | None = None,
 ) -> list[Evidence]:
     """GitHub 커밋. 제목·본문 전체를 본다. 본문은 code_change 에 없고 원본에만 있다."""
+    return commit_evidence_with_exclusions(payload, known_codes, known_paths, design_globs)[0]
+
+
+def commit_evidence_with_exclusions(
+    payload: dict[str, Any], known_codes: set[str], known_paths: set[str],
+    design_globs: list[str] | None = None,
+) -> tuple[list[Evidence], list[Exclusion]]:
     message = ((payload.get("commit") or {}).get("message") or "")
-    return _from_text(message, commit_link_kind(message), known_codes, known_paths, True)
+    title = message.strip().splitlines()[0] if message.strip() else ""
+    return _change_evidence(message, title, _files_of(payload), design_globs or [],
+                            known_codes, known_paths)
 
 
 def pull_request_evidence(
-    payload: dict[str, Any], known_codes: set[str], known_paths: set[str]
+    payload: dict[str, Any], known_codes: set[str], known_paths: set[str],
+    design_globs: list[str] | None = None,
 ) -> list[Evidence]:
-    text = f"{payload.get('title') or ''}\n{payload.get('body') or ''}"
-    return _from_text(text, commit_link_kind(payload.get("title") or ""),
-                      known_codes, known_paths, True)
+    return pull_request_evidence_with_exclusions(
+        payload, known_codes, known_paths, design_globs)[0]
+
+
+def pull_request_evidence_with_exclusions(
+    payload: dict[str, Any], known_codes: set[str], known_paths: set[str],
+    design_globs: list[str] | None = None,
+) -> tuple[list[Evidence], list[Exclusion]]:
+    title = payload.get("title") or ""
+    text = f"{title}\n{payload.get('body') or ''}"
+    return _change_evidence(text, title, _files_of(payload), design_globs or [],
+                            known_codes, known_paths)
+
+
+def design_doc_evidence(payload: dict[str, Any], known_codes: set[str]) -> list[Evidence]:
+    """저장소 설계 문서의 명시적 참조(ARC-024 2-1). 삭제된 문서는 근거가 없다."""
+    if payload.get("deleted") or not payload.get("text"):
+        return []
+    info = design_refs.parse(payload["text"], known_codes)
+    base = payload.get("html_url") or ""
+    out: list[Evidence] = []
+    # 한 문서는 요구사항마다 링크 하나다. 같은 코드를 여러 곳에서 가리키면 한정어("미결")가 붙은
+    # 참조를 앞에 둔다. 대응표 행이 먼저 잡혀 미결 표시가 사라지는 것을 막는다
+    ordered = sorted(info.refs, key=lambda r: (r.qualifier is None, r.line_no))
+    for ref in ordered:
+        meta = {
+            "repo": payload.get("repo"), "path": payload.get("path"),
+            "commitSha": payload.get("commit_sha"), "blobSha": payload.get("blob_sha"),
+            "line": ref.line_no, "section": ref.section, "form": ref.form,
+            "qualifier": ref.qualifier, "docId": info.doc_id,
+            "docStatus": info.status, "docStatusText": info.status_text,
+        }
+        out.append(Evidence(
+            DOC_REQ_REF, _clip(ref.line), ("REQ", ref.code), DESIGNS, meta,
+            f"{base}#L{ref.line_no}" if base else None,
+        ))
+    return out
 
 
 def github_issue_evidence(

@@ -12,6 +12,7 @@
 화면에는 아무것도 없는 상태를 만들지 않기 위해서다.
 """
 
+import base64
 from datetime import UTC, datetime
 from typing import Any
 
@@ -19,8 +20,9 @@ from app.ai.embedding import embedding_port
 from app.common import crypto, errors
 from app.config import settings
 from app.integration import port, repository
+from app.standard import design_refs, trace_service
 from app.standard import service as standard
-from app.standard import trace_service
+from app.standard.mapping_rules import MappingRules
 
 _EPOCH = datetime(1970, 1, 1, tzinfo=UTC)
 _PER_PAGE = 50
@@ -61,6 +63,7 @@ def run_sync(cur: Any, connection: dict[str, Any], retry_of: str | None = None) 
                     base, target, token, kind, _PER_PAGE, _MAX_PAGES, since=since
                 ):
                     stats["fetched"] += 1
+                    _carry_files(cur, cid, external_id, kind, payload)
                     # 원본이 이전과 같으면 적재하지 않는다. upserted 는 원본이 아니라
                     # 표준 모델 반영 건수로 쓴다(화면 라벨이 "반영"이다).
                     if not repository.upsert_raw_artifact(
@@ -91,6 +94,8 @@ def run_sync(cur: Any, connection: dict[str, Any], retry_of: str | None = None) 
         return job_id
 
     denied += _collect_files(cur, cid, connector, base, target, token, job_id, stats)
+    rules = MappingRules.from_json(connection.get("mapping_rules_json"))
+    _collect_details(cur, cid, connector, base, target, token, job_id, stats, rules)
 
     promoted = standard.promote_connection(cur, connection, embedding_port())
     stats["upserted"] = promoted.upserted
@@ -148,3 +153,131 @@ def _collect_files(
         ):
             stats["skippedUnchanged"] += 1
     return skipped
+
+
+# ─── 변경 파일과 저장소 설계 문서 (ARC-024 2-6) ──────────────────────────────
+
+
+def _carry_files(cur: Any, cid: str, external_id: str, kind: str, payload: dict) -> None:
+    """증분 수집이 커밋·PR 원본을 다시 받으면 목록 응답에는 변경 파일이 없다. 이미 받아 둔 것을
+    이어 붙인다. 커밋은 SHA 가 같으면 내용이 같고, PR 은 head SHA 가 같을 때만 잇는다."""
+    if kind not in ("commit", "pull_request") or "files" in payload:
+        return
+    old = repository.raw_payload(cur, cid, external_id)
+    if not old or not isinstance(old.get("files"), list):
+        return
+    if kind == "pull_request" and (old.get("head") or {}).get("sha") != (
+        payload.get("head") or {}
+    ).get("sha"):
+        return
+    payload["files"] = old["files"]
+
+
+def _collect_details(
+    cur: Any, cid: str, connector: Any, base: str, target: str, token: str, job_id: str,
+    stats: dict[str, int], rules: MappingRules,
+) -> None:
+    """설계 문서와 변경 파일을 필요한 만큼만 받는다. 실패는 삭제·끊김이 아니다.
+
+    차례로 하나씩 부른다. 남은 호출 한도가 낮거나 레이트리밋이면 멈추고 다음 회차로 넘긴다.
+    호출 수는 잡 통계에 남긴다(요청·그대로·실패·삭제).
+    """
+    for key in ("docCalls", "docUnchanged", "docFailed", "docDeleted",
+                "fileCalls", "fileCached", "fileFailed", "rateLimitStop"):
+        stats.setdefault(key, 0)
+    try:
+        if rules.design_globs and hasattr(connector, "fetch_file"):
+            _collect_design_docs(cur, cid, connector, base, target, token, job_id, stats,
+                                 rules.design_globs)
+        if settings.collect_change_files and hasattr(connector, "fetch_change_files"):
+            _collect_change_files(cur, cid, connector, base, target, token, job_id, stats)
+    except errors.ApiError as exc:
+        if exc.code != "TOOL_RATE_LIMITED":
+            raise
+        stats["rateLimitStop"] = 1  # 받은 것까지만 쓴다. 남은 것은 다음 회차
+
+
+def _collect_design_docs(
+    cur: Any, cid: str, connector: Any, base: str, target: str, token: str, job_id: str,
+    stats: dict[str, int], globs: list[str],
+) -> None:
+    tree = repository.raw_payload(cur, cid, "tree:HEAD")
+    if not tree or not isinstance(tree.get("blobs"), dict):
+        return  # 트리를 아직 못 받았다. 문서를 지운 것으로 보지 않는다
+    commit = tree.get("commit")
+    blobs = {p: s for p, s in tree["blobs"].items() if design_refs.match_any(p, globs)}
+    existing = repository.raw_payloads_by_kind(cur, cid, "design_doc")
+    html_base = str(tree.get("html_url") or "")
+
+    fetched = 0
+    for path, blob in sorted(blobs.items()):
+        old = existing.get(f"doc:{path}")
+        if old and old.get("blob_sha") == blob and not old.get("deleted"):
+            stats["docUnchanged"] += 1
+            continue
+        if fetched >= settings.design_doc_fetch_limit:
+            break
+        fetched += 1
+        stats["docCalls"] += 1
+        try:
+            got = connector.fetch_file(base, target, token, path, commit or None)
+        except errors.ApiError as exc:
+            if exc.code == "TOOL_RATE_LIMITED":
+                raise
+            stats["docFailed"] += 1  # 이전 원본과 링크를 그대로 둔다
+            continue
+        if got is None:
+            stats["docFailed"] += 1  # 트리에는 있는데 못 읽었다. 삭제로 보지 않는다
+            continue
+        try:
+            text = base64.b64decode(got.get("content") or "").decode("utf-8")
+        except (ValueError, UnicodeDecodeError):
+            stats["docFailed"] += 1
+            continue
+        payload = {
+            # 비교 기준은 트리의 blob SHA 다(같은 커밋이면 contents 의 sha 와 같다)
+            "repo": target, "path": path, "commit_sha": commit, "blob_sha": blob,
+            "html_url": f"{html_base}{path}" if html_base else got.get("htmlUrl"),
+            "text": text, "deleted": False,
+        }
+        repository.upsert_raw_artifact(cur, cid, f"doc:{path}", "design_doc", payload, job_id)
+
+    # 트리에서 빠진 문서만 삭제로 본다. 트리가 잘렸으면 판단하지 않는다(이동은 삭제 + 추가)
+    if tree.get("truncated"):
+        return
+    for external_id, old in existing.items():
+        path = external_id.removeprefix("doc:")
+        if path in blobs or old.get("deleted"):
+            continue
+        if path in tree["blobs"]:
+            continue  # 저장소에는 있는데 패턴에서 빠졌다. 지운 게 아니다
+        stats["docDeleted"] += 1
+        repository.upsert_raw_artifact(
+            cur, cid, external_id, "design_doc",
+            {**old, "deleted": True, "deleted_at_commit": commit}, job_id,
+        )
+
+
+def _collect_change_files(
+    cur: Any, cid: str, connector: Any, base: str, target: str, token: str, job_id: str,
+    stats: dict[str, int],
+) -> None:
+    rows = repository.raw_changes_without_files(cur, cid)
+    stats["fileCached"] = repository.count_changes_with_files(cur, cid)
+    for row in rows[: settings.change_files_fetch_limit]:
+        payload = row["payload_jsonb"]
+        kind = row["object_kind"]
+        ident = payload.get("sha") if kind == "commit" else str(payload.get("number") or "")
+        if not ident:
+            continue
+        stats["fileCalls"] += 1
+        files, left = connector.fetch_change_files(base, target, token, kind, ident)
+        if files is None:
+            stats["fileFailed"] += 1  # 모르는 채로 둔다. 다음 회차에 다시 받는다
+        else:
+            repository.upsert_raw_artifact(
+                cur, cid, row["external_id"], kind, {**payload, "files": files}, job_id
+            )
+        if left is not None and left < settings.github_min_remaining:
+            stats["rateLimitStop"] = 1
+            return
