@@ -11,10 +11,18 @@ from pydantic import BaseModel
 from app.auth.deps import Principal
 from app.common.paging import PageQuery, PageResponse
 from app.db import tx
-from app.standard import approval, repository, service, trace_service
+from app.standard import (
+    approval,
+    repository,
+    requirement_decision,
+    service,
+    trace_service,
+)
 from app.standard.models import (
     IssueResponse,
     IssueSummaryResponse,
+    RequirementDecisionRequest,
+    RequirementDecisionRevertRequest,
     RequirementDetailResponse,
     RequirementResponse,
     RequirementSummaryResponse,
@@ -69,6 +77,35 @@ def requirement_detail(
 ) -> RequirementDetailResponse:
     """요구사항 하나와 걸린 링크 전부. 링크마다 근거 원문과 위치가 붙는다."""
     with tx() as cur:
+        return trace_service.requirement_detail(cur, principal, project_id, requirement_id)
+
+
+@router.put(
+    "/{project_id}/requirements/{requirement_id}/status",
+    response_model=RequirementDetailResponse,
+)
+def decide_requirement_status(
+    project_id: str, requirement_id: str, req: RequirementDecisionRequest, principal: Principal
+) -> RequirementDetailResponse:
+    """발주기관이 요구사항 상태를 사유와 함께 지정한다(ARC-025). 근거 상태는 따로 남는다."""
+    with tx() as cur:
+        requirement_decision.decide(
+            cur, principal, project_id, requirement_id, req.status, req.reason
+        )
+        return trace_service.requirement_detail(cur, principal, project_id, requirement_id)
+
+
+@router.post(
+    "/{project_id}/requirements/{requirement_id}/status/revert",
+    response_model=RequirementDetailResponse,
+)
+def revert_requirement_status(
+    project_id: str, requirement_id: str, req: RequirementDecisionRevertRequest,
+    principal: Principal,
+) -> RequirementDetailResponse:
+    """지정을 거두고 근거 상태로 되돌린다."""
+    with tx() as cur:
+        requirement_decision.revert(cur, principal, project_id, requirement_id, req.reason)
         return trace_service.requirement_detail(cur, principal, project_id, requirement_id)
 
 

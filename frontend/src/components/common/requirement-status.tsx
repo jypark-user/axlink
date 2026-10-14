@@ -15,6 +15,14 @@ export function RequirementStatusBadge({
   if (!note) {
     return <Badge variant={badgeVariantFor(status)}>{text}</Badge>;
   }
+  if (basis === 'CLIENT_DECIDED') {
+    return (
+      <span className="inline-flex flex-col items-start gap-0.5">
+        <Badge variant={badgeVariantFor(status)}>{text}</Badge>
+        <span className="text-primary text-[11px] leading-none">{note}</span>
+      </span>
+    );
+  }
   return (
     <span
       className="inline-flex flex-col items-start gap-0.5"

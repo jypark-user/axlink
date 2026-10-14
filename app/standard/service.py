@@ -20,7 +20,13 @@ from app.common.paging import PageQuery, PageResponse
 from app.config import settings
 from app.db import fetch_all
 from app.rag import indexing
-from app.standard import mapping, mapping_redmine, repository, work_product_type
+from app.standard import (
+    mapping,
+    mapping_redmine,
+    repository,
+    requirement_decision,
+    work_product_type,
+)
 from app.standard.mapping_rules import MappingRules
 from app.standard.models import (
     IssueResponse,
@@ -227,7 +233,9 @@ def list_requirements(
             source=_source_ref(r),
             traceComplete=r["trace_complete"],
             updatedAt=r["updated_at"].isoformat(),
-            statusBasis=mapping.requirement_status_basis(r["status"], r["tool_name"]),
+            statusBasis=requirement_decision.status_basis(r),
+            evidenceStatus=r["evidence_status"],
+            decision=requirement_decision.decision_of(r),
         )
         for r in rows
     ]

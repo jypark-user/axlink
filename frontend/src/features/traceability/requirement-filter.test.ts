@@ -67,6 +67,7 @@ describe('구현 칸 설명', () => {
     verified: 0,
     notVerified: 41,
     verifiedRate: 0,
+    decided: 0,
     sources: [],
   };
   const byStatus = (implemented: number) => [
