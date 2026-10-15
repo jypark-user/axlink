@@ -37,15 +37,37 @@ _ERROR_CODE = {
 }
 
 
-def run_sync(cur: Any, connection: dict[str, Any], retry_of: str | None = None) -> str:
+def _fail_if_core_denied(connector: Any, denied: list[str]) -> None:
+    """권한이 빠진 항목이 수집의 본체면 부분 성공이 아니라 실패다.
+
+    모든 항목이 막혔거나(키가 무효, 프로젝트 접근 없음) 커넥터가 필수로 둔 항목이 막히면
+    "성공 · 0건" 처럼 보이지 않게 실패로 끝낸다. 앞서 받은 데이터는 지우지 않는다.
+    """
+    required = set(getattr(connector, "required_kinds", ()))
+    blocked = sorted(required & set(denied))
+    if denied and (blocked or set(denied) >= set(connector.item_kinds)):
+        names = ", ".join(blocked or denied)
+        raise errors.ApiError(
+            403, "TOOL_AUTH",
+            f"인증이 거부되었거나 읽기 권한이 없어 수집하지 못했습니다: {names}. "
+            "연결 테스트로 토큰·권한을 확인해 주세요.",
+        )
+
+
+def run_sync(
+    cur: Any, connection: dict[str, Any], retry_of: str | None = None, full: bool = False
+) -> str:
     """수집을 실행하고 sync_job id 를 돌려준다. 첫 회는 전체, 이후는 증분이다.
+
+    full 이면 커서를 무시하고 처음부터 다시 읽는다(화면의 "전체 수집"). 원본 키 규칙이
+    바뀌었거나 증분으로는 다시 오지 않는 항목을 되살릴 때 쓴다.
 
     재시도도 새 잡이다. 실패한 잡은 그대로 두고 retry_of 로 잇는다. 커서는 마지막
     성공 잡 기준이라 실패한 회차의 범위를 자연히 다시 읽는다.
     """
     now = datetime.now(UTC)
     cid = str(connection["id"])
-    since = repository.last_success_cursor(cur, cid)
+    since = None if full else repository.last_success_cursor(cur, cid)
     job_id = repository.insert_sync_job(
         cur, cid, "POLL" if since else "BACKFILL", since or _EPOCH, now, retry_of
     )
@@ -76,6 +98,7 @@ def run_sync(cur: Any, connection: dict[str, Any], retry_of: str | None = None) 
                     denied.append(kind)
                 else:
                     raise
+        _fail_if_core_denied(connector, denied)
     except errors.ApiError as exc:
         finished = datetime.now(UTC)
         repository.finish_sync_job(

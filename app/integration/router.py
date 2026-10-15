@@ -3,7 +3,10 @@
 경로가 /projects/{id}/connections 와 /connections/{id} 두 갈래라 라우터를 하나로 둔다.
 """
 
+from typing import Literal
+
 from fastapi import APIRouter, Query, Response
+from pydantic import BaseModel
 
 from app.auth.deps import Principal
 from app.common.paging import PageQuery, PageResponse
@@ -86,10 +89,20 @@ def delete_connection(connection_id: str, principal: Principal) -> Response:
     return Response(status_code=204)
 
 
+class SyncTriggerRequest(BaseModel):
+    """BACKFILL 이면 처음부터 다시 읽는다(화면의 "전체 수집"). 비우면 증분."""
+
+    kind: Literal["BACKFILL", "POLL"] | None = None
+
+
 @router.post("/connections/{connection_id}/sync", response_model=SyncJobResponse, status_code=202)
-def trigger_sync(connection_id: str, principal: Principal) -> SyncJobResponse:
+def trigger_sync(
+    connection_id: str, principal: Principal, req: SyncTriggerRequest | None = None
+) -> SyncJobResponse:
     with tx() as cur:
-        return service.trigger_sync(cur, principal, connection_id)
+        return service.trigger_sync(
+            cur, principal, connection_id, full=bool(req and req.kind == "BACKFILL")
+        )
 
 
 @router.post("/sync-jobs/{job_id}/retry", response_model=SyncJobResponse, status_code=202)
