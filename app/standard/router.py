@@ -4,6 +4,7 @@
 """
 
 from typing import Literal
+from uuid import UUID
 
 from fastapi import APIRouter, Query, Response
 from pydantic import BaseModel
@@ -129,24 +130,33 @@ def list_issues(
     principal: Principal,
     q: str | None = None,
     status: str | None = None,
+    connectionId: UUID | None = None,  # noqa: N803 — 화면 계약 이름
     page: int = Query(default=0, ge=0),
     size: int = Query(default=20, ge=1, le=200),
 ) -> PageResponse[IssueResponse]:
     """일반 이슈 화면. 도구에서 승격된 작업·결함이 여기로 나온다.
 
     요구사항으로 분류된 원천 이슈는 requirements 로 간다. 여기 없다.
+    connectionId 는 사업 안에서만 거른다. 사업 접근 검사는 그대로 먼저 한다.
     """
     with tx() as cur:
         return service.list_issues(
-            cur, principal, project_id, q, status, PageQuery(page=page, size=size)
+            cur, principal, project_id, q, status, PageQuery(page=page, size=size),
+            str(connectionId) if connectionId else None,
         )
 
 
 @router.get("/{project_id}/issues/summary", response_model=IssueSummaryResponse)
-def issue_summary(project_id: str, principal: Principal) -> IssueSummaryResponse:
+def issue_summary(
+    project_id: str,
+    principal: Principal,
+    connectionId: UUID | None = None,  # noqa: N803
+) -> IssueSummaryResponse:
     """일반 이슈 화면 카드. 목록 페이지와 상관없이 사업 전체를 센다."""
     with tx() as cur:
-        return service.issue_summary(cur, principal, project_id)
+        return service.issue_summary(
+            cur, principal, project_id, str(connectionId) if connectionId else None
+        )
 
 
 class RejectRequest(BaseModel):

@@ -10,6 +10,10 @@ class SourceRef(BaseModel):
     connectionId: str | None  # noqa: N815 — 프런트 계약 필드명
     externalId: str | None  # noqa: N815
     externalUrl: str | None  # noqa: N815
+    # 같은 도구의 연결이 여럿이면 tool 만으로는 어디서 왔는지 모른다(GH-140)
+    connectionName: str | None = None  # noqa: N815
+    target: str | None = None  # 저장소(owner/repo)나 Redmine 프로젝트 식별자
+    number: str | None = None  # 원천 번호. externalId 의 종류 접두(issue: 등)를 뗀 것
 
 
 class RequirementDecision(BaseModel):
@@ -68,6 +72,17 @@ class IssueSummaryResponse(BaseModel):
     heavyOpen: int  # noqa: N815 — 열린 것 중 BLOCKER · CRITICAL · MAJOR
     unassignedOpen: int  # noqa: N815 — 열린 것 중 담당 없음
     unspecifiedOpen: int = 0  # noqa: N815 — 열린 것 중 심각도 미지정. 고위험에서 빼고 따로 센다
+    sources: list["IssueSourceCount"] = []  # 연결 고르기. 연결을 골라 물어도 사업 전체를 낸다
+
+
+class IssueSourceCount(BaseModel):
+    """이슈 화면 연결 고르기 한 줄. connectionId 가 없으면 도구에서 오지 않은 이슈다."""
+
+    connectionId: str | None  # noqa: N815
+    tool: str | None
+    name: str | None
+    target: str | None
+    count: int
 
 
 class WorkProductResponse(BaseModel):

@@ -30,6 +30,7 @@ from app.standard import (
 from app.standard.mapping_rules import MappingRules
 from app.standard.models import (
     IssueResponse,
+    IssueSourceCount,
     IssueSummaryResponse,
     RequirementResponse,
     SourceRef,
@@ -205,7 +206,17 @@ def _source_ref(row: dict[str, Any]) -> SourceRef:
         connectionId=str(row["tool_connection_id"]) if row["tool_connection_id"] else None,
         externalId=row["external_id"],
         externalUrl=row["external_url"],
+        connectionName=row.get("connection_name"),
+        target=row.get("target_resource"),
+        number=_source_number(row["external_id"]),
     )
+
+
+def _source_number(external_id: str | None) -> str | None:
+    """GitHub 은 'issue:12', Redmine 일감은 '12' 로 들어온다. 화면에는 번호만 낸다."""
+    if not external_id:
+        return None
+    return external_id.rsplit(":", 1)[-1]
 
 
 def list_requirements(
@@ -251,11 +262,11 @@ def _check_project(cur: Any, principal: AuthPrincipal, project_id: str) -> None:
 
 
 def issue_summary(
-    cur: Any, principal: AuthPrincipal, project_id: str
+    cur: Any, principal: AuthPrincipal, project_id: str, connection_id: str | None = None
 ) -> IssueSummaryResponse:
     """이슈 화면 카드. 목록(list_issues)과 같은 권한 검사, 같은 사업 범위다."""
     _check_project(cur, principal, project_id)
-    n = repository.issue_summary(cur, project_id)
+    n = repository.issue_summary(cur, project_id, connection_id)
     return IssueSummaryResponse(
         total=n["total"],
         open=n["open"],
@@ -263,6 +274,16 @@ def issue_summary(
         heavyOpen=n["heavy_open"],
         unassignedOpen=n["unassigned_open"],
         unspecifiedOpen=n["unspecified_open"],
+        sources=[
+            IssueSourceCount(
+                connectionId=str(r["connection_id"]) if r["connection_id"] else None,
+                tool=r["tool"],
+                name=r["name"],
+                target=r["target_resource"],
+                count=int(r["n"]),
+            )
+            for r in repository.issue_sources(cur, project_id)
+        ],
     )
 
 
@@ -273,11 +294,12 @@ def list_issues(
     q: str | None,
     status: str | None,
     page: PageQuery,
+    connection_id: str | None = None,
 ) -> PageResponse[IssueResponse]:
     _check_project(cur, principal, project_id)
 
-    total = repository.count_issues(cur, project_id, q, status)
-    rows = repository.search_issues(cur, project_id, q, status, page)
+    total = repository.count_issues(cur, project_id, q, status, connection_id)
+    rows = repository.search_issues(cur, project_id, q, status, page, connection_id)
     content = [
         IssueResponse(
             id=str(r["id"]),
