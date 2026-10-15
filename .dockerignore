@@ -19,6 +19,14 @@ dist
 *.egg-info
 var
 test-results
+# DB 덤프·볼륨 tar·인증서·키·시험 계정 파일은 어디에 있든 넣지 않는다(이미지 빌드 CI 가 문맥을 검사한다)
+**/*.dump
+**/*.tar
+**/*.tar.gz
+**/*.pem
+**/*.key
+**/*.p12
+**/*accounts*.env
 _to_delete
 docs
 # 앱이 화면에 내는 사용 안내 문서만 이미지에 넣는다(app/help)

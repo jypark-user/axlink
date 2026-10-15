@@ -1,0 +1,75 @@
+# 실행 이미지 빌드와 GHCR 게시(ARC-026). 서버 배포는 하지 않는다.
+#
+# - PR: 빌드·검사만 한다. 게시하지 않는다(읽기 권한)
+# - main: CI 가 성공한 커밋만 빌드·게시한다(sha-<7> 와 main 태그)
+# - v태그(vX.Y.Z): main 에 있고 CI 가 성공한 커밋이면 X.Y.Z 태그와 반입용 tar 를 만든다
+# - 수동: 빌드·검사. publish 를 켜면 main·v태그일 때만 게시한다
+
+name: 이미지
+
+on:
+  pull_request:
+    paths:
+      - "app/**"
+      - "frontend/**"
+      - "db/migration/**"
+      - "docker/**"
+      - "docs/40-manual/**"
+      - "pyproject.toml"
+      - ".dockerignore"
+      - ".github/workflows/image*.yml"
+      - ".github/scripts/image-*.sh"
+  workflow_run:
+    workflows: [CI]
+    types: [completed]
+    branches: [main]
+  push:
+    tags: ["v[0-9]+.[0-9]+.[0-9]+"]
+  workflow_dispatch:
+    inputs:
+      publish:
+        description: GHCR 에 게시한다 (main·v태그에서만)
+        type: boolean
+        default: false
+
+permissions: {}
+
+concurrency:
+  group: images-${{ github.event.workflow_run.head_sha || github.event.pull_request.number || github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+jobs:
+  verify:
+    name: 검사
+    if: >-
+      github.event_name == 'pull_request' ||
+      (github.event_name == 'workflow_dispatch' && !(inputs.publish &&
+        (github.ref == 'refs/heads/main' || startsWith(github.ref, 'refs/tags/v'))))
+    permissions:
+      contents: read
+    uses: ./.github/workflows/image-build.yml
+    with:
+      sha: ${{ github.event.pull_request.head.sha || github.sha }}
+      publish: false
+      label: >-
+        ${{ github.event_name == 'pull_request'
+            && format('pr{0}', github.event.pull_request.number) || 'manual' }}
+
+  publish:
+    name: 게시
+    if: >-
+      (github.event_name == 'workflow_run' && github.event.workflow_run.conclusion == 'success' &&
+        github.event.workflow_run.event == 'push' && github.event.workflow_run.head_branch == 'main') ||
+      (github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v')) ||
+      (github.event_name == 'workflow_dispatch' && inputs.publish &&
+        (github.ref == 'refs/heads/main' || startsWith(github.ref, 'refs/tags/v')))
+    permissions:
+      contents: read
+      packages: write
+      actions: read
+    uses: ./.github/workflows/image-build.yml
+    with:
+      sha: ${{ github.event.workflow_run.head_sha || github.sha }}
+      publish: true
+      label: main
+      release: ${{ startsWith(github.ref, 'refs/tags/v') && github.ref_name || '' }}
