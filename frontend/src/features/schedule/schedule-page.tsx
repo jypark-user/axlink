@@ -61,7 +61,7 @@ export function SchedulePage(): ReactNode {
 
   return (
     <>
-      <PageHeader title="일정" description="용역사 WBS 기준의 작업 일정과 진척입니다." />
+      <PageHeader title="일정(WBS)" description="용역사 WBS 기준의 작업 일정과 진척입니다." />
       <CompletionPanel projectId={project.id} />
 
       <DataState state={state} onRetry={state.reload}>

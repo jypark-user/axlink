@@ -580,6 +580,14 @@ export interface RequirementSummaryResponse {
   sources: SourceStateSummary[];
 }
 
+/** 사용 안내 문서. 원천은 docs/40-manual 의 마크다운이다. */
+export interface HelpDocResponse {
+  slug: string;
+  title: string;
+  markdown: string;
+  updatedAt: string;
+}
+
 /** 상태의 출처. SOURCE_ISSUE_CLOSED = GitHub 이슈 닫힘, CLIENT_DECIDED = 발주기관 지정 */
 export type RequirementStatusBasis = 'SOURCE_ISSUE_CLOSED' | 'CLIENT_DECIDED';
 

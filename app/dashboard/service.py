@@ -104,7 +104,7 @@ def compute(cur: Any, project_id: str, at: date) -> ProgressResponse:
         unit="건",
         kind=OBSERVED,
         # 요구사항으로 분류된 원천 이슈는 requirement 로 가서 분모에 없다. 범위를 같이 보인다
-        note="요구사항으로 분류된 항목 제외" if issue_total else "연동된 일반 이슈가 없다",
+        note="요구사항으로 분류된 항목 제외" if issue_total else "연동된 일반 이슈가 없습니다",
     )
     product_measure = ProgressMeasure(
         value=_ratio(product_done, product_total),
@@ -239,13 +239,13 @@ def _load_plan(
 
     path = _plan_path(project_id, plan_row)
     if path is None:
-        return None, "WBS 항목은 채워졌으나 보관된 원본을 찾지 못했다. 다시 수집이 필요하다"
+        return None, "WBS 항목은 있지만 보관된 원본 파일을 찾지 못했습니다. 다시 수집해 주세요."
     try:
         plan = wbs.parse(path.read_bytes())
     except wbs.WbsParseError as exc:
-        return None, f"WBS 를 읽지 못했다 — {exc}"
+        return None, f"WBS 를 읽지 못했습니다. {exc}"
     except OSError as exc:
-        return None, f"WBS 원본을 열지 못했다 — {exc}"
+        return None, f"WBS 원본 파일을 열지 못했습니다. {exc}"
     wbs_repository.replace_plan(cur, project_id, plan_id, plan)
     return plan, None
 
@@ -606,7 +606,7 @@ def _gap_warnings(
         if gap >= 0.2:
             out.append(
                 f"신고 진척률이 {measure.label}({measure.value:.0%})보다 "
-                f"{gap:.0%}p 높다. 근거 확인이 필요하다"
+                f"{gap:.0%}p 높습니다. 근거를 확인해 주세요"
             )
     return out
 

@@ -87,6 +87,9 @@ def build_project_links(cur: Any, project_id: str) -> BuildResult:
     deleted_docs: set[str] = set()
     ambiguous: set[tuple[str, str]] = set()
     unknown_refs: dict[tuple[str, str, str], tuple[str, str | None]] = {}
+    # (출발 유형, 출발 id, GH·RM, 번호) → 이번에 그 참조로 이은 링크 id. 대상을 못 정했으면 None.
+    # 같은 참조가 예전에 다른 연결의 대상에 이어져 있었으면 끊김이 아니라 정정이다(ARC-027 3절)
+    rerouted: dict[tuple[str, str, str, str], str | None] = {}
 
     def resolve(target: tuple[str, str], origin: dict[str, Any]) -> tuple[str, str] | None:
         ref, value = target
@@ -130,6 +133,8 @@ def build_project_links(cur: Any, project_id: str) -> BuildResult:
                             (evidence.target[1], *source),
                             (evidence.text, evidence.url or raw["external_url"]),
                         )
+                    if evidence.target in ambiguous:
+                        rerouted.setdefault((*source, *evidence.target), None)
                     continue
                 edge = _edge(source, target, evidence, products)
                 if edge is None:
@@ -147,6 +152,10 @@ def build_project_links(cur: Any, project_id: str) -> BuildResult:
         if link_id is None:
             continue  # 같은 변을 사람이 만들어 두었다. 자동 근거로 덮지 않는다.
         kept.append(link_id)
+        if evidence.target[0] in _TOOL_PREFIX.values():
+            key = (edge.from_type, edge.from_id, *evidence.target)
+            if rerouted.get(key) is None:
+                rerouted[key] = link_id
         replaced.setdefault(
             (edge.from_type, edge.from_id, edge.to_type, edge.to_id), []
         ).append((link_id, edge.link_kind))
@@ -157,7 +166,7 @@ def build_project_links(cur: Any, project_id: str) -> BuildResult:
     result.unknown_codes = len({code for code, _, _ in unknown_refs})
     repository.replace_unresolved_refs(cur, project_id, unknown_refs)
     result.broken, result.superseded = repository.close_stale_auto_links(
-        cur, project_id, kept, replaced, excluded, deleted_docs
+        cur, project_id, kept, replaced, excluded, deleted_docs, rerouted
     )
     return result
 

@@ -1,6 +1,7 @@
 import { Link, NavLink, useLocation, useNavigate } from 'react-router-dom';
 import type { LucideIcon } from 'lucide-react';
 import {
+  BookOpen,
   CalendarRange,
   Camera,
   CircleDot,
@@ -79,6 +80,7 @@ const GLOBAL_GROUPS: NavGroup[] = [
     label: null,
     items: [
       { to: '/projects', label: '사업 목록', icon: FolderKanban },
+      { to: '/guide/tool-integration', label: '도구 연동 가이드', icon: BookOpen },
       // 위젯과 AI 답변이 고르는 그림 23종의 입력 계약. 관리자만 본다 (ARC-012)
       { to: '/templates', label: '인포 템플릿', icon: LayoutTemplate, roles: ['SUPER_ADMIN'] },
       { to: '/admin/errors', label: '서버 오류 기록', icon: TriangleAlert, roles: ['SUPER_ADMIN'] },
@@ -96,7 +98,7 @@ const projectGroups = (base: string): NavGroup[] => [
     label: '현황',
     items: [
       { to: `${base}/dashboard`, label: '진행 상황', icon: LayoutDashboard },
-      { to: `${base}/schedule`, label: '일정', icon: CalendarRange },
+      { to: `${base}/schedule`, label: '일정(WBS)', icon: CalendarRange },
       { to: `${base}/snapshots`, label: '스냅샷', icon: Camera },
       { to: `${base}/issues`, label: '일반 이슈', icon: CircleDot },
       { to: `${base}/traceability`, label: '요구사항', icon: Waypoints },
