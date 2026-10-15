@@ -403,3 +403,77 @@ def test_두_번째_연결을_붙여도_기존_이슈_링크_수동_링크가_�
     finally:
         with tx() as cur:
             src.cleanup(cur)
+
+
+# ---------------------------------------------------------------- 정정 처리
+
+
+@requires_db
+def test_잘못_이어졌던_자동_링크는_끊김이_아니라_정정으로_남는다(sources):
+    """수정 전 코드가 만든 링크를 흉내 낸다. 근거는 그대로 있고 해석만 바뀌었다."""
+    ids = sources.ids
+    with tx() as cur:
+        commit_a = fetch_one(cur, "select id from code_change where tool_connection_id = %s",
+                             (ids["ghA"],))["id"]
+        commit_b = fetch_one(cur, "select id from code_change where tool_connection_id = %s",
+                             (ids["ghB"],))["id"]
+        issue_b5 = _issue_of(cur, ids["ghB"], "GH-5")["id"]
+        issue_rm_a7 = _issue_of(cur, ids["rmA"], "RM-7")["id"]
+        issue_rm_b8 = _issue_of(cur, ids["rmB"], "RM-8")["id"]
+
+        def old_link(from_id, to_id, text):
+            return fetch_one(
+                cur,
+                """
+                insert into trace_link
+                  (project_id, from_type, from_id, to_type, to_id, link_kind,
+                   origin, status, evidence_kind, evidence_text)
+                values (%s, 'CODE_CHANGE', %s, 'ISSUE', %s, 'IMPLEMENTS',
+                        'AUTO', 'ACTIVE', 'TEXT_ISSUE_REF', %s)
+                returning id
+                """,
+                (PID, from_id, to_id, text),
+            )["id"]
+
+        wrong_conn = old_link(commit_a, issue_b5, "Refs: GH-5")         # A 커밋 → B 의 5번
+        guessed = old_link(commit_b, issue_rm_a7, "Refs: GH-5, RM-7")   # 여럿 중 하나를 고름
+        vanished = old_link(commit_a, issue_rm_b8, "Refs: RM-8")        # 근거가 이제 없다
+        manual = fetch_one(
+            cur,
+            """
+            insert into trace_link
+              (project_id, from_type, from_id, to_type, to_id, link_kind, origin)
+            values (%s, 'CODE_CHANGE', %s, 'ISSUE', %s, 'TESTS', 'MANUAL') returning id
+            """,
+            (PID, commit_a, issue_b5),
+        )["id"]
+
+        result = trace_service.build_project_links(cur, PID)
+        cur.execute(
+            "select id, origin, status, status_reason, superseded_by from trace_link "
+            "where id = any(%s::uuid[])",
+            ([wrong_conn, guessed, vanished, manual],),
+        )
+        got = {r["id"]: r for r in cur.fetchall()}
+        new_a = fetch_one(
+            cur,
+            "select tl.id from trace_link tl join issue i on i.id = tl.to_id "
+            "where tl.from_id = %s and tl.to_type = 'ISSUE' and tl.status = 'ACTIVE' "
+            "and tl.origin = 'AUTO' and i.tool_connection_id = %s",
+            (commit_a, ids["ghA"]),
+        )["id"]
+        cur.execute("delete from trace_link where id = %s", (manual,))
+
+    assert got[wrong_conn]["status"] == "SUPERSEDED"
+    assert got[wrong_conn]["superseded_by"] == new_a
+    assert got[wrong_conn]["status_reason"].startswith("연결 해석 정정으로 대체: GH-5")
+
+    assert got[guessed]["status"] == "SUPERSEDED"
+    assert got[guessed]["superseded_by"] is None
+    assert got[guessed]["status_reason"].startswith("연결 해석 정정으로 제외: RM-7")
+
+    assert got[vanished]["status"] == "BROKEN"
+    assert got[vanished]["status_reason"] == "원천 근거가 다시 확인되지 않음"
+
+    assert (got[manual]["origin"], got[manual]["status"]) == ("MANUAL", "ACTIVE")
+    assert result.superseded >= 2 and result.broken >= 1
