@@ -188,7 +188,7 @@ def load_plan(cur: Any, project_id: str) -> wbs.WbsPlan | None:
     total = round(sum(r.weight for r in leaves), 6)
     warnings: list[str] = []
     if abs(total - 1.0) > 0.005:
-        warnings.append(f"가중치 합이 1.00 이 아니다 ({total:.3f}). 합으로 나눠 정규화했다")
+        warnings.append(f"가중치 합이 1.00 이 아닙니다({total:.3f}). 합으로 나눠 맞췄습니다")
     return wbs.WbsPlan(rows=leaves, weight_total=total, warnings=warnings, groups=groups)
 
 
