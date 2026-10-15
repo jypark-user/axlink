@@ -109,7 +109,7 @@ def test_첫_산정이_파일을_읽어_행으로_남기고_그_뒤로는_파일
         again = dashboard_service.compute(cur, PID, date(2026, 9, 21))
     assert again.wbs.value == first.wbs.value and again.wbsPlanned == first.wbsPlanned
     assert again.behind == first.behind
-    assert not any("읽지 못했다" in w for w in again.warnings)
+    assert not any("읽지 못했습니다" in w for w in again.warnings)
 
 
 @requires_db

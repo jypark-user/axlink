@@ -98,7 +98,7 @@ const projectGroups = (base: string): NavGroup[] => [
     label: '현황',
     items: [
       { to: `${base}/dashboard`, label: '진행 상황', icon: LayoutDashboard },
-      { to: `${base}/schedule`, label: '일정', icon: CalendarRange },
+      { to: `${base}/schedule`, label: '일정(WBS)', icon: CalendarRange },
       { to: `${base}/snapshots`, label: '스냅샷', icon: Camera },
       { to: `${base}/issues`, label: '일반 이슈', icon: CircleDot },
       { to: `${base}/traceability`, label: '요구사항', icon: Waypoints },

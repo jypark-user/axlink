@@ -107,7 +107,7 @@ def parse(data: bytes) -> WbsPlan:
     try:
         wb = load_workbook(io.BytesIO(data), data_only=True, read_only=True)
     except Exception as exc:  # openpyxl 은 포맷별로 다른 예외를 던진다
-        raise WbsParseError(f"엑셀 파일로 열 수 없다: {exc}") from exc
+        raise WbsParseError(f"엑셀 파일로 열 수 없습니다: {exc}") from exc
 
     try:
         grid = [list(r) for r in wb.worksheets[0].iter_rows(values_only=True)]
@@ -117,14 +117,14 @@ def parse(data: bytes) -> WbsPlan:
     header_row, columns = _find_header(grid)
     if header_row is None:
         raise WbsParseError(
-            "머리글을 찾지 못했다. 가중치·실적 열이 있는 표가 필요하다 "
-            f"(위 {_HEADER_SCAN_ROWS}행을 확인했다)"
+            "머리글을 찾지 못했습니다. 가중치·실적 열이 있는 표가 필요합니다 "
+            f"(위에서 {_HEADER_SCAN_ROWS}행까지 확인했습니다)"
         )
 
     warnings: list[str] = []
     for key in ("wbs_id", "start", "end"):
         if key not in columns:
-            warnings.append(f"「{_COLUMNS[key][0]}」 열이 없다")
+            warnings.append(f"「{_COLUMNS[key][0]}」 열이 없습니다")
 
     rows: list[WbsRow] = []
     groups: list[WbsGroup] = []
@@ -138,11 +138,11 @@ def parse(data: bytes) -> WbsPlan:
             groups.append(group)
 
     if not rows:
-        raise WbsParseError("가중치가 있는 말단 작업을 한 건도 찾지 못했다")
+        raise WbsParseError("가중치가 있는 말단 작업을 한 건도 찾지 못했습니다")
 
     total = round(sum(r.weight for r in rows), 6)
     if abs(total - 1.0) > 0.005:
-        warnings.append(f"가중치 합이 1.00 이 아니다 ({total:.3f}). 합으로 나눠 정규화했다")
+        warnings.append(f"가중치 합이 1.00 이 아닙니다({total:.3f}). 합으로 나눠 맞췄습니다")
 
     return WbsPlan(rows=rows, weight_total=total, warnings=warnings, groups=groups)
 
@@ -221,13 +221,13 @@ def _read_row(
 
     actual = _ratio(_cell(raw, columns.get("actual")))
     if actual is None:
-        warnings.append(f"{line}행: 실적을 숫자로 읽지 못해 0 으로 본다")
+        warnings.append(f"{line}행: 실적을 숫자로 읽지 못해 0 으로 계산했습니다")
         actual = 0.0
 
     start = _date(_cell(raw, columns.get("start")))
     end = _date(_cell(raw, columns.get("end")))
     if start and end and end < start:
-        warnings.append(f"{line}행: 종료일이 시작일보다 빠르다")
+        warnings.append(f"{line}행: 종료일이 시작일보다 빠릅니다")
         start, end = None, None
 
     return WbsRow(
