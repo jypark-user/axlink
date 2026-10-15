@@ -43,6 +43,14 @@ class BuildResult:
     unresolved: int = 0  # 근거는 있으나 가리킨 대상이 표준 모델에 없어 만들지 않은 것
     ambiguous: int = 0  # 다른 도구 GH-n·RM-n 중 그 도구 연결이 여럿이라 고르지 않은 참조
     by_evidence: dict[str, int] = field(default_factory=dict)
+    unknown_codes: int = 0  # 사업에 없는 요구사항 코드를 가리킨 근거의 코드 수(GH-139)
+
+
+class _AnyCode(frozenset):
+    """근거 규칙에 넘기는 코드 집합. 꼴만 맞으면 다 받는다. 사업에 있는지는 resolve 가 본다."""
+
+    def __contains__(self, item: object) -> bool:
+        return isinstance(item, str)
 
 
 @dataclass(frozen=True)
@@ -58,6 +66,9 @@ def build_project_links(cur: Any, project_id: str) -> BuildResult:
     """사업의 원본 전부에서 추적관계를 다시 만든다. 재실행해도 중복이 생기지 않는다."""
     codes = repository.requirement_codes(cur, project_id)
     known_codes = set(codes)
+    # 요구사항 코드 꼴이면 일단 근거로 읽는다. 사업에 없는 코드는 잇지 않고 미해결로 남긴다.
+    # 전에는 규칙 단계에서 오타로 보고 버려서 화면에 안 보였다(GH-139)
+    candidate_codes = _AnyCode()
     products = repository.current_work_product_paths(cur, project_id)
     known_paths = set(products)
     index = repository.tool_entity_index(cur, project_id)
@@ -75,6 +86,7 @@ def build_project_links(cur: Any, project_id: str) -> BuildResult:
     excluded: dict[tuple[str, str, str, str], str] = {}
     deleted_docs: set[str] = set()
     ambiguous: set[tuple[str, str]] = set()
+    unknown_refs: dict[tuple[str, str, str], tuple[str, str | None]] = {}
     # (출발 유형, 출발 id, GH·RM, 번호) → 이번에 그 참조로 이은 링크 id. 대상을 못 정했으면 None.
     # 같은 참조가 예전에 다른 연결의 대상에 이어져 있었으면 끊김이 아니라 정정이다(ARC-027 3절)
     rerouted: dict[tuple[str, str, str, str], str | None] = {}
@@ -100,12 +112,13 @@ def build_project_links(cur: Any, project_id: str) -> BuildResult:
     for connection in connections:
         rules = MappingRules.from_json(connection.get("mapping_rules_json"))
         raws = repository.raw_artifacts_with_entities(cur, str(connection["id"]))
-        pr_refs = _pull_request_refs(raws, rules, known_codes, known_paths)
+        pr_refs = _pull_request_refs(raws, rules, candidate_codes, known_paths)
         for raw in raws:
             if raw["object_kind"] == "design_doc" and (raw["payload_jsonb"] or {}).get("deleted"):
                 deleted_docs.add(str(raw["raw_id"]))
             found, dropped = _evidence_of(
-                connection["tool"], raw, rules, known_codes, known_paths, pr_refs
+                connection["tool"], raw, rules, candidate_codes, known_paths, pr_refs,
+                design_codes=known_codes,
             )
             for source, ex in dropped:
                 target = resolve(ex.target, connection)
@@ -115,6 +128,11 @@ def build_project_links(cur: Any, project_id: str) -> BuildResult:
                 target = resolve(evidence.target, connection)
                 if target is None:
                     result.unresolved += 1
+                    if evidence.target[0] == "REQ":
+                        unknown_refs.setdefault(
+                            (evidence.target[1], *source),
+                            (evidence.text, evidence.url or raw["external_url"]),
+                        )
                     if evidence.target in ambiguous:
                         rerouted.setdefault((*source, *evidence.target), None)
                     continue
@@ -145,6 +163,8 @@ def build_project_links(cur: Any, project_id: str) -> BuildResult:
         result.by_evidence[evidence.kind] = result.by_evidence.get(evidence.kind, 0) + 1
 
     result.ambiguous = len(ambiguous)
+    result.unknown_codes = len({code for code, _, _ in unknown_refs})
+    repository.replace_unresolved_refs(cur, project_id, unknown_refs)
     result.broken, result.superseded = repository.close_stale_auto_links(
         cur, project_id, kept, replaced, excluded, deleted_docs, rerouted
     )
@@ -171,6 +191,7 @@ def _evidence_of(
     tool: str, raw: dict[str, Any], rules: MappingRules,
     known_codes: set[str], known_paths: set[str],
     pr_refs: dict[str, set[tuple[tuple[str, str], str]]] | None = None,
+    design_codes: set[str] | None = None,
 ) -> tuple[list[tuple[tuple[str, str], Evidence]], list[tuple[tuple[str, str], Exclusion]]]:
     """원본 하나에서 (출발점, 근거) 쌍과 분류가 일부러 뺀 근거를 뽑는다.
 
@@ -182,7 +203,10 @@ def _evidence_of(
     if tool == "GITHUB":
         if kind == "design_doc":
             source = ("REPO_DOCUMENT", str(raw["raw_id"]))
-            found = trace_rules.design_doc_evidence(payload, known_codes)
+            # 설계 문서 판별은 사업의 실제 코드 목록이 필요하다(ARC-024 오탐 방지)
+            found = trace_rules.design_doc_evidence(
+                payload, known_codes if design_codes is None else design_codes
+            )
         elif kind == "commit" and raw["code_change_id"]:
             source = ("CODE_CHANGE", str(raw["code_change_id"]))
             found, dropped = trace_rules.commit_evidence_with_exclusions(
@@ -394,6 +418,7 @@ def requirement_detail(
         statusBasis=requirement_decision.status_basis(row),
         evidenceStatus=row["evidence_status"],
         decision=requirement_decision.decision_of(row),
+        inBaseline=row["baseline_id"] is not None,
         body=row["body"] or "",
         traceLinks=[
             TraceLinkResponse(

@@ -95,7 +95,7 @@ class _Repo:
         conn = integ_repo.insert(
             cur, PID, org, "GITHUB", "design-trace", "https://api.github.com",
             f"o/design-{uuid.uuid4().hex[:6]}", crypto.encrypt("k"), "k***",
-            {"designDocPaths": DESIGN},
+            {"designDocPaths": DESIGN}, requirement_from_issues=True,
         )
         self.cid = str(conn["id"])
         # 수집 잡은 연결마다 하나만 돌 수 있다(uq_sync_job__running). 시험은 한 잡을 같이 쓴다

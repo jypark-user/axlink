@@ -38,6 +38,8 @@ import type {
   TraceLinkKind,
   TraceabilityRowResponse,
 } from '@/types/api';
+import type { BaselineStateResponse } from '@/types/api';
+import { BaselineBanner } from '@/features/requirement-baseline/baseline-banner';
 
 const PAGE_SIZE = 20;
 
@@ -61,6 +63,11 @@ export function TraceabilityPage(): ReactNode {
     return () => clearTimeout(t);
   }, [text]);
 
+  // 기준선 상태. 미확정이면 지금 목록이 무엇인지 머리에 같이 적는다(GH-139)
+  const baseline = useAsync<BaselineStateResponse>(
+    () => api.get<BaselineStateResponse>(`/projects/${project.id}/requirement-baseline`),
+    [project.id],
+  );
   // 요약은 사업 전체를 서버가 센 값이다. 목록 조건·쪽과 상관없다.
   const summary = useAsync<RequirementSummaryResponse>(
     () => api.get<RequirementSummaryResponse>(`/projects/${project.id}/requirements/summary`),
@@ -101,6 +108,7 @@ export function TraceabilityPage(): ReactNode {
         description="요구사항별 현황과 설계 근거 · 구현 관련 변경 · 시험 연결입니다. 연결은 완료·통과 증거가 아닙니다. 끊긴 칸은 붉게 표시됩니다."
       />
       <div className="@container flex flex-col gap-5">
+        {baseline.data && <BaselineBanner projectId={project.id} state={baseline.data} />}
         <DataState state={summary} onRetry={summary.reload}>
           {(n) => <Summary n={n} filter={filter} onPick={pick} />}
         </DataState>

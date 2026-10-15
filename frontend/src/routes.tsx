@@ -60,6 +60,11 @@ const StructuringDraftPage = lazy(() =>
     default: m.StructuringDraftPage,
   })),
 );
+const BaselinePage = lazy(() =>
+  import('@/features/requirement-baseline/baseline-page').then((m) => ({
+    default: m.BaselinePage,
+  })),
+);
 const DeliverablesPage = lazy(() =>
   import('@/features/deliverables/deliverables-page').then((m) => ({
     default: m.DeliverablesPage,
@@ -273,6 +278,14 @@ export function AppRoutes(): ReactNode {
             element={
               <SuspenseShell>
                 <TraceabilityPage />
+              </SuspenseShell>
+            }
+          />
+          <Route
+            path="requirement-baseline"
+            element={
+              <SuspenseShell>
+                <BaselinePage />
               </SuspenseShell>
             }
           />

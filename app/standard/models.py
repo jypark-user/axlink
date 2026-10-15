@@ -42,6 +42,8 @@ class RequirementResponse(BaseModel):
     # 근거가 정한 상태. 지정이 없으면 status 와 같다
     evidenceStatus: str | None = None  # noqa: N815
     decision: RequirementDecision | None = None
+    # 확정된 요구사항 기준선에 들었는지(GH-139). 기준선이 없거나 명세서에 없던 코드면 False
+    inBaseline: bool = False  # noqa: N815
 
 
 class IssueResponse(BaseModel):
@@ -232,3 +234,110 @@ class RequirementDecisionRevertRequest(BaseModel):
     """지정을 거두고 근거 상태로 되돌린다. 되돌리는 사유도 남긴다."""
 
     reason: str = Field(min_length=1, max_length=1000)
+
+
+# --- 요구사항 기준선 (GH-139, ARC-028) ----------------------------------------
+
+
+class BaselineItemRequest(BaseModel):
+    """명세서 항목 고치기·더하기. 문제(중복·코드 꼴)는 막지 않고 표시한다. 제출 때 막는다."""
+
+    code: str = Field(max_length=64)
+    title: str = Field(max_length=500)
+    body: str = Field(default="", max_length=20000)
+    priority: str = "SHOULD"
+
+
+class BaselineCreateRequest(BaseModel):
+    documentId: str  # noqa: N815 — 올려 둔 명세서 문서
+
+
+class BaselineReturnRequest(BaseModel):
+    reason: str = Field(min_length=1, max_length=1000)
+
+
+class BaselineConfirmRequest(BaseModel):
+    """확정. 같은 코드인데 내용이 다른 항목은 기본으로 기존 정의를 둔다.
+    명세서 내용으로 바꿀 코드만 적는다."""
+
+    applySpecCodes: list[str] = []  # noqa: N815
+
+
+class BaselineExisting(BaseModel):
+    requirementId: str  # noqa: N815
+    code: str
+    title: str
+    priority: str
+    source: str  # 기존 요구사항이 어디서 왔는지: 연결 이름, "문서", "수기"
+
+
+class BaselineItemResponse(BaseModel):
+    id: str
+    seq: int
+    code: str | None
+    title: str
+    body: str
+    priority: str
+    location: str | None  # 명세서 안 위치. 손으로 더한 항목은 없다
+    origin: str  # EXTRACTED | MANUAL
+    edited: bool  # 추출 결과를 사람이 고쳤는지
+    problems: list[str]  # DUPLICATE_CODE · INVALID_CODE · MISSING_TITLE · UNTRACEABLE_CODE
+    match: str | None  # NEW · SAME · CHANGED. 확정 전에는 지금 기준 미리보기다
+    existing: BaselineExisting | None
+    requirementId: str | None  # noqa: N815 — 확정 뒤 붙은 요구사항
+    specApplied: bool  # noqa: N815
+
+
+class BaselineConnection(BaseModel):
+    id: str
+    name: str
+    tool: str
+
+
+class BaselineResponse(BaseModel):
+    id: str
+    version: int
+    status: str  # DRAFT · SUBMITTED · CONFIRMED
+    documentId: str | None  # noqa: N815
+    sourceFilename: str  # noqa: N815
+    sourceDocVersion: str | None  # noqa: N815
+    createdBy: str | None  # noqa: N815
+    createdAt: str  # noqa: N815
+    submittedBy: str | None  # noqa: N815
+    submittedAt: str | None  # noqa: N815
+    returnedReason: str | None  # noqa: N815
+    confirmedBy: str | None  # noqa: N815
+    confirmedByRole: str | None  # noqa: N815
+    confirmedAt: str | None  # noqa: N815
+    items: list[BaselineItemResponse]
+    blockingCount: int  # noqa: N815 — 제출 전에 고쳐야 할 항목 수
+    extractionEmpty: bool  # noqa: N815 — 명세서에서 한 건도 뽑지 못했다
+    counts: dict[str, int]  # NEW · SAME · CHANGED
+    # 기존 요구사항 중 명세서에 없는 코드. 지우지 않고 기준선 밖으로 둔다
+    missing: list[BaselineExisting]
+    # 확정하면 요구사항 생성을 끌 연결(확정 뒤에는 끈 연결)
+    connections: list[BaselineConnection]
+
+
+class BaselineStateResponse(BaseModel):
+    """사업의 요구사항 기준선 상태. 요구사항 화면 머리와 기준선 화면이 같이 쓴다."""
+
+    state: str  # NONE(미등록) · DRAFT(작성 중) · SUBMITTED(확정 대기) · CONFIRMED
+    confirmed: BaselineResponse | None
+    working: BaselineResponse | None  # 발주기관에게 작성 중(DRAFT) 목록은 보이지 않는다
+    workingStatus: str | None  # noqa: N815
+    requirementCount: int  # noqa: N815
+    outsideBaselineCount: int  # noqa: N815 — 기준선에 들지 않은 요구사항
+    creatingConnections: list[BaselineConnection]  # noqa: N815 — 지금 이슈에서 요구사항을 만드는 연결
+    unresolvedCodeCount: int  # noqa: N815
+
+
+class UnresolvedRefResponse(BaseModel):
+    """사업에 없는 요구사항 코드를 가리킨 근거. 잇지 않고 보이기만 한다."""
+
+    code: str
+    sourceType: str  # noqa: N815
+    sourceId: str  # noqa: N815
+    sourceLabel: str  # noqa: N815
+    evidenceText: str | None  # noqa: N815
+    evidenceUrl: str | None  # noqa: N815

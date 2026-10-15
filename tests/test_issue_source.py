@@ -70,7 +70,7 @@ class _Sources:
         org = str(cur.fetchone()["organization_id"])
         conn = integ_repo.insert(
             cur, project_id, org, tool, name, base_url, target,
-            crypto.encrypt("k"), "k***", {},
+            crypto.encrypt("k"), "k***", {}, requirement_from_issues=True,
         )
         self.ids[key] = str(conn["id"])
         self.repo[key] = target

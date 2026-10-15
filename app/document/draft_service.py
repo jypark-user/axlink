@@ -12,7 +12,6 @@ from collections.abc import Callable
 from datetime import date
 from typing import Any
 
-from app.ai.embedding import embedding_port
 from app.ai.llm import llm_port
 from app.ai.port import LlmPort
 from app.auth.models import AuthPrincipal
@@ -26,7 +25,6 @@ from app.document.models import (
     StructuringConfirmResponse,
     StructuringDraftResponse,
 )
-from app.rag import indexing
 from app.standard import repository as standard_repo
 from app.standard.work_product_type import DISPLAY_NAMES
 
@@ -232,7 +230,12 @@ def _validate(req: StructuringConfirmRequest) -> dict[str, Any]:
 def confirm(
     cur: Any, principal: AuthPrincipal, document_id: str, req: StructuringConfirmRequest
 ) -> StructuringConfirmResponse:
-    """사람이 고친 초안을 표준 모델에 올린다. 산출물 한 버전 + 요구사항 + 색인."""
+    """사람이 고친 초안을 산출물 한 버전으로 올린다.
+
+    요구사항은 여기서 만들지 않는다(GH-139). 용역사가 확정한 초안이 곧바로 사업의 요구사항이
+    되면 발주기관 확정 전 목록이 확정 요구사항처럼 보이고, 기준선을 확정한 뒤에는 새 파일이
+    기준선을 덮는다. 요구사항은 요구사항 기준선(명세서 등록 → 제출 → 발주기관 확정)으로만 들어간다.
+    """
     row = _load(cur, principal, document_id)
     _require_proposed(row)
     rec = _validate(req)
@@ -243,42 +246,15 @@ def confirm(
         cur, project_id, document_id, principal.user_id, rec
     )
 
-    requirement_ids: list[str] = []
-    sources: list[indexing.IndexSource] = []
-    for r in rec["requirements"]:
-        rid = standard_repo.upsert_document_requirement(
-            cur, project_id, document_id, work_product_id, r
-        )
-        requirement_ids.append(rid)
-        sources.append(
-            indexing.IndexSource(
-                source_type="REQUIREMENT",
-                source_id=rid,
-                project_id=project_id,
-                title=f"{r['code']} {r['title']}" if r["code"] else r["title"],
-                body=r["body"],
-                uri=row["stored_path"],
-            )
-        )
-
     # 제안한 유형과 다르게 확정했으면 그 사실을 남긴다. 규칙·모델의 오답 기록이다.
     status = "CONFIRMED" if rec["type"] == row["proposed_type"] else "MANUAL_OVERRIDE"
     draft_repository.mark_confirmed(cur, str(row["id"]), principal.user_id, work_product_id, status)
     draft_repository.set_document_status(cur, document_id, "CONFIRMED")
 
-    indexed = 0
-    try:
-        indexed = indexing.reindex(cur, embedding_port(), sources).chunks
-    except errors.ApiError as exc:
-        if not exc.code.startswith("AI_"):
-            raise
-        # 색인은 실패해도 확정을 되돌리지 않는다. 표준 모델은 남기고 사유만 적는다.
-        repository.note_error(cur, document_id, f"요구사항 색인을 건너뛰었습니다. {exc.message}")
-
     return StructuringConfirmResponse(
         workProductId=work_product_id,
-        createdRequirementIds=requirement_ids,
-        indexedChunkCount=indexed,
+        createdRequirementIds=[],
+        indexedChunkCount=0,
     )
 
 

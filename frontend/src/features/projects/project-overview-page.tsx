@@ -43,10 +43,9 @@ import type {
   DocumentChunkResponse,
   DocumentStatus,
   DocumentUploadResponse,
-  DraftRequirement,
+  BaselineStateResponse,
   PageResponse,
   RequirementResponse,
-  StructuringDraftResponse,
 } from '@/types/api';
 
 /** 원문 열람 자리. 질문 화면의 자료 칸과 같은 오른쪽 사이드바를 쓴다 — 요약을 옆에 두고 읽는다. */
@@ -506,34 +505,6 @@ const requirementColumns: ColumnDef<RequirementResponse, unknown>[] = [
 
 /** 올린 문서에서 뽑혀 확정된 요구사항. 초안 확인에서 확정한 것이 여기 쌓인다. */
 /** 아직 등록 전인 요구사항 — 문서에서 읽어 온 그대로다. 상태 칸이 없다. */
-const draftRequirementColumns: ColumnDef<DraftRequirement, unknown>[] = [
-  {
-    accessorKey: 'code',
-    header: ({ column }) => <SortableHeader column={column}>코드</SortableHeader>,
-    cell: ({ row }) => (
-      <span className="text-muted-foreground font-mono text-xs">
-        {row.original.code ?? `#${row.original.index + 1}`}
-      </span>
-    ),
-  },
-  {
-    accessorKey: 'title',
-    header: ({ column }) => <SortableHeader column={column}>요구사항</SortableHeader>,
-    cell: ({ row }) => (
-      <span className="block max-w-xl truncate" title={row.original.body ?? row.original.title}>
-        {row.original.title}
-      </span>
-    ),
-  },
-  {
-    accessorKey: 'priority',
-    header: ({ column }) => <SortableHeader column={column}>중요도</SortableHeader>,
-    cell: ({ row }) => (
-      <Badge variant={badgeVariantFor(row.original.priority)}>{label(row.original.priority)}</Badge>
-    ),
-  },
-];
-
 function ProjectRequirements({ projectId }: { projectId: string }): ReactNode {
   const state = useAsync<PageResponse<RequirementResponse>>(
     () =>
@@ -542,66 +513,47 @@ function ProjectRequirements({ projectId }: { projectId: string }): ReactNode {
       ),
     [projectId],
   );
+  // 기준선 상태. 문서 초안·제출 중 목록은 확정 요구사항이 아니라 여기 싣지 않는다(GH-139)
+  const baseline = useAsync<BaselineStateResponse>(
+    () => api.get<BaselineStateResponse>(`/projects/${projectId}/requirement-baseline`),
+    [projectId],
+  );
 
   const rows = state.data?.content ?? [];
-
-  /**
-   * 등록된 요구사항이 없으면 문서 초안에서 읽어 온다.
-   * 색인은 끝났지만 확정 전이라 표가 비어 있는 동안에도, 문서에 적힌 요구사항은 보여야 한다.
-   */
-  const drafted = useAsync<DraftRequirement[]>(async () => {
-    if (state.loading || rows.length > 0) return [];
-    const docs = await api.get<PageResponse<DocumentUploadResponse>>(
-      `/projects/${projectId}/documents${toQueryString({ page: 0, size: 20 })}`,
-    );
-    const found: DraftRequirement[] = [];
-    for (const doc of docs.content.filter((d) => d.draftAvailable)) {
-      const draft = await api
-        .get<StructuringDraftResponse>(`/documents/${doc.id}/draft`)
-        .catch(() => null);
-      if (draft) found.push(...draft.requirements);
-    }
-    return found;
-  }, [projectId, state.loading, rows.length]);
-
-  const fromDraft = drafted.data ?? [];
+  const b = baseline.data;
+  const hint = !b
+    ? undefined
+    : b.confirmed
+      ? `요구사항 기준선 v${b.confirmed.version} 기준 ${rows.length}건입니다.`
+      : rows.length > 0
+        ? `기준선 미확정. 도구 이슈에서 만든 ${rows.length}건입니다.`
+        : '요구사항 기준선 미등록·미확정입니다.';
 
   return (
     <Window
       title="요구사항"
-      hint={
-        rows.length > 0
-          ? `올린 문서에서 정리된 ${rows.length}건입니다.`
-          : fromDraft.length > 0
-            ? `올린 문서에서 읽어 온 ${fromDraft.length}건입니다. 아직 등록 전이라 추적에는 연결되지 않습니다.`
-            : '올린 문서에서 요구사항을 뽑아내면 여기 쌓입니다.'
-      }
+      hint={hint}
       action={
-        rows.length > 0 ? (
+        <div className="flex gap-2">
           <Button asChild variant="outline" size="sm">
-            <Link to={`/p/${projectId}/traceability`}>추적 보기</Link>
+            <Link to={`/p/${projectId}/requirement-baseline`}>기준선</Link>
           </Button>
-        ) : null
+          {rows.length > 0 && (
+            <Button asChild variant="outline" size="sm">
+              <Link to={`/p/${projectId}/traceability`}>추적 보기</Link>
+            </Button>
+          )}
+        </div>
       }
     >
       <DataState state={state} onRetry={state.reload}>
         {(page) =>
           page.content.length === 0 ? (
-            fromDraft.length > 0 ? (
-              <DataTable<DraftRequirement, unknown>
-                columns={draftRequirementColumns}
-                data={fromDraft}
-                filterColumn="title"
-                filterPlaceholder="요구사항으로 찾기"
-                pageSize={10}
-              />
-            ) : (
-              <p className="text-muted-foreground text-sm">
-                {drafted.loading
-                  ? '문서에서 읽어 오는 중입니다…'
-                  : '아직 정리된 요구사항이 없습니다. 관련자료를 올리면 문서에서 뽑아 여기 쌓입니다.'}
-              </p>
-            )
+            <p className="text-muted-foreground text-sm">
+              {b?.workingStatus === 'SUBMITTED'
+                ? '용역사가 요구사항 명세서를 제출했습니다. 발주기관이 확정하면 여기 쌓입니다.'
+                : '확정된 요구사항이 없습니다. 용역사가 요구사항 명세서를 등록·제출하고 발주기관이 확정하면 여기 쌓입니다.'}
+            </p>
           ) : (
             <DataTable<RequirementResponse, unknown>
               columns={requirementColumns}

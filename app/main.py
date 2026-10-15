@@ -40,6 +40,7 @@ from app.rag.indexing import verify_dimension
 from app.rag.router import router as ask_router
 from app.review.router import router as review_router
 from app.semantic.router import router as semantic_router
+from app.standard.baseline_router import router as baseline_router
 from app.standard.router import router as standard_router
 
 
@@ -95,6 +96,7 @@ app.include_router(project_router)
 app.include_router(org_router)
 app.include_router(integration_router)
 app.include_router(document_router)
+app.include_router(baseline_router)  # /requirements/unresolved-refs 를 {id} 보다 먼저
 app.include_router(standard_router)
 app.include_router(dashboard_router)
 app.include_router(board_router)

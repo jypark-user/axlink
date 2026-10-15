@@ -73,7 +73,7 @@ class _Fixture:
         org = str(cur.fetchone()["organization_id"])
         conn = integ_repo.insert(
             cur, PID, org, tool, f"trace-{tool}", base_url, target,
-            crypto.encrypt("k"), "k***", {},
+            crypto.encrypt("k"), "k***", {}, requirement_from_issues=True,
         )
         return str(conn["id"])
 
