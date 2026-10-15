@@ -83,6 +83,9 @@ class Settings(BaseSettings):
     # 운영에서는 NAS 마운트 경로를 AXLINK_DOCUMENT_ROOT 로 준다.
     document_root: str = "var/documents"
 
+    # 사용 안내 문서(docs/40-manual) 위치. 비우면 저장소 경로를 쓴다. 운영 이미지가 따로 준다
+    manual_dir: str = ""
+
     # 청킹 파라미터 (파일럿 설계 03-physical-backend §6.1)
     chunk_target_tokens: int = 800
     chunk_min_tokens: int = 200

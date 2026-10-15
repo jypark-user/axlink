@@ -21,6 +21,8 @@ var
 test-results
 _to_delete
 docs
+# 앱이 화면에 내는 사용 안내 문서만 이미지에 넣는다(app/help)
+!docs/40-manual
 tests
 infra
 scripts
