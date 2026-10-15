@@ -853,31 +853,52 @@ def close_stale_auto_links(
     replaced: dict[tuple[str, str, str, str], list[tuple[str, str]]],
     excluded: dict[tuple[str, str, str, str], str],
     deleted_docs: set[str],
+    rerouted: dict[tuple[str, str, str, str], str | None] | None = None,
 ) -> tuple[int, int]:
     """이번에 다시 확인되지 않은 자동 링크를 닫는다. (끊김 수, 대체·제외 수).
 
     같은 출발·도착에 다른 관계가 새로 생겼으면 대체, 분류 규칙이 뺐으면 제외(둘 다 SUPERSEDED),
-    그 밖은 원천 근거가 사라진 끊김(BROKEN)이다. 지우지 않는다. 옛 링크의 관계·근거·만든 시각은
-    그대로 남는다(ARC-024 2-5). 수동 링크는 대상이 아니다.
+    같은 GH-n·RM-n 참조가 이번에 다른 연결의 대상으로 풀렸거나 대상을 정하지 못했으면 연결 해석
+    정정(SUPERSEDED, ARC-027), 그 밖은 원천 근거가 사라진 끊김(BROKEN)이다. 지우지 않는다.
+    옛 링크의 관계·근거·만든 시각은 그대로 남는다(ARC-024 2-5). 수동 링크는 대상이 아니다.
     """
     rows = fetch_all(
         cur,
         """
-        select id, from_type, from_id, to_type, to_id, link_kind from trace_link
-         where project_id = %s and origin = 'AUTO' and status = 'ACTIVE'
-           and not (id = any(%s::uuid[]))
+        select tl.id, tl.from_type, tl.from_id, tl.to_type, tl.to_id, tl.link_kind,
+               coalesce(ti.tool, tr.tool, tk.tool) as to_tool,
+               coalesce(i.external_id, r.external_id, k.external_id) as to_external_id
+          from trace_link tl
+          left join issue i on tl.to_type = 'ISSUE' and i.id = tl.to_id
+          left join tool_connection ti on ti.id = i.tool_connection_id
+          left join requirement r on tl.to_type = 'REQUIREMENT' and r.id = tl.to_id
+          left join tool_connection tr on tr.id = r.tool_connection_id
+          left join risk k on tl.to_type = 'RISK' and k.id = tl.to_id
+          left join tool_connection tk on tk.id = k.tool_connection_id
+         where tl.project_id = %s and tl.origin = 'AUTO' and tl.status = 'ACTIVE'
+           and not (tl.id = any(%s::uuid[]))
         """,
         (project_id, keep_ids),
     )
     broken = superseded = 0
     for r in rows:
         key = (r["from_type"], str(r["from_id"]), r["to_type"], str(r["to_id"]))
+        ref = _tool_ref(r["to_tool"], r["to_external_id"])
+        ref_key = (r["from_type"], str(r["from_id"]), *ref) if ref else None
         if key in replaced:
             new_kinds = ", ".join(sorted({k for _, k in replaced[key]}))
             status, by = "SUPERSEDED", replaced[key][0][0]
             reason = f"분류 정정으로 대체: {r['link_kind']} → {new_kinds}"
         elif key in excluded:
             status, by, reason = "SUPERSEDED", None, f"분류 정정으로 제외: {excluded[key]}"
+        elif ref_key is not None and rerouted and ref_key in rerouted:
+            status, by = "SUPERSEDED", rerouted[ref_key]
+            label = f"{ref[0]}-{ref[1]}"
+            reason = (
+                f"연결 해석 정정으로 대체: {label} 을 다른 연결의 같은 번호에 이었음"
+                if by
+                else f"연결 해석 정정으로 제외: {label} 의 도구 연결이 여럿이라 대상을 정할 수 없음"
+            )
         elif r["from_type"] == "REPO_DOCUMENT" and str(r["from_id"]) in deleted_docs:
             status, by, reason = "BROKEN", None, "원천 문서가 저장소에서 삭제됨"
         else:
@@ -896,6 +917,20 @@ def close_stale_auto_links(
         else:
             superseded += 1
     return broken, superseded
+
+
+_REF_PREFIX = {"GITHUB": "GH", "REDMINE": "RM"}
+
+
+def _tool_ref(tool: str | None, external_id: str | None) -> tuple[str, str] | None:
+    """링크 도착점을 GH-n·RM-n 참조로 되돌린다. 이슈 번호가 아니면 None."""
+    prefix = _REF_PREFIX.get(tool or "")
+    if prefix is None or not external_id:
+        return None
+    if prefix == "GH":
+        kind, _, number = external_id.partition(":")
+        return (prefix, number) if kind == "issue" else None
+    return (prefix, external_id) if external_id.isdigit() else None
 
 
 def break_stale_auto_links(cur: Any, project_id: str, keep_ids: list[str]) -> int:
