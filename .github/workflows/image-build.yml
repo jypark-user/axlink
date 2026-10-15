@@ -31,6 +31,8 @@ env:
   BASE_PATH: /ax-link/
   # 취약점 검사 도구. 러너에 설치하지 않고 고정 버전 이미지로 돌린다
   TRIVY_IMAGE: aquasec/trivy:0.57.0
+  # build-push-action 이 빌드 기록(.dockerbuild)을 산출물로 올리지 않게 한다. 기록은 image-manifest 가 맡는다
+  DOCKER_BUILD_RECORD_UPLOAD: "false"
 
 jobs:
   images:
