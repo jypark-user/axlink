@@ -20,6 +20,18 @@ _SOURCE_CONFLICT = """
 """
 
 
+# 정의(코드·제목·본문·중요도)를 명세서가 정한 행은 수집이 덮지 않는다. 문서에서 온 행과
+# 기준선에 든 행이 그렇다(GH-139). 이슈는 원천 연결과 근거 상태만 준다
+_DEFINED_ELSEWHERE = "(requirement.source_kind = 'DOCUMENT' or requirement.baseline_id is not null)"
+
+
+def _keep_definition(column: str) -> str:
+    return (
+        f"{column} = case when {_DEFINED_ELSEWHERE} then requirement.{column} "
+        f"else excluded.{column} end"
+    )
+
+
 def upsert_requirement(
     cur: Any, project_id: str, connection_id: str, external_id: str, rec: dict[str, Any]
 ) -> str:
@@ -33,8 +45,8 @@ def upsert_requirement(
         values (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, 'TOOL')
         {_SOURCE_CONFLICT}
         do update set
-           code = excluded.code, title = excluded.title, body = excluded.body,
-           priority = excluded.priority,
+           {_keep_definition("code")}, {_keep_definition("title")},
+           {_keep_definition("body")}, {_keep_definition("priority")},
            -- 수집은 근거 상태만 바꾼다. 발주기관 지정이 있으면 지금 상태는 지정대로 둔다(ARC-025)
            evidence_status = excluded.evidence_status,
            status = coalesce(requirement.decided_status, excluded.evidence_status),
@@ -51,6 +63,59 @@ def upsert_requirement(
         ),
     )
     return str(row["id"])
+
+
+def find_requirement_by_source(
+    cur: Any, connection_id: str, external_id: str
+) -> dict[str, Any] | None:
+    return fetch_one(
+        cur,
+        "select id, code, tool_connection_id from requirement "
+        "where tool_connection_id = %s and external_id = %s",
+        (connection_id, external_id),
+    )
+
+
+def find_requirement_by_code(cur: Any, project_id: str, code: str) -> dict[str, Any] | None:
+    return fetch_one(
+        cur,
+        "select id, code, tool_connection_id, external_id from requirement "
+        "where project_id = %s and code = %s",
+        (project_id, code),
+    )
+
+
+def update_requirement_evidence(
+    cur: Any, requirement_id: str, connection_id: str, external_id: str, rec: dict[str, Any]
+) -> None:
+    """이슈를 요구사항의 원천으로 잇고 근거 상태만 바꾼다. 정의는 건드리지 않는다.
+
+    문서로 먼저 만든 같은 코드의 행에 이슈를 붙일 때와, 이슈에서 요구사항을 만들지 않는
+    연결(기준선 확정 뒤)이 이미 이어진 요구사항을 갱신할 때 쓴다.
+    """
+    cur.execute(
+        """
+        update requirement
+           set tool_connection_id = %s, external_id = %s, external_url = %s,
+               evidence_status = %s, status = coalesce(decided_status, %s),
+               source_created_at = coalesce(source_created_at, %s),
+               source_updated_at = %s, updated_at = now()
+         where id = %s
+        """,
+        (
+            connection_id, external_id, rec["external_url"], rec["status"], rec["status"],
+            rec["source_created_at"], rec["source_updated_at"], requirement_id,
+        ),
+    )
+
+
+def has_confirmed_baseline(cur: Any, project_id: str) -> bool:
+    row = fetch_one(
+        cur,
+        "select 1 as x from requirement_baseline where project_id = %s and status = 'CONFIRMED'",
+        (project_id,),
+    )
+    return row is not None
 
 
 def upsert_issue(
@@ -303,40 +368,6 @@ def place_document_work_product(
     return str(row["id"])
 
 
-def upsert_document_requirement(
-    cur: Any, project_id: str, document_id: str, work_product_id: str, rec: dict[str, Any]
-) -> str:
-    """문서에서 확정한 요구사항. 같은 코드가 이미 있으면 글만 갱신한다.
-
-    도구(GitHub 이슈)에서 온 같은 코드의 요구사항이면 도구 연결은 그대로 둔다.
-    문서는 정의를, 이슈는 이행 추적을 맡는 것이라 둘을 한 행으로 합쳐야 추적이 산다.
-    코드가 없는 요구사항은 늘 새 행이다. 견줄 열쇠가 없다.
-    """
-    row = fetch_one(
-        cur,
-        """
-        insert into requirement
-          (project_id, code, title, body, priority, status, evidence_status,
-           work_product_id, document_upload_id, source_kind)
-        values (%s, %s, %s, %s, %s, 'DEFINED', 'DEFINED', %s, %s, 'DOCUMENT')
-        on conflict (project_id, code) where code is not null
-        do update set
-           title = excluded.title, body = excluded.body, priority = excluded.priority,
-           work_product_id = excluded.work_product_id,
-           document_upload_id = excluded.document_upload_id,
-           source_kind = case when requirement.tool_connection_id is null
-                              then 'DOCUMENT' else requirement.source_kind end,
-           updated_at = now()
-        returning id
-        """,
-        (
-            project_id, rec["code"], rec["title"], rec["body"], rec["priority"],
-            work_product_id, document_id,
-        ),
-    )
-    return str(row["id"])
-
-
 def work_product_for_review(cur: Any, work_product_id: str) -> dict[str, Any] | None:
     return fetch_one(
         cur,
@@ -412,6 +443,7 @@ _REQUIREMENT_COLUMNS = """
     r.tool_connection_id, r.external_id, r.external_url, r.source_kind, r.updated_at,
     coalesce(r.evidence_status, r.status) as evidence_status,
     r.decided_status, r.decided_reason, r.decided_at, du.name as decided_by_name,
+    r.baseline_id,
     c.tool as tool_name, c.name as connection_name, c.target_resource,
     {source_state} as source_state,
     exists (
@@ -846,6 +878,36 @@ def upsert_auto_trace_link(
         ),
     )
     return str(row["id"]) if row else None
+
+
+def replace_unresolved_refs(
+    cur: Any, project_id: str,
+    refs: dict[tuple[str, str, str], tuple[str, str | None]],
+) -> None:
+    """사업에 없는 요구사항 코드를 가리킨 근거. 링크 생성 때마다 사업 단위로 다시 쓴다."""
+    cur.execute("delete from requirement_unresolved_ref where project_id = %s", (project_id,))
+    for (code, source_type, source_id), (text, url) in refs.items():
+        cur.execute(
+            """
+            insert into requirement_unresolved_ref
+              (project_id, code, source_type, source_id, evidence_text, evidence_url)
+            values (%s, %s, %s, %s, %s, %s)
+            """,
+            (project_id, code, source_type, source_id, text, url),
+        )
+
+
+def list_unresolved_refs(cur: Any, project_id: str) -> list[dict[str, Any]]:
+    return fetch_all(
+        cur,
+        """
+        select code, source_type, source_id, evidence_text, evidence_url
+          from requirement_unresolved_ref
+         where project_id = %s
+         order by code, source_type, created_at
+        """,
+        (project_id,),
+    )
 
 
 def close_stale_auto_links(

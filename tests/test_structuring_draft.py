@@ -84,6 +84,7 @@ def _cleanup() -> None:
             """,
             (PID,),
         )
+        cur.execute("delete from requirement_baseline where project_id = %s", (PID,))
         cur.execute(
             "delete from requirement where project_id = %s and source_kind = 'DOCUMENT'", (PID,)
         )
@@ -180,7 +181,7 @@ def _confirm_body(draft: dict, **overrides) -> dict:
 
 
 @requires_db
-def test_confirm_places_work_product_and_requirements(client, as_pm, im001):
+def test_confirm_places_work_product_but_not_requirements(client, as_pm, im001):
     draft = _draft(client, as_pm, im001["id"])
     res = client.post(
         f"/api/documents/{im001['id']}/draft/confirm",
@@ -189,8 +190,10 @@ def test_confirm_places_work_product_and_requirements(client, as_pm, im001):
     )
     assert res.status_code == 200, res.text
     body = res.json()
-    assert len(body["createdRequirementIds"]) == 41
-    assert body["indexedChunkCount"] == 41  # 요구사항은 건당 1청크다
+    # 요구사항은 초안 확정으로 만들지 않는다. 요구사항 기준선(제출 → 발주기관 확정)으로만
+    # 들어간다(GH-139). 용역사가 확정한 초안이 곧바로 확정 요구사항처럼 보이면 안 된다
+    assert body["createdRequirementIds"] == []
+    assert body["indexedChunkCount"] == 0
 
     # 산출물 자리: 요구사항정의서 0.4 가 현행이 됐다.
     items = client.get(f"/api/projects/{PID}/work-products", headers=_auth(as_pm)).json()["items"]
@@ -208,13 +211,11 @@ def test_confirm_places_work_product_and_requirements(client, as_pm, im001):
         row = cur.fetchone()
     assert row == {"source_kind": "DOCUMENT", "doc": im001["id"], "at": "2026-08-27"}
 
-    # 요구사항: 41건이 문서 원천으로 들어갔다.
+    # 요구사항 목록에는 아무것도 들어가지 않았다
     page = client.get(
         f"/api/projects/{PID}/requirements?page=0&size=100", headers=_auth(as_pm)
     ).json()
-    mine = [r for r in page["content"] if r["source"]["tool"] == "UPLOAD"]
-    assert len(mine) == 41
-    assert all(r["status"] == "DEFINED" and r["priority"] == "MUST" for r in mine)
+    assert [r for r in page["content"] if r["source"]["tool"] == "UPLOAD"] == []
 
     # 문서와 초안의 상태가 넘어갔고, 목록에서 "초안 확인" 이 내려갔다.
     listed = client.get(f"/api/projects/{PID}/documents", headers=_auth(as_pm)).json()["content"]
@@ -454,3 +455,26 @@ def test_unknown_document_has_no_draft(client, as_pm):
     unknown = "00000000-0000-4000-8000-000000000000"
     res = client.get(f"/api/documents/{unknown}/draft", headers=_auth(as_pm))
     assert res.status_code == 404
+
+
+@requires_db
+def test_im001_명세서로_기준선을_만들면_41건이_위치와_함께_문제없이_나온다(
+    client, client_token, as_pm, im001
+):
+    """실제 요구사항정의서로 기준선 1단계를 돈다(GH-139). 초안 확정을 거치지 않아도 된다."""
+    base = f"/api/projects/{PID}/requirement-baseline"
+    created = client.post(base, json={"documentId": im001["id"]}, headers=_auth(as_pm))
+    assert created.status_code == 201, created.text
+    b = created.json()
+    codes = [i["code"] for i in b["items"]]
+    assert codes == ROW_RE.findall(IM001.read_text(encoding="utf-8"))
+    assert b["blockingCount"] == 0 and not any(i["problems"] for i in b["items"])
+    assert all(i["location"].startswith("표 ") for i in b["items"])
+    assert b["sourceDocVersion"] == "0.4"
+
+    sub = client.post(f"{base}/{b['id']}/submit", headers=_auth(as_pm))
+    assert sub.status_code == 200, sub.text
+    done = client.post(f"{base}/{b['id']}/confirm", json={},
+                       headers=_auth(client_token("r2")))
+    assert done.status_code == 200, done.text
+    assert sum(done.json()["counts"].values()) == 41

@@ -622,6 +622,8 @@ export interface RequirementResponse {
   statusBasis: RequirementStatusBasis | null;
   evidenceStatus: RequirementStatus | null;
   decision: RequirementDecision | null;
+  /** 확정된 요구사항 기준선에 들었는지. 기준선이 없거나 명세서에 없던 코드면 false */
+  inBaseline: boolean;
 }
 
 export interface RequirementDetailResponse extends RequirementResponse {
@@ -1666,4 +1668,93 @@ export interface WidgetTemplateResponse {
 
 export interface WidgetTemplateListResponse {
   templates: WidgetTemplateResponse[];
+}
+
+// --- 요구사항 기준선 (GH-139, ARC-028) ---
+
+export type BaselineStatus = 'DRAFT' | 'SUBMITTED' | 'CONFIRMED';
+export type BaselineState = 'NONE' | BaselineStatus;
+/** DUPLICATE_CODE · INVALID_CODE · MISSING_TITLE 는 제출 전에 고친다. UNTRACEABLE_CODE 는 경고 */
+export type BaselineProblem =
+  'DUPLICATE_CODE' | 'INVALID_CODE' | 'MISSING_TITLE' | 'UNTRACEABLE_CODE';
+export type BaselineMatch = 'NEW' | 'SAME' | 'CHANGED';
+
+export interface BaselineExisting {
+  requirementId: string;
+  code: string;
+  title: string;
+  priority: Priority;
+  /** 기존 요구사항이 어디서 왔는지. 연결 이름, "문서", "수기" */
+  source: string;
+}
+
+export interface BaselineItem {
+  id: string;
+  seq: number;
+  code: string | null;
+  title: string;
+  body: string;
+  priority: Priority;
+  /** 명세서 안 위치. 손으로 더한 항목은 없다 */
+  location: string | null;
+  origin: 'EXTRACTED' | 'MANUAL';
+  edited: boolean;
+  problems: BaselineProblem[];
+  /** 확정 전에는 지금 기준 미리보기다 */
+  match: BaselineMatch | null;
+  existing: BaselineExisting | null;
+  requirementId: string | null;
+  specApplied: boolean;
+}
+
+export interface BaselineConnection {
+  id: string;
+  name: string;
+  tool: ToolKind;
+}
+
+export interface BaselineResponse {
+  id: string;
+  version: number;
+  status: BaselineStatus;
+  documentId: string | null;
+  sourceFilename: string;
+  sourceDocVersion: string | null;
+  createdBy: string | null;
+  createdAt: string;
+  submittedBy: string | null;
+  submittedAt: string | null;
+  returnedReason: string | null;
+  confirmedBy: string | null;
+  confirmedByRole: string | null;
+  confirmedAt: string | null;
+  items: BaselineItem[];
+  blockingCount: number;
+  extractionEmpty: boolean;
+  counts: Record<BaselineMatch, number>;
+  /** 기존 요구사항 중 명세서에 없는 코드. 지우지 않고 기준선 밖으로 둔다 */
+  missing: BaselineExisting[];
+  /** 확정하면 요구사항 생성을 끌 연결(확정 뒤에는 끈 연결) */
+  connections: BaselineConnection[];
+}
+
+export interface BaselineStateResponse {
+  state: BaselineState;
+  confirmed: BaselineResponse | null;
+  /** 발주기관에게 작성 중(DRAFT) 목록은 오지 않는다 */
+  working: BaselineResponse | null;
+  workingStatus: BaselineStatus | null;
+  requirementCount: number;
+  outsideBaselineCount: number;
+  creatingConnections: BaselineConnection[];
+  unresolvedCodeCount: number;
+}
+
+export interface UnresolvedRefResponse {
+  code: string;
+  sourceType: string;
+  sourceId: string;
+  sourceLabel: string;
+  evidenceText: string | null;
+  evidenceUrl: string | null;
 }

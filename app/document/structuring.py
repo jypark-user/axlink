@@ -300,6 +300,130 @@ def extract_requirements(text: str) -> list[DraftRequirement]:
     return requirements_from_lines(lines)
 
 
+# 추적 규칙(trace_rules._REQ_CODE)이 읽는 꼴. 이 꼴이 아니면 커밋·이슈가 그 코드를 가리켜도
+# 링크가 생기지 않는다. 명세서에는 받아 두되 경고한다
+_TRACEABLE_CODE = re.compile(r"^[A-Z]{2,5}(?:\.[A-Z]{2,5})+\.\d{3}$")
+
+# 명세서 항목의 문제. BLOCKING 은 제출 전에 고쳐야 한다
+DUPLICATE_CODE = "DUPLICATE_CODE"
+INVALID_CODE = "INVALID_CODE"
+MISSING_TITLE = "MISSING_TITLE"
+UNTRACEABLE_CODE = "UNTRACEABLE_CODE"
+BLOCKING_PROBLEMS = (DUPLICATE_CODE, INVALID_CODE, MISSING_TITLE)
+
+
+@dataclass
+class SpecItem:
+    """명세서 한 행. 정형화 초안(DraftRequirement)과 달리 버리는 행이 없다.
+
+    같은 코드가 또 나와도, 코드 꼴이 아니어도 위치와 함께 남긴다. 무엇이 문제인지는
+    problems_of 가 정하고, 사람이 고치거나 지운다.
+    """
+
+    code: str | None
+    title: str
+    body: str
+    priority: str
+    location: str
+
+    def as_dict(self) -> dict:
+        return {
+            "code": self.code, "title": self.title, "body": self.body,
+            "priority": self.priority, "location": self.location,
+        }
+
+
+def spec_items(text: str) -> list[SpecItem]:
+    """명세서에서 항목을 위치와 함께 뽑는다. 표가 있으면 표만 본다(extract_requirements 와 같다).
+
+    표에서는 유효한 코드가 한 행이라도 있는 표만 요구사항 표로 본다. 그 표 안에서 코드 칸이
+    비지 않았는데 코드 꼴이 아닌 행은 버리지 않고 남긴다.
+    """
+    tables, _ = tables_and_lines(text)
+    items: list[SpecItem] = []
+    for t_no, table in enumerate(tables, start=1):
+        cols = _columns(table)
+        if cols is None:
+            continue
+        start = 0 if cols.headerless else 1
+        rows = table[start:]
+        if not any(_CODE_FULL.match(_cell(r, cols.code)) for r in rows):
+            continue
+        for r_no, row in enumerate(rows, start=start + 1):
+            code = _cell(row, cols.code)
+            name = _cell(row, cols.name)
+            if not code and not name:
+                continue
+            if not code:
+                continue  # 묶음 제목 같은 행. 코드 칸이 빈 행은 요구사항이 아니다
+            body = _cell(row, cols.body) or name
+            items.append(SpecItem(
+                code=code, title=_title_of(name) if name else "", body=body[:MAX_BODY_CHARS],
+                priority=priority_of(_cell(row, cols.priority)), location=f"표 {t_no} · {r_no}행",
+            ))
+    if items:
+        return items
+    return _spec_items_from_lines(text)
+
+
+def _spec_items_from_lines(text: str) -> list[SpecItem]:
+    items: list[SpecItem] = []
+    current: SpecItem | None = None
+    body: list[str] = []
+
+    def flush() -> None:
+        nonlocal current, body
+        if current is not None:
+            current.body = (clean(" ".join(body)) or current.title)[:MAX_BODY_CHARS]
+            items.append(current)
+        current, body = None, []
+
+    for no, raw in enumerate(text.splitlines(), start=1):
+        if raw.lstrip().startswith("|"):
+            continue
+        line = raw.strip()
+        match = _CODE_LINE.match(clean(_HEADING.sub(r"\1", line)))
+        if match:
+            flush()
+            rest = clean(match.group(2))
+            current = SpecItem(code=match.group(1), title=_title_of(rest) if rest else "",
+                               body="", priority="SHOULD", location=f"{no}번째 줄")
+            continue
+        if current is None:
+            continue
+        if not line or _HEADING.match(line):
+            flush()
+            continue
+        body.append(line)
+    flush()
+    return items
+
+
+def problems_of(items: list[dict]) -> list[list[str]]:
+    """항목마다의 문제 목록. items 는 code·title 을 가진 사전이다(DB 행이나 SpecItem.as_dict)."""
+    counts: dict[str, int] = {}
+    for item in items:
+        if item.get("code"):
+            counts[item["code"]] = counts.get(item["code"], 0) + 1
+    out: list[list[str]] = []
+    for item in items:
+        code, found = item.get("code"), []
+        if not code or not _CODE_FULL.match(code):
+            found.append(INVALID_CODE)
+        elif not _TRACEABLE_CODE.match(code):
+            found.append(UNTRACEABLE_CODE)
+        if code and counts.get(code, 0) > 1:
+            found.append(DUPLICATE_CODE)
+        if not (item.get("title") or "").strip():
+            found.append(MISSING_TITLE)
+        out.append(found)
+    return out
+
+
+def is_code(value: str) -> bool:
+    return bool(_CODE_FULL.match(value))
+
+
 def _title_lines(text: str, limit: int = 5) -> list[str]:
     out: list[str] = []
     for raw in text.splitlines():

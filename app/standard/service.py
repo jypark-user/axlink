@@ -46,6 +46,8 @@ class PromoteResult:
     raw_only: int = 0    # 원본 보존이 목적인 종류(마일스톤·버전·트래커). 실패가 아니다
     indexed: int = 0
     unchanged: int = 0
+    # 같은 코드가 다른 원천에 이미 있어 이 이슈를 새 요구사항으로 만들지 않은 수(GH-139)
+    requirement_conflicts: int = 0
     by_type: dict[str, int] = field(default_factory=dict)
     index_error: str | None = None
 
@@ -61,17 +63,26 @@ def promote_connection(cur: Any, connection: dict[str, Any], port: EmbeddingPort
     if connection["tool"] == "REDMINE":
         return _promote_redmine(cur, connection, rules, port, result, sources)
 
+    # 이슈에서 요구사항을 만드는지. 연결 설정이 꺼져 있거나 기준선을 확정한 사업이면 만들지 않는다
+    creates_requirements = bool(connection.get("requirement_from_issues")) and not (
+        repository.has_confirmed_baseline(cur, project_id)
+    )
+
     for raw in _raw_artifacts(cur, connection_id):
         payload, kind, external_id = raw["payload_jsonb"], raw["object_kind"], raw["external_id"]
 
         if kind == "issue":
             target = mapping.classify_issue(payload, rules)
+            row_id = None
             if target == "REQUIREMENT":
                 rec = mapping.to_requirement(payload)
-                row_id = repository.upsert_requirement(
-                    cur, project_id, connection_id, external_id, rec
+                row_id = _promote_requirement(
+                    cur, project_id, connection_id, external_id, rec,
+                    creates_requirements, result,
                 )
-            else:
+                if row_id is None:
+                    target = "ISSUE"
+            if target == "ISSUE":
                 rec = mapping.to_issue(payload)
                 row_id = repository.upsert_issue(cur, project_id, connection_id, external_id, rec)
             sources.append(
@@ -110,6 +121,46 @@ def promote_connection(cur: Any, connection: dict[str, Any], port: EmbeddingPort
         result.by_type[target] = result.by_type.get(target, 0) + 1
 
     return _finish_indexing(cur, port, result, sources)
+
+
+def _promote_requirement(
+    cur: Any, project_id: str, connection_id: str, external_id: str, rec: dict[str, Any],
+    creates: bool, result: PromoteResult,
+) -> str | None:
+    """요구사항으로 분류된 이슈 하나. 요구사항 id, 요구사항으로 두지 않으면 None(일반 이슈로 간다).
+
+    - 이 이슈에서 이미 이어진 요구사항이 있으면 그 행을 갱신한다. 만들지 않는 연결이면 근거만.
+    - 만들지 않는 연결이면 새 요구사항을 만들지 않는다. 이슈는 일반 이슈로 남아 코드를 참조한다.
+    - 같은 코드가 이미 있으면 새로 만들지 않는다. 원천이 없는 행(문서)이면 이 이슈를 원천으로
+      잇고, 다른 원천이 가진 코드면 붙이지 않고 충돌로 센다. 전에는 유일 제약 위반으로 수집
+      전체가 실패했다.
+    """
+    own = repository.find_requirement_by_source(cur, connection_id, external_id)
+    if not creates:
+        if own is None:
+            return None
+        repository.update_requirement_evidence(
+            cur, str(own["id"]), connection_id, external_id, rec
+        )
+        return str(own["id"])
+
+    code = rec["code"]
+    holder = repository.find_requirement_by_code(cur, project_id, code) if code else None
+    if holder is not None and (own is None or holder["id"] != own["id"]):
+        result.requirement_conflicts += 1
+        if own is not None:
+            # 제목을 다른 행의 코드로 바꾼 이슈. 코드는 그대로 두고 나머지만 갱신한다
+            repository.upsert_requirement(
+                cur, project_id, connection_id, external_id, {**rec, "code": own["code"]}
+            )
+            return str(own["id"])
+        if holder["tool_connection_id"] is None:
+            repository.update_requirement_evidence(
+                cur, str(holder["id"]), connection_id, external_id, rec
+            )
+            return str(holder["id"])
+        return None
+    return repository.upsert_requirement(cur, project_id, connection_id, external_id, rec)
 
 
 def _promote_redmine(
@@ -247,6 +298,7 @@ def list_requirements(
             statusBasis=requirement_decision.status_basis(r),
             evidenceStatus=r["evidence_status"],
             decision=requirement_decision.decision_of(r),
+            inBaseline=r["baseline_id"] is not None,
         )
         for r in rows
     ]
