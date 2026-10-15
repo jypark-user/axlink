@@ -32,5 +32,6 @@ def test_목록에_없는_이름이나_경로는_없는_것으로_본다(client,
     assert client.get("/api/help/..%2F..%2F.env", headers=auth).status_code == 404
 
 
+@requires_db  # client 고정물이 앱을 띄우며 DB 에 붙는다
 def test_로그인하지_않으면_받지_못한다(client):
     assert client.get("/api/help/tool-integration").status_code == 401
