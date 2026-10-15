@@ -1,4 +1,6 @@
 import { useState, type ReactNode } from 'react';
+import { Link } from 'react-router-dom';
+import { BookOpen } from 'lucide-react';
 import {
   AlertDialog,
   AlertDialogAction,
@@ -86,14 +88,21 @@ export function ConnectionsPage(): ReactNode {
         title="연동"
         description="GitHub · Redmine 연결과 수집 상태입니다."
         actions={
-          <Button
-            onClick={() => {
-              setEditing(null);
-              setFormOpen(true);
-            }}
-          >
-            연동 등록
-          </Button>
+          <>
+            <Button asChild variant="outline">
+              <Link to="/guide/tool-integration">
+                <BookOpen className="size-4" /> 연동 가이드
+              </Link>
+            </Button>
+            <Button
+              onClick={() => {
+                setEditing(null);
+                setFormOpen(true);
+              }}
+            >
+              연동 등록
+            </Button>
+          </>
         }
       />
       <DataState state={state} onRetry={state.reload} empty={{ text: '등록된 연결이 없습니다.' }}>

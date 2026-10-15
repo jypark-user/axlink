@@ -30,6 +30,7 @@ from app.dashboard.board_router import router as board_router
 from app.dashboard.router import router as dashboard_router
 from app.db import close_pool, pool, tx
 from app.document.router import router as document_router
+from app.help.router import router as help_router
 from app.instance import router as instance_router
 from app.integration.router import router as integration_router
 from app.org.router import router as org_router
@@ -105,6 +106,7 @@ app.include_router(admin_router)
 app.include_router(activity_router)
 app.include_router(schedule_router)
 app.include_router(instance_router)
+app.include_router(help_router)
 
 
 @app.get("/api/health", tags=["health"])

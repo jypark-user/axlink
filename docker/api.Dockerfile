@@ -56,8 +56,11 @@ ENV PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1 \
     PATH=/opt/venv/bin:$PATH \
     AXLINK_APP_VERSION="${AXLINK_VERSION}+${AXLINK_REVISION}" \
-    AXLINK_DOCUMENT_ROOT=/data/documents
+    AXLINK_DOCUMENT_ROOT=/data/documents \
+    AXLINK_MANUAL_DIR=/srv/axlink/docs/40-manual
 COPY --from=build /opt/venv /opt/venv
+# 화면이 /api/help 로 보여 주는 사용 안내 문서(원천은 docs/40-manual)
+COPY docs/40-manual /srv/axlink/docs/40-manual
 # 업로드 문서 보관 위치. 빈 볼륨을 처음 붙이면 이 소유권이 볼륨으로 옮겨진다.
 RUN useradd --system --uid 10001 --home-dir /srv/axlink axlink \
  && mkdir -p /srv/axlink /data/documents \
