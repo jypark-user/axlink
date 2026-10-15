@@ -169,8 +169,10 @@ def test_카드는_100건을_넘어도_사업_전체를_센다(client, client_to
     exp["unassignedOpen"] += sum(not (r["assignee"] or "").strip() for r in opened)
     exp["unspecifiedOpen"] += sum(r["severity"] is None for r in opened)
 
+    sources = got.pop("sources")  # 연결 고르기 목록. 연결별 수의 합이 전체와 같다
     assert got == exp
     assert got["total"] > 100
+    assert sum(s["count"] for s in sources) == got["total"]
     assert got["open"] + got["closed"] == got["total"]
 
 

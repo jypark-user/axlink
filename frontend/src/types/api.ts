@@ -478,6 +478,12 @@ export interface SourceRef {
   connectionId: string | null;
   externalId: string | null;
   externalUrl: string | null;
+  /** 같은 도구의 연결이 여럿이면 tool 만으로는 어디서 왔는지 모른다(GH-140) */
+  connectionName?: string | null;
+  /** 저장소(owner/repo)나 Redmine 프로젝트 식별자 */
+  target?: string | null;
+  /** 원천 번호. externalId 의 종류 접두(issue: 등)를 뗀 것 */
+  number?: string | null;
 }
 
 export interface EntityHistoryResponse {
@@ -633,6 +639,17 @@ export interface IssueSummaryResponse {
   unassignedOpen: number;
   /** 열린 것 중 심각도 미지정. 고위험에서 빼고 따로 센다 */
   unspecifiedOpen: number;
+  /** 연결 고르기. 연결을 골라 물어도 사업 전체 연결을 낸다 */
+  sources: IssueSourceCount[];
+}
+
+/** connectionId 가 없으면 도구에서 오지 않은 이슈(업로드·수기)다. */
+export interface IssueSourceCount {
+  connectionId: string | null;
+  tool: ToolKind | null;
+  name: string | null;
+  target: string | null;
+  count: number;
 }
 
 export interface IssueResponse {

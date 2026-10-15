@@ -41,6 +41,7 @@ class BuildResult:
     broken: int = 0     # 원천 근거가 사라져 끊긴 것으로 표시한 링크
     superseded: int = 0  # 분류 정정으로 다른 링크에 대체됐거나 제외된 링크(ARC-024 2-5)
     unresolved: int = 0  # 근거는 있으나 가리킨 대상이 표준 모델에 없어 만들지 않은 것
+    ambiguous: int = 0  # 다른 도구 GH-n·RM-n 중 그 도구 연결이 여럿이라 고르지 않은 참조
     by_evidence: dict[str, int] = field(default_factory=dict)
 
 
@@ -61,25 +62,35 @@ def build_project_links(cur: Any, project_id: str) -> BuildResult:
     known_paths = set(products)
     index = repository.tool_entity_index(cur, project_id)
     connections = repository.project_connections(cur, project_id)
-    by_prefix = {
-        _TOOL_PREFIX[c["tool"]]: str(c["id"])
-        for c in connections if c["tool"] in _TOOL_PREFIX
-    }
+    # GH-n / RM-n 은 도구만 말하고 연결은 말하지 않는다(GH-140). 같은 도구의 연결이 둘이면
+    # 번호가 겹칠 수 있다. 근거가 나온 연결이 그 도구면 그 연결에서 찾고, 다른 도구를 가리키면
+    # 그 도구의 연결이 하나일 때만 잇는다. 둘 이상이면 고르지 않고 미해결로 센다.
+    by_prefix: dict[str, list[str]] = {}
+    for c in connections:
+        if c["tool"] in _TOOL_PREFIX:
+            by_prefix.setdefault(_TOOL_PREFIX[c["tool"]], []).append(str(c["id"]))
 
     result = BuildResult()
     planned: dict[_Edge, tuple[Evidence, str | None]] = {}
     excluded: dict[tuple[str, str, str, str], str] = {}
     deleted_docs: set[str] = set()
+    ambiguous: set[tuple[str, str]] = set()
 
-    def resolve(target: tuple[str, str]) -> tuple[str, str] | None:
+    def resolve(target: tuple[str, str], origin: dict[str, Any]) -> tuple[str, str] | None:
         ref, value = target
         if ref == "REQ":
             return ("REQUIREMENT", codes[value]) if value in known_codes else None
         if ref == "FILE":
             return ("WORK_PRODUCT", products[value][0]) if value in products else None
-        connection_id = by_prefix.get(ref)
-        if connection_id is None:
-            return None
+        if _TOOL_PREFIX.get(origin["tool"]) == ref:
+            connection_id = str(origin["id"])
+        else:
+            candidates = by_prefix.get(ref, [])
+            if len(candidates) != 1:
+                if len(candidates) > 1:
+                    ambiguous.add(target)
+                return None
+            connection_id = candidates[0]
         external_id = f"issue:{value}" if ref == "GH" else value
         return index.get((connection_id, external_id))
 
@@ -94,11 +105,11 @@ def build_project_links(cur: Any, project_id: str) -> BuildResult:
                 connection["tool"], raw, rules, known_codes, known_paths, pr_refs
             )
             for source, ex in dropped:
-                target = resolve(ex.target)
+                target = resolve(ex.target, connection)
                 if target is not None:
                     excluded[(source[0], source[1], target[0], target[1])] = ex.reason
             for source, evidence in found:
-                target = resolve(evidence.target)
+                target = resolve(evidence.target, connection)
                 if target is None:
                     result.unresolved += 1
                     continue
@@ -124,6 +135,7 @@ def build_project_links(cur: Any, project_id: str) -> BuildResult:
         result.active += 1
         result.by_evidence[evidence.kind] = result.by_evidence.get(evidence.kind, 0) + 1
 
+    result.ambiguous = len(ambiguous)
     result.broken, result.superseded = repository.close_stale_auto_links(
         cur, project_id, kept, replaced, excluded, deleted_docs
     )
@@ -364,6 +376,9 @@ def requirement_detail(
             connectionId=str(row["tool_connection_id"]) if row["tool_connection_id"] else None,
             externalId=row["external_id"],
             externalUrl=row["external_url"],
+            connectionName=row.get("connection_name"),
+            target=row.get("target_resource"),
+            number=row["external_id"].rsplit(":", 1)[-1] if row["external_id"] else None,
         ),
         traceComplete=row["trace_complete"],
         updatedAt=row["updated_at"].isoformat(),

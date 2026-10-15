@@ -412,7 +412,7 @@ _REQUIREMENT_COLUMNS = """
     r.tool_connection_id, r.external_id, r.external_url, r.source_kind, r.updated_at,
     coalesce(r.evidence_status, r.status) as evidence_status,
     r.decided_status, r.decided_reason, r.decided_at, du.name as decided_by_name,
-    c.tool as tool_name,
+    c.tool as tool_name, c.name as connection_name, c.target_resource,
     {source_state} as source_state,
     exists (
       select 1 from trace_link tl
@@ -580,7 +580,7 @@ _ISSUE_COLUMNS = """
     i.id, i.project_id, i.issue_key, i.title, i.status, i.severity, i.assignee,
     i.resolved_at, i.source_updated_at, i.updated_at, i.source_priority,
     i.tool_connection_id, i.external_id, i.external_url, i.source_kind,
-    c.tool as tool_name
+    c.tool as tool_name, c.name as connection_name, c.target_resource
 """
 _ISSUE_FROM = """
     from issue i
@@ -588,7 +588,9 @@ _ISSUE_FROM = """
 """
 
 
-def _issue_filter(q: str | None, status: str | None) -> tuple[str, list[Any]]:
+def _issue_filter(
+    q: str | None, status: str | None, connection_id: str | None = None
+) -> tuple[str, list[Any]]:
     where, params = "", []
     if q and q.strip():
         like = f"%{q.strip()}%"
@@ -597,11 +599,18 @@ def _issue_filter(q: str | None, status: str | None) -> tuple[str, list[Any]]:
     if status:
         where += " and i.status = %s"
         params.append(status)
+    if connection_id:
+        # 사업 조건(i.project_id)과 같이 건다. 다른 사업의 연결 id 를 넣어도 0건이다
+        where += " and i.tool_connection_id = %s"
+        params.append(connection_id)
     return where, params
 
 
-def count_issues(cur: Any, project_id: str, q: str | None, status: str | None) -> int:
-    where, params = _issue_filter(q, status)
+def count_issues(
+    cur: Any, project_id: str, q: str | None, status: str | None,
+    connection_id: str | None = None,
+) -> int:
+    where, params = _issue_filter(q, status, connection_id)
     row = fetch_one(
         cur,
         f"select count(*) as n from issue i where i.project_id = %s {where}",
@@ -614,7 +623,9 @@ def count_issues(cur: Any, project_id: str, q: str | None, status: str | None) -
 HEAVY_SEVERITIES = ("BLOCKER", "CRITICAL", "MAJOR")
 
 
-def issue_summary(cur: Any, project_id: str) -> dict[str, int]:
+def issue_summary(
+    cur: Any, project_id: str, connection_id: str | None = None
+) -> dict[str, int]:
     """이슈 화면 카드 숫자. 목록과 같은 테이블·같은 사업 조건이고 페이지와 무관하다."""
     row = fetch_one(
         cur,
@@ -630,22 +641,50 @@ def issue_summary(cur: Any, project_id: str) -> dict[str, int]:
                                   and severity is null) as unspecified_open
           from issue
          where project_id = %s
+           and (%s::uuid is null or tool_connection_id = %s::uuid)
         """,
-        (list(HEAVY_SEVERITIES), project_id),
+        (list(HEAVY_SEVERITIES), project_id, connection_id, connection_id),
     )
     keys = ("total", "open", "closed", "heavy_open", "unassigned_open", "unspecified_open")
     return {k: int(row[k]) for k in keys}
 
 
+def issue_sources(cur: Any, project_id: str) -> list[dict[str, Any]]:
+    """이슈 화면의 연결 고르기. 사업에 붙은 연결과 연결별 이슈 수다.
+
+    이슈가 없는 연결도 낸다. 고를 수 있어야 "이 연결에서는 0건" 을 확인한다.
+    도구에서 오지 않은 이슈(업로드·수기)는 connection_id 가 비어 한 줄로 묶는다.
+    """
+    return fetch_all(
+        cur,
+        """
+        select c.id as connection_id, c.tool, c.name, c.target_resource,
+               count(i.id) as n
+          from tool_connection c
+          left join issue i on i.tool_connection_id = c.id and i.project_id = c.project_id
+         where c.project_id = %s
+         group by c.id
+        union all
+        select null, null, null, null, count(*)
+          from issue
+         where project_id = %s and tool_connection_id is null
+        having count(*) > 0
+         order by 2 nulls last, 3
+        """,
+        (project_id, project_id),
+    )
+
+
 def search_issues(
-    cur: Any, project_id: str, q: str | None, status: str | None, page: PageQuery
+    cur: Any, project_id: str, q: str | None, status: str | None, page: PageQuery,
+    connection_id: str | None = None,
 ) -> list[dict[str, Any]]:
     """열린 것이 위로, 그 안에서는 원천에서 최근 움직인 순서다. 감독이 볼 순서가 그렇다.
 
     끝의 id 는 동점 정리다. 한 번에 승격된 행은 시각이 같아서, 이게 없으면 쪽을 넘길 때
     같은 행이 두 번 나오고 어떤 행은 한 번도 안 나온다.
     """
-    where, params = _issue_filter(q, status)
+    where, params = _issue_filter(q, status, connection_id)
     return fetch_all(
         cur,
         f"""
@@ -909,7 +948,6 @@ def entity_labels(
 
     label_sql = {
         "REQUIREMENT": "coalesce(code, title)",
-        "ISSUE": "coalesce(issue_key, title)",
         "RISK": "title",
         "CODE_CHANGE": (
             "case when kind = 'COMMIT' then left(ref_name, 7) || ' ' || title else title end"
@@ -927,6 +965,27 @@ def entity_labels(
             )
             for r in rows:
                 out[(entity_type, str(r["id"]))] = (r["label"] or "?", r["url"])
+            continue
+        if entity_type == "ISSUE":
+            # 같은 도구의 연결이 사업에 둘 이상이면 GH-5 가 둘일 수 있다. 그때만 연결 이름을 붙인다
+            rows = fetch_all(
+                cur,
+                """
+                select i.id, i.external_url,
+                       coalesce(i.issue_key, i.title)
+                       || case when exists (
+                            select 1 from tool_connection o
+                             where o.project_id = c.project_id and o.tool = c.tool
+                               and o.id <> c.id
+                          ) then ' · ' || c.name else '' end as label
+                  from issue i
+                  left join tool_connection c on c.id = i.tool_connection_id
+                 where i.id = any(%s::uuid[])
+                """,
+                (ids,),
+            )
+            for r in rows:
+                out[(entity_type, str(r["id"]))] = (r["label"], r["external_url"])
             continue
         table = _ENTITY_TABLE.get(entity_type)
         if table is None:
