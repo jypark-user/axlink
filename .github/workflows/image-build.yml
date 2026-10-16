@@ -154,9 +154,13 @@ jobs:
           repo=$(ls db/migration | grep -c '^V.*\.sql$')
           img=$(docker run --rm --entrypoint sh "$mig" -c 'ls /flyway/sql | grep -c "^V.*\.sql$"')
           [ "$repo" = "$img" ] || { echo "::error::마이그레이션 파일 저장소 $repo, 이미지 $img"; exit 1; }
-          # web: 빌드된 index.html 이 앱 경로 아래 자산을 부른다
+          # web: 빌드된 index.html 이 앱 경로 아래 자산을 부른다. 보안 갱신이 nginx 판을 바꾸지 않았다
           docker run --rm --entrypoint sh "$web" -c \
-            'grep -q "/ax-link/assets/" /usr/share/nginx/html/index.html'
+            'grep -q "/ax-link/assets/" /usr/share/nginx/html/index.html && nginx -v 2>&1 | grep -q "nginx/1.27.5" && [ "$(id -u)" = 101 ]'
+          # migrate: PostgreSQL 드라이버만 남았다
+          left=$(docker run --rm --entrypoint sh "$mig" -c 'ls /flyway/drivers')
+          echo "$left" | grep -q '^postgresql-.*\.jar$' && [ "$(echo "$left" | wc -l)" = 1 ] \
+            || { echo "::error::migrate 드라이버: $left"; exit 1; }
           echo "api·web·migrate 내용 확인 (마이그레이션 $repo 개)"
 
       - name: 기동 검증 (시험 DB·운영 모드)
@@ -214,8 +218,11 @@ jobs:
           if [ -n "${{ steps.meta.outputs.release }}" ]; then
             tags="$tags ${{ steps.meta.outputs.release }}"
           else
-            # "가장 최근 main" 표시용이다. 배포에는 sha 태그나 digest 를 쓴다
-            tags="$tags main"
+            # "가장 최근 main" 표시용이다. 배포에는 sha 태그나 digest 를 쓴다. 병합이 겹치면 실행이
+            # 끝나는 순서가 커밋 순서와 다르다. 지금 main 머리인 커밋일 때만 옮긴다
+            head=$(git ls-remote origin refs/heads/main | cut -f1)
+            if [ "$head" = "${{ inputs.sha }}" ]; then tags="$tags main"
+            else echo "main 머리가 ${head:0:7} 라 main 태그를 옮기지 않는다"; fi
           fi
           for i in api web migrate; do
             for t in $tags; do

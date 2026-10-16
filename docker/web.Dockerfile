@@ -54,6 +54,11 @@ ENV AXLINK_API_UPSTREAM=http://api:8080 \
     AXLINK_BASE_PATH=${AXLINK_BASE_PATH} \
     AXLINK_SERVER_NAMES="" \
     AXLINK_LOCAL_NAMES=""
+# 기반 이미지(1.27-alpine, alpine 3.21)는 2025-06 이후 다시 만들어지지 않는다. 알파인 보안 갱신만 받는다
+# (OpenSSL CVE-2026-31789 등, ARC-026 4-4). nginx 는 설치 때 판이 고정돼 그대로 1.27.5 다
+USER root
+RUN apk upgrade --no-cache
+USER 101
 COPY --chmod=0755 docker/nginx/40-axlink-site.sh /docker-entrypoint.d/40-axlink-site.sh
 COPY --from=build /web/dist /usr/share/nginx/html
 EXPOSE 8080

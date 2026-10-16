@@ -14,6 +14,14 @@ LABEL org.opencontainers.image.title="axlink-migrate" \
       org.opencontainers.image.version="${AXLINK_VERSION}" \
       org.opencontainers.image.revision="${AXLINK_REVISION}" \
       org.opencontainers.image.source="https://github.com/jypark-user/axlink"
+# flyway:10 은 2024-11 이후 다시 만들어지지 않는다. 쓰지 않는 다른 DB 드라이버(Cassandra 의 netty
+# CVE-2026-75595 등)를 빼고 PostgreSQL 드라이버만 둔다. OS 는 걸린 패키지만 보안 갱신한다(ARC-026 4-4)
+RUN find /flyway/drivers -mindepth 1 -maxdepth 1 ! -name 'postgresql-*.jar' -exec rm -rf {} + \
+ && apt-get update \
+ && apt-get install -y --no-install-recommends --only-upgrade \
+      openssl libssl3 gpgv gnupg gpg gpg-agent gpgsm gpgconf dirmngr gnupg-utils \
+      gpg-wks-client gpg-wks-server gnupg-l10n \
+ && rm -rf /var/lib/apt/lists/*
 ENV FLYWAY_LOCATIONS=filesystem:/flyway/sql \
     FLYWAY_CONNECT_RETRIES=20
 COPY db/migration/ /flyway/sql/

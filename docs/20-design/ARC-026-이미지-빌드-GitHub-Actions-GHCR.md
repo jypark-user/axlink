@@ -74,6 +74,8 @@ vX.Y.Z 태그   → main 에 있고 CI 가 성공한 커밋인지 확인 → X.Y
 - 고칠 판이 나온 HIGH·CRITICAL 만 센다(`--ignore-unfixed`). 결과는 작업 요약과 산출물(30일)에 남는다.
 - 처리 기준: PR·main 은 보고만 한다. **릴리스는 고칠 수 있는 CRITICAL 이 하나라도 있으면 멈춘다.** HIGH 는 릴리스 노트에 남기고 다음 기반 이미지 갱신 때 처리한다.
 - 첫 결과(PR #151): api 0건. web CRITICAL 2·HIGH 39(기반 alpine 3.21.3 의 OpenSSL 등), migrate CRITICAL 1·HIGH 39(flyway 기반 이미지의 Java 라이브러리·Ubuntu 패키지). 모두 기반 이미지에서 왔다. 첫 릴리스 전에 기반 이미지(`nginx-unprivileged`·`flyway`) 판을 올리는 작업이 필요하다(따로 PR).
+- 10-16 수정(PR #154): 두 기반 이미지 모두 그 판으로는 더 갱신되지 않아 태그를 두고 고쳤다. web 은 알파인 보안 갱신만(`apk upgrade`, nginx 1.27.5 고정 유지), migrate 는 Flyway 10 유지·PostgreSQL 외 드라이버 제거·걸린 OS 패키지만 갱신. 결과: api 0, web 0, migrate CRITICAL 0·HIGH 8.
+- 남은 HIGH 8(migrate): `flyway/lib` 의 jackson-core·databind 2.15.2(Flyway 본체 의존성), PostgreSQL 드라이버 42.7.2. 마이그레이션 이미지는 배포 때 한 번 돌고 끝나며 외부 입력을 받지 않는다. 선택지: (1) 그대로 두고 릴리스 노트에 적는다, (2) 드라이버만 42.7.11 로 바꿔 넣는다(Maven Central 체크섬 고정), (3) Flyway 11 로 올린다(마이그레이션 검증·DB 사본 업그레이드를 다시 해야 한다). 결정 전까지 (1).
 
 ## 5. 기록
 
