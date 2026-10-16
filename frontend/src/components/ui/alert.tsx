@@ -9,7 +9,10 @@ const alertVariants = cva(
       variant: {
         default: 'bg-card text-card-foreground',
         destructive: 'border-destructive/40 bg-card text-destructive [&>svg]:text-current',
-        warning: 'border-warning/40 bg-card text-warning-foreground [&>svg]:text-warning',
+        // warning-foreground 는 경고색 바탕 위 글자색이다(밝은 테마 흰색, 어두운 테마 검정). 카드 바탕에 쓰면
+        // 두 테마 모두 안 보인다. 글자는 카드 색, 경고색은 테두리·아이콘·제목에만 쓴다
+        warning:
+          'border-warning/40 bg-card text-card-foreground [&>svg]:text-warning [&_[data-slot=alert-title]]:text-warning',
         success: 'border-success/40 bg-card text-card-foreground [&>svg]:text-success',
         info: 'border-info/40 bg-card text-card-foreground [&>svg]:text-info',
       },
