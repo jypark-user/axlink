@@ -23,7 +23,8 @@ import { isApiError } from '@/lib/api-error';
 import { formatDateTime } from '@/lib/format';
 import { useAsync } from '@/lib/use-async';
 import { InviteLinkDialog } from '@/features/assignments/invite-link-dialog';
-import type { AssignmentResponse } from '@/types/api';
+import { ParticipantsPanel } from '@/features/assignments/participants-panel';
+import type { AssignmentResponse, ParticipantResponse } from '@/types/api';
 
 /** `embedded` 면 사업 정보 화면 안에 들어간다 — 자체 화면 머리를 두지 않는다. */
 export function AssignmentsPage({ embedded }: { embedded?: boolean } = {}): ReactNode {
@@ -36,6 +37,10 @@ export function AssignmentsPage({ embedded }: { embedded?: boolean } = {}): Reac
 
   const state = useAsync<AssignmentResponse[]>(
     () => api.get<AssignmentResponse[]>(`/projects/${project.id}/assignments`),
+    [project.id],
+  );
+  const parts = useAsync<ParticipantResponse[]>(
+    () => api.get<ParticipantResponse[]>(`/projects/${project.id}/participants`),
     [project.id],
   );
 
@@ -74,6 +79,18 @@ export function AssignmentsPage({ embedded }: { embedded?: boolean } = {}): Reac
           actions={addButton}
         />
       )}
+      {parts.data && (
+        <div className="pb-4">
+          <ParticipantsPanel
+            projectId={project.id}
+            rows={parts.data}
+            onChanged={(next) => {
+              parts.setData(next);
+              state.reload();
+            }}
+          />
+        </div>
+      )}
       <DataState
         state={state}
         onRetry={state.reload}
@@ -96,7 +113,12 @@ export function AssignmentsPage({ embedded }: { embedded?: boolean } = {}): Reac
         )}
       </DataState>
 
-      <InviteLinkDialog projectId={project.id} open={inviteOpen} onOpenChange={setInviteOpen} />
+      <InviteLinkDialog
+        projectId={project.id}
+        open={inviteOpen}
+        onOpenChange={setInviteOpen}
+        participants={parts.data ?? []}
+      />
 
       <AlertDialog
         open={revokeTarget !== null}

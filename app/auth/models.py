@@ -38,6 +38,8 @@ class InvitationPreviewResponse(BaseModel):
     username: str | None
     name: str | None
     expiresAt: str  # noqa: N815
+    # 업체를 지정한 사업 초대면 그 업체 이름. 가입자는 이 업체로만 들어간다(GH-138)
+    contractorOrgName: str | None = None  # noqa: N815
 
 
 class AcceptInvitationRequest(BaseModel):

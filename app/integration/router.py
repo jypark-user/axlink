@@ -13,6 +13,7 @@ from app.common.paging import PageQuery, PageResponse
 from app.db import tx
 from app.integration import service
 from app.integration.models import (
+    ConnectionOwnerRequest,
     MappingRulesUpdateRequest,
     SyncJobResponse,
     ToolConnectionCreateRequest,
@@ -80,6 +81,15 @@ def update_status(
 ) -> ToolConnectionResponse:
     with tx() as cur:
         return service.change_status(cur, principal, connection_id, req.status)
+
+
+@router.patch("/connections/{connection_id}/owner", response_model=ToolConnectionResponse)
+def change_owner(
+    connection_id: str, req: ConnectionOwnerRequest, principal: Principal
+) -> ToolConnectionResponse:
+    """연결 소유 업체 변경. 발주기관·관리자만, 참여 용역 업체로만(GH-138)."""
+    with tx() as cur:
+        return service.change_owner(cur, principal, connection_id, req)
 
 
 @router.delete("/connections/{connection_id}", status_code=204, response_class=Response)

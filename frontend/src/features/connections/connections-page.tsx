@@ -121,7 +121,25 @@ export function ConnectionsPage(): ReactNode {
                   <p className="truncate text-muted-foreground">
                     {c.baseUrl} · {c.targetResource}
                   </p>
-                  <p className="text-muted-foreground">인증 {c.credentialMasked}</p>
+                  <p className="text-muted-foreground">
+                    소유 업체{' '}
+                    {c.ownerState === 'UNCLEAR' ? (
+                      <Badge
+                        variant="warning"
+                        title="참여 업체가 아닌 조직이 만든 연결입니다. 발주기관이 소유 업체를 지정합니다."
+                      >
+                        불명확{c.ownerOrgName ? ` · ${c.ownerOrgName}` : ''}
+                      </Badge>
+                    ) : (
+                      <span className="text-foreground">
+                        {c.ownerOrgName ?? '-'}
+                        {c.ownerState === 'CLIENT' ? ' (발주기관)' : ''}
+                      </span>
+                    )}
+                  </p>
+                  {c.credentialMasked && (
+                    <p className="text-muted-foreground">인증 {c.credentialMasked}</p>
+                  )}
                   <p className="text-muted-foreground">
                     수집 {c.ingestedCount.toLocaleString('ko-KR')}건 · 매핑규칙 {c.mappingRuleCount}
                     개
@@ -137,53 +155,65 @@ export function ConnectionsPage(): ReactNode {
                   )}
                   {
                     <div className="flex flex-wrap gap-2">
-                      <Button
-                        size="sm"
-                        variant="outline"
-                        onClick={() =>
-                          act(
-                            () => api.post(`/connections/${c.id}/test`, {}),
-                            '연결 테스트에 성공했습니다.',
-                          )
-                        }
-                      >
-                        연결 테스트
-                      </Button>
-                      <Button size="sm" disabled={syncingId === c.id} onClick={() => runSync(c)}>
-                        {syncingId === c.id ? '수집 중…' : '전체 수집'}
-                      </Button>
-                      {(c.status === 'ACTIVE' ||
-                        c.status === 'PAUSED' ||
-                        c.status === 'VERIFIED') && (
+                      {c.canManage && (
                         <Button
                           size="sm"
                           variant="outline"
                           onClick={() =>
                             act(
-                              () =>
-                                api.patch(`/connections/${c.id}/status`, {
-                                  status: c.status === 'ACTIVE' ? 'PAUSED' : 'ACTIVE',
-                                }),
-                              '상태를 변경했습니다.',
+                              () => api.post(`/connections/${c.id}/test`, {}),
+                              '연결 테스트에 성공했습니다.',
                             )
                           }
                         >
-                          {c.status === 'ACTIVE' ? '일시중지' : '활성화'}
+                          연결 테스트
                         </Button>
                       )}
-                      <Button
-                        size="sm"
-                        variant="outline"
-                        onClick={() => {
-                          setEditing(c);
-                          setFormOpen(true);
-                        }}
-                      >
-                        수정
+                      <Button size="sm" disabled={syncingId === c.id} onClick={() => runSync(c)}>
+                        {syncingId === c.id ? '수집 중…' : '전체 수집'}
                       </Button>
-                      <Button size="sm" variant="destructive" onClick={() => setDeleting(c)}>
-                        삭제
-                      </Button>
+                      {c.canManage &&
+                        (c.status === 'ACTIVE' ||
+                          c.status === 'PAUSED' ||
+                          c.status === 'VERIFIED') && (
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            onClick={() =>
+                              act(
+                                () =>
+                                  api.patch(`/connections/${c.id}/status`, {
+                                    status: c.status === 'ACTIVE' ? 'PAUSED' : 'ACTIVE',
+                                  }),
+                                '상태를 변경했습니다.',
+                              )
+                            }
+                          >
+                            {c.status === 'ACTIVE' ? '일시중지' : '활성화'}
+                          </Button>
+                        )}
+                      {c.canManage ? (
+                        <>
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            onClick={() => {
+                              setEditing(c);
+                              setFormOpen(true);
+                            }}
+                          >
+                            수정
+                          </Button>
+                          <Button size="sm" variant="destructive" onClick={() => setDeleting(c)}>
+                            삭제
+                          </Button>
+                        </>
+                      ) : (
+                        // 설정 변경·삭제는 소유 업체와 발주기관만 한다(GH-138)
+                        <span className="text-muted-foreground self-center text-xs">
+                          설정 변경은 소유 업체·발주기관만 할 수 있습니다
+                        </span>
+                      )}
                     </div>
                   }
                 </CardContent>

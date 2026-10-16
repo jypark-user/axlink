@@ -251,16 +251,18 @@ def insert_user(
 # --- 초대 -----------------------------------------------------------------
 
 def insert_invite(
-    cur: Any, project_id: str, token_hash: str, expires_at: datetime, created_by: str
+    cur: Any, project_id: str, token_hash: str, expires_at: datetime, created_by: str,
+    organization_id: str | None = None,
 ) -> dict[str, Any]:
     return fetch_one(
         cur,
         """
-        insert into project_invite (project_id, token_hash, expires_at, created_by_user_id)
-        values (%s, %s, %s, %s)
-        returning id, project_id, expires_at, revoked_at, created_at
+        insert into project_invite (project_id, token_hash, expires_at, created_by_user_id,
+                                    organization_id)
+        values (%s, %s, %s, %s, %s)
+        returning id, project_id, expires_at, revoked_at, created_at, organization_id
         """,
-        (project_id, token_hash, expires_at, created_by),
+        (project_id, token_hash, expires_at, created_by, organization_id),
     )
 
 
@@ -269,10 +271,12 @@ def find_invite_by_hash(cur: Any, token_hash: str) -> dict[str, Any] | None:
         cur,
         """
         select i.id, i.project_id, i.expires_at, i.revoked_at, i.created_by_user_id,
-               p.name as project_name, o.name as client_org_name
+               p.name as project_name, o.name as client_org_name,
+               i.organization_id, co.name as contractor_org_name
           from project_invite i
           join project p on p.id = i.project_id
           join organization o on o.id = p.client_org_id
+          left join organization co on co.id = i.organization_id
          where i.token_hash = %s
         """,
         (token_hash,),
