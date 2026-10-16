@@ -1,0 +1,15 @@
+# 5173(공개)을 GHCR 이미지로 띄울 때 덮어쓰는 파일. 지금 실행 환경에는 쓰지 않는다(ARC-026 6절).
+#
+#   AXLINK_API_IMAGE=ghcr.io/jypark-user/axlink-api@sha256:... \
+#   AXLINK_WEB_IMAGE=ghcr.io/jypark-user/axlink-web@sha256:... \
+#   AXLINK_VERSION=<표시 버전> docker compose -f infra/docker-compose.yml -f infra/docker-compose.ext.yml \
+#     -f infra/docker-compose.ghcr-ext.yml up -d --no-deps --no-build api web
+#
+# 이미지는 digest 로 고정한다(이미지 빌드 결과의 image-manifest.json). main 같은 움직이는 태그는 쓰지 않는다.
+services:
+  api:
+    image: ${AXLINK_API_IMAGE:?AXLINK_API_IMAGE 가 필요하다(digest 로 고정)}
+    pull_policy: missing
+  web:
+    image: ${AXLINK_WEB_IMAGE:?AXLINK_WEB_IMAGE 가 필요하다(digest 로 고정)}
+    pull_policy: missing

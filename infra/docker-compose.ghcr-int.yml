@@ -1,0 +1,13 @@
+# 5174(내부)를 GHCR 이미지로 띄울 때 덮어쓰는 파일. 원격 게시를 확인한 뒤 별도 반영 단계에서 쓴다.
+#
+#   AXLINK_API_IMAGE=ghcr.io/jypark-user/axlink-api@sha256:... \
+#   AXLINK_WEB_IMAGE=ghcr.io/jypark-user/axlink-web@sha256:... \
+#   AXLINK_INT_VERSION=<표시 버전> docker compose -f infra/docker-compose.int.yml \
+#     -f infra/docker-compose.ghcr-int.yml up -d --no-deps int-api int-web
+services:
+  int-api:
+    image: ${AXLINK_API_IMAGE:?AXLINK_API_IMAGE 가 필요하다(digest 로 고정)}
+    pull_policy: missing
+  int-web:
+    image: ${AXLINK_WEB_IMAGE:?AXLINK_WEB_IMAGE 가 필요하다(digest 로 고정)}
+    pull_policy: missing

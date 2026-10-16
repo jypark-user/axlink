@@ -1,0 +1,293 @@
+# 실행 이미지(api·web·migrate)를 빌드·검사하고, 요청이 있으면 GHCR 에 게시한다(ARC-026).
+# 직접 돌지 않는다. images.yml 이 부른다. 권한은 부르는 쪽 작업이 정한다(검사만 할 때는 읽기 권한).
+#
+# 서버 배포는 하지 않는다. 5173·5174 반영은 사람이 이미지 digest 를 골라 따로 한다.
+
+name: 이미지 빌드 (재사용)
+
+on:
+  workflow_call:
+    inputs:
+      sha:
+        description: 빌드할 커밋(전체 SHA)
+        type: string
+        required: true
+      publish:
+        description: GHCR 에 게시한다
+        type: boolean
+        default: false
+      label:
+        description: 버전 표시 앞부분(main·pr<번호>·manual). 버전은 <label>-<sha7> 이 된다
+        type: string
+        required: true
+      release:
+        description: 릴리스 태그(vX.Y.Z). 버전은 X.Y.Z 가 되고 반입용 tar 를 만든다
+        type: string
+        default: ""
+
+env:
+  REGISTRY: ghcr.io/jypark-user
+  # 외부 공개 경로. 5173·5174 모두 이 경로로 연다(빌드 때 정해진다)
+  BASE_PATH: /ax-link/
+  # 취약점 검사 도구. 러너에 설치하지 않고 고정 버전 이미지로 돌린다
+  TRIVY_IMAGE: aquasec/trivy:0.57.0
+  # build-push-action 이 빌드 기록(.dockerbuild)을 산출물로 올리지 않게 한다. 기록은 image-manifest 가 맡는다
+  DOCKER_BUILD_RECORD_UPLOAD: "false"
+
+jobs:
+  images:
+    name: 이미지 빌드·검사${{ inputs.publish && '·게시' || '' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.sha }}
+          fetch-depth: 0
+
+      - name: 이름 정하기
+        id: meta
+        run: |
+          short="${{ inputs.sha }}"; short="${short:0:7}"
+          release="${{ inputs.release }}"; release="${release#v}"
+          if [ -n "$release" ]; then version="$release"; else version="${{ inputs.label }}-$short"; fi
+          echo "short=$short" >> "$GITHUB_OUTPUT"
+          echo "release=$release" >> "$GITHUB_OUTPUT"
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+          # 로컬에서 쓸 이름. 게시할 때 레지스트리 이름을 따로 붙인다
+          for i in api web migrate; do echo "$i=axlink-$i:ci-$short" >> "$GITHUB_OUTPUT"; done
+
+      - name: 릴리스 태그가 검증된 main 커밋인지
+        if: steps.meta.outputs.release != ''
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          git fetch -q origin main
+          git merge-base --is-ancestor "${{ inputs.sha }}" origin/main \
+            || { echo "::error::v${{ steps.meta.outputs.release }} 가 main 에 없는 커밋이다"; exit 1; }
+          ok=$(gh api "repos/${{ github.repository }}/actions/runs?head_sha=${{ inputs.sha }}&per_page=50" \
+            --jq '[.workflow_runs[] | select(.name == "CI" and .conclusion == "success")] | length')
+          [ "$ok" -gt 0 ] || { echo "::error::이 커밋의 CI 성공 기록이 없다"; exit 1; }
+
+      - name: 빌드 문맥에 비밀값·실행 자료가 없는지
+        # .dockerignore 를 그대로 적용한 문맥을 통째로 담아 본다. 실제 빌드가 받는 파일과 같다
+        run: |
+          docker build -q -t axlink-context-check -f - . <<'EOF'
+          FROM busybox:1.36
+          COPY . /ctx
+          EOF
+          docker run --rm axlink-context-check sh -c '
+            cd /ctx
+            bad=$(find . \( -name ".env" -o -name ".env.*" ! -name ".env.example" \
+                     -o -name "*.dump" -o -name "*.tar" -o -name "*.tar.gz" -o -name "*.pem" \
+                     -o -name "*.key" -o -name "*.p12" -o -path "./var/*" -o -path "./.git/*" \
+                     -o -path "./.claude/*" -o -path "./tests/*" -o -path "./infra/*" \
+                     -o -name "*accounts*.env" \) -print | head -20)
+            if [ -n "$bad" ]; then echo "$bad"; exit 1; fi
+            echo "문맥 파일 $(find . -type f | wc -l)개, 금지 항목 없음"'
+
+      - uses: docker/setup-buildx-action@v3
+
+      - name: migrate 빌드
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: docker/migrate.Dockerfile
+          load: true
+          push: false
+          tags: ${{ steps.meta.outputs.migrate }}
+          build-args: |
+            AXLINK_VERSION=${{ steps.meta.outputs.version }}
+            AXLINK_REVISION=${{ inputs.sha }}
+          cache-from: type=gha,scope=migrate
+          cache-to: type=gha,mode=max,scope=migrate
+
+      - name: api 빌드
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: docker/api.Dockerfile
+          target: prod
+          load: true
+          push: false
+          tags: ${{ steps.meta.outputs.api }}
+          build-args: |
+            AXLINK_VERSION=${{ steps.meta.outputs.version }}
+            AXLINK_REVISION=${{ inputs.sha }}
+          cache-from: type=gha,scope=api
+          cache-to: type=gha,mode=max,scope=api
+
+      - name: web 빌드 (앱 경로 /ax-link/)
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: docker/web.Dockerfile
+          target: prod
+          load: true
+          push: false
+          tags: ${{ steps.meta.outputs.web }}
+          build-args: |
+            AXLINK_VERSION=${{ steps.meta.outputs.version }}
+            AXLINK_REVISION=${{ inputs.sha }}
+            AXLINK_BASE_PATH=${{ env.BASE_PATH }}
+          cache-from: type=gha,scope=web
+          cache-to: type=gha,mode=max,scope=web
+
+      - name: 이미지 내용 검사
+        run: |
+          set -euo pipefail
+          api=${{ steps.meta.outputs.api }} web=${{ steps.meta.outputs.web }} mig=${{ steps.meta.outputs.migrate }}
+          for img in $api $web $mig; do
+            rev=$(docker inspect -f '{{ index .Config.Labels "org.opencontainers.image.revision" }}' "$img")
+            [ "$rev" = "${{ inputs.sha }}" ] || { echo "::error::$img revision 라벨 $rev"; exit 1; }
+          done
+          # api: 앱·사용 안내 문서가 있고, 저장소의 시험·실행 자료는 없다
+          docker run --rm --entrypoint sh "$api" -c '
+            set -e
+            python -c "import app.main" >/dev/null
+            test -f "/srv/axlink/docs/40-manual/도구-연동-가이드.md"
+            bad=$(find / -xdev \( -name ".env" -o -name "*.dump" -o -path "*/tests/*" -o -path "/srv/axlink/var*" \) \
+                    ! -path "/opt/venv/lib/*" ! -path "/usr/*" 2>/dev/null | head -5)
+            [ -z "$bad" ] || { echo "$bad"; exit 1; }
+            [ "$(id -u axlink)" = 10001 ]'
+          # migrate: 저장소의 V 파일이 하나도 빠지지 않았다
+          repo=$(ls db/migration | grep -c '^V.*\.sql$')
+          img=$(docker run --rm --entrypoint sh "$mig" -c 'ls /flyway/sql | grep -c "^V.*\.sql$"')
+          [ "$repo" = "$img" ] || { echo "::error::마이그레이션 파일 저장소 $repo, 이미지 $img"; exit 1; }
+          # web: 빌드된 index.html 이 앱 경로 아래 자산을 부른다
+          docker run --rm --entrypoint sh "$web" -c \
+            'grep -q "/ax-link/assets/" /usr/share/nginx/html/index.html'
+          echo "api·web·migrate 내용 확인 (마이그레이션 $repo 개)"
+
+      - name: 기동 검증 (시험 DB·운영 모드)
+        run: bash .github/scripts/image-smoke.sh ${{ steps.meta.outputs.migrate }} ${{ steps.meta.outputs.api }} ${{ steps.meta.outputs.web }} ${{ steps.meta.outputs.version }}
+
+      - name: 기동 로그 보관
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: image-smoke-logs-${{ steps.meta.outputs.short }}
+          path: smoke-*.log
+          retention-days: 14
+
+      - name: 취약점 검사
+        # 처리 기준(ARC-026 4-4): 고칠 판이 나온 CRITICAL 만 센다. PR·main 은 보고만 하고,
+        # 릴리스는 그런 항목이 있으면 멈춘다. 결과는 작업 요약과 산출물(30일)에 남는다
+        run: |
+          mkdir -p scan
+          fail=0
+          for i in api web migrate; do
+            img=axlink-$i:ci-${{ steps.meta.outputs.short }}
+            docker run --rm -v /var/run/docker.sock:/var/run/docker.sock "$TRIVY_IMAGE" image \
+              --quiet --scanners vuln --ignore-unfixed --severity HIGH,CRITICAL \
+              --format json "$img" > "scan/$i.json"
+            crit=$(python3 -c "import json,sys;d=json.load(open('scan/$i.json'));print(sum(1 for r in d.get('Results',[]) for v in r.get('Vulnerabilities') or [] if v['Severity']=='CRITICAL'))")
+            high=$(python3 -c "import json,sys;d=json.load(open('scan/$i.json'));print(sum(1 for r in d.get('Results',[]) for v in r.get('Vulnerabilities') or [] if v['Severity']=='HIGH'))")
+            echo "| $i | $crit | $high |" >> scan/summary.md
+            [ "$crit" = 0 ] || fail=1
+          done
+          { echo "### 취약점 (고칠 판이 있는 것만)"; echo "| 이미지 | CRITICAL | HIGH |"; echo "|---|---|---|"; cat scan/summary.md; } >> "$GITHUB_STEP_SUMMARY"
+          if [ "$fail" = 1 ] && [ -n "${{ steps.meta.outputs.release }}" ]; then
+            echo "::error::릴리스 이미지에 고칠 수 있는 CRITICAL 이 있다"; exit 1
+          fi
+      - uses: actions/upload-artifact@v4
+        with:
+          name: image-scan-${{ steps.meta.outputs.short }}
+          path: scan/
+          retention-days: 30
+
+      - name: GHCR 로그인
+        if: inputs.publish
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ github.token }}
+
+      - name: 게시
+        id: push
+        if: inputs.publish
+        run: |
+          set -euo pipefail
+          short=${{ steps.meta.outputs.short }}
+          tags="sha-$short"
+          if [ -n "${{ steps.meta.outputs.release }}" ]; then
+            tags="$tags ${{ steps.meta.outputs.release }}"
+          else
+            # "가장 최근 main" 표시용이다. 배포에는 sha 태그나 digest 를 쓴다
+            tags="$tags main"
+          fi
+          for i in api web migrate; do
+            for t in $tags; do
+              docker tag "axlink-$i:ci-$short" "$REGISTRY/axlink-$i:$t"
+              docker push -q "$REGISTRY/axlink-$i:$t"
+            done
+            digest=$(docker inspect -f '{{ index .RepoDigests 0 }}' "$REGISTRY/axlink-$i:sha-$short" | cut -d@ -f2)
+            echo "${i}_digest=$digest" >> "$GITHUB_OUTPUT"
+          done
+          echo "tags=$tags" >> "$GITHUB_OUTPUT"
+
+      - name: 결과 기록
+        if: always()
+        run: |
+          python3 - <<'PY'
+          import json, os, subprocess
+          short = "${{ steps.meta.outputs.short }}"
+          out = {
+              "commit": "${{ inputs.sha }}",
+              "version": "${{ steps.meta.outputs.version }}",
+              "release": "${{ steps.meta.outputs.release }}" or None,
+              "published": "${{ inputs.publish }}" == "true" and "${{ steps.push.outcome }}" == "success",
+              "tags": "${{ steps.push.outputs.tags }}".split() or None,
+              "build": {"basePath": os.environ["BASE_PATH"], "platform": "linux/amd64",
+                        "workflowRun": "${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"},
+              "images": {},
+          }
+          for i in ("api", "web", "migrate"):
+              local = f"axlink-{i}:ci-{short}"
+              try:
+                  size = int(subprocess.check_output(["docker", "inspect", "-f", "{{.Size}}", local]).strip())
+                  image_id = subprocess.check_output(["docker", "inspect", "-f", "{{.Id}}", local]).decode().strip()
+              except subprocess.CalledProcessError:
+                  size, image_id = None, None
+              digest = {"api": "${{ steps.push.outputs.api_digest }}", "web": "${{ steps.push.outputs.web_digest }}",
+                        "migrate": "${{ steps.push.outputs.migrate_digest }}"}[i] or None
+              out["images"][i] = {
+                  "name": f"{os.environ['REGISTRY']}/axlink-{i}",
+                  "ref": f"{os.environ['REGISTRY']}/axlink-{i}@{digest}" if digest else None,
+                  "digest": digest, "imageId": image_id, "sizeBytes": size,
+              }
+          json.dump(out, open("image-manifest.json", "w"), indent=2, ensure_ascii=False)
+          with open(os.environ["GITHUB_STEP_SUMMARY"], "a") as f:
+              f.write(f"### 이미지 ({out['version']}, {out['commit'][:7]})\n\n| 이미지 | 크기(MB) | digest |\n|---|---|---|\n")
+              for i, v in out["images"].items():
+                  mb = round(v["sizeBytes"] / 1e6) if v["sizeBytes"] else "-"
+                  f.write(f"| {i} | {mb} | `{v['digest'] or '게시 안 함'}` |\n")
+          PY
+          cat image-manifest.json
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: image-manifest-${{ steps.meta.outputs.short }}
+          path: image-manifest.json
+          retention-days: 90
+
+      - name: 반입용 tar·체크섬 (릴리스)
+        if: steps.meta.outputs.release != '' && inputs.publish
+        run: |
+          set -euo pipefail
+          v=${{ steps.meta.outputs.release }} short=${{ steps.meta.outputs.short }}
+          mkdir -p offline
+          refs=""
+          for i in api web migrate; do refs="$refs $REGISTRY/axlink-$i:$v"; done
+          docker save $refs | gzip -6 > "offline/axlink-images-$v.tar.gz"
+          cp image-manifest.json "offline/axlink-images-$v.manifest.json"
+          (cd offline && sha256sum "axlink-images-$v.tar.gz" "axlink-images-$v.manifest.json" > SHA256SUMS)
+          ls -l offline; cat offline/SHA256SUMS
+      - uses: actions/upload-artifact@v4
+        if: steps.meta.outputs.release != '' && inputs.publish
+        with:
+          name: axlink-images-${{ steps.meta.outputs.release }}-offline
+          path: offline/
+          retention-days: 90
+          compression-level: 0
