@@ -1,0 +1,106 @@
+# Redmine 을 AX Link 와 따로 띄운다. 앱 Compose(axlink · axlink-int)와 수명이 갈리고 볼륨도 따로다.
+#
+#   docker compose -p axlink-redmine -f infra/docker-compose.redmine.yml \
+#     --env-file <비밀값 파일> up -d redmine-db redmine
+#
+# 비밀값(DB 비밀번호 · SECRET_KEY_BASE)은 저장소 밖 파일로 넘긴다. 예시는 infra/redmine.env.example.
+# 호스트에는 127.0.0.1 로만 연다. 외부 프록시에 붙이지 않는다.
+#
+# 이미지는 다이제스트로 고정한다(latest·메이저 태그 금지). 올릴 때는 새 다이제스트로 바꾸고
+# 바꾼 날짜를 적는다.
+#   Redmine 6.1.4 (Ruby 3.4.10)  · 2026-10-13 고정
+#   PostgreSQL 16.14              · 2026-10-13 고정
+#
+# 이 프로젝트에도 `down` 을 쓰지 않는다. 멈출 때는 `stop` 이다. 볼륨을 지우면 원천 데이터가 사라진다.
+name: axlink-redmine
+
+x-logging: &logging
+  driver: json-file
+  options:
+    max-size: "10m"
+    max-file: "3"
+
+services:
+  redmine-db:
+    image: postgres:16@sha256:4b7183ac05f8ef417db21fd72d71047a4238340c261d3cc3ddb6d579ab5071ae
+    container_name: axlink-rm-db
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: redmine
+      POSTGRES_PASSWORD: ${REDMINE_DB_PASSWORD:?REDMINE_DB_PASSWORD 가 없습니다}
+      POSTGRES_DB: redmine
+    volumes:
+      - db:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U redmine -d redmine"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+    logging: *logging
+
+  redmine:
+    image: redmine:6.1.4@sha256:c69d38e490ab67e70b6e105508564d9c72e352809857862faf563c79e357c525
+    container_name: axlink-rm
+    restart: unless-stopped
+    depends_on:
+      redmine-db:
+        condition: service_healthy
+    environment:
+      REDMINE_DB_POSTGRES: redmine-db
+      REDMINE_DB_USERNAME: redmine
+      REDMINE_DB_PASSWORD: ${REDMINE_DB_PASSWORD:?REDMINE_DB_PASSWORD 가 없습니다}
+      REDMINE_DB_DATABASE: redmine
+      REDMINE_SECRET_KEY_BASE: ${REDMINE_SECRET_KEY_BASE:?REDMINE_SECRET_KEY_BASE 가 없습니다}
+    ports: ["127.0.0.1:${REDMINE_HOST_PORT:-3000}:3000"]
+    volumes:
+      - files:/usr/src/redmine/files
+    networks:
+      default: {}
+      app:
+        aliases: [redmine]
+    logging: *logging
+
+  # 시험 전용 중계. AX Link 는 연결 주소로 https 나 루프백 http 만 받는다(app/integration/service.py
+  # _require_https). 앱이 컨테이너에 있으면 다른 컨테이너의 http Redmine 을 등록할 수 없어서,
+  # API 컨테이너의 네트워크 안 127.0.0.1:3000 을 Redmine 으로 넘긴다. 연결 주소는 http://localhost:3000.
+  # 운영 배포에는 쓰지 않는다. 운영은 Redmine 앞에 TLS 를 두고 https 주소로 등록한다.
+  # 대상 API 컨테이너를 다시 만들면 이 중계도 다시 띄워야 한다.
+  relay:
+    profiles: ["relay"]
+    image: nginxinc/nginx-unprivileged:1.27-alpine@sha256:65e3e85dbaed8ba248841d9d58a899b6197106c23cb0ff1a132b7bfe0547e4c0
+    container_name: axlink-rm-relay
+    restart: unless-stopped
+    network_mode: "container:${AXLINK_RELAY_TARGET:-axlink-int-api}"
+    depends_on: [redmine]
+    configs:
+      - source: relay_conf
+        target: /etc/nginx/nginx.conf
+    logging: *logging
+
+configs:
+  relay_conf:
+    content: |
+      pid /tmp/nginx.pid;
+      events {}
+      stream {
+        resolver 127.0.0.11 valid=30s;
+        server {
+          listen 127.0.0.1:3000;
+          set $$upstream redmine:3000;
+          proxy_pass $$upstream;
+        }
+      }
+
+networks:
+  # 앱(API)이 붙어 있는 네트워크. 5174 는 axlink-int_default, 공개 환경은 axlink_default.
+  app:
+    external: true
+    name: ${AXLINK_APP_NETWORK:-axlink-int_default}
+
+# 이름을 고정해 둔다. 10-13 첫 기동 볼륨(axlink-redmine_db·_files)은 마이그레이션 중 Ruby 가
+# 비정상 종료해 쓰지 않고 보존만 한다(var/notes/PC-점검-결과-2026-10-02.md).
+volumes:
+  db:
+    name: axlink-redmine_pgdata
+  files:
+    name: axlink-redmine_attachments
