@@ -14,6 +14,7 @@ from app.common.paging import PageQuery, PageResponse
 from app.integration import port, repository, sync
 from app.integration.models import (
     TOOLS,
+    ConnectionOwnerRequest,
     MappingRulesUpdateRequest,
     SyncJobResponse,
     SyncJobStats,
@@ -22,6 +23,7 @@ from app.integration.models import (
     ToolConnectionTestResponse,
     ToolConnectionUpdateRequest,
 )
+from app.project import participants
 from app.standard.mapping_rules import MappingRules
 
 
@@ -76,7 +78,7 @@ def test_saved(
     conn = repository.find_by_id(cur, connection_id)
     if conn is None:
         raise errors.not_found("connection", connection_id)
-    _require_project(cur, principal, str(conn["project_id"]))
+    participants.require_connection_manager(cur, principal, conn)
     token = crypto.decrypt(conn["auth_encrypted"])
     probe = _probe(conn["tool"], conn["base_url"], conn["target_resource"], token)
     # 저장소에 닿았으면 검증됨으로 올린다. 일부 항목 권한이 빠져도 연결 자체는 유효하다.
@@ -88,6 +90,12 @@ def create(
     cur: Any, principal: AuthPrincipal, project_id: str, req: ToolConnectionCreateRequest
 ) -> ToolConnectionResponse:
     _require_project(cur, principal, project_id)
+    if principal.role == "CONTRACTOR" and participants.active_participant(
+        cur, project_id, principal.org_id
+    ) is None:
+        raise errors.ApiError(
+            403, "NOT_PARTICIPANT", "이 사업의 참여 업체로 등록된 업체만 연결을 만들 수 있습니다."
+        )
     _require_tool(req.tool)
     _require_https(req.baseUrl)
     token = req.credential.accessToken
@@ -100,14 +108,14 @@ def create(
         req.targetResource, encrypted, hint,
         rules.to_json() if rules else None,
     )
-    return _to_response(cur, row)
+    return _to_response(cur, principal, row)
 
 
 def list_for_project(
     cur: Any, principal: AuthPrincipal, project_id: str
 ) -> list[ToolConnectionResponse]:
     _require_project(cur, principal, project_id)
-    return [_to_response(cur, r) for r in repository.find_by_project(cur, project_id)]
+    return [_to_response(cur, principal, r) for r in repository.find_by_project(cur, project_id)]
 
 
 def change_status(
@@ -116,7 +124,7 @@ def change_status(
     conn = repository.find_by_id(cur, connection_id)
     if conn is None:
         raise errors.not_found("connection", connection_id)
-    _require_project(cur, principal, str(conn["project_id"]))
+    participants.require_connection_manager(cur, principal, conn)
     current = conn["status"]
     if target == "ACTIVE" and current not in ("VERIFIED", "PAUSED"):
         raise errors.validation_failed(f"{current} → {target} 전이는 허용되지 않습니다.")
@@ -125,7 +133,7 @@ def change_status(
     if target not in ("ACTIVE", "PAUSED"):
         raise errors.validation_failed(f"허용되지 않는 상태입니다: {target}")
     repository.update_status(cur, connection_id, target, datetime.now(UTC))
-    return _to_response(cur, repository.find_by_id(cur, connection_id))
+    return _to_response(cur, principal, repository.find_by_id(cur, connection_id))
 
 
 def update_mapping(
@@ -135,10 +143,10 @@ def update_mapping(
     conn = repository.find_by_id(cur, connection_id)
     if conn is None:
         raise errors.not_found("connection", connection_id)
-    _require_project(cur, principal, str(conn["project_id"]))
+    participants.require_connection_manager(cur, principal, conn)
     rules = MappingRules.from_json(req.mappingRules)
     repository.update_mapping_rules(cur, connection_id, rules.to_json(), datetime.now(UTC))
-    return _to_response(cur, repository.find_by_id(cur, connection_id))
+    return _to_response(cur, principal, repository.find_by_id(cur, connection_id))
 
 
 def update(
@@ -151,7 +159,7 @@ def update(
     conn = repository.find_by_id(cur, connection_id)
     if conn is None:
         raise errors.not_found("connection", connection_id)
-    _require_project(cur, principal, str(conn["project_id"]))
+    participants.require_connection_manager(cur, principal, conn)
     if req.name is not None and not req.name.strip():
         raise errors.validation_failed("이름은 비울 수 없습니다.")
     if req.baseUrl is not None:
@@ -176,14 +184,14 @@ def update(
         auth_encrypted=encrypted, auth_hint=hint,
         reset_status=changed_target or req.credential is not None,
     )
-    return _to_response(cur, repository.find_by_id(cur, connection_id))
+    return _to_response(cur, principal, repository.find_by_id(cur, connection_id))
 
 
 def delete(cur: Any, principal: AuthPrincipal, connection_id: str) -> None:
     conn = repository.find_by_id(cur, connection_id)
     if conn is None:
         raise errors.not_found("connection", connection_id)
-    _require_project(cur, principal, str(conn["project_id"]))
+    participants.require_connection_manager(cur, principal, conn)
     repository.delete(cur, connection_id)
 
 
@@ -248,8 +256,13 @@ def _iso(value: Any) -> str | None:
     return value.isoformat() if value is not None else None
 
 
-def _to_response(cur: Any, row: dict[str, Any]) -> ToolConnectionResponse:
+def _to_response(
+    cur: Any, principal: AuthPrincipal, row: dict[str, Any]
+) -> ToolConnectionResponse:
+    """인증정보 힌트는 바꿀 수 있는 사람에게만 준다. 공유 조회에는 넣지 않는다(SER.SEC.001)."""
     cid = str(row["id"])
+    state, owner_name = participants.owner_state(cur, row)
+    manage = participants.can_manage_connection(cur, principal, row)
     return ToolConnectionResponse(
         id=cid,
         projectId=str(row["project_id"]),
@@ -257,7 +270,7 @@ def _to_response(cur: Any, row: dict[str, Any]) -> ToolConnectionResponse:
         name=row["name"],
         baseUrl=row["base_url"],
         targetResource=row["target_resource"],
-        credentialMasked=row["auth_hint"],
+        credentialMasked=row["auth_hint"] if manage else None,
         status=row["status"],
         lastSyncedAt=_iso(row["last_synced_at"]),
         lastSyncStatus=repository.last_sync_status(cur, cid),
@@ -265,4 +278,42 @@ def _to_response(cur: Any, row: dict[str, Any]) -> ToolConnectionResponse:
         ingestedCount=repository.ingested_count(cur, cid),
         mappingRuleCount=repository.mapping_rule_count(row["mapping_rules_json"]),
         createdAt=_iso(row["created_at"]),
+        ownerOrgId=str(row["contractor_org_id"]),
+        ownerOrgName=owner_name,
+        ownerState=state,
+        canManage=manage,
     )
+
+
+def change_owner(
+    cur: Any, principal: AuthPrincipal, connection_id: str, req: ConnectionOwnerRequest
+) -> ToolConnectionResponse:
+    """소유 업체를 바꾼다. 발주기관·관리자만, 이 사업의 참여 용역 업체로만(GH-138).
+
+    소유가 불명확한 연결을 정리하거나 참여를 끝낸 업체의 연결을 넘길 때 쓴다. 인증정보는
+    그대로라 새 소유 업체가 토큰을 다시 등록하는 것을 권한다.
+    """
+    conn = repository.find_by_id(cur, connection_id)
+    if conn is None:
+        raise errors.not_found("connection", connection_id)
+    project_id = str(conn["project_id"])
+    participants.require_manager(cur, principal, project_id)
+    part = participants.active_participant(cur, project_id, req.organizationId)
+    if part is None or part["type"] != "CONTRACTOR":
+        raise errors.validation_failed("이 사업의 참여 용역 업체로만 넘길 수 있습니다.")
+    before = str(conn["contractor_org_id"])
+    cur.execute(
+        "update tool_connection set contractor_org_id = %s, updated_at = now() where id = %s",
+        (req.organizationId, connection_id),
+    )
+    actor = auth_repo.find_user_by_id(cur, principal.user_id) or {}
+    cur.execute(
+        """
+        insert into entity_history (entity_type, entity_id, project_id, field, from_value,
+                                    to_value, actor)
+        values ('TOOL_CONNECTION', %s, %s, 'owner_org', %s, %s, %s)
+        """,
+        (connection_id, project_id, before, req.organizationId,
+         (actor.get("name") or actor.get("username") or "사용자")[:120]),
+    )
+    return _to_response(cur, principal, repository.find_by_id(cur, connection_id))

@@ -21,6 +21,7 @@ from app.auth.models import (
 from app.common import errors
 from app.common.hashes import random_token, sha256_hex
 from app.config import settings
+from app.project import participants
 from app.project import repository as project_repository
 
 # 09.17 실측(Windows · Python 3.13 · bcrypt 4.0~4.3): hashpw 가 같은 입력에 다른 값을 내는
@@ -102,6 +103,7 @@ def preview_invitation(cur: Any, token: str) -> InvitationPreviewResponse:
         username=None,
         name=None,
         expiresAt=invite["expires_at"].isoformat(),
+        contractorOrgName=invite.get("contractor_org_name"),
     )
 
 
@@ -110,25 +112,39 @@ def accept_invitation(
 ) -> LoginResponse:
     """용역사가 직접 계정을 만들고 그 사업에 붙는다(S2-1). 링크는 소진되지 않는다.
 
-    회사명이 이미 있으면 그 조직에 넣는다. 발주사 이름을 적으면 거절한다.
+    업체를 지정한 초대(GH-138)면 적은 회사명과 상관없이 그 업체로 들어간다. 지정하지 않은
+    (V54 이전) 초대는 새 업체 등록만 받는다. 이미 있는 회사명을 적어 그 업체에 끼어드는 것을
+    막는다 — 업체 이름만 알면 다른 업체의 연결 권한을 얻게 되기 때문이다.
     """
     now = datetime.now(UTC)
     invite = _valid_invite(cur, req.token, now)
     org_name = (req.contractorOrgName or "").strip()
     username = (req.username or "").strip()
     name = (req.name or "").strip()
-    if not org_name or not username or not name:
+    bound = invite.get("organization_id")
+    if (not bound and not org_name) or not username or not name:
         raise errors.validation_failed("회사명·아이디·이름을 모두 입력하세요.")
     if repository.find_user_by_username(cur, username) is not None:
         raise errors.validation_failed("이미 쓰고 있는 아이디입니다.")
 
-    org = project_repository.find_organization_by_name(cur, org_name)
-    if org is None:
-        org_id = project_repository.insert_organization(cur, org_name, "CONTRACTOR")
-    elif org["type"] != "CONTRACTOR":
-        raise errors.validation_failed("용역사 회사명이 아닙니다.")
+    project_id = str(invite["project_id"])
+    if bound:
+        if participants.active_participant(cur, project_id, str(bound)) is None:
+            raise errors.ApiError(
+                404, "NOT_FOUND", "초대한 업체가 이 사업에서 빠졌습니다. 새 초대 링크를 받으세요."
+            )
+        org_id = str(bound)
     else:
-        org_id = str(org["id"])
+        org = project_repository.find_organization_by_name(cur, org_name)
+        if org is not None and org["type"] != "CONTRACTOR":
+            raise errors.validation_failed("용역사 회사명이 아닙니다.")
+        if org is not None:
+            raise errors.ApiError(
+                409, "ORGANIZATION_EXISTS",
+                "이미 등록된 업체입니다. 발주기관에 업체를 지정한 초대 링크를 요청하세요.",
+            )
+        org_id = project_repository.insert_organization(cur, org_name, "CONTRACTOR")
+    participants.ensure(cur, project_id, org_id, None)
 
     password_hash = bcrypt.hashpw(req.password.encode("utf-8"), bcrypt.gensalt()).decode()
     user_id = project_repository.insert_user(

@@ -12,6 +12,10 @@ from app.project import service
 from app.project.models import (
     AssignmentCreateRequest,
     AssignmentResponse,
+    InviteCreateRequest,
+    ParticipantCreateRequest,
+    ParticipantResponse,
+    ParticipantUpdateRequest,
     ProjectCreateRequest,
     ProjectDeleteRequest,
     ProjectDetailResponse,
@@ -89,6 +93,48 @@ def remove_assignment(project_id: str, assignment_id: str, principal: Principal)
 
 
 @router.post("/{project_id}/invites", response_model=ProjectInviteResponse, status_code=201)
-def create_invite(project_id: str, principal: Principal) -> ProjectInviteResponse:
+def create_invite(
+    project_id: str, principal: Principal, req: InviteCreateRequest | None = None
+) -> ProjectInviteResponse:
+    """초대 링크. 참여 업체를 지정하면 가입자는 그 업체로만 들어간다(GH-138)."""
     with tx() as cur:
-        return service.create_invite(cur, principal, project_id)
+        return service.create_invite(cur, principal, project_id, req)
+
+
+@router.get("/{project_id}/participants", response_model=list[ParticipantResponse])
+def list_participants(project_id: str, principal: Principal) -> list[ParticipantResponse]:
+    """참여 업체. 사업에 접근할 수 있으면 누구나 본다."""
+    with tx() as cur:
+        return service.list_participants(cur, principal, project_id)
+
+
+@router.post(
+    "/{project_id}/participants", response_model=list[ParticipantResponse], status_code=201
+)
+def add_participant(
+    project_id: str, req: ParticipantCreateRequest, principal: Principal
+) -> list[ParticipantResponse]:
+    """참여 업체 추가. 발주기관·관리자만."""
+    with tx() as cur:
+        return service.add_participant(cur, principal, project_id, req)
+
+
+@router.patch(
+    "/{project_id}/participants/{participant_id}", response_model=list[ParticipantResponse]
+)
+def update_participant(
+    project_id: str, participant_id: str, req: ParticipantUpdateRequest, principal: Principal
+) -> list[ParticipantResponse]:
+    with tx() as cur:
+        return service.update_participant(cur, principal, project_id, participant_id, req)
+
+
+@router.delete(
+    "/{project_id}/participants/{participant_id}", response_model=list[ParticipantResponse]
+)
+def remove_participant(
+    project_id: str, participant_id: str, principal: Principal
+) -> list[ParticipantResponse]:
+    """참여 종료. 지우지 않고 종료로 남기고, 그 업체 사용자 할당을 해제한다."""
+    with tx() as cur:
+        return service.remove_participant(cur, principal, project_id, participant_id)

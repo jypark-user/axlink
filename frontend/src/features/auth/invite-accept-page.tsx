@@ -54,9 +54,11 @@ export function InviteAcceptPage(): ReactNode {
 
   // USER 초대는 계정이 이미 있다. 비밀번호만 정하면 된다.
   const isNewAccount = preview?.kind === 'PROJECT';
+  // 업체를 지정한 초대면 회사명을 받지 않는다. 그 업체로만 들어간다(GH-138)
+  const boundOrg = preview?.contractorOrgName ?? null;
 
   const validate = (): string | null => {
-    if (isNewAccount && !orgName.trim()) return '회사명을 입력하세요.';
+    if (isNewAccount && !boundOrg && !orgName.trim()) return '회사명을 입력하세요.';
     if (isNewAccount && !name.trim()) return '이름을 입력하세요.';
     if (isNewAccount && !username.trim()) return '아이디를 입력하세요.';
     if (password.length < 8) return '비밀번호는 8자 이상이어야 합니다.';
@@ -80,7 +82,7 @@ export function InviteAcceptPage(): ReactNode {
         isNewAccount
           ? {
               token,
-              contractorOrgName: orgName.trim(),
+              contractorOrgName: boundOrg ? undefined : orgName.trim(),
               username: username.trim(),
               name: name.trim(),
               password,
@@ -141,12 +143,16 @@ export function InviteAcceptPage(): ReactNode {
               <>
                 <div className="flex flex-col gap-1.5">
                   <Label htmlFor="orgName">회사명</Label>
-                  <Input
-                    id="orgName"
-                    autoComplete="organization"
-                    value={orgName}
-                    onChange={(e) => setOrgName(e.target.value)}
-                  />
+                  {boundOrg ? (
+                    <Input id="orgName" value={boundOrg} readOnly disabled />
+                  ) : (
+                    <Input
+                      id="orgName"
+                      autoComplete="organization"
+                      value={orgName}
+                      onChange={(e) => setOrgName(e.target.value)}
+                    />
+                  )}
                 </div>
                 <div className="flex flex-col gap-1.5">
                   <Label htmlFor="name">이름</Label>

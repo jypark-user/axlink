@@ -182,6 +182,8 @@ export interface InvitationPreviewResponse {
   username: string | null;
   name: string | null;
   expiresAt: string;
+  /** 업체를 지정한 사업 초대면 그 업체 이름. 가입자는 이 업체로만 들어간다 */
+  contractorOrgName?: string | null;
 }
 
 /** contractorOrgName·username·name은 PROJECT 초대에만 필요하다. */
@@ -206,6 +208,8 @@ export interface ProjectInviteResponse {
   createdAt: string;
   /** 생성 응답에만 담긴다. 목록 조회에서는 null. */
   token: string | null;
+  organizationId?: string | null;
+  organizationName?: string | null;
 }
 
 export interface OrganizationCreateRequest {
@@ -390,7 +394,8 @@ export interface ToolConnectionResponse {
   name: string;
   baseUrl: string;
   targetResource: string;
-  credentialMasked: string;
+  /** 인증정보 끝자리. 소유 업체·발주기관·관리자에게만 온다 */
+  credentialMasked: string | null;
   status: ConnectionStatus;
   lastSyncedAt: string | null;
   lastSyncStatus: SyncJobStatus | null;
@@ -398,6 +403,26 @@ export interface ToolConnectionResponse {
   ingestedCount: number;
   mappingRuleCount: number;
   createdAt: string;
+  ownerOrgId: string | null;
+  ownerOrgName: string | null;
+  /** PARTICIPANT 참여 업체 · CLIENT 발주기관이 만듦 · UNCLEAR 참여 업체 아님(지정 필요) */
+  ownerState: 'PARTICIPANT' | 'CLIENT' | 'UNCLEAR' | null;
+  /** 이 사용자가 설정 변경·삭제·연결 테스트를 할 수 있는지 */
+  canManage: boolean;
+}
+
+/** 사업의 참여 업체(GH-138). 대표사·참여사는 표시 구분이고 권한이 없다. */
+export interface ParticipantResponse {
+  id: string;
+  organizationId: string;
+  organizationName: string;
+  role: 'REPRESENTATIVE' | 'PARTICIPANT';
+  workNote: string | null;
+  status: 'ACTIVE' | 'REMOVED';
+  userCount: number;
+  connectionCount: number;
+  createdAt: string;
+  removedAt: string | null;
 }
 
 export interface ToolConnectionTestRequest {

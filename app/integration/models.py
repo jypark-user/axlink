@@ -81,7 +81,8 @@ class ToolConnectionResponse(BaseModel):
     name: str
     baseUrl: str  # noqa: N815
     targetResource: str  # noqa: N815
-    credentialMasked: str  # noqa: N815
+    # 인증정보 힌트(끝 몇 글자). 소유 업체·발주기관·관리자에게만 준다. 그 밖에는 None(GH-138)
+    credentialMasked: str | None  # noqa: N815
     status: str
     lastSyncedAt: str | None  # noqa: N815
     lastSyncStatus: str | None  # noqa: N815
@@ -89,3 +90,12 @@ class ToolConnectionResponse(BaseModel):
     ingestedCount: int  # noqa: N815
     mappingRuleCount: int  # noqa: N815
     createdAt: str  # noqa: N815
+    ownerOrgId: str | None = None  # noqa: N815
+    ownerOrgName: str | None = None  # noqa: N815
+    # PARTICIPANT(참여 업체) · CLIENT(발주기관이 만듦) · UNCLEAR(참여 업체 아님, 지정 필요)
+    ownerState: str | None = None  # noqa: N815
+    canManage: bool = False  # noqa: N815 — 이 사용자가 설정 변경·삭제·연결 테스트를 할 수 있는지
+
+
+class ConnectionOwnerRequest(BaseModel):
+    organizationId: str  # noqa: N815 — 사업의 참여 업체

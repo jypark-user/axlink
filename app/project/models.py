@@ -50,6 +50,42 @@ class ProjectInviteResponse(BaseModel):
     revokedAt: str | None  # noqa: N815
     createdAt: str  # noqa: N815
     token: str | None  # 생성 응답에만 담긴다. 저장은 해시로만 한다.
+    # 이 링크로 가입한 사람이 들어갈 업체(GH-138). 비어 있으면 새 업체 등록만 받는다
+    organizationId: str | None = None  # noqa: N815
+    organizationName: str | None = None  # noqa: N815
+
+
+class InviteCreateRequest(BaseModel):
+    organizationId: str | None = None  # noqa: N815 — 참여 업체. 지정하면 그 업체로만 가입한다
+
+
+class ParticipantResponse(BaseModel):
+    """사업의 참여 업체. 대표사·참여사는 표시 구분이고 권한이 없다."""
+
+    id: str
+    organizationId: str  # noqa: N815
+    organizationName: str  # noqa: N815
+    role: str  # REPRESENTATIVE | PARTICIPANT
+    workNote: str | None  # noqa: N815
+    status: str  # ACTIVE | REMOVED
+    userCount: int  # noqa: N815
+    connectionCount: int  # noqa: N815
+    createdAt: str  # noqa: N815
+    removedAt: str | None  # noqa: N815
+
+
+class ParticipantCreateRequest(BaseModel):
+    """기존 용역 업체를 고르거나(organizationId) 새 업체 이름을 적는다(organizationName)."""
+
+    organizationId: str | None = None  # noqa: N815
+    organizationName: str | None = Field(default=None, max_length=200)  # noqa: N815
+    role: str = "PARTICIPANT"
+    workNote: str | None = Field(default=None, max_length=300)  # noqa: N815
+
+
+class ParticipantUpdateRequest(BaseModel):
+    role: str | None = None
+    workNote: str | None = Field(default=None, max_length=300)  # noqa: N815
 
 
 class ProjectMetrics(BaseModel):
