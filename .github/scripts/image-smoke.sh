@@ -93,4 +93,8 @@ curl -fs http://127.0.0.1:18081/ax-link/version.json | grep -q "\"$VERSION\"" \
 curl -fs http://127.0.0.1:18081/ax-link/api/health >/dev/null || fail "웹의 API 프록시 실패"
 code=$(curl -s -o /dev/null -w '%{http_code}' -H 'Host: evil.example' http://127.0.0.1:18081/ax-link/)
 [ "$code" = 421 ] || fail "목록 밖 호스트가 421 이 아니다($code)"
-echo "웹 자산 $(echo "$assets" | wc -l)개, API 프록시, 호스트 제한 확인"
+loc=$(curl -s -o /dev/null -D - 'http://127.0.0.1:18081/p/x/requirements?q=1' | tr -d '\r' | sed -n 's/^[Ll]ocation: //p')
+[ "$loc" = "/ax-link/p/x/requirements?q=1" ] || fail "앱 경로 없는 화면 주소가 앱 경로로 가지 않는다($loc)"
+code=$(curl -s -o /dev/null -w '%{http_code}' http://127.0.0.1:18081/ax-link/p/x/requirements)
+[ "$code" = 200 ] || fail "앱 경로 화면 주소 응답 $code"
+echo "웹 자산 $(echo "$assets" | wc -l)개, API 프록시, 호스트 제한, 앱 경로 없는 주소 이동 확인"

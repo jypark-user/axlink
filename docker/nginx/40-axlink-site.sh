@@ -4,7 +4,7 @@
 #   AXLINK_API_UPSTREAM   API 주소. 기본 http://api:8080
 #   AXLINK_BASE_PATH      앱 경로. 기본 /. 외부 공개는 /ax-link/ (빌드의 base 와 같아야 한다)
 #   AXLINK_SERVER_NAMES   받을 호스트(공백 구분). 비우면 가리지 않는다. 목록 밖 호스트는 421
-#   AXLINK_LOCAL_NAMES    그중 첫 화면(/)을 앱 경로로 보낼 호스트. 프록시 없이 직접 여는 주소
+#   AXLINK_LOCAL_NAMES    그중 앱 경로 없이 온 화면 주소를 앱 경로로 보낼 호스트. 프록시 없이 직접 여는 주소
 #
 # 앞단 프록시가 앱 경로를 떼고 넘기든 붙여 넘기든 같은 화면이 나오게, 앱 경로로 온 요청은
 # 떼어 낸 경로로 다시 찾는다. 앞단이 떼는 경우 "/" 가 첫 화면이라 그 호스트는 "/" 를 돌려보내지 않는다.
@@ -23,7 +23,14 @@ case "$base" in
 esac
 
 # 화면·API 공통 위치. 앱 경로는 떼어 낸 뒤 이 위치들이 받는다.
+# $1 이 yes 면 앱 경로 없이 온 화면 주소(/login, /p/... 등)를 앱 경로를 붙여 돌려보낸다.
+# 앱 경로를 떼어 낸 내부 재요청과 구분하려고 원래 요청 주소($request_uri)를 본다.
 locations() {
+  redirect=""
+  if [ "$1" = yes ] && [ -n "$prefix" ]; then
+    redirect="
+        if (\$request_uri !~ ^${prefix}(/|\$)) { return 302 ${prefix}\$request_uri; }"
+  fi
   if [ -n "$prefix" ]; then
     cat <<EOF
     location = ${prefix} { return 301 ${prefix}/; }
@@ -61,7 +68,7 @@ EOF
     }
 
     # 화면 주소를 직접 열거나 새로고침해도 index.html 이 받는다(클라이언트 라우팅).
-    location / {
+    location / {${redirect}
         try_files \$uri \$uri/ /index.html;
         add_header Cache-Control "no-cache";
     }
@@ -81,7 +88,7 @@ EOF
   if [ "$2" = yes ] && [ -n "$prefix" ]; then
     echo "    location = / { return 302 ${prefix}/; }"
   fi
-  locations
+  locations "$2"
   echo "}"
 }
 
