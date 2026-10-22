@@ -1,5 +1,6 @@
 import { Fragment, useState, type ReactNode } from 'react';
-import { ExternalLink } from 'lucide-react';
+import { BookOpen, ExternalLink } from 'lucide-react';
+import { Link } from 'react-router-dom';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -72,6 +73,8 @@ const STATUS_WORD = {
   CONFIRMED: '확정',
 } as const;
 const PRIORITIES: Priority[] = ['MUST', 'SHOULD', 'COULD', 'WONT'];
+// 사용 설명서의 요구사항 등록 문서(docs/40-manual/요구사항-등록.md)
+const GUIDE = '/guide/requirement-baseline';
 
 /**
  * 요구사항 기준선 (GH-139). 용역사가 명세서를 등록·정리·제출하고 발주기관이 확정한다.
@@ -95,6 +98,13 @@ export function BaselinePage(): ReactNode {
       <PageHeader
         title="요구사항 기준선"
         description="용역사가 요구사항 명세서를 등록·정리해 제출하고, 발주기관이 확정합니다. 확정 전 목록은 요구사항 현황에 들어가지 않습니다."
+        actions={
+          <Button asChild variant="outline">
+            <Link to={GUIDE}>
+              <BookOpen className="size-4" /> 설명서
+            </Link>
+          </Button>
+        }
       />
       <div className="flex flex-col gap-5">
         <DataState state={state} onRetry={state.reload}>
@@ -218,13 +228,45 @@ function NoBaseline({
               관련자료 화면에서 명세서 파일을 먼저 올려 주세요.
             </p>
           )}
+          <SpecCautions />
         </div>
       ) : (
         <p className="text-muted-foreground text-sm">
-          용역사가 요구사항 명세서를 등록하고 제출하면 여기서 확정합니다.
+          용역사가 요구사항 명세서를 등록하고 제출하면 여기서 확정합니다.{' '}
+          <Link to={`${GUIDE}#flow`} className="text-primary hover:underline">
+            등록·확정 흐름
+          </Link>
         </p>
       )}
     </Window>
+  );
+}
+
+/** 명세서를 고르기 전에 보는 주의. 자세한 형식표는 설명서에 둔다. */
+function SpecCautions(): ReactNode {
+  return (
+    <Alert className="mt-2 w-full">
+      <AlertTitle>등록 전에 명세서 형식을 확인하세요</AlertTitle>
+      <AlertDescription>
+        <ul className="ml-4 list-disc space-y-1">
+          <li>
+            한 행에 요구사항 하나가 있는 표(ID 열과 내용 열)를 읽습니다. ID 는{' '}
+            <code>SWFR.CON.004</code> · <code>REQ-001</code> 꼴이어야 합니다.
+          </li>
+          <li>
+            숫자만 쓴 ID, 요구사항마다 세로 표를 쓰는 카드형, 머리행 위에 안내 행이 있는 표, 스캔한
+            PDF 는 아직 읽지 못합니다. 등록한 뒤 항목을 직접 넣으세요.
+          </li>
+          <li>확정하면 되돌리기 어렵습니다. 처음이면 시험 사업에서 먼저 해 보세요.</li>
+        </ul>
+        <Link
+          to={`${GUIDE}#spec-format`}
+          className="text-primary mt-2 inline-block hover:underline"
+        >
+          명세서 형식 자세히 보기
+        </Link>
+      </AlertDescription>
+    </Alert>
   );
 }
 
@@ -313,7 +355,10 @@ function Working({
             <AlertTitle>명세서에서 요구사항을 찾지 못했습니다</AlertTitle>
             <AlertDescription>
               요구사항 ID 열이 있는 표나 코드로 시작하는 줄이 있어야 합니다. 항목을 직접 더하거나
-              등록을 취소하고 다른 파일을 고르세요.
+              등록을 취소하고 다른 파일을 고르세요.{' '}
+              <Link to={`${GUIDE}#spec-format`} className="text-primary hover:underline">
+                읽는 명세서 형식
+              </Link>
             </AlertDescription>
           </Alert>
         )}
