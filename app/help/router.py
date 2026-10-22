@@ -17,8 +17,19 @@ from app.config import settings
 
 router = APIRouter(prefix="/api/help", tags=["help"])
 
-# 화면 주소의 이름 → docs/40-manual 안의 파일
-GUIDES = {"tool-integration": "도구-연동-가이드.md"}
+# 화면 주소의 이름 → docs/40-manual 안의 파일. 순서가 설명서 목차 순서다.
+# 문서끼리는 파일 이름으로 링크한다(저장소에서 그대로 열린다). 화면이 아래 목록으로 주소를 바꾼다
+GUIDES = {
+    "manual": "사용-설명서.md",
+    "tool-integration": "도구-연동-가이드.md",
+    "requirement-baseline": "요구사항-등록.md",
+}
+
+
+class HelpEntryResponse(BaseModel):
+    slug: str
+    title: str
+    file: str  # 문서끼리의 링크가 가리키는 파일 이름
 
 
 class HelpDocResponse(BaseModel):
@@ -33,6 +44,25 @@ def manual_dir() -> Path:
     if settings.manual_dir:
         return Path(settings.manual_dir)
     return Path(__file__).resolve().parents[2] / "docs" / "40-manual"
+
+
+def _title(path: Path, slug: str) -> str:
+    with path.open(encoding="utf-8") as f:
+        for line in f:
+            if line.startswith("# "):
+                return line[2:].strip()
+    return slug
+
+
+@router.get("", response_model=list[HelpEntryResponse])
+def help_index(_principal: Principal) -> list[HelpEntryResponse]:
+    """설명서 목차. 파일이 없는 항목은 빼고 낸다."""
+    out = []
+    for slug, name in GUIDES.items():
+        path = manual_dir() / name
+        if path.is_file():
+            out.append(HelpEntryResponse(slug=slug, title=_title(path, slug), file=name))
+    return out
 
 
 @router.get("/{slug}", response_model=HelpDocResponse)

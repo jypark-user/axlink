@@ -16,10 +16,8 @@ const LoginPage = lazy(() =>
 const InviteAcceptPage = lazy(() =>
   import('@/features/auth/invite-accept-page').then((m) => ({ default: m.InviteAcceptPage })),
 );
-const ToolIntegrationGuidePage = lazy(() =>
-  import('@/features/help/tool-integration-guide-page').then((m) => ({
-    default: m.ToolIntegrationGuidePage,
-  })),
+const GuidePage = lazy(() =>
+  import('@/features/help/guide-page').then((m) => ({ default: m.GuidePage })),
 );
 const ProjectListPage = lazy(() =>
   import('@/features/projects/project-list-page').then((m) => ({ default: m.ProjectListPage })),
@@ -136,12 +134,12 @@ export function AppRoutes(): ReactNode {
             </SuspenseShell>
           }
         />
-        {/* 도구 연동 가이드 — 역할과 사업에 상관없이 본다. 연동 화면에서도 여기로 온다 */}
+        {/* 사용 설명서 — 역할과 사업에 상관없이 본다. 각 화면이 /guide/<문서>#<절> 로 바로 연다 */}
         <Route
-          path="/guide/tool-integration"
+          path="/guide/:slug?"
           element={
             <SuspenseShell>
-              <ToolIntegrationGuidePage />
+              <GuidePage />
             </SuspenseShell>
           }
         />
