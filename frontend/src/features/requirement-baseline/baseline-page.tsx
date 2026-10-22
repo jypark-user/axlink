@@ -1,4 +1,4 @@
-import { useState, type ReactNode } from 'react';
+import { Fragment, useState, type ReactNode } from 'react';
 import { ExternalLink } from 'lucide-react';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { Badge } from '@/components/ui/badge';
@@ -44,6 +44,7 @@ import { useAsync } from '@/lib/use-async';
 import type {
   BaselineItem,
   BaselineMatch,
+  BaselineParent,
   BaselineProblem,
   BaselineResponse,
   BaselineStateResponse,
@@ -321,8 +322,10 @@ function Working({
             제출 전에 고칠 항목이 {b.blockingCount}건 있습니다(코드 중복·코드 형식·명칭 없음).
           </p>
         )}
+        <Summary b={b} />
         <ItemsTable
           items={b.items}
+          parents={b.parents}
           editable={editable}
           onEdit={setEditing}
           onDelete={(item) => run(() => api.del(`${url}/items/${item.id}`), '항목을 지웠습니다.')}
@@ -385,84 +388,178 @@ function BaselineMeta({ b }: { b: BaselineResponse }): ReactNode {
   );
 }
 
+/** 기준선 한눈 요약. 요구사항 수와 기존 요구사항과의 대조. */
+function Summary({ b }: { b: BaselineResponse }): ReactNode {
+  if (b.items.length === 0) return null;
+  const confirmed = b.status === 'CONFIRMED';
+  const facts: [string, number][] = [['요구사항', b.items.length]];
+  if (b.parents.length > 0) facts.push(['상위 요구사항', b.parents.length]);
+  facts.push(
+    [confirmed ? '새로 생김' : '새로 생길 것', b.counts.NEW],
+    ['기존과 같음', b.counts.SAME],
+    ['기존과 다름', b.counts.CHANGED],
+  );
+  return (
+    <dl className="mb-4 flex flex-wrap gap-x-6 gap-y-2 text-sm">
+      {facts.map(([name, n]) => (
+        <div key={name} className="flex items-baseline gap-1.5">
+          <dt className="text-muted-foreground">{name}</dt>
+          <dd className="font-semibold tabular-nums">{n}건</dd>
+        </div>
+      ))}
+    </dl>
+  );
+}
+
+const NO_PARENT = '';
+
+/** 항목을 상위 요구사항별로 묶는다. 상위가 없는 명세서는 한 묶음이다. 순서는 명세서 순서. */
+function groupByParent(
+  items: BaselineItem[],
+  parents: BaselineParent[],
+): { parent: BaselineParent | null; items: BaselineItem[] }[] {
+  if (parents.length === 0) return [{ parent: null, items }];
+  const owner = new Map<string, string>();
+  for (const p of parents) for (const c of p.children) owner.set(c, p.code);
+  const groups = new Map<string, BaselineItem[]>(parents.map((p) => [p.code, []]));
+  groups.set(NO_PARENT, []);
+  for (const item of items) {
+    groups.get((item.code && owner.get(item.code)) || NO_PARENT)?.push(item);
+  }
+  return [
+    ...parents.map((p) => ({ parent: p, items: groups.get(p.code) ?? [] })),
+    { parent: null, items: groups.get(NO_PARENT) ?? [] },
+  ].filter((g) => g.items.length > 0);
+}
+
 function ItemsTable({
   items,
+  parents,
   editable,
   onEdit,
   onDelete,
 }: {
   items: BaselineItem[];
+  parents: BaselineParent[];
   editable: boolean;
   onEdit?: (item: BaselineItem) => void;
   onDelete?: (item: BaselineItem) => void;
 }): ReactNode {
   if (items.length === 0) return null;
+  const groups = groupByParent(items, parents);
+  const columns = editable ? 5 : 4;
   return (
     <Table>
       <TableHeader>
         <TableRow>
-          <TableHead className="w-36">요구사항 ID</TableHead>
+          <TableHead className="w-40">요구사항 ID</TableHead>
           <TableHead>명칭</TableHead>
           <TableHead className="w-20">중요도</TableHead>
-          <TableHead className="w-28">명세서 위치</TableHead>
-          <TableHead className="w-48">기존 요구사항</TableHead>
+          <TableHead className="w-44">기존 요구사항과 대조</TableHead>
           {editable && <TableHead className="w-28" />}
         </TableRow>
       </TableHeader>
       <TableBody>
-        {items.map((item) => (
-          <TableRow key={item.id}>
-            <TableCell className="font-mono text-xs">
-              {item.code ?? '(없음)'}
-              <div className="mt-1 flex flex-wrap gap-1">
-                {item.problems.map((p) => (
-                  <Badge key={p} variant={BLOCKING.includes(p) ? 'destructive' : 'warning'}>
-                    {PROBLEM_WORD[p]}
-                  </Badge>
-                ))}
-              </div>
-            </TableCell>
-            <TableCell>
-              <span className="break-keep">{item.title || '-'}</span>
-              {item.edited && <span className="text-muted-foreground text-xs"> · 고침</span>}
-              {item.origin === 'MANUAL' && (
-                <span className="text-muted-foreground text-xs"> · 직접 추가</span>
-              )}
-            </TableCell>
-            <TableCell>{label(item.priority)}</TableCell>
-            <TableCell className="text-muted-foreground text-xs">{item.location ?? '-'}</TableCell>
-            <TableCell className="text-xs">
-              {item.match && (
-                <Badge
-                  variant={
-                    item.match === 'CHANGED' ? 'warning' : item.match === 'NEW' ? 'info' : 'muted'
-                  }
-                >
-                  {MATCH_WORD[item.match]}
-                </Badge>
-              )}
-              {item.existing && item.match === 'CHANGED' && (
-                <div className="text-muted-foreground mt-1">
-                  기존: {item.existing.title} · {label(item.existing.priority)} (
-                  {item.existing.source})
-                </div>
-              )}
-              {item.specApplied && <div className="text-primary mt-1">명세서 내용으로 바꿈</div>}
-            </TableCell>
-            {editable && (
-              <TableCell className="text-right">
-                <Button size="sm" variant="ghost" onClick={() => onEdit?.(item)}>
-                  고치기
-                </Button>
-                <Button size="sm" variant="ghost" onClick={() => onDelete?.(item)}>
-                  지우기
-                </Button>
-              </TableCell>
+        {groups.map((g) => (
+          <Fragment key={g.parent?.code ?? NO_PARENT}>
+            {parents.length > 0 && (
+              <TableRow className="bg-muted/40 hover:bg-muted/40">
+                <TableCell colSpan={columns} className="py-2">
+                  {g.parent ? (
+                    <span className="text-sm">
+                      <span className="text-muted-foreground font-mono text-xs">
+                        {g.parent.code}
+                      </span>{' '}
+                      <span className="font-medium">{g.parent.title}</span>
+                      <span className="text-muted-foreground"> · {g.items.length}건</span>
+                    </span>
+                  ) : (
+                    <span className="text-muted-foreground text-sm">
+                      상위 요구사항을 적지 않은 항목 · {g.items.length}건
+                    </span>
+                  )}
+                </TableCell>
+              </TableRow>
             )}
-          </TableRow>
+            {g.items.map((item) => (
+              <ItemRow
+                key={item.id}
+                item={item}
+                editable={editable}
+                onEdit={onEdit}
+                onDelete={onDelete}
+              />
+            ))}
+          </Fragment>
         ))}
       </TableBody>
     </Table>
+  );
+}
+
+function ItemRow({
+  item,
+  editable,
+  onEdit,
+  onDelete,
+}: {
+  item: BaselineItem;
+  editable: boolean;
+  onEdit?: (item: BaselineItem) => void;
+  onDelete?: (item: BaselineItem) => void;
+}): ReactNode {
+  const notes = [item.edited && '고침', item.origin === 'MANUAL' && '직접 추가'].filter(Boolean);
+  return (
+    <TableRow>
+      <TableCell className="align-top">
+        <span className="font-mono text-xs">{item.code ?? '(없음)'}</span>
+        {item.location && (
+          <div className="text-muted-foreground mt-0.5 text-xs">명세서 {item.location}</div>
+        )}
+        {item.problems.length > 0 && (
+          <div className="mt-1 flex flex-wrap gap-1">
+            {item.problems.map((p) => (
+              <Badge key={p} variant={BLOCKING.includes(p) ? 'destructive' : 'warning'}>
+                {PROBLEM_WORD[p]}
+              </Badge>
+            ))}
+          </div>
+        )}
+      </TableCell>
+      <TableCell className="align-top whitespace-normal">
+        <span className="line-clamp-2 break-keep" title={item.title}>
+          {item.title || '-'}
+        </span>
+        {notes.length > 0 && (
+          <span className="text-muted-foreground text-xs">{notes.join(' · ')}</span>
+        )}
+      </TableCell>
+      <TableCell className="align-top">{label(item.priority)}</TableCell>
+      <TableCell className="align-top whitespace-normal text-xs">
+        {item.match === 'NEW' && <span className="text-muted-foreground">{MATCH_WORD.NEW}</span>}
+        {item.match && item.match !== 'NEW' && (
+          <Badge variant={item.match === 'CHANGED' ? 'warning' : 'muted'}>
+            {MATCH_WORD[item.match]}
+          </Badge>
+        )}
+        {item.existing && item.match === 'CHANGED' && (
+          <div className="text-muted-foreground mt-1">
+            기존: {item.existing.title} · {label(item.existing.priority)} ({item.existing.source})
+          </div>
+        )}
+        {item.specApplied && <div className="text-primary mt-1">명세서 내용으로 바꿈</div>}
+      </TableCell>
+      {editable && (
+        <TableCell className="text-right align-top">
+          <Button size="sm" variant="ghost" onClick={() => onEdit?.(item)}>
+            고치기
+          </Button>
+          <Button size="sm" variant="ghost" onClick={() => onDelete?.(item)}>
+            지우기
+          </Button>
+        </TableCell>
+      )}
+    </TableRow>
   );
 }
 
@@ -472,7 +569,7 @@ function ImpactPanel({ b }: { b: BaselineResponse }): ReactNode {
   return (
     <Window
       title={confirmed ? '확정 결과' : '확정하면'}
-      hint={`새 요구사항 ${b.counts.NEW}건 · 기존과 같음 ${b.counts.SAME}건 · 기존과 다름 ${b.counts.CHANGED}건. 기존 요구사항은 ID·추적 링크·상태 지정·이력이 그대로입니다.`}
+      hint="기존 요구사항은 ID·추적 링크·상태 지정·이력이 그대로입니다."
     >
       <div className="flex flex-col gap-3 text-sm">
         <div>
@@ -523,7 +620,8 @@ function ConfirmedBaseline({
       {(b) => (
         <>
           <Window title={`기준선 v${b.version} · 확정`} hint={<BaselineMeta b={b} />}>
-            <ItemsTable items={b.items} editable={false} />
+            <Summary b={b} />
+            <ItemsTable items={b.items} parents={b.parents} editable={false} />
           </Window>
           <ImpactPanel b={b} />
         </>
@@ -688,44 +786,111 @@ function ConfirmDialog({
   );
 }
 
-function UnresolvedRefs({ refs }: { refs: UnresolvedRefResponse[] }): ReactNode {
-  if (refs.length === 0) return null;
+/** 같은 코드를 가리킨 근거를 한 줄로 모은다. 코드는 서버 순서, 근거는 출처 번호순(GH-3, GH-12). */
+function byCode(refs: UnresolvedRefResponse[]): [string, UnresolvedRefResponse[]][] {
+  const out = new Map<string, UnresolvedRefResponse[]>();
+  for (const r of refs) out.set(r.code, [...(out.get(r.code) ?? []), r]);
+  const order = (a: UnresolvedRefResponse, b: UnresolvedRefResponse) =>
+    a.sourceLabel.localeCompare(b.sourceLabel, 'ko', { numeric: true });
+  return [...out.entries()].map(([code, rows]) => [code, rows.sort(order)]);
+}
+
+function RefSources({ refs }: { refs: UnresolvedRefResponse[] }): ReactNode {
   return (
-    <Window
-      title={`요구사항 목록에 없는 ID 참조 ${refs.length}건`}
-      hint="커밋·이슈가 가리켰지만 사업 요구사항에 없는 코드입니다. 추적 링크로 잇지 않습니다. 오타이거나 기준선에 빠진 요구사항입니다."
-    >
-      <Table>
-        <TableHeader>
-          <TableRow>
-            <TableHead className="w-36">가리킨 ID</TableHead>
-            <TableHead className="w-48">출처</TableHead>
-            <TableHead>근거</TableHead>
+    <div className="flex flex-wrap gap-x-3 gap-y-1">
+      {refs.map((r) => {
+        const name = r.sourceLabel.length > 40 ? `${r.sourceLabel.slice(0, 39)}…` : r.sourceLabel;
+        return r.evidenceUrl ? (
+          <a
+            key={`${r.sourceType}-${r.sourceId}`}
+            className="text-primary inline-flex items-center gap-1 hover:underline"
+            href={r.evidenceUrl}
+            target="_blank"
+            rel="noreferrer"
+            title={r.evidenceText ?? r.sourceLabel}
+          >
+            {name} <ExternalLink className="size-3" />
+          </a>
+        ) : (
+          <span key={`${r.sourceType}-${r.sourceId}`} title={r.evidenceText ?? undefined}>
+            {name}
+          </span>
+        );
+      })}
+    </div>
+  );
+}
+
+function RefTable({
+  groups,
+  first,
+}: {
+  groups: [string, UnresolvedRefResponse[]][];
+  first: string;
+}): ReactNode {
+  return (
+    <Table>
+      <TableHeader>
+        <TableRow>
+          <TableHead className="w-64">{first}</TableHead>
+          <TableHead className="w-16 text-right">근거</TableHead>
+          <TableHead>가리킨 곳</TableHead>
+        </TableRow>
+      </TableHeader>
+      <TableBody>
+        {groups.map(([code, rows]) => (
+          <TableRow key={code}>
+            <TableCell className="align-top">
+              <span className="font-mono text-xs">{code}</span>
+              {rows[0].parentTitle && (
+                <div className="text-muted-foreground mt-0.5 text-xs">{rows[0].parentTitle}</div>
+              )}
+            </TableCell>
+            <TableCell className="text-right align-top tabular-nums">{rows.length}건</TableCell>
+            <TableCell className="align-top whitespace-normal text-xs">
+              <RefSources refs={rows} />
+            </TableCell>
           </TableRow>
-        </TableHeader>
-        <TableBody>
-          {refs.map((r) => (
-            <TableRow key={`${r.code}-${r.sourceType}-${r.sourceId}`}>
-              <TableCell className="font-mono text-xs">{r.code}</TableCell>
-              <TableCell className="text-xs">{r.sourceLabel}</TableCell>
-              <TableCell className="text-xs">
-                {r.evidenceUrl ? (
-                  <a
-                    className="text-primary inline-flex items-center gap-1 hover:underline"
-                    href={r.evidenceUrl}
-                    target="_blank"
-                    rel="noreferrer"
-                  >
-                    {r.evidenceText ?? '원문'} <ExternalLink className="size-3" />
-                  </a>
-                ) : (
-                  (r.evidenceText ?? '-')
-                )}
-              </TableCell>
-            </TableRow>
-          ))}
-        </TableBody>
-      </Table>
-    </Window>
+        ))}
+      </TableBody>
+    </Table>
+  );
+}
+
+/**
+ * 커밋·이슈가 가리켰지만 요구사항 목록에 없는 코드. 명세서의 상위 요구사항을 가리킨 것은
+ * 정상이라 따로 접어 두고, 정말 없는 코드(오타·빠진 요구사항)를 앞에 둔다.
+ */
+function UnresolvedRefs({ refs }: { refs: UnresolvedRefResponse[] }): ReactNode {
+  const unknown = byCode(refs.filter((r) => !r.parentTitle));
+  const parents = byCode(refs.filter((r) => r.parentTitle));
+  if (unknown.length === 0 && parents.length === 0) return null;
+  const parentRefCount = parents.reduce((n, [, rows]) => n + rows.length, 0);
+  return (
+    <>
+      {unknown.length > 0 && (
+        <Window
+          title={`요구사항 목록에 없는 ID ${unknown.length}종`}
+          hint="커밋·이슈가 가리켰지만 사업 요구사항에도, 명세서의 상위 요구사항에도 없는 코드입니다. 추적 링크로 잇지 않습니다. 오타이거나 기준선에 빠진 요구사항입니다."
+        >
+          <RefTable groups={unknown} first="가리킨 ID" />
+        </Window>
+      )}
+      {parents.length > 0 && (
+        <Window
+          title={`상위 요구사항을 가리킨 참조 ${parents.length}종`}
+          hint="명세서 절 제목의 상위 요구사항 코드를 커밋·이슈가 적은 것입니다. 정상이며, 상위는 요구사항 목록에 들지 않으므로 추적 링크로 잇지 않습니다."
+        >
+          <details className="group">
+            <summary className="text-muted-foreground cursor-pointer text-sm select-none">
+              근거 {parentRefCount}건 보기
+            </summary>
+            <div className="mt-3">
+              <RefTable groups={parents} first="상위 요구사항" />
+            </div>
+          </details>
+        </Window>
+      )}
+    </>
   );
 }
