@@ -149,3 +149,47 @@ def test_모델_답의_첫_줄이_제목이다():
 def test_모델에_주는_머리는_표를_뺀다():
     head = s.head_for_llm("제목\n| a | b |\n본문", limit=100)
     assert head == "제목\n본문"
+
+
+def test_절_제목의_상위_요구사항_코드를_따로_읽는다():
+    text = (
+        "문서번호 IM-001 · 버전 v1.0\n"
+        "SFR.CON.001 확장 가능한 커넥터 구조\n"
+        "커넥터 구조를 정의한다.\n"
+        "### SFR.CON.002 대표 도구 연동\n"
+        "| 요구사항 ID | 요구사항 명칭 | 요구사항 설명 | 중요도 |\n"
+        "|---|---|---|---|\n"
+        "| SWFR.CON.001 | 공통 인터페이스 | 공통 인터페이스 (상위 SFR.CON.001) | 필수 |\n"
+        "| SWFR.CON.003 | GitHub 수집 | GitHub 을 수집한다 (상위 SFR.CON.002 대표 도구) | 필수 |\n"
+        "| SWFR.CON.009 | 상위 없음 | 상위를 적지 않은 항목 | 필수 |\n"
+        "SWFR.CON.001 본문에서 다시 언급해도 상위가 아니다\n"
+    )
+    items = s.spec_items(text)
+    codes = {i.code for i in items}
+    parents = s.spec_parents(text, codes)
+    # 문서번호(IM-001)는 커밋이 가리킬 꼴이 아니라 상위로 읽지 않는다. 표의 코드도 아니다
+    assert [(p["code"], p["title"]) for p in parents] == [
+        ("SFR.CON.001", "확장 가능한 커넥터 구조"), ("SFR.CON.002", "대표 도구 연동"),
+    ]
+    assert parents[0]["location"] == "2번째 줄"
+    parent_codes = [p["code"] for p in parents]
+    assert [s.parent_of(i.as_dict(), parent_codes) for i in items] == [
+        "SFR.CON.001", "SFR.CON.002", None,
+    ]
+
+
+def test_상위_코드가_다른_코드의_일부면_상위로_보지_않는다():
+    assert s.parent_of({"title": "x", "body": "SFR.CON.0012 와 XSFR.CON.001"},
+                       ["SFR.CON.001"]) is None
+
+
+def test_표가_없는_명세서는_상위가_없다():
+    text = "SFR.CON.001 상위\nSWFR.CON.001 하위 항목\n"
+    assert s.spec_parents(text, {i.code for i in s.spec_items(text)}) == []
+
+
+def test_요구사항정의서의_상위_요구사항_14개를_읽는다():
+    text = IM001.read_text(encoding="utf-8")
+    parents = s.spec_parents(text, {i.code for i in s.spec_items(text)})
+    assert len(parents) == 14
+    assert parents[0]["code"] == "SFR.CON.001" and parents[-1]["code"] == "SFR.SEC.001"

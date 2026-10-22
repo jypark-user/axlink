@@ -288,6 +288,15 @@ class BaselineItemResponse(BaseModel):
     specApplied: bool  # noqa: N815
 
 
+class BaselineParent(BaseModel):
+    """명세서의 상위 요구사항(절 제목의 코드). 요구사항 목록에는 들지 않는다."""
+
+    code: str
+    title: str
+    location: str | None
+    children: list[str]  # 이 상위에 속한 항목 코드. 항목 설명이 상위 코드를 적은 것
+
+
 class BaselineConnection(BaseModel):
     id: str
     name: str
@@ -317,6 +326,7 @@ class BaselineResponse(BaseModel):
     missing: list[BaselineExisting]
     # 확정하면 요구사항 생성을 끌 연결(확정 뒤에는 끈 연결)
     connections: list[BaselineConnection]
+    parents: list[BaselineParent]
 
 
 class BaselineStateResponse(BaseModel):
@@ -341,3 +351,5 @@ class UnresolvedRefResponse(BaseModel):
     sourceLabel: str  # noqa: N815
     evidenceText: str | None  # noqa: N815
     evidenceUrl: str | None  # noqa: N815
+    # 가리킨 코드가 기준선의 상위 요구사항이면 그 명칭. 없는 ID 가 아니라 상위를 가리킨 것이다
+    parentTitle: str | None = None  # noqa: N815

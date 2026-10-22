@@ -399,6 +399,44 @@ def _spec_items_from_lines(text: str) -> list[SpecItem]:
     return items
 
 
+def spec_parents(text: str, item_codes: set[str]) -> list[dict]:
+    """명세서의 상위 요구사항. 표 밖의 줄(절 제목 등)이 요구사항 코드로 시작하는데 표의
+    요구사항이 아닌 것이다. 예: "SFR.CON.001 확장 가능한 커넥터 구조".
+
+    표가 없는 명세서는 그런 줄이 곧 요구사항이라(_spec_items_from_lines) 상위가 없다.
+    커밋·이슈가 가리킬 수 있는 꼴(_TRACEABLE_CODE)만 받는다. 문서번호(IM-001) 같은 줄을
+    상위로 읽지 않으려는 것이다.
+    """
+    tables, _ = tables_and_lines(text)
+    if not tables or not item_codes:
+        return []
+    out: list[dict] = []
+    seen: set[str] = set()
+    for no, raw in enumerate(text.splitlines(), start=1):
+        if raw.lstrip().startswith("|"):
+            continue
+        match = _CODE_LINE.match(clean(_HEADING.sub(r"\1", raw.strip())))
+        if not match:
+            continue
+        code = match.group(1)
+        if code in item_codes or code in seen or not _TRACEABLE_CODE.match(code):
+            continue
+        seen.add(code)
+        out.append({"code": code, "title": _title_of(clean(match.group(2))),
+                    "location": f"{no}번째 줄"})
+    return out
+
+
+def parent_of(item: dict, parent_codes: list[str]) -> str | None:
+    """항목이 속한 상위 요구사항. 항목 설명·명칭이 상위 코드를 적었으면 그것이다(첫 번째).
+    적지 않았으면 모른다. 위치로 짐작하지 않는다."""
+    text = f"{item.get('title') or ''} {item.get('body') or ''}"
+    for code in parent_codes:
+        if re.search(rf"(?<![\w.]){re.escape(code)}(?![\w])", text):
+            return code
+    return None
+
+
 def problems_of(items: list[dict]) -> list[list[str]]:
     """항목마다의 문제 목록. items 는 code·title 을 가진 사전이다(DB 행이나 SpecItem.as_dict)."""
     counts: dict[str, int] = {}

@@ -9,7 +9,8 @@ from app.db import fetch_all, fetch_one
 _BASELINE_COLUMNS = """
     b.id, b.project_id, b.version, b.status, b.document_upload_id, b.source_filename,
     b.source_file_hash, b.source_doc_version, b.submitted_at, b.returned_reason,
-    b.confirmed_at, b.confirmed_by_role, b.confirm_result, b.created_at, b.updated_at,
+    b.confirmed_at, b.confirmed_by_role, b.confirm_result, b.parents_json, b.created_at,
+    b.updated_at,
     cu.name as created_by_name, su.name as submitted_by_name, fu.name as confirmed_by_name
 """
 _BASELINE_FROM = """
@@ -95,6 +96,29 @@ def insert(
         ),
     )
     return str(row["id"])
+
+
+def set_parents(cur: Any, baseline_id: str, parents: list[dict[str, Any]]) -> None:
+    cur.execute(
+        "update requirement_baseline set parents_json = %s where id = %s",
+        (Jsonb(parents), baseline_id),
+    )
+
+
+def baselines_for_parents(cur: Any, project_id: str) -> list[dict[str, Any]]:
+    """상위 요구사항을 읽을 기준선(확정본과 작업 중인 것). parents_json 이 없던 때 등록한
+    것은 명세서 문서의 글을 같이 읽는다."""
+    return fetch_all(
+        cur,
+        """
+        select b.id, b.parents_json, d.extracted_text
+          from requirement_baseline b
+          left join document_upload d on d.id = b.document_upload_id and b.parents_json is null
+         where b.project_id = %s
+         order by (b.status = 'CONFIRMED') desc, b.version desc
+        """,
+        (project_id,),
+    )
 
 
 def insert_item(cur: Any, baseline_id: str, seq: int, item: dict[str, Any], origin: str) -> str:
@@ -315,10 +339,14 @@ def requirement_counts(cur: Any, project_id: str) -> dict[str, int]:
     return {"total": int(row["total"]), "outside": int(row["outside"])}
 
 
-def unresolved_count(cur: Any, project_id: str) -> int:
+def unresolved_count(cur: Any, project_id: str, except_codes: set[str]) -> int:
+    """없는 코드를 가리킨 근거의 코드 수. 기준선의 상위 요구사항 코드는 빼고 센다."""
     row = fetch_one(
         cur,
-        "select count(distinct code) as n from requirement_unresolved_ref where project_id = %s",
-        (project_id,),
+        """
+        select count(distinct code) as n from requirement_unresolved_ref
+         where project_id = %s and not (code = any(%s))
+        """,
+        (project_id, list(except_codes)),
     )
     return int(row["n"])

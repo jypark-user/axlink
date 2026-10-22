@@ -28,6 +28,7 @@ from app.standard.models import (
     BaselineExisting,
     BaselineItemRequest,
     BaselineItemResponse,
+    BaselineParent,
     BaselineResponse,
     BaselineStateResponse,
     UnresolvedRefResponse,
@@ -101,6 +102,34 @@ def _iso(value: Any) -> str | None:
     return value.isoformat() if value else None
 
 
+def _parents(cur: Any, row: dict[str, Any], items: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    """기준선의 상위 요구사항. 등록 때 적어 둔 것을 쓴다. parents_json 이 생기기 전에 등록한
+    기준선은 명세서 문서의 글에서 다시 읽는다(문서가 지워졌으면 없다)."""
+    if row.get("parents_json") is not None:
+        return row["parents_json"]
+    if not row.get("document_upload_id"):
+        return []
+    document = repo.find_document(cur, str(row["document_upload_id"]))
+    text = (document or {}).get("extracted_text")
+    if not text:
+        return []
+    return structuring.spec_parents(text, {i["code"] for i in items if i["code"]})
+
+
+def project_parents(cur: Any, project_id: str) -> dict[str, str]:
+    """사업 기준선(확정본·작업 중)의 상위 요구사항 코드와 명칭. 확정본이 앞선다."""
+    out: dict[str, str] = {}
+    for b in repo.baselines_for_parents(cur, project_id):
+        parents = b["parents_json"]
+        if parents is None:
+            text = b["extracted_text"]
+            codes = {i["code"] for i in repo.items(cur, str(b["id"])) if i["code"]}
+            parents = structuring.spec_parents(text, codes) if text else []
+        for p in parents:
+            out.setdefault(p["code"], p["title"])
+    return out
+
+
 def _to_response(cur: Any, row: dict[str, Any], with_items: bool = True) -> BaselineResponse:
     items = repo.items(cur, str(row["id"])) if with_items else []
     problems = structuring.problems_of(items)
@@ -146,6 +175,14 @@ def _to_response(cur: Any, row: dict[str, Any], with_items: bool = True) -> Base
             for c in repo.connections_creating(cur, str(row["project_id"]))
         ]
 
+    parents = _parents(cur, row, items) if with_items else []
+    codes = [p["code"] for p in parents]
+    children: dict[str, list[str]] = {c: [] for c in codes}
+    for item in items:
+        parent = structuring.parent_of(item, codes)
+        if parent and item["code"]:
+            children[parent].append(item["code"])
+
     return BaselineResponse(
         id=str(row["id"]), version=row["version"], status=row["status"],
         documentId=str(row["document_upload_id"]) if row["document_upload_id"] else None,
@@ -161,6 +198,11 @@ def _to_response(cur: Any, row: dict[str, Any], with_items: bool = True) -> Base
         ),
         extractionEmpty=with_items and not items,
         counts=counts, missing=missing, connections=connections,
+        parents=[
+            BaselineParent(code=p["code"], title=p["title"], location=p.get("location"),
+                           children=children[p["code"]])
+            for p in parents
+        ],
     )
 
 
@@ -188,7 +230,9 @@ def state(cur: Any, principal: AuthPrincipal, project_id: str) -> BaselineStateR
             BaselineConnection(id=str(c["id"]), name=c["name"], tool=c["tool"])
             for c in repo.connections_creating(cur, project_id)
         ],
-        unresolvedCodeCount=repo.unresolved_count(cur, project_id),
+        unresolvedCodeCount=repo.unresolved_count(
+            cur, project_id, set(project_parents(cur, project_id))
+        ),
     )
 
 
@@ -208,6 +252,7 @@ def unresolved_refs(
 ) -> list[UnresolvedRefResponse]:
     _check_project(cur, principal, project_id)
     rows = repository.list_unresolved_refs(cur, project_id)
+    parents = project_parents(cur, project_id)
     labels = repository.entity_labels(
         cur, {(r["source_type"], str(r["source_id"])) for r in rows}
     )
@@ -216,6 +261,7 @@ def unresolved_refs(
             code=r["code"], sourceType=r["source_type"], sourceId=str(r["source_id"]),
             sourceLabel=labels.get((r["source_type"], str(r["source_id"])), ("?", None))[0],
             evidenceText=r["evidence_text"], evidenceUrl=r["evidence_url"],
+            parentTitle=parents.get(r["code"]),
         )
         for r in rows
     ]
@@ -254,8 +300,12 @@ def create(
         structuring.guess_version(text), principal.user_id,
     )
     # 추출 결과는 버리는 행 없이 모두 넣는다. 중복·꼴 문제는 표시하고 사람이 고친다
-    for seq, item in enumerate(structuring.spec_items(text), start=1):
+    extracted = structuring.spec_items(text)
+    for seq, item in enumerate(extracted, start=1):
         repo.insert_item(cur, baseline_id, seq, item.as_dict(), "EXTRACTED")
+    repo.set_parents(
+        cur, baseline_id, structuring.spec_parents(text, {i.code for i in extracted if i.code})
+    )
     return _to_response(cur, repo.find(cur, project_id, baseline_id))
 
 
@@ -421,6 +471,9 @@ def confirm(
             project_id=project_id, field="requirement_from_issues",
             from_value="true", to_value="false", actor=actor,
         )
+    if row["parents_json"] is None:
+        # 열이 생기기 전에 등록한 기준선. 확정본은 문서가 지워져도 상위를 잃지 않게 적어 둔다
+        repo.set_parents(cur, baseline_id, _parents(cur, row, items))
     repo.set_confirmed(cur, baseline_id, principal.user_id, principal.role, {
         "before": before,
         "missing": missing,

@@ -572,6 +572,78 @@ def test_없는_요구사항_ID_참조는_잇지_않고_미해결로_보인다(c
     assert linked["n"] == 1
 
 
+@requires_db
+def test_명세서의_상위_요구사항을_가리킨_참조는_없는_ID로_세지_않는다(client, client_token, clean):
+    """명세서 절 제목의 상위 코드(SFR)는 요구사항이 아니다. 이슈가 그 코드를 적어도 잇지 않고,
+    '목록에 없는 ID' 에서 빼서 상위 참조로 보인다. 진짜 없는 코드는 그대로 남는다."""
+    from app.standard import trace_service
+
+    pm, po = _auth(client_token("r3")), _auth(client_token("r2"))
+    clean["codes"] += ["SWFR.TST.401", "SWFR.TST.402"]
+    spec = (
+        "# 요구사항 명세서 v1.0\n\nSFR.TST.001 상위 기능 묶음\n\n"
+        "| 요구사항 ID | 요구사항 명칭 | 요구사항 설명 | 중요도 |\n|---|---|---|---|\n"
+        "| SWFR.TST.401 | 첫 항목 | 첫 항목 (상위 SFR.TST.001) | 필수 |\n"
+        "| SWFR.TST.402 | 둘째 항목 | 상위를 적지 않았다 | 필수 |\n"
+    )
+    with tx() as cur:
+        conn = _connect(cur, creates=False)
+        cid = str(conn["id"])
+        clean["conns"].append(cid)
+        _load(cur, conn, [("issue:41", _gh_issue(
+            41, "커넥터 작업", [], body="**SFR.TST.001** 상위 기능 묶음 · 관련 SFR.TST.999"))])
+        _promote(cur, cid)
+        trace_service.build_project_links(cur, PID)
+        doc = _document(cur, spec)
+        clean["docs"].append(doc)
+
+    sub = _submitted(client, pm, doc)
+    assert sub["parents"] == [{"code": "SFR.TST.001", "title": "상위 기능 묶음",
+                               "location": "3번째 줄", "children": ["SWFR.TST.401"]}]
+    assert len(sub["items"]) == 2  # 상위 코드는 요구사항 항목이 아니다
+    res = client.post(f"{_base()}/{sub['id']}/confirm", json={}, headers=po)
+    assert res.status_code == 200, res.text
+
+    refs = client.get(f"/api/projects/{PID}/requirements/unresolved-refs", headers=po).json()
+    by_code = {r["code"]: r for r in refs}
+    assert by_code["SFR.TST.001"]["parentTitle"] == "상위 기능 묶음"
+    assert by_code["SFR.TST.999"]["parentTitle"] is None
+    assert client.get(_base(), headers=po).json()["unresolvedCodeCount"] == 1
+    with tx() as cur:
+        assert "SFR.TST.001" not in _req_codes(cur)
+        stored = fetch_one(cur, "select parents_json from requirement_baseline where id = %s",
+                           (sub["id"],))["parents_json"]
+    assert [p["code"] for p in stored] == ["SFR.TST.001"]
+
+
+@requires_db
+def test_상위_요구사항을_적기_전에_등록한_기준선은_명세서_글에서_다시_읽는다(
+    client, client_token, clean
+):
+    pm, po = _auth(client_token("r3")), _auth(client_token("r2"))
+    clean["codes"] += ["SWFR.TST.411"]
+    with tx() as cur:
+        doc = _document(cur, (
+            "SFR.TST.011 옛 상위\n\n| 요구사항 ID | 요구사항 명칭 | 요구사항 설명 | 중요도 |\n"
+            "|---|---|---|---|\n| SWFR.TST.411 | 항목 | 항목 (상위 SFR.TST.011) | 필수 |\n"
+        ))
+        clean["docs"].append(doc)
+    sub = _submitted(client, pm, doc)
+    with tx() as cur:
+        cur.execute("update requirement_baseline set parents_json = null where id = %s",
+                    (sub["id"],))
+    again = client.get(f"{_base()}/{sub['id']}", headers=po).json()
+    assert [(p["code"], p["children"]) for p in again["parents"]] == [
+        ("SFR.TST.011", ["SWFR.TST.411"])
+    ]
+    # 확정하면 확정본에 적어 둔다
+    assert client.post(f"{_base()}/{sub['id']}/confirm", json={}, headers=po).status_code == 200
+    with tx() as cur:
+        stored = fetch_one(cur, "select parents_json from requirement_baseline where id = %s",
+                           (sub["id"],))["parents_json"]
+    assert stored and stored[0]["code"] == "SFR.TST.011"
+
+
 # ---------------------------------------------------------------- 권한
 
 
