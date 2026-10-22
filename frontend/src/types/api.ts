@@ -1740,6 +1740,14 @@ export interface BaselineItem {
   specApplied: boolean;
 }
 
+/** 명세서 절 제목의 상위 요구사항. 요구사항 목록에는 들지 않는다. */
+export interface BaselineParent {
+  code: string;
+  title: string;
+  location: string | null;
+  children: string[];
+}
+
 export interface BaselineConnection {
   id: string;
   name: string;
@@ -1769,6 +1777,7 @@ export interface BaselineResponse {
   missing: BaselineExisting[];
   /** 확정하면 요구사항 생성을 끌 연결(확정 뒤에는 끈 연결) */
   connections: BaselineConnection[];
+  parents: BaselineParent[];
 }
 
 export interface BaselineStateResponse {
@@ -1790,4 +1799,6 @@ export interface UnresolvedRefResponse {
   sourceLabel: string;
   evidenceText: string | null;
   evidenceUrl: string | null;
+  /** 가리킨 코드가 기준선의 상위 요구사항이면 그 명칭. 없는 ID 가 아니다 */
+  parentTitle?: string | null;
 }
