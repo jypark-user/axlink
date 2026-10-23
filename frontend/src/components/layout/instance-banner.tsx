@@ -19,10 +19,11 @@ export function InstanceBanner(): ReactNode {
     };
   }, []);
   if (!label) return null;
+  // 인쇄(설명서 PDF 등)에는 넣지 않는다. 화면에서만 어느 환경인지 알리면 된다
   return (
     <div
       role="status"
-      className="bg-warning-muted text-warning border-warning/40 border-b px-4 py-1 text-center text-xs font-semibold"
+      className="bg-warning-muted text-warning border-warning/40 border-b px-4 py-1 text-center text-xs font-semibold print:hidden"
     >
       {label}
     </div>

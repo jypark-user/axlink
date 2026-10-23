@@ -19,6 +19,9 @@ const InviteAcceptPage = lazy(() =>
 const GuidePage = lazy(() =>
   import('@/features/help/guide-page').then((m) => ({ default: m.GuidePage })),
 );
+const GuidePrintPage = lazy(() =>
+  import('@/features/help/guide-print-page').then((m) => ({ default: m.GuidePrintPage })),
+);
 const ProjectListPage = lazy(() =>
   import('@/features/projects/project-list-page').then((m) => ({ default: m.ProjectListPage })),
 );
@@ -117,6 +120,18 @@ export function AppRoutes(): ReactNode {
         <Route path="/login" element={<LoginPage />} />
         <Route path="/invite/accept" element={<InviteAcceptPage />} />
       </Route>
+
+      {/* 설명서 인쇄(PDF) — 메뉴 없이 본문만 이어 그려야 쪽이 제대로 나뉜다. 화면 틀 밖에 둔다 */}
+      <Route
+        path="/guide/print"
+        element={
+          <RequireAuth>
+            <SuspenseShell>
+              <GuidePrintPage />
+            </SuspenseShell>
+          </RequireAuth>
+        }
+      />
 
       <Route
         element={
