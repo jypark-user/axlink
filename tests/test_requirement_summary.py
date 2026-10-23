@@ -1,6 +1,6 @@
 """요구사항 화면 요약과 목록 조건 (SWFR.WEB.002).
 
-요약은 목록 쪽과 상관없이 사업 전체를 서버에서 센다. 원천 이슈 상태는 원천 기록(raw_artifact)
+요약은 목록 쪽과 상관없이 사업 전체를 서버에서 센다. 출처 이슈 상태는 원천 기록(raw_artifact)
 에서 세고 내부 상태에서 짐작하지 않는다. 카드가 거는 조건마다 목록 건수가 요약과 맞아야 한다.
 """
 
@@ -149,7 +149,7 @@ def test_요약은_100건을_넘어도_사업_전체를_센다(client, client_to
     assert got["verified"] == verified == baseline["verified"] + 40
     assert got["notVerified"] == total - verified
     assert got["verifiedRate"] == pytest.approx(verified / total)
-    # GitHub 연결에서 온 IMPLEMENTED 20건만 원천 이슈 닫힘으로 센다. 수기 IMPLEMENTED 6건은 아니다
+    # GitHub 연결에서 온 IMPLEMENTED 20건만 출처 이슈 닫힘으로 센다. 수기 IMPLEMENTED 6건은 아니다
     assert got["implementedFromSourceClosed"] == baseline["from_closed"] + 20
 
 

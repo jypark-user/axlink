@@ -387,7 +387,7 @@ _REQUIREMENT_COLUMNS = """
          and tl.link_kind = 'TESTS' and tl.status = 'ACTIVE'
     ) as trace_complete
 """
-# 원천 이슈 상태는 수집한 원천 기록에서 읽는다. 내부 상태(IMPLEMENTED 등)에서 역산하지 않는다.
+# 출처 이슈 상태는 수집한 원본 기록에서 읽는다. 내부 상태(IMPLEMENTED 등)에서 역산하지 않는다.
 # 지금 요구사항을 만드는 원천은 GitHub 뿐이라 GitHub 의 state 만 읽는다. 다른 도구는 UNKNOWN
 _SOURCE_STATE = """
     case

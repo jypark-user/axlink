@@ -526,8 +526,8 @@ function ProjectRequirements({ projectId }: { projectId: string }): ReactNode {
     : b.confirmed
       ? `요구사항 기준선 v${b.confirmed.version} 기준 ${rows.length}건입니다.`
       : rows.length > 0
-        ? `기준선 미확정. 도구 이슈에서 만든 ${rows.length}건입니다.`
-        : '요구사항 기준선 미등록·미확정입니다.';
+        ? `${rows.length}건. 기준선은 아직 확정되지 않았습니다.`
+        : '아직 요구사항이 없습니다. 명세서를 등록해 기준선을 만듭니다.';
 
   return (
     <Window

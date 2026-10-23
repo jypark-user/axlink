@@ -28,7 +28,7 @@ describe('요구사항 목록 조건', () => {
       filterParams({
         kind: 'source',
         connectionId: null,
-        sourceLabel: '원천 연결 없음',
+        sourceLabel: '출처 이슈 없음',
         state: 'NONE',
       }),
     ).toEqual({ sourceState: 'NONE' });
@@ -44,7 +44,7 @@ describe('요구사항 목록 조건', () => {
         sourceLabel: 'GitHub a/b',
         state: 'CLOSED',
       }),
-    ).toBe('GitHub a/b · 원천 이슈 닫힘');
+    ).toBe('GitHub a/b · 출처 이슈 닫힘');
   });
 
   it('분모가 0 이면 비율은 산출 불가다', () => {
@@ -75,18 +75,18 @@ describe('구현 칸 설명', () => {
     { status: 'IMPLEMENTED' as const, count: implemented },
   ];
 
-  it('구현이 전부 원천 이슈 닫힘에서 왔으면 모두라고 말한다', () => {
+  it('구현이 전부 출처 이슈 닫힘에서 왔으면 모두라고 말한다', () => {
     const text = implementedNote({
       ...base,
       byStatus: byStatus(11),
       implementedFromSourceClosed: 11,
     });
     expect(text).toBe(
-      '구현 11건은 모두 GitHub 원천 이슈가 닫혀서 붙은 상태입니다. 구현·검증 완료를 뜻하지 않습니다.',
+      "구현 11건은 모두 출처 이슈가 닫혀서 '구현'이 된 것입니다. 실제 구현을 확인한 것은 아닙니다.",
     );
   });
 
-  it('일부만 원천 이슈 닫힘이면 그 건수만 짚는다', () => {
+  it('일부만 출처 이슈 닫힘이면 그 건수만 짚는다', () => {
     const text = implementedNote({
       ...base,
       byStatus: byStatus(11),

@@ -300,7 +300,7 @@ def requirement_summary(
 
 def _source_summary(row: dict[str, Any]) -> SourceStateSummary:
     if row["connection_id"] is None:
-        tool, label = "NONE", "원천 연결 없음(문서·수기)"
+        tool, label = "NONE", "출처 이슈 없음(명세서·직접 입력)"
     else:
         tool = row["tool"]
         label = f"{_TOOL_NAME.get(tool, tool)} {row['target_resource']}"

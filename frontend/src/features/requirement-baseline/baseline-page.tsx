@@ -59,7 +59,7 @@ const PROBLEM_WORD: Record<BaselineProblem, string> = {
   DUPLICATE_CODE: '코드 중복',
   INVALID_CODE: '코드 형식 아님',
   MISSING_TITLE: '명칭 없음',
-  UNTRACEABLE_CODE: '커밋·이슈가 참조할 수 없는 코드 형식',
+  UNTRACEABLE_CODE: '추적에 쓸 수 없는 ID 형식',
 };
 const BLOCKING: BaselineProblem[] = ['DUPLICATE_CODE', 'INVALID_CODE', 'MISSING_TITLE'];
 const MATCH_WORD: Record<BaselineMatch, string> = {
@@ -97,7 +97,7 @@ export function BaselinePage(): ReactNode {
     <>
       <PageHeader
         title="요구사항 기준선"
-        description="용역사가 요구사항 명세서를 등록·정리해 제출하고, 발주기관이 확정합니다. 확정 전 목록은 요구사항 현황에 들어가지 않습니다."
+        description="용역사가 명세서를 올려 요구사항 목록을 만들고 발주기관이 확정합니다. 확정한 목록만 요구사항 현황에 반영됩니다."
         actions={
           <Button asChild variant="outline">
             <Link to={GUIDE}>
@@ -121,9 +121,9 @@ export function BaselinePage(): ReactNode {
               )}
               {s.state !== 'CONFIRMED' && s.workingStatus === 'DRAFT' && !s.working && (
                 <Alert>
-                  <AlertTitle>용역사가 명세서를 정리하고 있습니다.</AlertTitle>
+                  <AlertTitle>용역사가 명세서를 정리하는 중입니다</AlertTitle>
                   <AlertDescription>
-                    제출하면 여기서 보고 확정하거나 돌려보낼 수 있습니다.
+                    용역사가 제출하면 이 화면에서 확인하고 확정하거나 돌려보냅니다.
                   </AlertDescription>
                 </Alert>
               )}
@@ -196,11 +196,11 @@ function NoBaseline({
 
   return (
     <Window
-      title="요구사항 기준선 미등록"
+      title="등록된 기준선이 없습니다"
       hint={
         s.requirementCount > 0
-          ? `지금 요구사항 ${s.requirementCount}건은 도구 이슈에서 만든 것입니다. 기준선을 확정하면 코드가 같은 항목에 붙고, 이슈로 요구사항을 만드는 설정은 꺼집니다.`
-          : '확정된 요구사항이 없습니다.'
+          ? `지금 요구사항 ${s.requirementCount}건은 기준선 밖에 있습니다. 명세서를 확정하면 ID 가 같은 요구사항은 기준선에 들어갑니다.`
+          : '명세서를 등록해 요구사항 목록을 만듭니다.'
       }
     >
       {isAuthor ? (
@@ -209,7 +209,7 @@ function NoBaseline({
             <Label htmlFor="spec-doc">요구사항 명세서</Label>
             <Select value={documentId} onValueChange={setDocumentId}>
               <SelectTrigger id="spec-doc" className="w-full">
-                <SelectValue placeholder="관련자료에 올린 문서에서 고르기" />
+                <SelectValue placeholder="자료 화면에 올린 문서에서 고르기" />
               </SelectTrigger>
               <SelectContent>
                 {readable.map((d) => (
@@ -225,16 +225,16 @@ function NoBaseline({
           </Button>
           {readable.length === 0 && !docs.loading && (
             <p className="text-muted-foreground text-sm">
-              관련자료 화면에서 명세서 파일을 먼저 올려 주세요.
+              먼저 자료 화면에 명세서 파일을 올리세요.
             </p>
           )}
           <SpecCautions />
         </div>
       ) : (
         <p className="text-muted-foreground text-sm">
-          용역사가 요구사항 명세서를 등록하고 제출하면 여기서 확정합니다.{' '}
+          용역사가 명세서를 등록해 제출하면 여기서 확정합니다.{' '}
           <Link to={`${GUIDE}#flow`} className="text-primary hover:underline">
-            등록·확정 흐름
+            진행 순서 보기
           </Link>
         </p>
       )}
@@ -250,12 +250,12 @@ function SpecCautions(): ReactNode {
       <AlertDescription>
         <ul className="ml-4 list-disc space-y-1">
           <li>
-            한 행에 요구사항 하나가 있는 표(ID 열과 내용 열)를 읽습니다. ID 는{' '}
-            <code>SWFR.CON.004</code> · <code>REQ-001</code> 꼴이어야 합니다.
+            요구사항 하나가 한 행인 표를 읽습니다. ID 열과 내용 열이 있어야 하고, ID 는{' '}
+            <code>SWFR.CON.004</code> 나 <code>REQ-001</code> 처럼 씁니다.
           </li>
           <li>
-            숫자만 쓴 ID, 요구사항마다 세로 표를 쓰는 카드형, 머리행 위에 안내 행이 있는 표, 스캔한
-            PDF 는 아직 읽지 못합니다. 등록한 뒤 항목을 직접 넣으세요.
+            숫자만 쓴 ID, 요구사항마다 표를 따로 둔 양식, 머리행 위에 안내 문구가 있는 표, 스캔한
+            PDF 는 아직 읽지 못합니다. 이럴 때는 등록한 뒤 항목을 직접 추가하세요.
           </li>
           <li>확정하면 되돌리기 어렵습니다. 처음이면 시험 사업에서 먼저 해 보세요.</li>
         </ul>
@@ -315,7 +315,7 @@ function Working({
                 <Button
                   size="sm"
                   variant="ghost"
-                  onClick={() => run(() => api.del(url), '버렸습니다.')}
+                  onClick={() => run(() => api.del(url), '등록을 취소했습니다.')}
                 >
                   등록 취소
                 </Button>
@@ -354,8 +354,8 @@ function Working({
           <Alert variant="destructive" className="mb-3">
             <AlertTitle>명세서에서 요구사항을 찾지 못했습니다</AlertTitle>
             <AlertDescription>
-              요구사항 ID 열이 있는 표나 코드로 시작하는 줄이 있어야 합니다. 항목을 직접 더하거나
-              등록을 취소하고 다른 파일을 고르세요.{' '}
+              ID 열이 있는 표나 ID 로 시작하는 줄이 없습니다. 항목을 직접 추가하거나, 등록을
+              취소하고 다른 파일을 고르세요.{' '}
               <Link to={`${GUIDE}#spec-format`} className="text-primary hover:underline">
                 읽는 명세서 형식
               </Link>
@@ -364,7 +364,7 @@ function Working({
         )}
         {b.blockingCount > 0 && (
           <p className="text-destructive mb-3 text-sm">
-            제출 전에 고칠 항목이 {b.blockingCount}건 있습니다(코드 중복·코드 형식·명칭 없음).
+            고쳐야 제출할 수 있는 항목이 {b.blockingCount}건 있습니다. 빨간 표시를 확인하세요.
           </p>
         )}
         <Summary b={b} />
@@ -436,11 +436,10 @@ function BaselineMeta({ b }: { b: BaselineResponse }): ReactNode {
 /** 기준선 한눈 요약. 요구사항 수와 기존 요구사항과의 대조. */
 function Summary({ b }: { b: BaselineResponse }): ReactNode {
   if (b.items.length === 0) return null;
-  const confirmed = b.status === 'CONFIRMED';
   const facts: [string, number][] = [['요구사항', b.items.length]];
   if (b.parents.length > 0) facts.push(['상위 요구사항', b.parents.length]);
   facts.push(
-    [confirmed ? '새로 생김' : '새로 생길 것', b.counts.NEW],
+    ['새 요구사항', b.counts.NEW],
     ['기존과 같음', b.counts.SAME],
     ['기존과 다름', b.counts.CHANGED],
   );
@@ -500,7 +499,7 @@ function ItemsTable({
           <TableHead className="w-40">요구사항 ID</TableHead>
           <TableHead>명칭</TableHead>
           <TableHead className="w-20">중요도</TableHead>
-          <TableHead className="w-44">기존 요구사항과 대조</TableHead>
+          <TableHead className="w-44">기존 요구사항</TableHead>
           {editable && <TableHead className="w-28" />}
         </TableRow>
       </TableHeader>
@@ -520,7 +519,7 @@ function ItemsTable({
                     </span>
                   ) : (
                     <span className="text-muted-foreground text-sm">
-                      상위 요구사항을 적지 않은 항목 · {g.items.length}건
+                      상위 요구사항 없음 · {g.items.length}건
                     </span>
                   )}
                 </TableCell>
@@ -608,19 +607,19 @@ function ItemRow({
   );
 }
 
-/** 확정하면 무엇이 바뀌는지. 기존 요구사항과의 대조, 명세서에 없는 기존 코드, 생성을 끌 연결. */
+/** 확정하면 무엇이 바뀌는지. 명세서에 없는 기존 요구사항을 보인다. */
 function ImpactPanel({ b }: { b: BaselineResponse }): ReactNode {
   const confirmed = b.status === 'CONFIRMED';
   return (
     <Window
       title={confirmed ? '확정 결과' : '확정하면'}
-      hint="기존 요구사항은 ID·추적 링크·상태 지정·이력이 그대로입니다."
+      hint="기존 요구사항의 ID, 추적 링크, 상태 지정, 이력은 바뀌지 않습니다."
     >
       <div className="flex flex-col gap-3 text-sm">
         <div>
           <p className="font-medium">명세서에 없는 기존 요구사항 {b.missing.length}건</p>
           <p className="text-muted-foreground">
-            지우지 않고 기준선 밖으로 둡니다. 정리는 변경 관리에서 합니다.
+            지우지 않고 기준선 밖에 남깁니다. 정리는 변경 관리에서 합니다.
           </p>
           {b.missing.length > 0 && (
             <ul className="mt-1 list-disc pl-5">
@@ -630,18 +629,6 @@ function ImpactPanel({ b }: { b: BaselineResponse }): ReactNode {
                 </li>
               ))}
             </ul>
-          )}
-        </div>
-        <div>
-          <p className="font-medium">
-            {confirmed ? '요구사항 생성을 끈 연결' : '이슈로 요구사항을 만드는 설정을 끌 연결'}{' '}
-            {b.connections.length}개
-          </p>
-          {b.connections.length > 0 && (
-            <p className="text-muted-foreground">
-              {b.connections.map((c) => c.name).join(', ')}. 이후 이슈는 요구사항 ID 를 참조만
-              합니다.
-            </p>
           )}
         </div>
       </div>
@@ -694,7 +681,8 @@ function ItemDialog({
         <DialogHeader>
           <DialogTitle>{item ? '명세서 항목 고치기' : '명세서 항목 추가'}</DialogTitle>
           <DialogDescription>
-            {item?.location ? `명세서 ${item.location}. ` : ''}추출한 원래 값은 따로 남습니다.
+            {item?.location ? `명세서 ${item.location}. ` : ''}명세서에서 읽은 원래 값은 따로
+            보관됩니다.
           </DialogDescription>
         </DialogHeader>
         <div className="flex flex-col gap-3">
@@ -789,15 +777,16 @@ function ConfirmDialog({
         <DialogHeader>
           <DialogTitle>요구사항 기준선 v{b.version} 확정</DialogTitle>
           <DialogDescription>
-            새 요구사항 {b.counts.NEW}건이 생기고, 기존 요구사항 {b.counts.SAME + b.counts.CHANGED}
-            건은 ID 그대로 기준선에 붙습니다. 연결 {b.connections.length}개의 요구사항 생성 설정이
-            꺼집니다. 확정한 뒤의 변경은 변경 관리 절차로 합니다.
+            새 요구사항 {b.counts.NEW}건이 만들어지고, 기존 요구사항{' '}
+            {b.counts.SAME + b.counts.CHANGED}건은 ID 를 유지한 채 기준선에 들어갑니다. 확정한
+            뒤에는 변경 관리 절차로만 바꿀 수 있습니다.
           </DialogDescription>
         </DialogHeader>
         {changed.length > 0 && (
           <div className="flex max-h-80 flex-col gap-2 overflow-y-auto text-sm">
             <p className="font-medium">
-              내용이 다른 기존 요구사항 {changed.length}건. 고르지 않으면 기존 정의를 둡니다.
+              내용이 다른 기존 요구사항이 {changed.length}건 있습니다. 명세서 내용으로 바꿀 것만
+              고르세요. 고르지 않은 것은 기존 내용을 그대로 둡니다.
             </p>
             {changed.map((i) => (
               <label key={i.id} className="flex items-start gap-2 rounded-md border px-3 py-2">
@@ -878,8 +867,8 @@ function RefTable({
       <TableHeader>
         <TableRow>
           <TableHead className="w-64">{first}</TableHead>
-          <TableHead className="w-16 text-right">근거</TableHead>
-          <TableHead>가리킨 곳</TableHead>
+          <TableHead className="w-16 text-right">건수</TableHead>
+          <TableHead>적힌 곳</TableHead>
         </TableRow>
       </TableHeader>
       <TableBody>
@@ -915,20 +904,20 @@ function UnresolvedRefs({ refs }: { refs: UnresolvedRefResponse[] }): ReactNode 
     <>
       {unknown.length > 0 && (
         <Window
-          title={`요구사항 목록에 없는 ID ${unknown.length}종`}
-          hint="커밋·이슈가 가리켰지만 사업 요구사항에도, 명세서의 상위 요구사항에도 없는 코드입니다. 추적 링크로 잇지 않습니다. 오타이거나 기준선에 빠진 요구사항입니다."
+          title={`요구사항에 없는 ID ${unknown.length}개`}
+          hint="커밋이나 이슈에 적혔지만 요구사항 목록에 없는 ID 입니다. 오타이거나 명세서에 빠진 요구사항일 수 있습니다. 추적 링크는 만들지 않습니다."
         >
-          <RefTable groups={unknown} first="가리킨 ID" />
+          <RefTable groups={unknown} first="ID" />
         </Window>
       )}
       {parents.length > 0 && (
         <Window
-          title={`상위 요구사항을 가리킨 참조 ${parents.length}종`}
-          hint="명세서 절 제목의 상위 요구사항 코드를 커밋·이슈가 적은 것입니다. 정상이며, 상위는 요구사항 목록에 들지 않으므로 추적 링크로 잇지 않습니다."
+          title={`상위 요구사항 ID ${parents.length}개`}
+          hint="커밋이나 이슈에 상위 요구사항 ID(명세서 절 제목의 ID)를 적은 경우입니다. 문제는 아닙니다. 상위 요구사항은 추적 링크를 만들지 않습니다."
         >
           <details className="group">
             <summary className="text-muted-foreground cursor-pointer text-sm select-none">
-              근거 {parentRefCount}건 보기
+              {parentRefCount}건 보기
             </summary>
             <div className="mt-3">
               <RefTable groups={parents} first="상위 요구사항" />

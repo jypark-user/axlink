@@ -105,7 +105,7 @@ export function TraceabilityPage(): ReactNode {
     <>
       <PageHeader
         title="요구사항"
-        description="요구사항별 현황과 설계 근거 · 구현 관련 변경 · 시험 연결입니다. 연결은 완료·통과 증거가 아닙니다. 끊긴 칸은 붉게 표시됩니다."
+        description="요구사항마다 이어진 설계 문서, 코드 변경, 시험을 봅니다. 이어져 있다고 완료나 통과를 뜻하지는 않습니다. 근거가 사라진 연결은 붉게 표시합니다."
       />
       <div className="@container flex flex-col gap-5">
         {baseline.data && <BaselineBanner projectId={project.id} state={baseline.data} />}
@@ -213,7 +213,7 @@ function Summary({
 
       <Card className="gap-0 py-3">
         <CardContent className="flex flex-col gap-2 px-4">
-          <p className="win-label">상태별 건수 (요구사항 상태)</p>
+          <p className="win-label">상태별 건수</p>
           <div className="flex flex-wrap gap-1.5">
             {n.byStatus.map((s) => (
               <Chip
@@ -234,10 +234,11 @@ function Summary({
 
       <Card className="gap-0 py-3">
         <CardContent className="flex flex-col gap-2 px-4">
-          <p className="win-label">원천 이슈 상태 (수집한 원천 기록 기준)</p>
+          <p className="win-label">출처 이슈 상태</p>
           <p className="text-muted-foreground text-xs">
-            요구사항 상태와 따로 셉니다. 원천 이슈 닫힘은 구현·검증 완료를 뜻하지 않습니다.
-            {linked.length > 1 && ' 원천마다 따로 세며 합치지 않습니다.'}
+            명세서 등록 전에 이슈로 만든 요구사항은 그 이슈가 열렸는지 닫혔는지 따로 보여 줍니다.
+            이슈가 닫혔다고 구현이 끝났다는 뜻은 아닙니다.
+            {linked.length > 1 && ' 저장소마다 따로 셉니다.'}
           </p>
           {n.sources.length === 0 && (
             <p className="text-muted-foreground text-sm">요구사항이 없습니다.</p>
@@ -377,9 +378,9 @@ function buildColumns(
       cell: ({ row }) => <StatusCell row={row.original} onDecide={onDecide} />,
     },
     {
-      // 원천 이슈의 열림·닫힘. 위 상태 칸과 따로 읽는다
+      // 출처 이슈의 열림·닫힘. 위 상태 칸과 따로 읽는다
       accessorKey: 'sourceState',
-      header: '원천 이슈',
+      header: '출처 이슈',
       cell: ({ row }) => (
         <span
           className={cn(
@@ -458,7 +459,7 @@ const SOURCE_CELL: Record<SourceState, string> = {
   OPEN: '열림',
   CLOSED: '닫힘',
   UNKNOWN: '기록 없음',
-  NONE: '원천 연결 없음',
+  NONE: '없음',
 };
 
 /** 요구사항 제목. 두 줄까지 보이고, 누르면 전체를 펼친다. 마우스를 올려도 전체가 보인다. */

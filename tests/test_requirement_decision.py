@@ -62,7 +62,7 @@ def _rec(status: str) -> dict:
 
 
 def _resync(conn_id: str, status: str) -> None:
-    """수집이 다시 돌아 원천 이슈의 열림·닫힘을 읽는다(service.promote_connection 과 같은 길)."""
+    """수집이 다시 돌아 출처 이슈의 열림·닫힘을 읽는다(service.promote_connection 과 같은 길)."""
     with tx() as cur:
         own = repository.find_requirement_by_source(cur, conn_id, "issue:9301")
         repository.update_requirement_evidence(
@@ -116,7 +116,7 @@ def test_수집이_다시_돌아도_지정은_남고_근거만_바뀐다(client,
         headers=_auth(client_token("r2")),
     ).raise_for_status()
 
-    _resync(conn, "IMPLEMENTED")  # 원천 이슈가 닫혔다
+    _resync(conn, "IMPLEMENTED")  # 출처 이슈가 닫혔다
     row = _row(rid)
     assert row["status"] == "ACCEPTED"
     assert row["evidence_status"] == "IMPLEMENTED"
@@ -145,7 +145,7 @@ def test_되돌리면_근거_상태로_돌아가고_그_뒤로는_근거대로_�
     assert res.json()["decision"] is None
     assert res.json()["statusBasis"] == "SOURCE_ISSUE_CLOSED"
 
-    _resync(conn, "DEFINED")  # 원천 이슈를 다시 열었다
+    _resync(conn, "DEFINED")  # 출처 이슈를 다시 열었다
     assert _row(rid)["status"] == "DEFINED"
 
     again = client.post(

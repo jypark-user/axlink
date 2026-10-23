@@ -65,7 +65,7 @@ class IssueResponse(BaseModel):
 class IssueSummaryResponse(BaseModel):
     """이슈 화면 카드. 목록 페이지와 상관없이 사업 전체를 서버에서 센다.
 
-    issue 테이블만 센다. 요구사항으로 분류된 원천 이슈는 requirement 로 가서 여기 없다.
+    issue 테이블만 센다. 명세서 전에 이슈로 만든 요구사항의 출처 이슈는 여기 없다.
     """
 
     total: int
@@ -161,7 +161,7 @@ class SourceStateSummary(BaseModel):
 
     내부 상태에서 거꾸로 짐작하지 않는다.
 
-    connectionId 가 None 이면 원천 연결 없이 문서·수기로 들어온 요구사항 묶음이다.
+    connectionId 가 None 이면 출처 이슈가 없는 요구사항(명세서·직접 입력) 묶음이다.
     """
 
     connectionId: str | None  # noqa: N815
@@ -179,7 +179,7 @@ class RequirementSummaryResponse(BaseModel):
     total: int
     verified: int  # VERIFIED · ACCEPTED. 이행률 분자와 같다
     notVerified: int  # noqa: N815 — total - verified. 미구현이라는 뜻이 아니다
-    # IMPLEMENTED 중 GitHub 원천 이슈가 닫혀서 붙은 것. 구현·검증을 확인했다는 뜻이 아니다
+    # IMPLEMENTED 중 출처 이슈가 닫혀서 붙은 것. 구현을 확인했다는 뜻이 아니다
     implementedFromSourceClosed: int  # noqa: N815
     verifiedRate: float | None  # noqa: N815 — total 이 0 이면 None(산출 불가)
     decided: int = 0  # 발주기관이 상태를 지정한 요구사항 수(ARC-025)
@@ -197,7 +197,7 @@ class TraceabilityRowResponse(BaseModel):
     requirementStatusBasis: str | None = None  # noqa: N815 — RequirementResponse.statusBasis 와 같다
     requirementEvidenceStatus: str | None = None  # noqa: N815 — RequirementResponse.evidenceStatus
     requirementDecision: RequirementDecision | None = None  # noqa: N815
-    # 원천 이슈 상태. OPEN | CLOSED | UNKNOWN, 원천 연결이 없으면 NONE. 내부 상태와 따로다
+    # 출처 이슈 상태. OPEN | CLOSED | UNKNOWN, 출처 이슈가 없으면 NONE. 요구사항 상태와 따로다
     sourceState: str = "NONE"  # noqa: N815
     designs: list[TraceCell]
     implementsList: list[TraceCell]  # noqa: N815 — implements 는 예약어라 프런트가 이렇게 부른다
