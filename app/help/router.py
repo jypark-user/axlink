@@ -5,10 +5,12 @@ API 는 그 파일을 그대로 낸다. 문서를 고치면 화면도 같이 바
 목록으로만 정한다. 경로를 요청에서 받지 않는다.
 """
 
+import re
 from datetime import UTC, datetime
 from pathlib import Path
 
 from fastapi import APIRouter
+from fastapi.responses import FileResponse
 from pydantic import BaseModel
 
 from app.auth.deps import Principal
@@ -24,6 +26,11 @@ GUIDES = {
     "tool-integration": "도구-연동-가이드.md",
     "requirement-baseline": "요구사항-등록.md",
 }
+
+
+# 문서에 넣는 화면 캡처. images/ 아래 그림 파일만 낸다. svg 는 스크립트를 품을 수 있어 받지 않는다
+_ASSET = re.compile(r"^images/(?:[\w.\-]+/)*[\w.\-]+\.(png|jpe?g|webp)$")
+_ASSET_TYPES = {"png": "image/png", "jpg": "image/jpeg", "jpeg": "image/jpeg", "webp": "image/webp"}
 
 
 class HelpEntryResponse(BaseModel):
@@ -63,6 +70,20 @@ def help_index(_principal: Principal) -> list[HelpEntryResponse]:
         if path.is_file():
             out.append(HelpEntryResponse(slug=slug, title=_title(path, slug), file=name))
     return out
+
+
+@router.get("/assets/{path:path}")
+def help_asset(path: str, _principal: Principal) -> FileResponse:
+    """문서 안 그림(`images/도구-연동/01.png`). 경로 꼴과 위치를 둘 다 본다."""
+    m = _ASSET.match(path)
+    root = (manual_dir() / "images").resolve()
+    target = (manual_dir() / path).resolve() if m and ".." not in path.split("/") else None
+    if target is None or not target.is_relative_to(root) or not target.is_file():
+        raise errors.not_found("안내 그림", path)
+    return FileResponse(
+        target, media_type=_ASSET_TYPES[m.group(1).lower()],
+        headers={"Cache-Control": "private, max-age=3600"},
+    )
 
 
 @router.get("/{slug}", response_model=HelpDocResponse)

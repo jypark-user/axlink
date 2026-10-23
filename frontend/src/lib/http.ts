@@ -151,10 +151,9 @@ export async function openStream(
 }
 
 /**
- * 파일을 받아 브라우저 내려받기로 넘긴다.
- * 토큰이 헤더로 가야 해서 링크를 그냥 걸 수 없다 — 받아 온 뒤 잠시 만든 주소로 넘긴다.
+ * 파일을 Blob 으로 받는다. 토큰이 헤더로 가야 해서 img·a 에 주소를 그냥 걸 수 없을 때 쓴다.
  */
-export async function download(path: string, filename: string): Promise<void> {
+export async function fetchBlob(path: string): Promise<Blob> {
   const url = `${BASE}${path}`;
   let res = await fetch(url, { headers: withAuth(new Headers(), {}) });
   if (res.status === 401) {
@@ -167,8 +166,15 @@ export async function download(path: string, filename: string): Promise<void> {
     res = await fetch(url, { headers: withAuth(new Headers(), {}) });
   }
   if (!res.ok) throw ApiError.from(res.status, await safeJson(res));
+  return res.blob();
+}
 
-  const href = URL.createObjectURL(await res.blob());
+/**
+ * 파일을 받아 브라우저 내려받기로 넘긴다.
+ * 토큰이 헤더로 가야 해서 링크를 그냥 걸 수 없다 — 받아 온 뒤 잠시 만든 주소로 넘긴다.
+ */
+export async function download(path: string, filename: string): Promise<void> {
+  const href = URL.createObjectURL(await fetchBlob(path));
   const link = document.createElement('a');
   link.href = href;
   link.download = filename;

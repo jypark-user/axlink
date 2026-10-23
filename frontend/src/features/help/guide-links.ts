@@ -35,3 +35,14 @@ export function routeOf(href: string, files: Map<string, string>): string | null
   if (!slug) return null;
   return `/guide/${slug}${hash ? `#${hash}` : ''}`;
 }
+
+/**
+ * 문서 안 그림 주소를 설명서 그림 API 경로로 바꾼다. 문서는 저장소에서도 보이게
+ * `images/<문서>/<파일>` 상대 경로로 적는다. 바깥 주소는 null(그대로 둔다).
+ */
+export function assetPathOf(src: string): string | null {
+  if (/^[a-z]+:/i.test(src) || src.startsWith('/')) return null;
+  const path = decodeURIComponent(src).replace(/^\.\//, '');
+  if (!path.startsWith('images/')) return null;
+  return `/help/assets/${path.split('/').map(encodeURIComponent).join('/')}`;
+}
