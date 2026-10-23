@@ -5,7 +5,8 @@ import re
 from app.help import router as help_router
 from tests.conftest import requires_db
 
-_LINK = re.compile(r"\]\(([^)\s]+)\)")
+_LINK = re.compile(r"(?<!!)\[[^\]]*\]\(([^)\s]+)\)")
+_IMAGE = re.compile(r"!\[[^\]]*\]\(([^)\s]+)\)")
 _ANCHOR = re.compile(r"^#{2,6} .+?\{#([\w-]+)\}\s*$", re.M)
 
 
@@ -38,6 +39,15 @@ def test_설명서_안의_링크는_있는_문서와_있는_절을_가리킨다(
             elif anchor and anchor not in anchors[target]:
                 broken.append(f"{name}: {href} (절 없음)")
     assert not broken, broken
+
+
+def test_설명서의_그림은_저장소에_있고_그림_API_가_내는_꼴이다():
+    missing = []
+    for name in help_router.GUIDES.values():
+        for src in _IMAGE.findall(_read(name)):
+            if not help_router._ASSET.match(src) or not (help_router.manual_dir() / src).is_file():
+                missing.append(f"{name}: {src}")
+    assert not missing, missing
 
 
 def test_화면이_바로_여는_절이_설명서에_있다():
@@ -79,3 +89,17 @@ def test_목록에_없는_이름이나_경로는_없는_것으로_본다(client,
 def test_로그인하지_않으면_받지_못한다(client):
     assert client.get("/api/help/tool-integration").status_code == 401
     assert client.get("/api/help").status_code == 401
+
+
+@requires_db
+def test_설명서_그림은_로그인한_사용자에게만_images_아래_그림_파일만_낸다(client, client_token):
+    auth = _auth(client_token("r3"))
+    url = "/api/help/assets/images/tool-integration/01-connections.png"
+    ok = client.get(url, headers=auth)
+    assert ok.status_code == 200, ok.text
+    assert ok.headers["content-type"] == "image/png"
+    assert ok.content[:8] == b"\x89PNG\r\n\x1a\n"
+    assert client.get(url).status_code == 401
+    for bad in ("images/../요구사항-등록.md", "images/%2E%2E/요구사항-등록.md", "요구사항-등록.md",
+                "images/x.svg", "images/없는-그림.png", "../../.env"):
+        assert client.get(f"/api/help/assets/{bad}", headers=auth).status_code == 404, bad

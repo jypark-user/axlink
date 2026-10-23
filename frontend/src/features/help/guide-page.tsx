@@ -1,16 +1,58 @@
-import { useEffect, type ReactNode } from 'react';
+import { useEffect, useState, type ReactNode } from 'react';
 import { Link, useLocation, useParams } from 'react-router-dom';
 import { DataState } from '@/components/common/data-state';
 import { PageHeader } from '@/components/layout/page-header';
 import { Markdown } from '@/components/ui/markdown';
-import { api } from '@/lib/http';
+import { api, fetchBlob } from '@/lib/http';
 import { formatDateTime } from '@/lib/format';
 import { useAsync } from '@/lib/use-async';
 import { cn } from '@/lib/utils';
 import type { HelpDocResponse, HelpEntryResponse } from '@/types/api';
-import { routeOf, sectionsOf, splitAnchor } from '@/features/help/guide-links';
+import { assetPathOf, routeOf, sectionsOf, splitAnchor } from '@/features/help/guide-links';
 
 const INDEX_SLUG = 'manual';
+
+/**
+ * 문서 안 화면 캡처. 그림 API 도 로그인이 필요해 img 에 주소를 바로 걸 수 없다. 토큰을 실어
+ * 받아 잠시 쓰는 주소로 그린다. 대체 글은 그림 아래 설명으로도 보인다.
+ */
+function GuideImage({ src, alt }: { src?: string; alt?: string }): ReactNode {
+  const path = src ? assetPathOf(src) : null;
+  const [url, setUrl] = useState<string | null>(null);
+  const [failed, setFailed] = useState(false);
+  useEffect(() => {
+    if (!path) return;
+    let href: string | null = null;
+    let alive = true;
+    fetchBlob(path)
+      .then((blob) => {
+        href = URL.createObjectURL(blob);
+        if (alive) setUrl(href);
+      })
+      .catch(() => alive && setFailed(true));
+    return () => {
+      alive = false;
+      if (href) URL.revokeObjectURL(href);
+    };
+  }, [path]);
+  const shown = path ? url : (src ?? null);
+  return (
+    <span className="my-2 block">
+      {shown ? (
+        <img
+          src={shown}
+          alt={alt ?? ''}
+          className="border-border block max-w-full rounded-md border"
+        />
+      ) : (
+        <span className="bg-muted text-muted-foreground block rounded-md px-3 py-6 text-center text-sm">
+          {failed ? '그림을 불러오지 못했습니다' : '그림을 불러오는 중'}
+        </span>
+      )}
+      {alt && <span className="text-muted-foreground mt-1 block text-xs">{alt}</span>}
+    </span>
+  );
+}
 /**
  * 사용 설명서. 글은 화면에 두지 않고 납품 문서(docs/40-manual)를 /api/help 로 받아 그린다.
  * 왼쪽에 문서 목록과 이 문서의 절, 오른쪽에 본문. 다른 화면은 `/guide/<문서>#<절>` 로 바로 연다.
@@ -94,6 +136,9 @@ export function GuidePage(): ReactNode {
                 components={{
                   h2: heading('h2', 'text-lg font-semibold tracking-tight mt-4 first:mt-0'),
                   h3: heading('h3', 'text-sm font-semibold mt-2 first:mt-0'),
+                  img: ({ src, alt }) => (
+                    <GuideImage src={typeof src === 'string' ? src : undefined} alt={alt} />
+                  ),
                   a: ({ href, children }) => {
                     const to = href ? routeOf(href, files) : null;
                     return to ? (

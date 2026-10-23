@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { routeOf, sectionsOf, splitAnchor } from '@/features/help/guide-links';
+import { assetPathOf, routeOf, sectionsOf, splitAnchor } from '@/features/help/guide-links';
 
 const FILES = new Map([
   ['요구사항-등록.md', 'requirement-baseline'],
@@ -42,5 +42,23 @@ describe('sectionsOf', () => {
       { id: 'flow', title: '1. 흐름' },
       { id: 'rules', title: 'R 규칙' },
     ]);
+  });
+});
+
+describe('assetPathOf', () => {
+  it('문서의 images/ 상대 경로를 그림 API 경로로 바꾼다', () => {
+    expect(assetPathOf('images/tool-integration/01-connections.png')).toBe(
+      '/help/assets/images/tool-integration/01-connections.png',
+    );
+    expect(assetPathOf('./images/요구사항/a.png')).toBe(
+      `/help/assets/images/${encodeURIComponent('요구사항')}/a.png`,
+    );
+  });
+
+  it('바깥 주소나 images 밖 경로는 건드리지 않는다', () => {
+    expect(assetPathOf('https://example.com/a.png')).toBeNull();
+    expect(assetPathOf('data:image/png;base64,AAAA')).toBeNull();
+    expect(assetPathOf('/ax-link/a.png')).toBeNull();
+    expect(assetPathOf('other/a.png')).toBeNull();
   });
 });
