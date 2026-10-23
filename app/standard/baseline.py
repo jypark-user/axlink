@@ -6,8 +6,7 @@ requirement 에 쓰지 않으므로 요구사항 목록·이행률·추적표 �
 확정은 한 트랜잭션이다. 기존 요구사항은 코드로 이어 ID·원천·상태 지정·추적 링크·이력을 그대로
 두고, 새 코드만 새 행으로 만든다. 같은 코드인데 내용이 다르면 기본으로 기존 정의를 두고, 발주기관이
 고른 코드만 명세서 내용으로 바꾼다. 명세서에 없는 기존 코드는 지우지 않고 기준선 밖으로 남긴다.
-그리고 사업의 모든 연결에서 이슈로 요구사항을 만드는 설정을 끈다. 이 중 하나라도 실패하면 아무것도
-바뀌지 않는다.
+이 중 하나라도 실패하면 아무것도 바뀌지 않는다. 요구사항은 명세서로만 만든다(ARC-030).
 
 1단계는 최초 기준선만 다룬다. 확정한 뒤의 변경(새 버전 대조·확정)은 후속 단위다. 그때까지 새
 명세서를 올려도 기준선은 바뀌지 않는다.
@@ -24,7 +23,6 @@ from app.rag import indexing
 from app.standard import baseline_repository as repo
 from app.standard import repository, trace_service
 from app.standard.models import (
-    BaselineConnection,
     BaselineExisting,
     BaselineItemRequest,
     BaselineItemResponse,
@@ -166,14 +164,9 @@ def _to_response(cur: Any, row: dict[str, Any], with_items: bool = True) -> Base
 
     if confirmed:
         missing = [BaselineExisting(**m) for m in result.get("missing", [])]
-        connections = [BaselineConnection(**c) for c in result.get("disabledConnections", [])]
     else:
         codes = {i["code"] for i in items if i["code"]}
         missing = [_existing(r) for c, r in existing.items() if c not in codes]
-        connections = [
-            BaselineConnection(id=str(c["id"]), name=c["name"], tool=c["tool"])
-            for c in repo.connections_creating(cur, str(row["project_id"]))
-        ]
 
     parents = _parents(cur, row, items) if with_items else []
     codes = [p["code"] for p in parents]
@@ -197,7 +190,7 @@ def _to_response(cur: Any, row: dict[str, Any], with_items: bool = True) -> Base
             1 for f in problems if any(p in structuring.BLOCKING_PROBLEMS for p in f)
         ),
         extractionEmpty=with_items and not items,
-        counts=counts, missing=missing, connections=connections,
+        counts=counts, missing=missing,
         parents=[
             BaselineParent(code=p["code"], title=p["title"], location=p.get("location"),
                            children=children[p["code"]])
@@ -226,10 +219,6 @@ def state(cur: Any, principal: AuthPrincipal, project_id: str) -> BaselineStateR
         workingStatus=working["status"] if working else None,
         requirementCount=counts["total"],
         outsideBaselineCount=counts["outside"],
-        creatingConnections=[
-            BaselineConnection(id=str(c["id"]), name=c["name"], tool=c["tool"])
-            for c in repo.connections_creating(cur, project_id)
-        ],
         unresolvedCodeCount=repo.unresolved_count(
             cur, project_id, set(project_parents(cur, project_id))
         ),
@@ -464,22 +453,12 @@ def confirm(
 
     codes = {i["code"] for i in items}
     missing = [_existing(r).model_dump() for c, r in existing.items() if c not in codes]
-    stopped = repo.stop_creating(cur, project_id)
-    for conn in stopped:
-        repository.insert_entity_history(
-            cur, entity_type="TOOL_CONNECTION", entity_id=str(conn["id"]),
-            project_id=project_id, field="requirement_from_issues",
-            from_value="true", to_value="false", actor=actor,
-        )
     if row["parents_json"] is None:
         # 열이 생기기 전에 등록한 기준선. 확정본은 문서가 지워져도 상위를 잃지 않게 적어 둔다
         repo.set_parents(cur, baseline_id, _parents(cur, row, items))
     repo.set_confirmed(cur, baseline_id, principal.user_id, principal.role, {
         "before": before,
         "missing": missing,
-        "disabledConnections": [
-            {"id": str(c["id"]), "name": c["name"], "tool": c["tool"]} for c in stopped
-        ],
     })
     repository.insert_entity_history(
         cur, entity_type="REQUIREMENT_BASELINE", entity_id=baseline_id, project_id=project_id,

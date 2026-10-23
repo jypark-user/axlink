@@ -1,7 +1,7 @@
 """연결별 매핑 규칙 (SWFR.CON.002 — 코드 수정 없이 설정으로).
 
-업체마다 다른 것은 판별 이름들이다 — 어떤 라벨이 요구사항인지, 어떤 트래커가
-리스크인지, REQ ID 커스텀 필드를 뭐라 부르는지. 그것만 설정으로 빼고 나머지
+업체마다 다른 것은 판별 이름들이다. 어떤 트래커가 리스크인지, REQ ID 커스텀 필드를
+뭐라 부르는지, 설계 문서가 저장소 어디에 있는지. 그것만 설정으로 빼고 나머지
 매핑 논리는 코드에 남긴다. 논리까지 설정으로 빼면 설정이 곧 코드가 된다.
 
 저장처는 tool_connection.mapping_rules_json. 비어 있으면 기본값이고, 기본값은
@@ -13,12 +13,13 @@ from typing import Any
 
 from app.common import errors
 
-_KNOWN = {"requirementLabel", "riskTracker", "reqIdField", "designDocPaths"}
+_KNOWN = {"riskTracker", "reqIdField", "designDocPaths"}
+# 이슈로 요구사항을 만들 때 쓰던 키(ARC-030 전). 예전 설정에 남아 있어 받기만 하고 쓰지 않는다
+_RETIRED = {"requirementLabel"}
 
 
 @dataclass(frozen=True)
 class MappingRules:
-    requirement_label: str = "유형: 요구사항"  # GitHub — 이 라벨이 붙은 이슈가 요구사항
     risk_tracker: str = "리스크"               # Redmine — 이 트래커가 risk 로 승격
     req_id_field: str = "REQ ID"               # Redmine — 도구 횡단 접착 커스텀 필드
     # 저장소 설계 문서 경로 패턴(쉼표로 나눔, ARC-024). 기본은 비어 있다. 다른 업체 저장소가
@@ -37,6 +38,7 @@ class MappingRules:
             # 파일럿 형식({"version":1,"rules":[]}) — V1 컬럼 기본값으로 남아 있던 행이다.
             # 규칙을 쓴 적 없다는 뜻이므로 기본값으로 읽는다(V22 가 정규화하지만 안전판).
             return cls()
+        raw = {k: v for k, v in raw.items() if k not in _RETIRED}
         unknown = set(raw) - _KNOWN
         if unknown:
             allowed = ", ".join(sorted(_KNOWN))
@@ -47,7 +49,6 @@ class MappingRules:
         if len(cleaned) != len(raw):
             raise errors.validation_failed("매핑 규칙 값은 비어 있지 않은 문자열이어야 합니다.")
         return cls(
-            requirement_label=cleaned.get("requirementLabel", cls.requirement_label),
             risk_tracker=cleaned.get("riskTracker", cls.risk_tracker),
             req_id_field=cleaned.get("reqIdField", cls.req_id_field),
             design_doc_paths=cleaned.get("designDocPaths", cls.design_doc_paths),
@@ -59,7 +60,6 @@ class MappingRules:
 
     def to_json(self) -> dict[str, str]:
         return {
-            "requirementLabel": self.requirement_label,
             "riskTracker": self.risk_tracker,
             "reqIdField": self.req_id_field,
             # 비어 있으면 적지 않는다. 빈 문자열은 from_json 이 오타로 거른다

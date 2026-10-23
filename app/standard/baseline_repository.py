@@ -305,27 +305,6 @@ def record_item_match(
     )
 
 
-def connections_creating(cur: Any, project_id: str) -> list[dict[str, Any]]:
-    return fetch_all(
-        cur,
-        "select id, name, tool from tool_connection "
-        "where project_id = %s and requirement_from_issues order by created_at",
-        (project_id,),
-    )
-
-
-def stop_creating(cur: Any, project_id: str) -> list[dict[str, Any]]:
-    return fetch_all(
-        cur,
-        """
-        update tool_connection set requirement_from_issues = false, updated_at = now()
-         where project_id = %s and requirement_from_issues
-        returning id, name, tool
-        """,
-        (project_id,),
-    )
-
-
 def requirement_counts(cur: Any, project_id: str) -> dict[str, int]:
     row = fetch_one(
         cur,

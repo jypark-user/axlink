@@ -124,3 +124,51 @@ def client_token(client: TestClient):
         return res.json()["accessToken"]
 
     return _login
+
+
+# 이슈 라벨·제목으로 요구사항을 가르던 예전 규칙(ARC-030 전). 지금 수집은 요구사항을 만들지 않는다
+_OLD_REQUIREMENT_LABEL = "유형: 요구사항"
+_OLD_CODE_IN_TITLE = re.compile(r"^\[[A-Z]{2,5}(?:\.[A-Z]{2,5})+\.\d{3}\]")
+
+
+def seed_issue_requirements(
+    cur, project_id: str, connection_id: str, issues: list[tuple[str, dict]]
+) -> dict[str, str]:
+    """예전에 GitHub 이슈로 만들어 둔 요구사항을 흉내 낸다. 그런 요구사항이 있는 사업
+    (5173 실제 사업처럼)을 시험할 때 쓴다. 이슈는 원본으로 따로 넣고 수집을 돌리면, 수집은
+    이 요구사항의 열림·닫힘만 따라간다. 돌려주는 값은 {external_id: 요구사항 id}."""
+    from app.standard import mapping
+
+    made: dict[str, str] = {}
+    for external_id, payload in issues:
+        title = payload.get("title") or ""
+        if _OLD_REQUIREMENT_LABEL not in mapping.labels(payload) and not (
+            _OLD_CODE_IN_TITLE.match(title)
+        ):
+            continue
+        cur.execute(
+            "select id from requirement where tool_connection_id = %s and external_id = %s",
+            (connection_id, external_id),
+        )
+        found = cur.fetchone()
+        if found:  # 같은 이슈를 다시 넣는 시험(재수집). 이미 만든 것은 그대로 둔다
+            made[external_id] = str(found["id"])
+            continue
+        rec = mapping.to_requirement(payload)
+        cur.execute(
+            """
+            insert into requirement
+              (project_id, code, title, body, priority, status, evidence_status, assignee,
+               source_created_at, source_updated_at,
+               tool_connection_id, external_id, external_url, source_kind)
+            values (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, 'TOOL')
+            returning id
+            """,
+            (
+                project_id, rec["code"], rec["title"], rec["body"], rec["priority"],
+                rec["status"], rec["status"], rec["assignee"], rec["source_created_at"],
+                rec["source_updated_at"], connection_id, external_id, rec["external_url"],
+            ),
+        )
+        made[external_id] = str(cur.fetchone()["id"])
+    return made

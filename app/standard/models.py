@@ -297,12 +297,6 @@ class BaselineParent(BaseModel):
     children: list[str]  # 이 상위에 속한 항목 코드. 항목 설명이 상위 코드를 적은 것
 
 
-class BaselineConnection(BaseModel):
-    id: str
-    name: str
-    tool: str
-
-
 class BaselineResponse(BaseModel):
     id: str
     version: int
@@ -324,8 +318,6 @@ class BaselineResponse(BaseModel):
     counts: dict[str, int]  # NEW · SAME · CHANGED
     # 기존 요구사항 중 명세서에 없는 코드. 지우지 않고 기준선 밖으로 둔다
     missing: list[BaselineExisting]
-    # 확정하면 요구사항 생성을 끌 연결(확정 뒤에는 끈 연결)
-    connections: list[BaselineConnection]
     parents: list[BaselineParent]
 
 
@@ -338,7 +330,6 @@ class BaselineStateResponse(BaseModel):
     workingStatus: str | None  # noqa: N815
     requirementCount: int  # noqa: N815
     outsideBaselineCount: int  # noqa: N815 — 기준선에 들지 않은 요구사항
-    creatingConnections: list[BaselineConnection]  # noqa: N815 — 지금 이슈에서 요구사항을 만드는 연결
     unresolvedCodeCount: int  # noqa: N815
 
 

@@ -12,8 +12,7 @@ from app.db import fetch_all, fetch_one
 _COLUMNS = """
     id, project_id, contractor_org_id, tool, name, base_url, target_resource,
     auth_encrypted, auth_hint, mapping_rules_json, status,
-    last_verified_at, last_synced_at, last_error, created_at,
-    requirement_from_issues
+    last_verified_at, last_synced_at, last_error, created_at
 """
 
 
@@ -28,22 +27,19 @@ def insert(
     auth_encrypted: str,
     auth_hint: str,
     mapping_rules: dict[str, Any] | None = None,
-    requirement_from_issues: bool = False,
 ) -> dict[str, Any]:
-    """새 연결. 이슈에서 요구사항을 만드는 것은 기본으로 끈다(GH-139). 켜는 것은 V53 이전
-    연결을 흉내 내는 시험뿐이다. 화면·API 로 만드는 연결은 언제나 끈 채로 시작한다."""
     row = fetch_one(
         cur,
         """
         insert into tool_connection
           (project_id, contractor_org_id, tool, name, base_url, target_resource,
-           auth_encrypted, auth_hint, mapping_rules_json, status, requirement_from_issues)
-        values (%s, %s, %s, %s, %s, %s, %s, %s, %s, 'DRAFT', %s)
+           auth_encrypted, auth_hint, mapping_rules_json, status)
+        values (%s, %s, %s, %s, %s, %s, %s, %s, %s, 'DRAFT')
         returning id
         """,
         (
             project_id, contractor_org_id, tool, name, base_url, target_resource,
-            auth_encrypted, auth_hint, Jsonb(mapping_rules or {}), requirement_from_issues,
+            auth_encrypted, auth_hint, Jsonb(mapping_rules or {}),
         ),
     )
     return find_by_id(cur, str(row["id"]))

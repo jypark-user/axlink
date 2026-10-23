@@ -19,7 +19,7 @@ from app.db import tx
 from app.integration import repository as integ_repo
 from app.standard import service as standard
 from app.standard import trace_service
-from tests.conftest import requires_db
+from tests.conftest import requires_db, seed_issue_requirements
 
 PID = "c0000000-0000-4000-8000-000000000001"
 DESIGN = "docs/20-design/*.md"
@@ -95,7 +95,7 @@ class _Repo:
         conn = integ_repo.insert(
             cur, PID, org, "GITHUB", "design-trace", "https://api.github.com",
             f"o/design-{uuid.uuid4().hex[:6]}", crypto.encrypt("k"), "k***",
-            {"designDocPaths": DESIGN}, requirement_from_issues=True,
+            {"designDocPaths": DESIGN},
         )
         self.cid = str(conn["id"])
         # 수집 잡은 연결마다 하나만 돌 수 있다(uq_sync_job__running). 시험은 한 잡을 같이 쓴다
@@ -104,6 +104,8 @@ class _Repo:
     def load(self, cur, items: list[tuple[str, str, dict]]) -> None:
         for external_id, kind, payload in items:
             integ_repo.upsert_raw_artifact(cur, self.cid, external_id, kind, payload, self.job)
+        # 요구사항 라벨 이슈는 예전처럼 요구사항으로 만들어 둔다(수집은 더 만들지 않는다)
+        seed_issue_requirements(cur, PID, self.cid, [(e, p) for e, k, p in items if k == "issue"])
         cur.execute("select * from tool_connection where id = %s", (self.cid,))
         standard.promote_connection(cur, cur.fetchone(), embedding_port())
 
