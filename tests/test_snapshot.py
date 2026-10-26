@@ -94,9 +94,12 @@ def test_같은_날_다시_찍으면_덮어쓴다(client, client_token, seeded_i
 
 @requires_db
 def test_스냅샷이_추이_위젯의_점이_된다(client, client_token, seeded_issues):
+    from app.dashboard import snapshot as _snapshot
+
     token = client_token("r2")
     yesterday = (clock.today() - timedelta(days=1)).isoformat()
-    client.post(f"/api/projects/{PID}/snapshots?at={yesterday}", headers=_auth(token))
+    with tx() as cur:  # 어제 것은 스케줄러가 찍은 것으로 둔다(손으로는 오늘만 찍는다)
+        _snapshot.take_unchecked(cur, PID, clock.today() - timedelta(days=1))
     client.post(f"/api/projects/{PID}/snapshots", headers=_auth(token))
 
     trend = _preview(client, token, "progress_issue_pct", ["period_day"], "LINE_CHART")
