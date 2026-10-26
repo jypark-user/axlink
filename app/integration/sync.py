@@ -8,11 +8,16 @@
 종료가 아니라 **시작 시각**을 적는다 — 수집 도중의 갱신분을 다음 회차가 겹쳐 읽게
 되지만, 내용해시 적재가 걸러 주므로 놓치는 것보다 겹치는 쪽이 재현 가능하다.
 
+한 회차는 항목종류마다 _PER_PAGE × _MAX_PAGES 건까지만 읽는다. 상한에 걸린 종류는 다 읽은
+것이 아니므로 어댑터가 이어 읽을 자리를 돌려주고, 잡의 stats_json.resume 에 남긴다. 다음
+회차는 그 종류만 그 자리부터 읽는다(점검 DATA-01). 다른 종류의 커서는 그대로 넘어간다.
+
 원본을 적재한 뒤 표준 모델로 승격하고 색인까지 한 흐름에서 끝낸다 — 수집이 끝났는데
 화면에는 아무것도 없는 상태를 만들지 않기 위해서다.
 """
 
 import base64
+from collections.abc import Callable, Generator
 from datetime import UTC, datetime
 from typing import Any
 
@@ -54,6 +59,47 @@ def _fail_if_core_denied(connector: Any, denied: list[str]) -> None:
         )
 
 
+def _iso(moment: datetime) -> str:
+    return moment.astimezone(UTC).isoformat()
+
+
+def _drain(
+    items: Generator[tuple[str, dict], None, Any], take: Callable[[str, dict], None]
+) -> port.PageResult | None:
+    """어댑터가 낸 항목을 모두 받고, 다 읽었는지(None) 상한에 걸렸는지(PageResult) 돌려준다."""
+    while True:
+        try:
+            external_id, payload = next(items)
+        except StopIteration as stop:
+            return stop.value
+        take(external_id, payload)
+
+
+def _passes(
+    plan: dict[str, str] | None, since: datetime | None
+) -> list[tuple[datetime | None, datetime | None]]:
+    """이번 회차에 이 종류를 읽을 범위들. 이어 읽을 자리가 있으면 그것을 먼저 쓴다."""
+    if not plan:
+        return [(since, None)]
+    start = datetime.fromisoformat(plan["since"])
+    if "until" in plan:  # 최신부터 오는 목록이 못 읽은 구간. 그 구간 뒤에 새 범위
+        return [(start, datetime.fromisoformat(plan["until"])), (since, None)]
+    return [(start if since is None else min(start, since), None)]
+
+
+def _merge(old: dict[str, str] | None, got: port.PageResult) -> dict[str, str] | None:
+    """상한에 걸려 새로 생긴 이어 읽을 자리. 앞서 남은 구간과 겹치면 넓혀 합친다."""
+    if got.resume_since is not None:
+        new = {"since": _iso(got.resume_since)}
+    elif got.gap is not None:
+        new = {"since": _iso(got.gap[0]), "until": _iso(got.gap[1])}
+    else:
+        return old
+    if old and "until" in old and "until" in new:
+        return {"since": min(old["since"], new["since"]), "until": max(old["until"], new["until"])}
+    return new
+
+
 def run_sync(
     cur: Any, connection: dict[str, Any], retry_of: str | None = None, full: bool = False
 ) -> str:
@@ -77,25 +123,45 @@ def run_sync(
     stats = {"fetched": 0, "upserted": 0, "unmapped": 0, "indexed": 0, "skippedUnchanged": 0}
     denied: list[str] = []
     connector = port.get_connector(connection["tool"])
+    # 전체 수집은 처음부터 읽으므로 앞 회차의 이어 읽을 자리를 쓰지 않는다
+    resume_before = {} if full else repository.last_success_resume(cur, cid)
+    resume: dict[str, dict[str, str]] = {}
+    limited: list[str] = []
+
+    def take(kind: str) -> Callable[[str, dict], None]:
+        def put(external_id: str, payload: dict) -> None:
+            stats["fetched"] += 1
+            _carry_files(cur, cid, external_id, kind, payload)
+            # 원본이 이전과 같으면 적재하지 않는다. upserted 는 원본이 아니라
+            # 표준 모델 반영 건수로 쓴다(화면 라벨이 "반영"이다).
+            if not repository.upsert_raw_artifact(cur, cid, external_id, kind, payload, job_id):
+                stats["skippedUnchanged"] += 1
+        return put
 
     try:
         for kind in connector.item_kinds:
+            plan = resume_before.get(kind)
             try:
-                for external_id, payload in connector.fetch_items(
-                    base, target, token, kind, _PER_PAGE, _MAX_PAGES, since=since
-                ):
-                    stats["fetched"] += 1
-                    _carry_files(cur, cid, external_id, kind, payload)
-                    # 원본이 이전과 같으면 적재하지 않는다. upserted 는 원본이 아니라
-                    # 표준 모델 반영 건수로 쓴다(화면 라벨이 "반영"이다).
-                    if not repository.upsert_raw_artifact(
-                        cur, cid, external_id, kind, payload, job_id
-                    ):
-                        stats["skippedUnchanged"] += 1
+                for start, until in _passes(plan, since):
+                    got = _drain(
+                        connector.fetch_items(
+                            base, target, token, kind, _PER_PAGE, _MAX_PAGES,
+                            since=start, until=until,
+                        ),
+                        take(kind),
+                    )
+                    if got is not None and got.truncated:
+                        if kind not in limited:
+                            limited.append(kind)
+                        merged = _merge(resume.get(kind), got)
+                        if merged:
+                            resume[kind] = merged
             except errors.ApiError as exc:
                 # 이 항목종류만 권한이 빠진 경우 — 건너뛰고 다음으로. 나머지는 하드 실패.
                 if exc.code == "TOOL_AUTH":
                     denied.append(kind)
+                    if plan:  # 이번에 못 읽었으니 이어 읽을 자리를 다음 회차로 넘긴다
+                        resume[kind] = plan
                 else:
                     raise
         _fail_if_core_denied(connector, denied)
@@ -128,6 +194,13 @@ def run_sync(
     trace_service.build_project_links(cur, str(connection["project_id"]))
 
     notes = []
+    if limited:
+        notes.append(
+            f"회차 상한({_PER_PAGE * _MAX_PAGES:,}건)에 걸려 다 읽지 못한 항목: "
+            f"{', '.join(limited)}. 다음 회차에 이어 읽습니다"
+        )
+    if resume:
+        stats["resume"] = resume
     if denied:
         notes.append(f"권한이 없어 건너뛴 항목: {', '.join(denied)}")
     if promoted.index_error:

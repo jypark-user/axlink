@@ -111,7 +111,7 @@ def test_첫_회는_전체_이후는_증분이고_반복해도_수렴한다(clie
     }
     received_since = []
 
-    def fake_fetch(base, target, secret, kind, per_page, max_pages, since=None):
+    def fake_fetch(base, target, secret, kind, per_page, max_pages, since=None, until=None):
         received_since.append((kind, since))
         if kind != "issue":
             return

@@ -10,7 +10,7 @@
 API 가 지원하지 않아 싣지 않는다 — 경과 기록이 필요해지면 상세 API 로 승격한다.
 """
 
-from collections.abc import Iterator
+from collections.abc import Generator
 from datetime import UTC, datetime
 from typing import Any
 
@@ -18,7 +18,7 @@ import httpx
 
 from app.common import errors
 from app.config import settings
-from app.integration.port import ProbeResult
+from app.integration.port import PageResult, ProbeResult
 
 ITEM_KINDS = ("issue", "version", "tracker")
 # 이 항목이 막히면 수집 전체를 실패로 본다. 버전·트래커만 받고 성공으로 끝나면 안 된다
@@ -108,12 +108,15 @@ def verify(base_url: str, target: str, secret: str) -> ProbeResult:
 
 def fetch_items(
     base_url: str, target: str, secret: str, kind: str, per_page: int, max_pages: int,
-    since: datetime | None = None,
-) -> Iterator[tuple[str, dict]]:
+    since: datetime | None = None, until: datetime | None = None,
+) -> Generator[tuple[str, dict], None, PageResult | None]:
     """항목종류 하나를 offset 페이지로 가져온다. (external_id, payload) 를 낸다.
 
     증분(since)은 이슈만 updated_on 필터를 쓴다. 버전·트래커에는 갱신 필터가 없어
     전량을 다시 낸다 — 몇 건 안 되고, 내용해시 적재가 걸러 준다.
+
+    이슈는 갱신 오름차순(updated_on:asc)이라 상한에 걸리면 마지막으로 읽은 시각부터 다음
+    회차가 이어 읽는다(점검 DATA-01). until 은 쓰지 않는다(최신부터 오는 목록이 없다).
     """
     headers = _headers(secret)
     url, params = _kind_url(_base(base_url), target, kind)
@@ -121,6 +124,7 @@ def fetch_items(
         stamp = since.astimezone(UTC).strftime("%Y-%m-%dT%H:%M:%SZ")
         params["updated_on"] = f">={stamp}"
     key = f"{kind}s"  # issues / versions / trackers — Redmine 목록 응답의 루트 키
+    last: str | None = None
 
     with httpx.Client(timeout=settings.connector_timeout) as client:
         for page in range(max_pages):
@@ -136,9 +140,15 @@ def fetch_items(
                 raise errors.ApiError(502, "TOOL_UNREACHABLE", f"Redmine 오류 {res.status_code}")
             batch = res.json().get(key) or []
             for item in batch:
+                last = item.get("updated_on") or last
                 yield external_id(kind, item), item
             if len(batch) < per_page:
-                return
+                return None
+    # 상한에 걸렸다. 다 읽은 것이 아니다
+    if kind == "issue" and last:
+        return PageResult(resume_since=datetime.strptime(last, "%Y-%m-%dT%H:%M:%SZ")
+                          .replace(tzinfo=UTC))
+    return PageResult()
 
 
 def fetch_file(
@@ -161,9 +171,9 @@ class RedmineConnector:
     def fetch_items(
         self, base_url: str, target: str, secret: str,
         kind: str, per_page: int, max_pages: int,
-        since: datetime | None = None,
-    ) -> Iterator[tuple[str, dict[str, Any]]]:
-        return fetch_items(base_url, target, secret, kind, per_page, max_pages, since)
+        since: datetime | None = None, until: datetime | None = None,
+    ) -> Generator[tuple[str, dict[str, Any]], None, PageResult | None]:
+        return fetch_items(base_url, target, secret, kind, per_page, max_pages, since, until)
 
     def fetch_file(
         self, base_url: str, target: str, secret: str, path: str, ref: str | None = None,

@@ -153,7 +153,7 @@ def test_키가_무효면_수집은_실패하고_받아_둔_데이터는_남는�
 def test_전체_수집을_요청하면_커서를_무시하고_처음부터_읽는다(client, client_token, monkeypatch):
     seen = []
 
-    def fake_fetch(base, target, secret, kind, per_page, max_pages, since=None):
+    def fake_fetch(base, target, secret, kind, per_page, max_pages, since=None, until=None):
         seen.append((kind, since))
         if kind == "issue":
             yield "1", _issue(1)

@@ -252,6 +252,25 @@ def last_success_cursor(cur: Any, connection_id: str):
     return row["cursor_to"] if row else None
 
 
+def last_success_resume(cur: Any, connection_id: str) -> dict[str, Any]:
+    """마지막 성공 수집이 남긴 이어 읽을 자리(stats_json.resume). 없으면 빈 dict.
+
+    항목종류 → {"since": ISO} 또는 {"since": ISO, "until": ISO}. 상한에 걸린 종류만 있다.
+    """
+    row = fetch_one(
+        cur,
+        """
+        select stats_json -> 'resume' as resume
+          from sync_job
+         where tool_connection_id = %s and status = 'SUCCEEDED'
+         order by cursor_to desc nulls last, finished_at desc nulls last
+         limit 1
+        """,
+        (connection_id,),
+    )
+    return (row or {}).get("resume") or {}
+
+
 def upsert_raw_artifact(
     cur: Any, connection_id: str, external_id: str, object_kind: str, payload: dict, job_id: str
 ) -> bool:
