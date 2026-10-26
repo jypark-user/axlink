@@ -673,3 +673,69 @@ def test_다른_사업의_기준선은_보거나_바꿀_수_없다(client, clien
     # 다른 사업의 문서로 우리 사업 기준선을 만들 수 없다
     assert client.post(_base(), json={"documentId": doc}, headers=pm).status_code == 404
     assert client.get(_base()).status_code == 401
+
+
+# ---------------------------------------------------------------- 검색 색인 (점검 DATA-02)
+
+
+def _indexed(cur, requirement_id: str) -> str:
+    rows = fetch_all(
+        cur, "select source_title, content from doc_chunk where source_type = 'REQUIREMENT' "
+        "and source_id = %s order by chunk_no", (requirement_id,))
+    return "\n".join(f"{r['source_title']}\n{r['content']}" for r in rows)
+
+
+@requires_db
+def test_요구사항_색인은_출처_이슈가_아니라_정의를_따른다(client, client_token, clean):
+    pm, po = _auth(client_token("r3")), _auth(client_token("r2"))
+    with tx() as cur:
+        legacy = _legacy_project(cur, clean)
+    sub = _submitted(client, pm, legacy["doc"])
+    done = client.post(f"{_base()}/{sub['id']}/confirm",
+                       json={"applySpecCodes": ["SWFR.TST.202"]}, headers=po)
+    assert done.status_code == 200, done.text
+
+    with tx() as cur:
+        rows = _req_codes(cur)
+        a, b, new = rows["SWFR.TST.201"], rows["SWFR.TST.202"], rows["SWFR.TST.204"]
+        # 명세서 내용을 적용한 기존 요구사항은 확정하면서 새 정의로 색인한다
+        assert "명세서 쪽 제목" in _indexed(cur, str(b["id"]))
+        assert "이슈 쪽 제목" not in _indexed(cur, str(b["id"]))
+        assert "명세서에만 있는 요구사항" in _indexed(cur, str(new["id"]))
+
+        # 확정 뒤 출처 이슈의 제목이 바뀌어도 요구사항 색인은 정의 그대로다
+        _load(cur, legacy["conn"], [
+            ("issue:1", _gh_issue(1, "[SWFR.TST.201] 이슈에서 바꾼 제목", ["유형: 요구사항"])),
+            ("issue:2", _gh_issue(2, "[SWFR.TST.202] 또 바꾼 제목", ["유형: 요구사항"])),
+        ])
+        _promote(cur, legacy["cid"])
+        assert "같은 제목" in _indexed(cur, str(a["id"]))
+        assert "이슈에서 바꾼 제목" not in _indexed(cur, str(a["id"]))
+        assert "명세서 쪽 제목" in _indexed(cur, str(b["id"]))
+        assert "또 바꾼 제목" not in _indexed(cur, str(b["id"]))
+
+
+@requires_db
+def test_확정_때_색인이_실패해도_다음_수집이_채운다(client, client_token, clean, monkeypatch):
+    from app.common import errors
+    from app.rag import indexing
+
+    pm, po = _auth(client_token("r3")), _auth(client_token("r2"))
+    with tx() as cur:
+        legacy = _legacy_project(cur, clean)
+    sub = _submitted(client, pm, legacy["doc"])
+
+    real = indexing.reindex
+
+    def down(*_a, **_k):
+        raise errors.ApiError(503, "AI_UNAVAILABLE", "임베딩 모델이 응답하지 않습니다.")
+    monkeypatch.setattr(indexing, "reindex", down)
+    done = client.post(f"{_base()}/{sub['id']}/confirm",
+                       json={"applySpecCodes": ["SWFR.TST.202"]}, headers=po)
+    assert done.status_code == 200, done.text  # 색인은 못 했어도 확정은 남는다
+    monkeypatch.setattr(indexing, "reindex", real)
+
+    with tx() as cur:
+        b = _req_codes(cur)["SWFR.TST.202"]
+        _promote(cur, legacy["cid"])
+        assert "명세서 쪽 제목" in _indexed(cur, str(b["id"]))
