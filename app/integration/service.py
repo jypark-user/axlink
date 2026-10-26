@@ -6,6 +6,7 @@
 
 from datetime import UTC, datetime
 from typing import Any
+from urllib.parse import urlsplit
 
 from app.auth import repository as auth_repo
 from app.auth.models import AuthPrincipal
@@ -35,13 +36,36 @@ def _require_project(cur: Any, principal: AuthPrincipal, project_id: str) -> Non
         raise errors.project_access_denied()
 
 
+# http 를 받는 같은 기계 주소. 문자열 앞부분이 아니라 실제 호스트로 비교한다
+# ("http://localhost.attacker.invalid", "http://localhost@attacker.invalid" 를 막는다)
+_LOOPBACK_HOSTS = {"localhost", "127.0.0.1", "::1"}
+
+
 def _require_https(base_url: str) -> None:
-    # 평문 자격증명이 http 로 나가지 않게 막는다. 루프백만 예외다 —
-    # 로컬 검증용 Redmine(HTTP)이 여기 해당하고, 기계 밖으로 나가지 않는다.
-    if base_url.startswith(("http://localhost", "http://127.0.0.1")):
+    """평문 자격증명이 기계 밖 http 로 나가지 않게 막는다(SER.SEC.001).
+
+    https 는 호스트를 가리지 않는다. 사내 Redmine·GitHub Enterprise 의 사설 주소도 된다.
+    http 는 같은 기계 주소만 받는다(로컬 검증용 Redmine). 주소에 사용자 정보(user@)는
+    받지 않는다. 토큰은 따로 받고, user@ 는 실제 호스트를 숨기는 데 쓰인다.
+    """
+    try:
+        parts = urlsplit((base_url or "").strip())
+        port = parts.port  # 숫자가 아니면 ValueError
+    except ValueError:
+        port = -1
+    host = (parts.hostname or "").lower()
+    if not host or port == -1:
+        raise errors.validation_failed("baseUrl 이 올바른 주소가 아닙니다.")
+    if "@" in parts.netloc:
+        raise errors.validation_failed("baseUrl 에 사용자 정보(@)를 넣을 수 없습니다.")
+    scheme = parts.scheme.lower()
+    if scheme == "https":
         return
-    if not base_url.startswith("https://"):
-        raise errors.validation_failed("baseUrl 은 https 로 시작해야 합니다.")
+    if scheme == "http" and host in _LOOPBACK_HOSTS:
+        return
+    raise errors.validation_failed(
+        "baseUrl 은 https 로 시작해야 합니다. http 는 같은 기계 주소(localhost·127.0.0.1)만 됩니다."
+    )
 
 
 def _require_tool(tool: str) -> None:
