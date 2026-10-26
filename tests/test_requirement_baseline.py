@@ -681,7 +681,7 @@ def test_다른_사업의_기준선은_보거나_바꿀_수_없다(client, clien
 def _indexed(cur, requirement_id: str) -> str:
     rows = fetch_all(
         cur, "select source_title, content from doc_chunk where source_type = 'REQUIREMENT' "
-        "and source_id = %s order by chunk_no", (requirement_id,))
+        "and source_id = %s order by chunk_index", (requirement_id,))
     return "\n".join(f"{r['source_title']}\n{r['content']}" for r in rows)
 
 
