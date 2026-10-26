@@ -156,12 +156,12 @@ export function DocumentDetailPage(): ReactNode {
                     rel="noreferrer"
                     className="underline-offset-2 hover:underline"
                   >
-                    원천 도구에서 보기
+                    수집한 도구에서 보기
                   </a>
                 ) : (
                   <span className="text-muted-foreground text-xs">
-                    직접 올린 문서라 여기가 원본입니다. 도구에서 수집한 산출물은 원천 링크가 붙고,
-                    폐쇄망에서는 그 링크가 열리지 않을 수 있습니다.
+                    직접 올린 문서라 여기가 원본입니다. 도구에서 수집한 산출물에는 그 도구의 링크가
+                    붙고, 폐쇄망에서는 그 링크가 열리지 않을 수 있습니다.
                   </span>
                 )}
               </section>

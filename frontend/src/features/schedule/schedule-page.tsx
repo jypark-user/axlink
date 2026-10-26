@@ -40,7 +40,7 @@ function readView(): ViewId {
 const SOURCE_DESCRIPTION: Record<WbsScheduleResponse['source'], string> = {
   WBS_FILE: '용역사가 제출한 WBS 의 항목·기간·실적입니다. 계획선은 기간으로 다시 계산했습니다.',
   REDMINE: 'Redmine 이슈의 시작일·종료일·진척률입니다. WBS 파일이 없어 이것으로 대신합니다.',
-  NONE: '일정의 원천이 없습니다.',
+  NONE: '일정을 읽을 WBS 파일도 Redmine 일정도 없습니다.',
 };
 
 export function SchedulePage(): ReactNode {

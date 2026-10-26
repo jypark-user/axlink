@@ -256,7 +256,7 @@ function buildColumns(
           </span>
         );
         const why = item.rule ? `${RULE_LABEL[item.rule] ?? item.rule}: ${item.ref ?? ''}` : null;
-        // 근거가 올린 문서면 자료 상세로, 저장소 파일이면 원천(GitHub)으로 간다
+        // 근거가 올린 문서면 자료 상세로, 저장소 파일이면 그 저장소(GitHub)로 간다
         const docBacked = item.rule === 'LINKED_DOC' || item.rule === 'FILE_NAME';
         const detailDoc = docBacked ? item.documents[0] : undefined;
         return (
@@ -270,7 +270,7 @@ function buildColumns(
                 url={item.url}
                 filename={item.deliverable ?? 'deliverable'}
                 className="w-fit"
-                title="원천 저장소에서 보기"
+                title="저장소에서 보기"
               >
                 {pill}
               </ServerLink>
