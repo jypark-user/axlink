@@ -30,8 +30,8 @@ def foreign():
     with tx() as cur:
         pid = str(fetch_one(
             cur,
-            "insert into project (client_org_id, name, start_date, end_date) "
-            "values (%s, %s, '2026-08-01', '2026-11-30') returning id",
+            "insert into project (client_org_id, name, start_date, end_date, description) "
+            "values (%s, %s, '2026-08-01', '2026-11-30', '권한 시험') returning id",
             (OTHER_CLIENT_ORG, f"권한 시험 {uuid.uuid4().hex[:6]}"),
         )["id"])
         doc = str(fetch_one(
@@ -78,7 +78,9 @@ def test_용역사는_사업_정보를_바꾸거나_지우지_못한다(client, 
         before = fetch_one(cur, "select name, end_date from project where id = %s", (PID,))
     res = client.patch(f"/api/projects/{PID}", json={"name": "바꿈"}, headers=r3)
     assert res.status_code == 403
-    assert client.delete(f"/api/projects/{PID}", headers=r3).status_code == 403
+    # 삭제는 비밀번호 본문이 있어야 검증을 지나 권한 검사에 닿는다
+    res = client.request("DELETE", f"/api/projects/{PID}", json={"password": "x"}, headers=r3)
+    assert res.status_code == 403
     with tx() as cur:
         after = fetch_one(cur, "select name, end_date from project where id = %s", (PID,))
     assert after == before
