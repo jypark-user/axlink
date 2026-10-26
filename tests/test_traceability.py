@@ -124,3 +124,21 @@ def test_저장소_전체가_규약을_지킨다():
     _, _, doc_violations = tr.scan_docs(known)
 
     assert commit_violations + doc_violations == []
+
+
+def test_git_이_실패하면_빈_표를_만들지_않고_멈춘다(monkeypatch):
+    # 저장소가 아니거나 git 이 깨지면 커밋이 0건으로 읽혀 표가 조용히 빈다(점검 DOC-01)
+    with pytest.raises(tr.GitError):
+        tr.git("log", "--no-such-option")
+    monkeypatch.setattr(tr, "ROOT", ROOT / "no-such-dir")
+    with pytest.raises(tr.GitError):
+        tr.scan_commits(set())
+
+
+def test_git_이_실패하면_검사도_실패로_끝난다(monkeypatch, capsys):
+    def broken(*_args):
+        raise tr.GitError("git log 실패: fatal: not a git repository")
+    monkeypatch.setattr(tr, "git", broken)
+    monkeypatch.setattr("sys.argv", ["build_traceability.py", "--check"])
+    assert tr.main() == 2
+    assert "git log 실패" in capsys.readouterr().err
