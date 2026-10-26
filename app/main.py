@@ -11,6 +11,7 @@ from contextlib import asynccontextmanager
 from fastapi import FastAPI
 from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import JSONResponse
 from starlette.exceptions import HTTPException as StarletteHTTPException
 
 from app.activity.router import router as activity_router
@@ -114,3 +115,15 @@ app.include_router(help_router)
 @app.get("/api/health", tags=["health"])
 def health() -> dict[str, str]:
     return {"status": "UP", "version": settings.app_version}
+
+
+@app.get("/api/health/documents", tags=["health"])
+def document_health() -> JSONResponse:
+    """문서 처리 작업자 상태. API 헬스와 따로 본다(점검 RES-01). 고장이면 503."""
+    from app.document import worker
+
+    st = worker.status()
+    if settings.document_processing != "background" and st["state"] == "off":
+        st["state"] = "inline"  # 요청 안에서 처리한다. 작업자가 없다
+    code = 503 if st["state"] in ("failing", "dead") else 200
+    return JSONResponse(st, status_code=code)
