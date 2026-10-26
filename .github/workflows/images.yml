@@ -3,7 +3,8 @@
 # - PR: 빌드·검사만 한다. 게시하지 않는다(읽기 권한)
 # - main: CI 가 성공한 커밋만 빌드·게시한다(sha-<7> 와 main 태그)
 # - v태그(vX.Y.Z): main 에 있고 CI 가 성공한 커밋이면 X.Y.Z 태그와 반입용 tar 를 만든다
-# - 수동: 빌드·검사. publish 를 켜면 main·v태그일 때만 게시한다
+# - 수동: 빌드·검사. publish 를 켜면 main·v태그일 때만, 그 커밋의 main CI 가 성공했을 때만 게시한다
+#   (CI 확인은 image-build.yml 이 게시 경로마다 똑같이 한다)
 
 name: 이미지
 

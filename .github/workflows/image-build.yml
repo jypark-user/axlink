@@ -57,17 +57,26 @@ jobs:
           # 로컬에서 쓸 이름. 게시할 때 레지스트리 이름을 따로 붙인다
           for i in api web migrate; do echo "$i=axlink-$i:ci-$short" >> "$GITHUB_OUTPUT"; done
 
-      - name: 릴리스 태그가 검증된 main 커밋인지
-        if: steps.meta.outputs.release != ''
+      - name: 게시할 커밋이 CI 를 통과한 main 커밋인지
+        # 게시 경로(main 자동·v태그·수동) 모두 같은 확인을 거친다(점검 DEP-01). 수동 실행도
+        # main 에서 CI 가 실패했거나 아직 도는 커밋은 게시하지 못한다. PR 에서 통과한 기록은
+        # 세지 않는다. 긴급 예외 경로는 두지 않았다
+        if: inputs.publish
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
           git fetch -q origin main
           git merge-base --is-ancestor "${{ inputs.sha }}" origin/main \
-            || { echo "::error::v${{ steps.meta.outputs.release }} 가 main 에 없는 커밋이다"; exit 1; }
-          ok=$(gh api "repos/${{ github.repository }}/actions/runs?head_sha=${{ inputs.sha }}&per_page=50" \
-            --jq '[.workflow_runs[] | select(.name == "CI" and .conclusion == "success")] | length')
-          [ "$ok" -gt 0 ] || { echo "::error::이 커밋의 CI 성공 기록이 없다"; exit 1; }
+            || { echo "::error::${{ inputs.sha }} 가 main 에 없는 커밋이다"; exit 1; }
+          runs=$(gh api "repos/${{ github.repository }}/actions/runs?head_sha=${{ inputs.sha }}&per_page=50")
+          ok=$(jq '[.workflow_runs[] | select(.name == "CI" and .event == "push"
+                and .head_branch == "main" and .conclusion == "success")] | length' <<< "$runs")
+          if [ "$ok" -eq 0 ]; then
+            jq -r '.workflow_runs[] | select(.name == "CI")
+              | "  CI \(.event) \(.head_branch) \(.status) \(.conclusion // "-")"' <<< "$runs"
+            echo "::error::이 커밋의 main CI 성공 기록이 없다. CI 가 성공한 뒤 다시 실행한다"
+            exit 1
+          fi
 
       - name: 빌드 문맥에 비밀값·실행 자료가 없는지
         # .dockerignore 를 그대로 적용한 문맥을 통째로 담아 본다. 실제 빌드가 받는 파일과 같다
