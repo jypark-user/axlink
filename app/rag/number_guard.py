@@ -3,6 +3,14 @@
 모델이 쓴 숫자는 문장이 끝날 때까지 들고 있다가, 그 숫자가 집계 값이나 근거 원문의 값과
 같고 단위·대상·기준 시점이 맞는지 본 뒤에만 내보낸다. 맞지 않는 문장은 화면에 나가지 않는다.
 질문과 앞 답의 숫자는 근거가 아니다. 질문의 낱말은 "무엇에 대한 숫자인가" 를 판정할 때만 쓴다.
+
+집계·그림·일정의 값은 그 값을 부르는 말(라벨)과 짝을 짓는다(점검 NUM-01). "계획 진척률 75%",
+"보고 진척률 40%" 를 받고 "계획 진척률은 40%" 라고 쓰면, 숫자는 근거에 있어도 다른 값의 라벨이
+문장과 더 잘 맞으므로 막는다. 라벨은 근거 줄에서 그 숫자 바로 앞 구절과 줄 머리말이다.
+문장 쪽은 숫자 바로 앞(값이 앞에 오는 문장이면 바로 뒤) 구절을 본다. 같은 묶음 안에서 값을
+서로 구분하는 낱말만 센다. 구분하는 말을 하지 않은 문장은 값·단위·대상·시점만 본다.
+낱말 대조라 문장 구조를 이해하는 것은 아니다. 근거 원문(청크)의 숫자와 산출 근거 같은 설명
+줄에는 짝을 적용하지 않는다.
 """
 
 import re
@@ -147,19 +155,22 @@ def _normalize(token: str) -> str:
     return str(int(value)) if value.is_integer() else f"{value:g}"
 
 
+def _spans(text: str) -> list[tuple[int, int, str, str]]:
+    """수치마다 (시작, 끝, 값, 단위). 끝은 단위 뒤다."""
+    out = []
+    for m in _NUMBER.finditer(_mask(text)):
+        unit = m.group(2) or ""
+        out.append((m.start(1), m.end(), _normalize(m.group(1)), _UNIT_ALIAS.get(unit, unit)))
+    return out
+
+
 def quantities(text: str, start_at: int = 0) -> list[tuple[str, str]]:
     """수치로 보는 숫자와 그 단위. 날짜·버전·번호는 뺀다.
 
     start_at 앞은 이미 내보낸 같은 문장의 앞부분이다. 제외 규칙(식별자·표식·버전)은 앞부분까지
     붙여서 보고, 수치는 start_at 뒤에서만 센다. 조각이 'SWFR.RAG.' 와 '007' 로 끊겨 와도 같다.
     """
-    out = []
-    for m in _NUMBER.finditer(_mask(text)):
-        if m.start(1) < start_at:
-            continue
-        unit = m.group(2) or ""
-        out.append((_normalize(m.group(1)), _UNIT_ALIAS.get(unit, unit)))
-    return out
+    return [(value, unit) for start, _, value, unit in _spans(text) if start >= start_at]
 
 
 def has_quantity(text: str) -> bool:
@@ -177,6 +188,7 @@ class Fact:
     source: str  # "집계" | "그림 1" | "근거 2" | "목록 범위"
     as_of: frozenset[DateKey] = frozenset()
     chunk_no: int | None = None
+    label: frozenset[str] | None = None  # 값을 부르는 말. 근거 원문·설명 줄의 값은 None
 
 
 def facts_from_lines(
@@ -186,10 +198,32 @@ def facts_from_lines(
     lines = list(lines)
     words = keywords(" ".join([subject, *lines]))
     return [
-        Fact(value, unit, words, source, as_of)
+        Fact(value, unit, words, source, as_of, label=label)
         for line in lines
-        for value, unit in quantities(line)
+        for value, unit, label in _labelled(line)
     ]
+
+
+# 값의 뜻을 풀어 쓴 줄. 설명 문장의 낱말을 라벨로 쓰면 다른 값이 막힌다
+_EXPLAIN_HEADS = ("산출 근거",)
+
+
+def _labelled(line: str) -> list[tuple[str, str, frozenset[str] | None]]:
+    """줄의 수치마다 (값, 단위, 라벨). 라벨은 줄 머리말 + 앞 숫자 뒤부터 이 숫자 앞까지 +
+    이 숫자 뒤 쉼표까지("말단 작업 10건 중 3건이 늦음" 의 3 은 "늦음" 까지)."""
+    spans = _spans(line)
+    colon = line.find(":")
+    head = line[:colon] if spans and 0 <= colon < spans[0][0] else ""
+    if head.strip(" -") in _EXPLAIN_HEADS:
+        return [(value, unit, None) for _, _, value, unit in spans]
+    out = []
+    for i, (start, end, value, unit) in enumerate(spans):
+        prev = spans[i - 1][1] if i else 0
+        nxt = spans[i + 1][0] if i + 1 < len(spans) else len(line)
+        tail = line[end:nxt].split(",")[0]
+        words = keywords(f"{head} {line[prev:start]} {tail}")
+        out.append((value, unit, frozenset(_canon(words))))
+    return out
 
 
 def facts_from_chunk(no: int, content: str) -> list[Fact]:
@@ -212,7 +246,7 @@ def facts_from_chunk(no: int, content: str) -> list[Fact]:
 class Violation:
     value: str
     unit: str
-    reason: str  # 근거에 없는 값 | 단위 불일치 | 대상 불일치 | 기준 시점 불일치
+    reason: str  # 근거에 없는 값 | 단위 불일치 | 대상 불일치 | 지표 불일치 | 기준 시점 불일치
 
 
 # 수치가 "무엇의" 값인지 말하는 낱말. 문장의 대상어는 이 사전과 집계·그림 제목에서만 뽑는다.
@@ -248,28 +282,84 @@ class Checker:
     facts: list[Fact]
     question: str = ""
     subjects: frozenset[str] = DOMAIN_TERMS  # 집계·그림 제목의 낱말을 더해 넘긴다
+    # 묶음(source)마다 라벨이 있는 값들과, 그 값들을 서로 구분하는 낱말
+    _labelled: dict[str, list[Fact]] = field(init=False, repr=False)
+    _distinct: dict[str, frozenset[str]] = field(init=False, repr=False)
+
+    def __post_init__(self) -> None:
+        self._labelled = {}
+        for f in self.facts:
+            if f.label is not None:
+                self._labelled.setdefault(f.source, []).append(f)
+        self._distinct = {
+            source: frozenset().union(*(f.label for f in group))
+            - frozenset.intersection(*(f.label for f in group))
+            for source, group in self._labelled.items()
+        }
 
     def check(self, sentence: str, context: str = "") -> list[Violation]:
         """문장의 수치 중 근거로 설명되지 않는 것. context 는 이미 내보낸 같은 문장의 앞부분이다."""
         whole = context + sentence
-        claims = quantities(whole, start_at=len(context))
-        if not claims:
+        spans = _spans(whole)
+        if not any(start >= len(context) for start, *_ in spans):
             return []
         subject = self._subjects_in(whole) or self._subjects_in(self.question)
         cited = {int(n) for n in _FOOTNOTE.findall(whole)}
         when = dates_in(whole)
+        clauses = self._clauses(whole, spans)
         bad = []
-        for value, unit in claims:
-            reason = self._why_not(value, unit, subject, cited, when)
+        for (start, _, value, unit), clause in zip(spans, clauses, strict=True):
+            if start < len(context):
+                continue
+            reason = self._why_not(value, unit, subject, cited, when, clause)
             if reason:
                 bad.append(Violation(value, unit, reason))
         return bad
+
+    def _clauses(self, text: str, spans: list[tuple[int, int, str, str]]) -> list[set[str]]:
+        """숫자마다 그 숫자를 가리키는 구절의 낱말.
+
+        보통은 앞 숫자 뒤부터 이 숫자 앞까지("계획 진척률은 75%"). 첫 숫자 앞에 구분하는 말이
+        없고 마지막 숫자 뒤에 있으면 값이 앞에 오는 문장으로 보고 뒤 구절을 쓴다("75%는 계획").
+        """
+        vocab = frozenset().union(*self._distinct.values())
+        edges = [0, *[end for _, end, *_ in spans]]
+        before = [_canon(keywords(text[edges[i]: spans[i][0]])) for i in range(len(spans))]
+        nexts = [start for start, *_ in spans[1:]] + [len(text)]
+        after = [_canon(keywords(text[spans[i][1]: nexts[i]])) for i in range(len(spans))]
+
+        def names(words: set[str]) -> bool:
+            return any(_overlap([w], vocab) for w in words)
+
+        if spans and not names(before[0]) and names(after[-1]):
+            return after
+        return before
+
+    def _outranked(self, fact: Fact, clause: set[str]) -> bool:
+        """구절이 말한 구분 낱말이 같은 묶음의 다른 값(같은 단위) 라벨과 더 많이 맞는가."""
+        if fact.label is None:
+            return False
+        distinct = self._distinct.get(fact.source, frozenset())
+        named = [w for w in clause if _overlap([w], distinct)]
+        if not named:
+            return False
+
+        def score(label: frozenset[str]) -> int:
+            return sum(1 for w in named if _overlap([w], label))
+
+        mine = score(fact.label)
+        return any(
+            score(other.label) > mine
+            for other in self._labelled[fact.source]
+            if other.value != fact.value
+            and (not other.unit or not fact.unit or other.unit == fact.unit)
+        )
 
     def _subjects_in(self, text: str) -> set[str]:
         vocab = _canon(self.subjects)
         return {w for w in _canon(keywords(text)) if _overlap([w], vocab)}
 
-    def _why_not(self, value, unit, subject, cited, when) -> str | None:
+    def _why_not(self, value, unit, subject, cited, when, clause=frozenset()) -> str | None:
         same = [f for f in self.facts if f.value == value]
         if not same:
             return "근거에 없는 값"
@@ -284,6 +374,9 @@ class Checker:
             ]
             if not same:
                 return "대상 불일치"
+        same = [f for f in same if not self._outranked(f, clause)]
+        if not same:
+            return "지표 불일치"
         if when:
             same = [
                 f for f in same
