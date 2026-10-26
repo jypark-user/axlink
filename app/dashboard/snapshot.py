@@ -13,7 +13,7 @@ from typing import Any
 from app.activity import service as activity
 from app.auth import repository as auth_repo
 from app.auth.models import AuthPrincipal
-from app.common import errors
+from app.common import clock, errors
 from app.dashboard import service as progress_service
 from app.dashboard.models import ProgressSnapshotResponse
 from app.db import fetch_all, fetch_one
@@ -27,7 +27,7 @@ def take(
     )
     if project_id not in allowed:
         raise errors.project_access_denied()
-    return take_unchecked(cur, project_id, at or date.today(), actor=principal)
+    return take_unchecked(cur, project_id, at or clock.today(), actor=principal)
 
 
 def list_recent(

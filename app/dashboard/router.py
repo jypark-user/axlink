@@ -10,6 +10,7 @@ from typing import Annotated
 from fastapi import APIRouter, Query
 
 from app.auth.deps import Principal
+from app.common import clock
 from app.dashboard import completion, service, snapshot
 from app.dashboard.models import (
     CompletionSummaryResponse,
@@ -33,7 +34,7 @@ def wbs_completion(
     """보고 진척률과 완료 확인율, 작업별 근거 사실(ARC-019). 시맨틱 지표와 같은 뷰를 읽는다."""
     with tx() as cur:
         service.require_project(cur, principal, project_id)
-        return CompletionSummaryResponse(**completion.summary(cur, project_id, at or date.today()))
+        return CompletionSummaryResponse(**completion.summary(cur, project_id, at or clock.today()))
 
 
 @router.get("/{project_id}/progress", response_model=ProgressResponse)

@@ -18,6 +18,8 @@ from datetime import date, datetime
 
 from openpyxl import load_workbook
 
+from app.common import clock
+
 # 컬럼 이름 후보. 앞에 있을수록 우선한다. 소문자·공백제거 후 부분일치로 본다.
 _COLUMNS: dict[str, tuple[str, ...]] = {
     "wbs_id": ("wbsid", "wbs", "id", "번호", "코드"),
@@ -149,7 +151,7 @@ def parse(data: bytes) -> WbsPlan:
 
 def progress(plan: WbsPlan, at: date | None = None) -> WbsProgress:
     """가중 진척률과 계획선. 가중치 합으로 나누므로 합이 1이 아니어도 성립한다."""
-    at = at or date.today()
+    at = at or clock.today()
     total = plan.weight_total or 1.0
 
     actual = sum(r.weight * r.actual for r in plan.rows) / total

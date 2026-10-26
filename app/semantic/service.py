@@ -10,6 +10,7 @@ from uuid import UUID
 
 from app.auth import repository as auth_repo
 from app.auth.models import AuthPrincipal
+from app.common import clock
 from app.db import fetch_all
 from app.semantic import builder
 from app.semantic import catalog as catalog_module
@@ -155,7 +156,7 @@ def _shift_period(validated: ValidatedSpec) -> ValidatedSpec | None:
             return None
         if definition.op == "LAST_N_DAYS":
             n = int(bound.values[0])
-            hi = date.today() - timedelta(days=n + 1)
+            hi = clock.today() - timedelta(days=n + 1)
             lo = hi - timedelta(days=n - 1)
         elif definition.op == "BETWEEN":
             lo0, hi0 = sorted(bound.values)

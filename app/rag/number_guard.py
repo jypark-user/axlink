@@ -9,13 +9,13 @@ import re
 from collections.abc import Iterable
 from dataclasses import dataclass, field
 from datetime import datetime
-from zoneinfo import ZoneInfo
 
+from app.common import clock
 from app.rag import blocks as blocks_mod
 
 BLOCKED_NOTE = "(근거를 확인할 수 없는 수치가 있어 이 부분은 표시하지 않았습니다.)"
 
-_SEOUL = ZoneInfo("Asia/Seoul")
+_SEOUL = clock.PROJECT_TZ
 
 # ---------------------------------------------------------------- 수치가 아닌 숫자
 

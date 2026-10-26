@@ -1,10 +1,11 @@
 """일별 스냅샷 (SWFR.PIP.005). 오늘 찍은 값이 추이 위젯의 한 점이 되는지 본다."""
 
 import uuid
-from datetime import UTC, date, datetime, timedelta
+from datetime import UTC, datetime, timedelta
 
 import pytest
 
+from app.common import clock
 from app.db import fetch_one, tx
 from tests.conftest import requires_db
 
@@ -55,7 +56,7 @@ def test_스냅샷은_그날의_집계를_그대로_담는다(client, client_tok
     res = client.post(f"/api/projects/{PID}/snapshots", headers=_auth(token))
     assert res.status_code == 200, res.text
     body = res.json()
-    assert body["snapshotDate"] == date.today().isoformat()
+    assert body["snapshotDate"] == clock.today().isoformat()
     assert body["workProductTotalCount"] == 22
 
     with tx() as cur:
@@ -85,8 +86,8 @@ def test_같은_날_다시_찍으면_덮어쓴다(client, client_token, seeded_i
         row = fetch_one(
             cur,
             "select count(*) as n from progress_snapshot"
-            " where project_id = %s and snapshot_date = current_date",
-            (PID,),
+            " where project_id = %s and snapshot_date = %s",
+            (PID, clock.today()),
         )
     assert row["n"] == 1
 
@@ -94,20 +95,20 @@ def test_같은_날_다시_찍으면_덮어쓴다(client, client_token, seeded_i
 @requires_db
 def test_스냅샷이_추이_위젯의_점이_된다(client, client_token, seeded_issues):
     token = client_token("r2")
-    yesterday = (date.today() - timedelta(days=1)).isoformat()
+    yesterday = (clock.today() - timedelta(days=1)).isoformat()
     client.post(f"/api/projects/{PID}/snapshots?at={yesterday}", headers=_auth(token))
     client.post(f"/api/projects/{PID}/snapshots", headers=_auth(token))
 
     trend = _preview(client, token, "progress_issue_pct", ["period_day"], "LINE_CHART")
     days = [r["values"]["d0"] for r in trend["rows"]]
-    assert days[-2:] == [yesterday, date.today().isoformat()]  # 시간순
+    assert days[-2:] == [yesterday, clock.today().isoformat()]  # 시간순
 
     with tx() as cur:
         row = fetch_one(
             cur,
             "select round(100.0 * issue_resolved_count / issue_total_count, 2) as pct"
-            " from progress_snapshot where project_id = %s and snapshot_date = current_date",
-            (PID,),
+            " from progress_snapshot where project_id = %s and snapshot_date = %s",
+            (PID, clock.today()),
         )
     assert trend["rows"][-1]["values"]["value"] == float(row["pct"])
 

@@ -24,7 +24,7 @@ from typing import Any
 from app.activity import service as activity
 from app.auth import repository as auth_repo
 from app.auth.deps import AuthPrincipal
-from app.common import errors
+from app.common import clock, errors
 from app.config import settings
 from app.dashboard import deliverable, repository, wbs
 from app.dashboard.models import (
@@ -68,7 +68,7 @@ def project_progress(
     )
     if project_id not in allowed:
         raise errors.project_access_denied()
-    return compute(cur, project_id, at or date.today())
+    return compute(cur, project_id, at or clock.today())
 
 
 def compute(cur: Any, project_id: str, at: date) -> ProgressResponse:
@@ -159,7 +159,7 @@ def wbs_schedule(
     )
     if project_id not in allowed:
         raise errors.project_access_denied()
-    return schedule(cur, project_id, at or date.today())
+    return schedule(cur, project_id, at or clock.today())
 
 
 def schedule(cur: Any, project_id: str, at: date) -> WbsScheduleResponse:
@@ -344,7 +344,7 @@ def wbs_deliverables(
     )
     if project_id not in allowed:
         raise errors.project_access_denied()
-    today = at or date.today()
+    today = at or clock.today()
     # 행이 그 계획서 버전에서 왔는지부터 맞춘다. 없으면 파일을 한 번 읽어 남긴다
     plan_row = standard_repo.current_work_product(cur, project_id, PLAN_TYPE)
     _load_plan(cur, project_id, plan_row)
@@ -545,7 +545,7 @@ def _read_plan(
     plan, warning = _load_plan(cur, project_id, plan_row)
     if plan is None:
         return None, warning
-    return wbs.progress(plan, at or date.today()), None
+    return wbs.progress(plan, at or clock.today()), None
 
 
 def _plan_path(project_id: str, plan_row: dict[str, Any]) -> Path | None:

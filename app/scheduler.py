@@ -21,13 +21,13 @@ import logging
 from dataclasses import dataclass
 from datetime import UTC, date, datetime, time, timedelta
 from typing import Any
-from zoneinfo import ZoneInfo
 
+from app.common import clock
 from app.db import fetch_all, tx
 
 log = logging.getLogger(__name__)
 
-LOCAL_TZ = ZoneInfo("Asia/Seoul")
+LOCAL_TZ = clock.PROJECT_TZ  # 화면·직접 조회의 "오늘" 과 같은 시간대(점검 TIME-01)
 TICK_SECONDS = 60
 SYNC_INTERVAL_OPTIONS = (0, 15, 30, 60, 180, 360, 720, 1440)  # 분. 0 은 수동만
 DEFAULT_SYNC_INTERVAL = 30
