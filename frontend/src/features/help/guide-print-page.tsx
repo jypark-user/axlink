@@ -78,9 +78,11 @@ export function GuidePrintPage(): ReactNode {
     };
   }, []);
 
-  const [settled, setSettled] = useState<Set<string>>(() => new Set());
+  // 그림 경로 → 그려졌는가. 못 그린 그림도 끝난 것으로 센다(그 자리에 안내가 인쇄된다)
+  const [settled, setSettled] = useState<Map<string, boolean>>(() => new Map());
   const onImageSettled = useCallback(
-    (path: string) => setSettled((prev) => (prev.has(path) ? prev : new Set(prev).add(path))),
+    (path: string, ok: boolean) =>
+      setSettled((prev) => (prev.has(path) ? prev : new Map(prev).set(path, ok))),
     [],
   );
 
@@ -92,6 +94,7 @@ export function GuidePrintPage(): ReactNode {
           const files = new Map(entries.map((e) => [e.file, e.slug]));
           const wanted = imagePaths(docs);
           const ready = [...wanted].every((p) => settled.has(p));
+          const missing = [...wanted].filter((p) => settled.get(p) === false).length;
           const title = doc === ALL ? 'AX Link 사용 설명서' : docs[0]?.title;
           const back = doc === ALL ? '/guide' : `/guide/${doc}`;
           return (
@@ -103,9 +106,11 @@ export function GuidePrintPage(): ReactNode {
                   </Link>
                 </Button>
                 <span className="text-muted-foreground text-sm">
-                  {ready
-                    ? '인쇄 창에서 대상을 "PDF로 저장"으로 고르세요.'
-                    : `그림을 불러오는 중 (${settled.size}/${wanted.size})`}
+                  {!ready
+                    ? `그림을 불러오는 중 (${settled.size}/${wanted.size})`
+                    : missing > 0
+                      ? `그림 ${missing}개를 불러오지 못해 그 자리에 안내 문구가 인쇄됩니다. 인쇄 창에서 대상을 "PDF로 저장"으로 고르세요.`
+                      : '인쇄 창에서 대상을 "PDF로 저장"으로 고르세요.'}
                 </span>
                 <Button className="ml-auto" disabled={!ready} onClick={() => window.print()}>
                   <FileDown className="size-4" /> PDF로 저장
