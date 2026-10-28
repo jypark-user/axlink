@@ -8,7 +8,8 @@ import { assetPathOf, routeOf, splitAnchor } from '@/features/help/guide-links';
 /**
  * 문서 안 화면 캡처. 그림 API 도 로그인이 필요해 img 에 주소를 바로 걸 수 없다. 토큰을 실어
  * 받아 잠시 쓰는 주소로 그린다. 대체 글은 그림 아래 설명으로도 보인다.
- * onSettled 는 그림을 다 받았거나 못 받았을 때 한 번 부른다(인쇄 화면이 기다린다).
+ * onSettled 는 그림이 그려졌거나(ok) 못 그렸을 때 부른다(인쇄 화면이 기다린다). 받기는 됐는데
+ * 그림을 해석하지 못한 경우(손상된 파일)도 못 그린 것이다. 그 자리에는 안내 문구가 남는다.
  */
 function GuideImage({
   src,
@@ -17,7 +18,7 @@ function GuideImage({
 }: {
   src?: string;
   alt?: string;
-  onSettled?: (path: string) => void;
+  onSettled?: (path: string, ok: boolean) => void;
 }): ReactNode {
   const path = src ? assetPathOf(src) : null;
   const [url, setUrl] = useState<string | null>(null);
@@ -34,7 +35,7 @@ function GuideImage({
       .catch(() => {
         if (alive) {
           setFailed(true);
-          onSettled?.(path);
+          onSettled?.(path, false);
         }
       });
     return () => {
@@ -42,14 +43,18 @@ function GuideImage({
       if (href) URL.revokeObjectURL(href);
     };
   }, [path, onSettled]);
-  const shown = path ? url : (src ?? null);
+  const shown = failed ? null : path ? url : (src ?? null);
   return (
     <span className="my-2 block break-inside-avoid">
       {shown ? (
         <img
           src={shown}
           alt={alt ?? ''}
-          onLoad={() => path && onSettled?.(path)}
+          onLoad={() => path && onSettled?.(path, true)}
+          onError={() => {
+            setFailed(true);
+            if (path) onSettled?.(path, false);
+          }}
           className="border-border block max-w-full rounded-md border"
         />
       ) : (
@@ -88,7 +93,7 @@ export function GuideMarkdown({
   markdown: string;
   /** 설명서 파일 이름 → 주소 이름. GET /api/help 목차에서 만든다 */
   files: Map<string, string>;
-  onImageSettled?: (path: string) => void;
+  onImageSettled?: (path: string, ok: boolean) => void;
 }): ReactNode {
   return (
     <Markdown
