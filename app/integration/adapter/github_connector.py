@@ -292,7 +292,7 @@ def fetch_file(
         if meta.get("type") != "file":
             raise errors.ApiError(400, "TOOL_NOT_FOUND", f"파일이 아닙니다: {path}")
 
-        blob = _file_bytes(client, headers, meta)
+        blob = _file_bytes(client, headers, _repo_url(base_url, target_resource), meta)
         return {
             "path": meta.get("path", path),
             "sha": meta.get("sha"),
@@ -302,18 +302,28 @@ def fetch_file(
         }
 
 
-def _file_bytes(client: httpx.Client, headers: dict[str, str], meta: dict) -> bytes:
-    """1MB 를 넘으면 contents 응답에 본문이 없다. 그때는 download_url 로 받는다."""
+def _file_bytes(
+    client: httpx.Client, headers: dict[str, str], repo_url: str, meta: dict
+) -> bytes:
+    """파일 본문. 1MB 를 넘으면 contents 응답에 본문이 없어서 Git blob API 로 받는다.
+
+    응답의 download_url 은 쓰지 않는다. 다른 호스트를 가리킬 수 있고, 거기에 연결 토큰을
+    실어 보내게 된다(점검 SEC-02). blob 은 연결에 등록한 같은 API 호스트에서 받는다.
+    리다이렉트는 따라가지 않는다(httpx 기본값).
+    """
     encoded = meta.get("content")
     if encoded and meta.get("encoding") == "base64":
         return base64.b64decode(encoded)
-    url = meta.get("download_url")
-    if not url:
+    sha = meta.get("sha")
+    if not sha:
         raise errors.ApiError(502, "TOOL_UNREACHABLE", "파일 본문을 받을 수 없습니다.")
-    res = _get(client, url, headers)
-    if res.status_code >= 400:
+    res = _get(client, f"{repo_url}/git/blobs/{sha}", headers)
+    if res.status_code != 200:
         raise errors.ApiError(502, "TOOL_UNREACHABLE", f"파일 내려받기 실패 {res.status_code}")
-    return res.content
+    blob = res.json()
+    if blob.get("encoding") != "base64" or blob.get("content") is None:
+        raise errors.ApiError(502, "TOOL_UNREACHABLE", "파일 본문 형식을 읽을 수 없습니다.")
+    return base64.b64decode(blob["content"])
 
 
 def _external_id(kind: str, item: dict) -> str:
