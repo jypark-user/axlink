@@ -160,13 +160,16 @@ def _allowed(cur: Any, principal: AuthPrincipal) -> list[str]:
 
 
 def _load(cur: Any, principal: AuthPrincipal, dashboard_id: str) -> dict[str, Any]:
-    """열람 가능한 대시보드 행. 사업 대시보드는 사업 접근으로, 개인 대시보드는 소유로 판단한다."""
+    """열람 가능한 대시보드 행. 사업에 묶인 대시보드는 사업 접근으로, 사업 없는 개인 대시보드는
+    소유로 판단한다. 만든 사람이라도 그 사업에서 빠졌으면 열지 못한다(점검 6절)."""
     row = repo.find_dashboard(cur, dashboard_id)
     if row is None:
         raise errors.not_found("dashboard", dashboard_id)
-    if str(row["owner_user_id"]) == principal.user_id:
+    if row["project_id"] is None:
+        if str(row["owner_user_id"]) != principal.user_id:
+            raise errors.project_access_denied()
         return row
-    if row["project_id"] is None or str(row["project_id"]) not in _allowed(cur, principal):
+    if str(row["project_id"]) not in _allowed(cur, principal):
         raise errors.project_access_denied()
     return row
 
