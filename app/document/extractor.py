@@ -2,8 +2,14 @@
 
 파일럿의 Tika(Java) 자리다. 형식마다 라이브러리가 다르지만 결과 모양은 하나로 맞춘다.
 표는 전부 마크다운으로 낸다(ARC-001 6절 · RSK-010 으로 검증).
+
+올린 파일 크기(50MB)만으로는 파서가 쓰는 메모리·시간을 묶지 못한다. 압축 형식(DOCX·XLSX·PPTX·
+HWPX)은 풀린 크기가 수십 배가 될 수 있다. 그래서 열기 전에 압축 목록을 보고 풀린 총량·배율·
+항목 수가 상한을 넘으면 읽지 않는다. XLSX 는 행을 흘려 읽고 행 수에, PDF 는 쪽 수에 상한을 둔다
+(점검 RES-02). 파서를 별도 프로세스로 떼거나 처리 시간에 상한을 두는 일은 하지 않았다.
 """
 
+import zipfile
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -20,6 +26,19 @@ MIME_BY_EXT = {
     "MD": "text/markdown",
     "TXT": "text/plain",
 }
+
+
+# 압축 형식 상한. 실제 산출물(수 MB, 항목 수백 개, 배율 10배 안팎)보다 넉넉하게 잡았다
+ZIP_EXTS = frozenset({"DOCX", "XLSX", "PPTX", "HWPX"})
+MAX_UNZIPPED_BYTES = 500 * 1024 * 1024
+MAX_ZIP_ENTRIES = 10_000
+MAX_ZIP_RATIO = 200  # 풀린 크기 / 압축 크기. 1MB 이하로 풀리는 파일은 보지 않는다
+MAX_XLSX_ROWS = 200_000  # 시트를 합친 값 있는 행
+MAX_PDF_PAGES = 2_000
+
+
+class LimitError(ValueError):
+    """파일이 처리 상한을 넘었다. 메시지가 그대로 문서의 처리 실패 이유가 된다."""
 
 
 @dataclass
@@ -52,7 +71,33 @@ def extract(path: Path, ext: str) -> ExtractResult:
     }.get(ext.upper())
     if handler is None:
         raise ValueError(f"지원하지 않는 형식입니다: {ext}")
+    if ext.upper() in ZIP_EXTS:
+        check_zip(path)
     return handler(path)
+
+
+def check_zip(path: Path) -> None:
+    """압축을 풀기 전에 목록만 보고 상한을 넘는지 본다. 넘으면 LimitError."""
+    try:
+        with zipfile.ZipFile(path) as z:
+            infos = z.infolist()
+    except zipfile.BadZipFile as exc:
+        raise ValueError("파일이 손상됐거나 형식이 확장자와 다릅니다.") from exc
+    if len(infos) > MAX_ZIP_ENTRIES:
+        raise LimitError(
+            f"파일 안 항목이 너무 많습니다({len(infos):,}개, 상한 {MAX_ZIP_ENTRIES:,}개)."
+        )
+    unpacked = sum(i.file_size for i in infos)
+    packed = max(1, sum(i.compress_size for i in infos))
+    if unpacked > MAX_UNZIPPED_BYTES:
+        raise LimitError(
+            f"압축을 풀면 너무 큽니다({unpacked // 1024 // 1024:,}MB, "
+            f"상한 {MAX_UNZIPPED_BYTES // 1024 // 1024:,}MB)."
+        )
+    if unpacked > 1024 * 1024 and unpacked / packed > MAX_ZIP_RATIO:
+        raise LimitError(
+            f"압축 배율이 비정상적으로 큽니다({unpacked // packed:,}배, 상한 {MAX_ZIP_RATIO}배)."
+        )
 
 
 def _hwp5(path: Path) -> ExtractResult:
@@ -83,20 +128,30 @@ def _docx(path: Path) -> ExtractResult:
 def _xlsx(path: Path) -> ExtractResult:
     from openpyxl import load_workbook
 
-    wb = load_workbook(path, data_only=True)
-    parts, sheets = [], 0
-    for name in wb.sheetnames:
-        rows = [
-            ["" if c.value is None else str(c.value) for c in row]
-            for row in wb[name].iter_rows()
-            if any(c.value is not None for c in row)
-        ]
-        if not rows:
-            continue
-        sheets += 1
-        # 시트 이름을 표제로 남긴다 — 청킹이 이걸 원문 위치로 쓴다.
-        parts.append(f"## 시트: {name}\n\n{markdown_table(rows)}")
-    return ExtractResult("\n\n".join(parts), sheets)
+    # read_only 는 행을 흘려 읽는다. 시트 전체를 메모리에 올리지 않는다
+    wb = load_workbook(path, data_only=True, read_only=True)
+    parts, sheets, total, cut = [], 0, 0, False
+    try:
+        for name in wb.sheetnames:
+            rows = []
+            for row in wb[name].iter_rows(values_only=True):
+                if all(v is None for v in row):
+                    continue
+                if total >= MAX_XLSX_ROWS:
+                    cut = True
+                    break
+                rows.append(["" if v is None else str(v) for v in row])
+                total += 1
+            if rows:
+                sheets += 1
+                # 시트 이름을 표제로 남긴다 — 청킹이 이걸 원문 위치로 쓴다.
+                parts.append(f"## 시트: {name}\n\n{markdown_table(rows)}")
+            if cut:
+                break
+    finally:
+        wb.close()
+    warning = f"행이 많아 앞 {MAX_XLSX_ROWS:,}행만 읽었습니다." if cut else ""
+    return ExtractResult("\n\n".join(parts), sheets, warning=warning)
 
 
 def _pdf(path: Path) -> ExtractResult:
@@ -110,7 +165,7 @@ def _pdf(path: Path) -> ExtractResult:
     pages, found, table_count = [], False, 0
     with pdfplumber.open(path) as pdf:
         page_count = len(pdf.pages)
-        for i, page in enumerate(pdf.pages, 1):
+        for i, page in enumerate(pdf.pages[:MAX_PDF_PAGES], 1):
             chunks, tables_found = _pdf_page(page)
             table_count += tables_found
             found = found or bool(chunks)
@@ -120,6 +175,8 @@ def _pdf(path: Path) -> ExtractResult:
                 pages.append(f"<!-- {i}쪽 --> 텍스트 없음")
     # 스캔본은 페이지는 있는데 글자가 하나도 안 나온다. OCR 은 범위 밖이라 판별만 한다.
     warning = "" if found else "텍스트가 추출되지 않았습니다 — 스캔 이미지 PDF 로 보입니다."
+    if page_count > MAX_PDF_PAGES:
+        warning = f"쪽이 많아 앞 {MAX_PDF_PAGES:,}쪽만 읽었습니다. {warning}".strip()
     return ExtractResult("\n\n".join(pages), table_count, page_count=page_count, warning=warning)
 
 

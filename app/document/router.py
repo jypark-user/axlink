@@ -54,7 +54,8 @@ def upload_document(
 ) -> DocumentUploadResponse:
     """접수만 한다. 추출·색인·초안은 작업자가 뒤에서 한다(GH-121). 동기 함수라 FastAPI 가
     스레드에서 돌린다. async 로 두고 안에서 막히는 일을 하면 API 전체가 멈춘다."""
-    content = file.file.read()
+    # 상한까지만 읽는다. 넘는 파일을 통째로 메모리에 올리지 않는다(넘으면 service 가 거절한다)
+    content = file.file.read(service.MAX_BYTES + 1)
     with tx() as cur:
         return service.upload(
             cur, principal, project_id, file.filename or "", content, wbs_id=wbsId
