@@ -9,7 +9,7 @@ fetch:  BACKFILL 이 항목종류별로 페이지를 돌며 원본을 가져온�
 """
 
 import base64
-from collections.abc import Iterator
+from collections.abc import Generator, Iterator
 from datetime import UTC, datetime
 from typing import Any
 
@@ -17,9 +17,10 @@ import httpx
 
 from app.common import errors
 from app.config import settings
-from app.integration.port import ProbeResult
+from app.integration.port import PageResult, ProbeResult
 
 _API_VERSION = "2022-11-28"
+_EPOCH = datetime(1970, 1, 1, tzinfo=UTC)
 
 # 항목종류 → 저장소 하위 경로. 프로브·수집이 같은 정의를 쓴다.
 ITEM_PATHS = {
@@ -103,10 +104,22 @@ def _iso_z(moment: datetime) -> str:
     return moment.astimezone(UTC).strftime("%Y-%m-%dT%H:%M:%SZ")
 
 
+def _parse_z(stamp: str) -> datetime:
+    return datetime.strptime(stamp, "%Y-%m-%dT%H:%M:%SZ").replace(tzinfo=UTC)
+
+
+def _stamp(kind: str, item: dict) -> str | None:
+    """정렬·필터 기준 시각. 커밋은 committer 날짜(since·until 필터가 이것을 본다)."""
+    if kind == "commit":
+        commit = item.get("commit") or {}
+        return (commit.get("committer") or commit.get("author") or {}).get("date")
+    return item.get("updated_at")
+
+
 def fetch_items(
     base_url: str, target_resource: str, token: str, kind: str, per_page: int, max_pages: int,
-    since: datetime | None = None,
-) -> Iterator[tuple[str, dict]]:
+    since: datetime | None = None, until: datetime | None = None,
+) -> Generator[tuple[str, dict], None, PageResult | None]:
     """항목종류 하나를 페이지 단위로 가져온다. (external_id, payload) 를 순서대로 낸다.
 
     denied 는 예외로 올린다 — 호출부가 부분 실패로 기록하고 다음 종류로 넘어간다.
@@ -116,14 +129,18 @@ def fetch_items(
     PR 목록에는 그런 필터가 없어 갱신 내림차순으로 받다가 경계에서 끊는다.
     마일스톤은 갱신 필터도 정렬도 없고 저장소당 몇 개뿐이라 매번 전부 받는다. 원본이
     같으면 적재 단계가 걸러 낸다.
+
+    max_pages 에 걸려 멈추면 PageResult 를 돌려준다(점검 DATA-01). 이슈는 갱신 오름차순이라
+    마지막으로 읽은 시각부터, 커밋·PR(최신부터)은 못 읽은 오래된 구간을 다음 회차가 읽는다.
     """
     headers = _headers(token)
     if kind == "tree":
         yield from _fetch_tree(base_url, target_resource, headers)
-        return
+        return None
     base = _repo_url(base_url, target_resource) + ITEM_PATHS[kind]
     params = {"per_page": per_page}
     stop_before: str | None = None
+    skip_after = _iso_z(until) if until is not None else None
     if kind in ("issue", "pull_request"):
         params.update(state="all", sort="updated", direction="asc")
     elif kind == "milestone":
@@ -134,7 +151,11 @@ def fetch_items(
         else:  # pull_request
             params["direction"] = "desc"
             stop_before = _iso_z(since)
+    if until is not None and kind == "commit":
+        params["until"] = _iso_z(until)
 
+    first: str | None = None   # 이번에 처음 본 시각
+    last: str | None = None    # 이번에 마지막으로 본 시각
     with httpx.Client(timeout=settings.connector_timeout) as client:
         for page in range(1, max_pages + 1):
             res = _get(client, base, headers, params={**params, "page": page})
@@ -143,20 +164,36 @@ def fetch_items(
                     raise errors.ApiError(429, "TOOL_RATE_LIMITED", "레이트리밋")
                 raise errors.ApiError(403, "TOOL_AUTH", f"{kind} 읽기 권한이 없습니다.")
             if res.status_code == 409:  # 빈 저장소
-                return
+                return None
             if res.status_code >= 400:
                 raise errors.ApiError(502, "TOOL_UNREACHABLE", f"GitHub 오류 {res.status_code}")
             batch = res.json()
             if not isinstance(batch, list) or not batch:
-                return
+                return None
             for item in batch:
+                stamp = _stamp(kind, item)
+                if stamp:
+                    first = first or stamp
+                    last = stamp
                 if kind == "issue" and item.get("pull_request") is not None:
                     continue  # PR 은 /pulls 에서 가져온다
                 if stop_before and (item.get("updated_at") or "") < stop_before:
-                    return  # 경계 이전 갱신분 — 이 뒤로는 전부 이미 가진 것이다
+                    return None  # 경계 이전 갱신분 — 이 뒤로는 전부 이미 가진 것이다
+                newer = (item.get("updated_at") or "") > (skip_after or "~")
+                if kind == "pull_request" and newer:
+                    continue  # 이어 읽는 구간보다 새것. 이번 회차의 다른 범위가 읽는다
                 yield _external_id(kind, item), item
             if len(batch) < per_page:
-                return
+                return None
+    # 상한에 걸렸다. 다 읽은 것이 아니다
+    if not last:
+        return PageResult()
+    descending = kind == "commit" or (kind == "pull_request" and stop_before is not None)
+    if descending:
+        return PageResult(gap=(since or _EPOCH, _parse_z(last)))
+    if kind in ("issue", "pull_request"):
+        return PageResult(resume_since=_parse_z(last))
+    return PageResult()
 
 
 def _html_base(base_url: str) -> str:
@@ -344,9 +381,9 @@ class GitHubConnector:
     def fetch_items(
         self, base_url: str, target: str, secret: str,
         kind: str, per_page: int, max_pages: int,
-        since: datetime | None = None,
-    ) -> Iterator[tuple[str, dict[str, Any]]]:
-        return fetch_items(base_url, target, secret, kind, per_page, max_pages, since)
+        since: datetime | None = None, until: datetime | None = None,
+    ) -> Generator[tuple[str, dict[str, Any]], None, PageResult | None]:
+        return fetch_items(base_url, target, secret, kind, per_page, max_pages, since, until)
 
     def fetch_file(
         self, base_url: str, target: str, secret: str, path: str, ref: str | None = None,

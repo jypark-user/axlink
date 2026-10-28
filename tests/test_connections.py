@@ -217,7 +217,7 @@ def test_backfill_ingests_raw_artifacts(client, as_pm, monkeypatch):
         lambda base, target, tok: github.ProbeResult("jypark-user/axlink", ["issue", "commit"], []),
     )
 
-    def fake_fetch(base, target, tok, kind, per_page, max_pages, since=None):
+    def fake_fetch(base, target, tok, kind, per_page, max_pages, since=None, until=None):
         if kind == "issue":
             yield "issue:1", {"number": 1, "title": "첫 이슈"}
             yield "issue:2", {"number": 2, "title": "둘째 이슈"}
@@ -270,7 +270,7 @@ def test_backfill_tolerates_missing_permission(client, as_pm, monkeypatch):
         lambda base, target, tok: github.ProbeResult("jypark-user/axlink", ["commit"], ["issue"]),
     )
 
-    def fetch_with_denied(base, target, tok, kind, per_page, max_pages, since=None):
+    def fetch_with_denied(base, target, tok, kind, per_page, max_pages, since=None, until=None):
         from app.common import errors
 
         if kind == "issue":
