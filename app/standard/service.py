@@ -25,6 +25,7 @@ from app.standard import (
     mapping_redmine,
     repository,
     requirement_decision,
+    requirement_index,
     work_product_type,
 )
 from app.standard.mapping_rules import MappingRules
@@ -69,25 +70,26 @@ def promote_connection(cur: Any, connection: dict[str, Any], port: EmbeddingPort
             # 예전에 이슈로 만든 요구사항이 있으면 그 이슈는 그 요구사항의 열림·닫힘만 바꾼다
             own = repository.find_requirement_by_source(cur, connection_id, external_id)
             if own is not None:
+                # 요구사항 색인은 이슈 글이 아니라 요구사항 정의로 만든다(_finish_indexing)
                 rec = mapping.to_requirement(payload)
                 repository.update_requirement_evidence(
                     cur, str(own["id"]), connection_id, external_id, rec
                 )
-                row_id, target = str(own["id"]), "REQUIREMENT"
+                target = "REQUIREMENT"
             else:
                 rec = mapping.to_issue(payload)
                 row_id = repository.upsert_issue(cur, project_id, connection_id, external_id, rec)
                 target = "ISSUE"
-            sources.append(
-                indexing.IndexSource(
-                    source_type=target,
-                    source_id=row_id,
-                    project_id=project_id,
-                    title=rec["title"],
-                    body=rec["body"],
-                    uri=rec["external_url"],
+                sources.append(
+                    indexing.IndexSource(
+                        source_type=target,
+                        source_id=row_id,
+                        project_id=project_id,
+                        title=rec["title"],
+                        body=rec["body"],
+                        uri=rec["external_url"],
+                    )
                 )
-            )
         elif kind in ("milestone", "tree", "design_doc"):
             # 원본 보존이 목적이다. 일정 지표(SWFR.PIP.007)와 산출물 판정(ARC-016)이 여기서 읽는다.
             # 저장소 설계 문서는 산출물로 올리지 않는다. 원본이 곧 설계 근거의 출발점이다(ARC-024)
@@ -113,7 +115,7 @@ def promote_connection(cur: Any, connection: dict[str, Any], port: EmbeddingPort
         result.upserted += 1
         result.by_type[target] = result.by_type.get(target, 0) + 1
 
-    return _finish_indexing(cur, port, result, sources)
+    return _finish_indexing(cur, port, result, sources, project_id)
 
 
 def _promote_redmine(
@@ -163,7 +165,7 @@ def _promote_redmine(
         result.upserted += 1
         result.by_type[target] = result.by_type.get(target, 0) + 1
 
-    return _finish_indexing(cur, port, result, sources)
+    return _finish_indexing(cur, port, result, sources, project_id)
 
 
 def _finish_indexing(
@@ -171,7 +173,11 @@ def _finish_indexing(
     port: EmbeddingPort,
     result: PromoteResult,
     sources: list[indexing.IndexSource],
+    project_id: str,
 ) -> PromoteResult:
+    # 사업의 요구사항 색인을 정의대로 맞춘다. 바뀐 것만 임베딩한다. 기준선 확정 때 색인을
+    # 못 했어도 여기서 채워진다(점검 DATA-02)
+    sources = [*sources, *requirement_index.sources(cur, project_id)]
     # 모델이 죽어 있다고 승격까지 되돌리지 않는다. 표준 모델은 남기고 색인만 못 했다고 적는다.
     try:
         indexed = indexing.reindex(cur, port, sources)

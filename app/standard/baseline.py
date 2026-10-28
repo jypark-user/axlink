@@ -21,7 +21,7 @@ from app.common import errors
 from app.document import structuring
 from app.rag import indexing
 from app.standard import baseline_repository as repo
-from app.standard import repository, trace_service
+from app.standard import repository, requirement_index, trace_service
 from app.standard.models import (
     BaselineExisting,
     BaselineItemRequest,
@@ -421,16 +421,12 @@ def confirm(
     label = f"v{row['version']}"
     document_id = str(row["document_upload_id"]) if row["document_upload_id"] else None
     before: dict[str, dict[str, Any]] = {}
-    sources: list[indexing.IndexSource] = []
+    touched: list[str] = []
     for item in items:
         hit = existing.get(item["code"])
         if hit is None:
             rid = repo.insert_requirement(cur, project_id, item, document_id, baseline_id)
             match, applied = "NEW", False
-            sources.append(indexing.IndexSource(
-                source_type="REQUIREMENT", source_id=rid, project_id=project_id,
-                title=f"{item['code']} {item['title']}", body=item["body"],
-            ))
         else:
             rid = str(hit["id"])
             match = "CHANGED" if item["code"] in changed else "SAME"
@@ -450,6 +446,7 @@ def confirm(
             field="baseline", from_value=None, to_value=f"{label} {match}", actor=actor,
         )
         repo.record_item_match(cur, str(item["id"]), rid, match, applied)
+        touched.append(rid)
 
     codes = {i["code"] for i in items}
     missing = [_existing(r).model_dump() for c, r in existing.items() if c not in codes]
@@ -466,11 +463,14 @@ def confirm(
     )
     # 새 코드가 생겼으니 미해결이던 참조가 풀린다. 같은 트랜잭션에서 다시 잇는다
     trace_service.build_project_links(cur, project_id)
-    if sources:
+    # 기준선에 든 요구사항 전부를 확정된 정의로 색인한다. 새 요구사항만이 아니라 명세서 내용을
+    # 적용한 것, 예전에 출처 이슈 글로 색인된 것도 맞춘다. 내용이 같으면 다시 만들지 않는다
+    if touched:
         try:
-            indexing.reindex(cur, embedding_port(), sources)
+            confirmed = requirement_index.sources(cur, project_id, touched)
+            indexing.reindex(cur, embedding_port(), confirmed)
         except errors.ApiError as exc:
             if not exc.code.startswith("AI_"):
                 raise
-            # 색인은 검색용이다. 실패해도 확정은 남긴다. 다음 수집·재색인이 채운다
+            # 색인은 검색용이다. 실패해도 확정은 남긴다. 다음 수집 회차가 채운다
     return _to_response(cur, repo.find(cur, project_id, baseline_id))
