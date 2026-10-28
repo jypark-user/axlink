@@ -58,16 +58,25 @@ FIELDS = [
 ]
 
 
+class GitError(RuntimeError):
+    """git 을 못 읽었다. 빈 출력으로 넘기면 커밋 0건짜리 표가 나오고 검사도 통과한다."""
+
+
 def git(*args: str) -> str:
     """git 출력을 UTF-8 로 읽는다. 로캘에 맡기면 Windows(cp949)에서 깨진다."""
-    proc = subprocess.run(
-        ["git", *args],
-        cwd=ROOT,
-        capture_output=True,
-        check=False,
-        encoding="utf-8",
-        errors="replace",
-    )
+    try:
+        proc = subprocess.run(
+            ["git", *args],
+            cwd=ROOT,
+            capture_output=True,
+            check=False,
+            encoding="utf-8",
+            errors="replace",
+        )
+    except OSError as exc:  # git 이 없거나 경로가 없다
+        raise GitError(f"git {args[0]} 실패: {exc}") from exc
+    if proc.returncode != 0:
+        raise GitError(f"git {args[0]} 실패: {(proc.stderr or '').strip()}")
     return proc.stdout or ""
 
 
@@ -197,7 +206,11 @@ def main() -> int:
 
     titles, tasks = scan_requirements()
     known = set(titles)
-    commits, issues, violations = scan_commits(known)
+    try:
+        commits, issues, violations = scan_commits(known)
+    except GitError as exc:
+        print(f"[오류] {exc}. 추적표를 만들지 않았다.", file=sys.stderr)
+        return 2
     designs, tests, doc_violations = scan_docs(known)
     violations += doc_violations
 
