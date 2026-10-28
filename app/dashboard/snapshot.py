@@ -5,6 +5,10 @@
 
 서버 안 스케줄러(app/scheduler.py)가 사업별 설정 시각에 매일 찍는다. 수동 트리거
 (POST /projects/{id}/snapshots)는 그대로 두어 시연·점검 때 바로 찍을 수 있다.
+
+손으로 찍는 것은 발주기관 담당자와 관리자만, 사업 기준 오늘 날짜만 된다(점검 SNAP-01).
+스냅샷은 찍는 순간의 값을 센다. 과거 날짜로 찍으면 지금 값이 그날 값처럼 남아 추이가 거짓이
+된다. 과거 정정 경로는 두지 않았다. 필요하면 정정 사유와 이전 값을 남기는 경로를 따로 만든다.
 """
 
 from datetime import date
@@ -13,7 +17,7 @@ from typing import Any
 from app.activity import service as activity
 from app.auth import repository as auth_repo
 from app.auth.models import AuthPrincipal
-from app.common import errors
+from app.common import clock, errors
 from app.dashboard import service as progress_service
 from app.dashboard.models import ProgressSnapshotResponse
 from app.db import fetch_all, fetch_one
@@ -27,7 +31,15 @@ def take(
     )
     if project_id not in allowed:
         raise errors.project_access_denied()
-    return take_unchecked(cur, project_id, at or date.today(), actor=principal)
+    if principal.role not in ("CLIENT", "SUPER_ADMIN"):
+        raise errors.ApiError(403, "FORBIDDEN", "발주기관 담당자만 스냅샷을 기록할 수 있습니다.")
+    today = clock.today()
+    if at is not None and at != today:
+        raise errors.validation_failed(
+            f"스냅샷은 오늘({today.isoformat()}) 날짜로만 기록합니다. "
+            "지금 값을 다른 날짜에 남기면 그날 값처럼 보입니다."
+        )
+    return take_unchecked(cur, project_id, today, actor=principal)
 
 
 def list_recent(

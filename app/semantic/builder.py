@@ -16,7 +16,7 @@ from datetime import date
 from typing import Any
 from uuid import UUID
 
-from app.common import errors
+from app.common import clock, errors
 from app.dashboard.widget_template import DEFAULT_LIMIT, fits, is_template, row_cap
 from app.semantic.catalog import Catalog, DimensionDef, FilterDef, MeasureDef, filter_key
 from app.semantic.models import WidgetColumn, WidgetFilter, WidgetOptions, WidgetSpec
@@ -174,7 +174,7 @@ def _cast(definition: FilterDef, value: Any) -> Any:
             raise catalog_error(f"날짜 값이 올바르지 않습니다: {text}") from exc
     if kind == "MONTH_TOKEN":
         if text.lower() == "current":
-            return date.today().replace(day=1)
+            return clock.today().replace(day=1)
         try:
             return date.fromisoformat(f"{text}-01")
         except ValueError as exc:
@@ -306,8 +306,9 @@ def _filter_fragment(bound: BoundFilter, time_col: str, index: int) -> tuple[str
         )
     if op == "LAST_N_DAYS":
         return (
-            f"{column} >= current_date - make_interval(days => %({name})s)",
-            {name: int(values[0])},
+            # DB 의 오늘(current date)은 세션 시간대를 따른다. 사업 기준일을 넘긴다(점검 TIME-01)
+            f"{column} >= %({name}_today)s::date - make_interval(days => %({name})s)",
+            {name: int(values[0]), f"{name}_today": clock.today()},
         )
     raise catalog_error(f"지원하지 않는 filter op: {op}")
 

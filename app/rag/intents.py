@@ -8,9 +8,8 @@ dashboard.compute 와 일별 스냅샷에서 온다. 메뉴와 답의 수치가 
 from dataclasses import dataclass, field
 from datetime import UTC, date, datetime, timedelta
 from typing import Any
-from zoneinfo import ZoneInfo
 
-from app.common import korean
+from app.common import clock, korean
 from app.dashboard import service as progress_service
 from app.db import fetch_all, fetch_one
 from app.rag import blocks
@@ -40,7 +39,6 @@ MAX_PROJECTS = 5
 TABLE_ROWS = 20
 PROMPT_ROWS = 10
 
-_SEOUL = ZoneInfo("Asia/Seoul")
 
 # 계획선은 실제 계획값이 아니다. 답에 늘 함께 보인다. 숫자를 넣지 않는다(검문 근거가 흐려진다)
 PLAN_FORMULA = (
@@ -89,7 +87,7 @@ class IntentResult:
 
 
 def today() -> date:
-    return datetime.now(_SEOUL).date()
+    return clock.today()
 
 
 def run(

@@ -10,6 +10,7 @@ from typing import Annotated
 from fastapi import APIRouter, Query
 
 from app.auth.deps import Principal
+from app.common import clock
 from app.dashboard import completion, service, snapshot
 from app.dashboard.models import (
     CompletionSummaryResponse,
@@ -33,7 +34,7 @@ def wbs_completion(
     """보고 진척률과 완료 확인율, 작업별 근거 사실(ARC-019). 시맨틱 지표와 같은 뷰를 읽는다."""
     with tx() as cur:
         service.require_project(cur, principal, project_id)
-        return CompletionSummaryResponse(**completion.summary(cur, project_id, at or date.today()))
+        return CompletionSummaryResponse(**completion.summary(cur, project_id, at or clock.today()))
 
 
 @router.get("/{project_id}/progress", response_model=ProgressResponse)
@@ -61,9 +62,10 @@ def list_snapshots(
 def take_snapshot(
     project_id: str, principal: Principal, at: BaseDate = None
 ) -> ProgressSnapshotResponse:
-    """일별 스냅샷을 찍는다(SWFR.PIP.005). 같은 날 다시 찍으면 덮어쓴다.
+    """오늘 스냅샷을 찍는다(SWFR.PIP.005). 같은 날 다시 찍으면 덮어쓴다.
 
-    스케줄러는 없다. 운영에서는 이 경로를 하루 한 번 부른다.
+    매일 기록은 스케줄러가 한다. 이 경로는 시연·점검 때 손으로 찍는 용도로, 발주기관 담당자와
+    관리자만 쓴다. at 은 오늘(사업 시간대)만 받는다.
     """
     with tx() as cur:
         return snapshot.take(cur, principal, project_id, at)

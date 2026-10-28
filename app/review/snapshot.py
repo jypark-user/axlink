@@ -7,10 +7,10 @@
 보고·확인 시점에는 같은 함수를 다시 불러 "그때"와 "지금"을 나란히 놓는다(SWFR.WEB.005).
 """
 
-from datetime import date
 from typing import Any
 
 from app.auth.models import AuthPrincipal
+from app.common import clock
 from app.dashboard import completion
 from app.dashboard import service as dashboard_service
 from app.db import fetch_all, fetch_one
@@ -134,7 +134,7 @@ def capture(
         # 근거는 지금 다시 대조한다(저장하지 않음). 저장된 판정은 화면을 연 때의 것이라 낡을
         # 수 있다. 파일 대조·정식 제출·승인은 서로 다른 사실이다. 산출물 항목에 닿지 못하면
         # 제출·승인은 UNKNOWN 으로 남긴다(completion.facts_from)
-        check = dashboard_service.judge_deliverables(cur, project_id, date.today())
+        check = dashboard_service.judge_deliverables(cur, project_id, clock.today())
         judged = next((j for j in check.judgements if j.wbs_id == target_key), None)
         facts = completion.facts_from(cur, judged, check.tree_sha)
         item = completion.current_item(cur, project_id, wbs_id=target_key)
