@@ -1,6 +1,6 @@
 """요구사항 상태의 출처 표시 (SWFR.WEB.001).
 
-GitHub 이슈를 닫으면 요구사항이 IMPLEMENTED 가 된다(mapping.to_requirement). 그건 원천 이슈가
+GitHub 이슈를 닫으면 요구사항이 IMPLEMENTED 가 된다(mapping.to_requirement). 그건 출처 이슈가
 닫혔다는 사실이지 구현·검증을 확인했다는 뜻이 아니다. 화면과 AI 표가 그 사실대로 부르는지,
 그리고 다른 출처의 같은 상태까지 GitHub 닫힘으로 부르지 않는지 본다.
 """
@@ -102,6 +102,6 @@ def test_AI_요구사항_표도_GitHub_닫힘만_그렇게_부른다(mixed_requi
         table = entity_table.build(cur, "REQUIREMENT", entity_table.ALL, [PID], 500)
     assert table is not None
     status = {r.values["title"]: r.values["status"] for r in table.data.rows}
-    assert status["출처 시험 gh_closed"] == "원천 이슈 닫힘(구현·검증 완료를 뜻하지 않음)"
+    assert status["출처 시험 gh_closed"] == "출처 이슈 닫힘(구현 확인 아님)"
     assert status["출처 시험 manual"] == "IMPLEMENTED"
     assert status["출처 시험 gh_open"] == "DEFINED"

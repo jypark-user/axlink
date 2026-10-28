@@ -578,7 +578,7 @@ export interface StatusCount {
   count: number;
 }
 
-/** 원천 하나의 이슈 상태. connectionId 가 null 이면 원천 연결 없이 들어온 요구사항 묶음이다. */
+/** 연결 하나의 출처 이슈 상태. connectionId 가 null 이면 출처 이슈가 없는 요구사항 묶음이다. */
 export interface SourceStateSummary {
   connectionId: string | null;
   tool: string;
@@ -595,7 +595,7 @@ export interface RequirementSummaryResponse {
   /** VERIFIED · ACCEPTED */
   verified: number;
   notVerified: number;
-  /** IMPLEMENTED 중 GitHub 원천 이슈가 닫혀서 붙은 건수. 구현·검증 완료를 뜻하지 않는다. */
+  /** IMPLEMENTED 중 출처 이슈가 닫혀서 붙은 건수. 실제 구현을 확인한 것은 아니다. */
   implementedFromSourceClosed: number;
   /** total 이 0 이면 null */
   verifiedRate: number | null;
@@ -640,7 +640,7 @@ export interface TraceabilityRowResponse {
   /** 근거가 정한 상태. 지정이 없으면 requirementStatus 와 같다 */
   requirementEvidenceStatus: RequirementStatus | null;
   requirementDecision: RequirementDecision | null;
-  /** 원천 이슈 상태. 수집한 원천 기록에서 읽는다. 원천 연결이 없으면 NONE. 내부 상태와 따로다. */
+  /** 출처 이슈 상태(명세서 전에 이슈로 만든 요구사항만). 출처 이슈가 없으면 NONE. 요구사항 상태와 따로다. */
   sourceState: SourceState;
   designs: TraceCell[];
   implementsList: TraceCell[];
@@ -1755,12 +1755,6 @@ export interface BaselineParent {
   children: string[];
 }
 
-export interface BaselineConnection {
-  id: string;
-  name: string;
-  tool: ToolKind;
-}
-
 export interface BaselineResponse {
   id: string;
   version: number;
@@ -1782,8 +1776,6 @@ export interface BaselineResponse {
   counts: Record<BaselineMatch, number>;
   /** 기존 요구사항 중 명세서에 없는 코드. 지우지 않고 기준선 밖으로 둔다 */
   missing: BaselineExisting[];
-  /** 확정하면 요구사항 생성을 끌 연결(확정 뒤에는 끈 연결) */
-  connections: BaselineConnection[];
   parents: BaselineParent[];
 }
 
@@ -1795,7 +1787,6 @@ export interface BaselineStateResponse {
   workingStatus: BaselineStatus | null;
   requirementCount: number;
   outsideBaselineCount: number;
-  creatingConnections: BaselineConnection[];
   unresolvedCodeCount: number;
 }
 

@@ -1,8 +1,8 @@
-"""요구사항 기준선 1단계 (GH-139, SWFR.PIP.002, ARC-028).
+"""요구사항 기준선 1단계 (GH-139, SWFR.PIP.002, ARC-028, ARC-030).
 
 명세서 등록 → 추출 결과 정리 → 용역사 제출 → 발주기관 확정. 확정 전 목록은 요구사항으로
-보이지 않고, 확정은 기존 요구사항을 코드로 이어 ID·링크·지정·이력을 그대로 둔다. 확정한
-뒤에는 이슈 수집이 요구사항을 만들거나 정의를 덮지 않는다.
+보이지 않고, 확정은 기존 요구사항을 코드로 이어 ID·링크·지정·이력을 그대로 둔다. 이슈 수집은
+요구사항을 만들거나 정의를 덮지 않는다.
 """
 
 import uuid
@@ -15,7 +15,8 @@ from app.common import crypto
 from app.db import fetch_all, fetch_one, tx
 from app.integration import repository as integ_repo
 from app.standard import service as standard
-from tests.conftest import requires_db
+from app.standard import trace_service
+from tests.conftest import requires_db, seed_issue_requirements
 
 PID = "c0000000-0000-4000-8000-000000000001"
 
@@ -35,17 +36,13 @@ def _gh_issue(number: int, title: str, labels: list[str], closed: bool = False,
     }
 
 
-def _connect(cur, name: str = "기준선 시험 저장소", project_id: str = PID,
-             creates: bool = True) -> dict:
-    """creates=True 는 V53 이전부터 있던 연결(요구사항 생성 켜짐)을 흉내 낸다."""
+def _connect(cur, name: str = "기준선 시험 저장소", project_id: str = PID) -> dict:
     cur.execute("select organization_id from app_user where username = 'r3'")
     org = str(cur.fetchone()["organization_id"])
     conn = integ_repo.insert(
         cur, project_id, org, "GITHUB", name, "https://api.github.com",
         f"x/base-{uuid.uuid4().hex[:6]}", crypto.encrypt("k"), "k***", {},
     )
-    cur.execute("update tool_connection set requirement_from_issues = %s where id = %s",
-                (creates, conn["id"]))
     return conn
 
 
@@ -88,47 +85,54 @@ def _cleanup(cur, conn_ids: list[str], codes: list[str], project_id: str = PID) 
 
 
 @requires_db
-def test_문서가_먼저_만든_코드의_요구사항_이슈가_들어와도_수집이_실패하지_않는다():
-    """10-14 에 코드로 추정한 결함(GH-139). 고치기 전에는 uq_requirement__code 위반으로
-    수집 트랜잭션 전체가 실패했다. 문서 행을 그대로 두고 이슈를 원천으로 잇는다."""
+def test_명세서_요구사항과_같은_코드의_이슈는_일반_이슈로_들어와_추적으로_이어진다():
+    """요구사항은 명세서로만 만든다(ARC-030). 같은 코드를 제목에 단 이슈가 들어와도 요구사항의
+    정의와 원천은 그대로고, 이슈는 일반 이슈가 되어 그 코드로 이어진다. 다시 수집해도 같다.
+    (10-14 결함 GH-139: 전에는 이 경우 uq_requirement__code 위반으로 수집 전체가 실패했다)"""
     code = "SWFR.TST.901"
     with tx() as cur:
         conn = _connect(cur)
         cid = str(conn["id"])
     try:
-        with tx() as cur:
-            doc_req = fetch_one(
-                cur,
-                """
-                insert into requirement (project_id, code, title, body, priority, status,
-                                         evidence_status, source_kind)
-                values (%s, %s, '명세서 제목', '명세서 본문', 'MUST', 'DEFINED', 'DEFINED',
-                        'DOCUMENT')
-                returning id
-                """,
-                (PID, code),
-            )["id"]
-            _load(cur, conn, [("issue:31", _gh_issue(
-                31, f"[{code}] 이슈 제목", ["유형: 요구사항"], closed=True, body="이슈 본문"))])
-            _promote(cur, cid)
-            rows = fetch_all(
-                cur, "select * from requirement where project_id = %s and code = %s",
-                (PID, code),
-            )
-        assert len(rows) == 1
-        row = rows[0]
-        assert row["id"] == doc_req
-        # 정의는 문서가 정한다. 이슈는 원천 연결과 근거 상태만 준다
-        assert (row["title"], row["body"]) == ("명세서 제목", "명세서 본문")
-        assert str(row["tool_connection_id"]) == cid and row["external_id"] == "issue:31"
-        assert row["evidence_status"] == "IMPLEMENTED"
-
-        # 다시 수집해도 정의를 이슈 값으로 덮지 않는다
-        with tx() as cur:
-            _promote(cur, cid)
-            again = fetch_one(cur, "select title, body from requirement where id = %s",
-                              (doc_req,))
-        assert (again["title"], again["body"]) == ("명세서 제목", "명세서 본문")
+        for _ in range(2):
+            with tx() as cur:
+                doc_req = fetch_one(cur, "select id from requirement where project_id = %s "
+                                         "and code = %s", (PID, code))
+                if doc_req is None:
+                    doc_req = fetch_one(
+                        cur,
+                        """
+                        insert into requirement (project_id, code, title, body, priority,
+                                                 status, evidence_status, source_kind)
+                        values (%s, %s, '명세서 제목', '명세서 본문', 'MUST', 'DEFINED',
+                                'DEFINED', 'DOCUMENT')
+                        returning id
+                        """,
+                        (PID, code),
+                    )
+                _load(cur, conn, [("issue:31", _gh_issue(
+                    31, f"[{code}] 이슈 제목", ["유형: 요구사항"], closed=True,
+                    body="이슈 본문"))])
+                _promote(cur, cid)
+                trace_service.build_project_links(cur, PID)
+                rows = fetch_all(
+                    cur, "select * from requirement where project_id = %s and code = %s",
+                    (PID, code),
+                )
+                issue = fetch_one(cur, "select id, issue_key from issue "
+                                       "where tool_connection_id = %s", (cid,))
+                link = fetch_one(
+                    cur, "select status from trace_link where from_type = 'ISSUE' "
+                         "and from_id = %s and to_type = 'REQUIREMENT' and to_id = %s",
+                    (issue["id"], doc_req["id"]),
+                )
+            assert len(rows) == 1
+            row = rows[0]
+            assert row["id"] == doc_req["id"]
+            assert (row["title"], row["body"]) == ("명세서 제목", "명세서 본문")
+            assert row["tool_connection_id"] is None and row["evidence_status"] == "DEFINED"
+            assert issue["issue_key"] == "GH-31"
+            assert link == {"status": "ACTIVE"}
     finally:
         with tx() as cur:
             _cleanup(cur, [cid], [code])
@@ -293,8 +297,8 @@ def test_신규_사업은_등록_정리_제출_확정을_거쳐서만_요구사�
 
 
 @requires_db
-def test_새_연결은_이슈에서_요구사항을_만들지_않는다(client, client_token, clean):
-    """화면·API 로 만든 연결은 꺼진 채로 시작한다. 요구사항 라벨 이슈는 일반 이슈로 간다."""
+def test_요구사항_라벨이_붙은_이슈도_일반_이슈로_들어온다(client, client_token, clean):
+    """예전 요구사항 라벨·제목 꼴의 이슈를 받아도 요구사항이 되지 않는다."""
     pm = _auth(client_token("r3"))
     res = client.post(f"/api/projects/{PID}/connections", headers=pm, json={
         "tool": "GITHUB", "name": "새 저장소", "baseUrl": "https://api.github.com",
@@ -307,7 +311,6 @@ def test_새_연결은_이슈에서_요구사항을_만들지_않는다(client, 
     clean["codes"].append("SWFR.TST.501")
     with tx() as cur:
         conn = integ_repo.find_by_id(cur, cid)
-        assert conn["requirement_from_issues"] is False
         _load(cur, conn, [("issue:7", _gh_issue(7, "[SWFR.TST.501] 요구사항 라벨",
                                                  ["유형: 요구사항"]))])
         _promote(cur, cid)
@@ -321,18 +324,20 @@ def test_새_연결은_이슈에서_요구사항을_만들지_않는다(client, 
 
 
 def _legacy_project(cur, clean) -> dict:
-    """V53 이전처럼 GitHub 이슈로 요구사항을 만들어 온 사업. 지정·수동 링크·이력이 있다."""
-    conn = _connect(cur, creates=True)
+    """ARC-030 전처럼 GitHub 이슈로 요구사항을 만들어 온 사업. 지정·수동 링크·이력이 있다."""
+    conn = _connect(cur)
     cid = str(conn["id"])
     clean["conns"].append(cid)
     clean["codes"] += ["SWFR.TST.201", "SWFR.TST.202", "SWFR.TST.203", "SWFR.TST.204",
                        "SWFR.TST.205"]
-    _load(cur, conn, [
+    items = [
         ("issue:1", _gh_issue(1, "[SWFR.TST.201] 같은 제목", ["유형: 요구사항"])),
         ("issue:2", _gh_issue(2, "[SWFR.TST.202] 이슈 쪽 제목", ["유형: 요구사항"])),
         ("issue:3", _gh_issue(3, "[SWFR.TST.203] 명세서에 없는 요구사항", ["유형: 요구사항"])),
         ("issue:9", _gh_issue(9, "작업 이슈", ["유형: 작업"])),
-    ])
+    ]
+    _load(cur, conn, items)
+    seed_issue_requirements(cur, PID, cid, items)
     _promote(cur, cid)
     rows = _req_codes(cur)
     a, b = rows["SWFR.TST.201"], rows["SWFR.TST.202"]
@@ -385,7 +390,6 @@ def test_기존_요구사항은_ID_링크_지정_이력을_그대로_두고_기�
     assert changed["existing"]["title"] == "이슈 쪽 제목"
     assert changed["existing"]["source"] == "기준선 시험 저장소"
     assert "SWFR.TST.203" in {m["code"] for m in sub["missing"]}
-    assert legacy["cid"] in {c["id"] for c in sub["connections"]}
 
     # 내용이 같은 코드는 명세서로 바꿀 대상이 아니다. 거절되고 아무것도 안 바뀐다
     bad = client.post(f"{_base()}/{sub['id']}/confirm",
@@ -395,7 +399,6 @@ def test_기존_요구사항은_ID_링크_지정_이력을_그대로_두고_기�
 
     done = client.post(f"{_base()}/{sub['id']}/confirm", json={}, headers=po)
     assert done.status_code == 200, done.text
-    assert [c["id"] for c in done.json()["connections"]] == [legacy["cid"]]
     assert {m["code"] for m in done.json()["missing"]} >= {"SWFR.TST.203"}
 
     with tx() as cur:
@@ -406,8 +409,6 @@ def test_기존_요구사항은_ID_링크_지정_이력을_그대로_두고_기�
         history = fetch_all(
             cur, "select field, to_value from entity_history where entity_id = %s "
             "order by changed_at", (a["id"],))
-        flag = fetch_one(cur, "select requirement_from_issues from tool_connection "
-                              "where id = %s", (legacy["cid"],))
     # ID 그대로, 원천 연결 그대로, 지정 그대로
     assert (a["id"], b["id"], c["id"]) == (
         legacy["a"]["id"], legacy["b"]["id"], legacy["c"]["id"])
@@ -421,7 +422,6 @@ def test_기존_요구사항은_ID_링크_지정_이력을_그대로_두고_기�
     assert manual == {"status": "ACTIVE", "origin": "MANUAL"}
     assert [h["field"] for h in history] == ["status", "baseline"]
     assert history[1]["to_value"] == "v1 SAME"
-    assert flag["requirement_from_issues"] is False
 
 
 @requires_db
@@ -462,7 +462,7 @@ def test_확정_뒤_재수집은_요구사항을_만들거나_정의_지정을_�
             # 확정 뒤 새로 단 요구사항 라벨. 요구사항이 되지 않는다
             ("issue:5", _gh_issue(5, "[SWFR.TST.205] 새 요구사항 이슈", ["유형: 요구사항"])),
         ])
-        result = _promote(cur, legacy["cid"])
+        _promote(cur, legacy["cid"])
         rows = _req_codes(cur)
         new_issue = fetch_one(cur, "select issue_key from issue where tool_connection_id = %s "
                                    "and external_id = 'issue:5'", (legacy["cid"],))
@@ -472,7 +472,6 @@ def test_확정_뒤_재수집은_요구사항을_만들거나_정의_지정을_�
     # 근거 상태는 원천을 따르고, 지정은 그대로다
     assert (a["evidence_status"], a["status"]) == ("IMPLEMENTED", "VERIFIED")
     assert (b["evidence_status"], b["status"]) == ("IMPLEMENTED", "IMPLEMENTED")
-    assert result.requirement_conflicts == 0
 
 
 def _principal(cur, username: str):
@@ -497,10 +496,10 @@ def test_확정_중_실패하면_아무것도_바뀌지_않는다(client, client
         legacy = _legacy_project(cur, clean)
     sub = _submitted(client, pm, legacy["doc"])
 
-    def broken(cur, project_id):
-        raise RuntimeError("연결 설정을 바꾸다 실패")
+    def broken(*args, **kwargs):
+        raise RuntimeError("확정을 적다 실패")
 
-    monkeypatch.setattr(baseline_service.repo, "stop_creating", broken)
+    monkeypatch.setattr(baseline_service.repo, "set_confirmed", broken)
     with pytest.raises(RuntimeError), tx() as cur:
         baseline_service.confirm(cur, _principal(cur, "r2"), PID, sub["id"], [])
     monkeypatch.undo()
@@ -511,13 +510,10 @@ def test_확정_중_실패하면_아무것도_바뀌지_않는다(client, client
                            (sub["id"],))["status"]
         items = fetch_all(cur, "select match_result from requirement_baseline_item "
                                "where baseline_id = %s", (sub["id"],))
-        flag = fetch_one(cur, "select requirement_from_issues from tool_connection "
-                              "where id = %s", (legacy["cid"],))["requirement_from_issues"]
     assert status == "SUBMITTED"
     assert "SWFR.TST.204" not in rows
     assert all(r["baseline_id"] is None for k, r in rows.items() if k.startswith("SWFR.TST."))
     assert {i["match_result"] for i in items} == {None}
-    assert flag is True
     # 다시 확정하면 된다
     assert client.post(f"{_base()}/{sub['id']}/confirm", json={}, headers=po).status_code == 200
 
@@ -531,7 +527,7 @@ def test_없는_요구사항_ID_참조는_잇지_않고_미해결로_보인다(c
 
     po = _auth(client_token("r2"))
     with tx() as cur:
-        conn = _connect(cur, creates=False)
+        conn = _connect(cur)
         cid = str(conn["id"])
         clean["conns"].append(cid)
         clean["codes"].append("SWFR.TST.301")
@@ -587,7 +583,7 @@ def test_명세서의_상위_요구사항을_가리킨_참조는_없는_ID로_�
         "| SWFR.TST.402 | 둘째 항목 | 상위를 적지 않았다 | 필수 |\n"
     )
     with tx() as cur:
-        conn = _connect(cur, creates=False)
+        conn = _connect(cur)
         cid = str(conn["id"])
         clean["conns"].append(cid)
         _load(cur, conn, [("issue:41", _gh_issue(
@@ -677,17 +673,3 @@ def test_다른_사업의_기준선은_보거나_바꿀_수_없다(client, clien
     # 다른 사업의 문서로 우리 사업 기준선을 만들 수 없다
     assert client.post(_base(), json={"documentId": doc}, headers=pm).status_code == 404
     assert client.get(_base()).status_code == 401
-
-
-@requires_db
-def test_수집이_읽는_연결_조회에_생성_설정이_실려_있다(clean):
-    """API·스케줄러는 integ_repo.find_by_id·find_by_project 로 연결을 읽어 수집한다. 이 조회에
-    설정이 없으면 기존 연결도 꺼진 것으로 보여 요구사항 이슈가 일반 이슈로 새어 나간다."""
-    with tx() as cur:
-        on = _connect(cur, name="켜진 연결", creates=True)
-        off = _connect(cur, name="꺼진 연결", creates=False)
-        clean["conns"] += [str(on["id"]), str(off["id"])]
-        assert integ_repo.find_by_id(cur, str(on["id"]))["requirement_from_issues"] is True
-        found = {str(c["id"]): c["requirement_from_issues"]
-                 for c in integ_repo.find_by_project(cur, PID)}
-    assert found[str(on["id"])] is True and found[str(off["id"])] is False

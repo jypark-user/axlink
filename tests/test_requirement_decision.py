@@ -22,7 +22,7 @@ def _auth(token: str) -> dict[str, str]:
 
 @pytest.fixture
 def gh_requirement():
-    """GitHub 에서 열린 요구사항 하나. 수집을 흉내 내려고 upsert_requirement 로 넣는다."""
+    """예전에 GitHub 이슈로 만든 열린 요구사항 하나(ARC-030 전)."""
     with tx() as cur:
         org = fetch_one(cur, "select id from organization where type = 'CONTRACTOR' limit 1")
         conn_id = str(uuid.uuid4())
@@ -35,7 +35,17 @@ def gh_requirement():
             """,
             (conn_id, PID, org["id"]),
         )
-        rid = repository.upsert_requirement(cur, PID, conn_id, "issue:9301", _rec("DEFINED"))
+        rec = _rec("DEFINED")
+        rid = str(fetch_one(
+            cur,
+            """
+            insert into requirement (project_id, title, body, priority, status, evidence_status,
+                                     tool_connection_id, external_id, external_url, source_kind)
+            values (%s, %s, %s, %s, %s, %s, %s, 'issue:9301', %s, 'TOOL') returning id
+            """,
+            (PID, rec["title"], rec["body"], rec["priority"], rec["status"], rec["status"],
+             conn_id, rec["external_url"]),
+        )["id"])
     yield {"id": rid, "connection": conn_id}
     with tx() as cur:
         cur.execute("delete from activity_event where target_key = %s", (rid,))
@@ -52,8 +62,12 @@ def _rec(status: str) -> dict:
 
 
 def _resync(conn_id: str, status: str) -> None:
+    """수집이 다시 돌아 출처 이슈의 열림·닫힘을 읽는다(service.promote_connection 과 같은 길)."""
     with tx() as cur:
-        repository.upsert_requirement(cur, PID, conn_id, "issue:9301", _rec(status))
+        own = repository.find_requirement_by_source(cur, conn_id, "issue:9301")
+        repository.update_requirement_evidence(
+            cur, str(own["id"]), conn_id, "issue:9301", _rec(status)
+        )
 
 
 def _row(rid: str) -> dict:
@@ -102,7 +116,7 @@ def test_수집이_다시_돌아도_지정은_남고_근거만_바뀐다(client,
         headers=_auth(client_token("r2")),
     ).raise_for_status()
 
-    _resync(conn, "IMPLEMENTED")  # 원천 이슈가 닫혔다
+    _resync(conn, "IMPLEMENTED")  # 출처 이슈가 닫혔다
     row = _row(rid)
     assert row["status"] == "ACCEPTED"
     assert row["evidence_status"] == "IMPLEMENTED"
@@ -131,7 +145,7 @@ def test_되돌리면_근거_상태로_돌아가고_그_뒤로는_근거대로_�
     assert res.json()["decision"] is None
     assert res.json()["statusBasis"] == "SOURCE_ISSUE_CLOSED"
 
-    _resync(conn, "DEFINED")  # 원천 이슈를 다시 열었다
+    _resync(conn, "DEFINED")  # 출처 이슈를 다시 열었다
     assert _row(rid)["status"] == "DEFINED"
 
     again = client.post(

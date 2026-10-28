@@ -19,7 +19,7 @@ from app.integration import repository as integ_repo
 from app.project import repository as project_repo
 from app.standard import service as standard
 from app.standard import trace_service
-from tests.conftest import requires_db
+from tests.conftest import requires_db, seed_issue_requirements
 
 PID = "c0000000-0000-4000-8000-000000000001"
 ROOT = Path(__file__).resolve().parent.parent
@@ -73,7 +73,7 @@ class _Fixture:
         org = str(cur.fetchone()["organization_id"])
         conn = integ_repo.insert(
             cur, PID, org, tool, f"trace-{tool}", base_url, target,
-            crypto.encrypt("k"), "k***", {}, requirement_from_issues=True,
+            crypto.encrypt("k"), "k***", {},
         )
         return str(conn["id"])
 
@@ -81,6 +81,8 @@ class _Fixture:
         job = integ_repo.insert_sync_job(cur, cid, "BACKFILL", None, datetime.now(UTC))
         for external_id, kind, payload in items:
             integ_repo.upsert_raw_artifact(cur, cid, external_id, kind, payload, job)
+        # 요구사항 라벨 이슈는 예전처럼 요구사항으로 만들어 둔다(수집은 더 만들지 않는다)
+        seed_issue_requirements(cur, PID, cid, [(e, p) for e, k, p in items if k == "issue"])
 
     def promote(self, cur) -> None:
         for cid in (self.gh, self.rm):

@@ -71,7 +71,7 @@ ENTITIES: dict[str, EntitySpec] = {
         open_clause="e.status not in ('RESOLVED', 'CLOSED')",
         closed_clause="e.status in ('RESOLVED', 'CLOSED')",
         url_expr="e.external_url",
-        scope_note="요구사항으로 분류된 항목 제외",
+        scope_note="예전에 요구사항으로 만든 이슈 제외",
         order_note=(
             "심각도가 지정된 이슈를 심각도 순으로 먼저 두고, 심각도 미지정은 별도 묶음으로 뒤에 "
             "최근 갱신순으로 둔다. 미지정은 위험 등급이 아니다"
@@ -93,7 +93,7 @@ ENTITIES: dict[str, EntitySpec] = {
                 "when e.status = 'IMPLEMENTED' and exists ("
                 "select 1 from tool_connection c where c.id = e.tool_connection_id "
                 "and c.tool = 'GITHUB') "
-                "then '원천 이슈 닫힘(구현·검증 완료를 뜻하지 않음)' else e.status end",
+                "then '출처 이슈 닫힘(구현 확인 아님)' else e.status end",
             ),
         ),
         order_by="e.code nulls last, e.created_at",

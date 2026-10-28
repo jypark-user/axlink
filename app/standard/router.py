@@ -136,7 +136,7 @@ def list_issues(
 ) -> PageResponse[IssueResponse]:
     """일반 이슈 화면. 도구에서 승격된 작업·결함이 여기로 나온다.
 
-    요구사항으로 분류된 원천 이슈는 requirements 로 간다. 여기 없다.
+    명세서 전에 이슈로 만든 요구사항의 출처 이슈는 requirements 쪽이라 여기 없다.
     connectionId 는 사업 안에서만 거른다. 사업 접근 검사는 그대로 먼저 한다.
     """
     with tx() as cur:

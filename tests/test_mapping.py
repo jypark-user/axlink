@@ -26,19 +26,6 @@ _TASK = {
 }
 
 
-def test_requirement_label_routes_to_requirement():
-    assert mapping.classify_issue(_REQUIREMENT) == "REQUIREMENT"
-
-
-def test_task_label_routes_to_issue():
-    assert mapping.classify_issue(_TASK) == "ISSUE"
-
-
-def test_code_in_title_routes_even_without_label():
-    payload = {**_REQUIREMENT, "labels": []}
-    assert mapping.classify_issue(payload) == "REQUIREMENT"
-
-
 def test_requirement_splits_code_from_title():
     rec = mapping.to_requirement(_REQUIREMENT)
     assert rec["code"] == "SWFR.CON.001"

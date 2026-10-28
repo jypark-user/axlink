@@ -35,8 +35,8 @@ import type {
   SourceRef,
 } from '@/types/api';
 
-/** 이 화면이 세는 범위. 요구사항 라벨이 붙은 원천 이슈는 요구사항으로 가서 여기 없다. */
-const GENERAL_ISSUE_SCOPE = '요구사항으로 분류된 항목 제외';
+/** 이 화면이 세는 범위. 명세서 등록 전에 요구사항으로 만든 이슈는 요구사항 화면에 있다. */
+const GENERAL_ISSUE_SCOPE = '수집한 이슈입니다';
 const EMPTY_TEXT = '수집된 일반 이슈가 없습니다. 연동을 붙이면 도구의 이슈가 여기 쌓입니다.';
 const ALL_CONNECTIONS = 'ALL';
 const TOOL_NAME: Record<string, string> = {
@@ -49,7 +49,7 @@ const TOOL_NAME: Record<string, string> = {
 const toolName = (tool: string | null | undefined): string =>
   tool ? (TOOL_NAME[tool] ?? tool) : '-';
 
-/** 원천 번호. 저장소·프로젝트와 같이 적어야 GH-5 가 둘일 때 어느 쪽인지 안다 */
+/** 도구 번호. 저장소·프로젝트와 같이 적어야 GH-5 가 둘일 때 어느 쪽인지 안다 */
 const sourceNumber = (source: SourceRef): string | null => {
   if (!source.number) return null;
   return source.target ? `${source.target} #${source.number}` : `#${source.number}`;
@@ -91,7 +91,7 @@ export function IssuesPage(): ReactNode {
     <>
       <PageHeader
         title="일반 이슈"
-        description={`${GENERAL_ISSUE_SCOPE}. 요구사항은 사업 개요의 요구사항과 추적 화면에서 봅니다.`}
+        description={`${GENERAL_ISSUE_SCOPE}. 예전에 요구사항으로 만든 이슈는 요구사항 화면에서 봅니다.`}
       />
       <div className="@container flex flex-col gap-5">
         {connections.length > 0 && (
@@ -221,7 +221,7 @@ function IssueDetailSheet({
               <DetailRow term="저장소·프로젝트">
                 <span className="font-mono text-xs">{issue.source.target ?? '-'}</span>
               </DetailRow>
-              <DetailRow term="원천 번호">
+              <DetailRow term="도구 번호">
                 <span className="font-mono text-xs">
                   {issue.source.number ? `#${issue.source.number}` : '-'}
                 </span>
@@ -245,7 +245,7 @@ function IssueDetailSheet({
                 {issue.sourcePriority && (
                   <span className="text-muted-foreground">
                     {' '}
-                    · 원천 우선순위 {issue.sourcePriority}
+                    · 도구 우선순위 {issue.sourcePriority}
                   </span>
                 )}
               </DetailRow>
@@ -303,14 +303,14 @@ function buildColumns(): ColumnDef<IssueResponse, unknown>[] {
               {label(row.original.severity)}
             </Badge>
           ) : (
-            // 원천에 심각도가 없다. 낮다는 뜻이 아니다
-            <Badge variant="muted" title="원천에 심각도가 없어 지정하지 않았습니다">
+            // 도구에 심각도가 없다. 낮다는 뜻이 아니다
+            <Badge variant="muted" title="도구에 심각도 값이 없어 비워 두었습니다">
               미지정
             </Badge>
           )}
           {row.original.sourcePriority && (
             <span className="text-muted-foreground text-xs">
-              원천 우선순위 {row.original.sourcePriority}
+              도구 우선순위 {row.original.sourcePriority}
             </span>
           )}
         </div>
@@ -337,7 +337,7 @@ function buildColumns(): ColumnDef<IssueResponse, unknown>[] {
     },
     {
       id: 'source',
-      header: '원천',
+      header: '도구',
       cell: ({ row }) => {
         const source = row.original.source;
         const number = sourceNumber(source);

@@ -26,7 +26,7 @@ export function RequirementStatusBadge({
   return (
     <span
       className="inline-flex flex-col items-start gap-0.5"
-      title="GitHub 이슈가 닫혀 있어 붙은 상태입니다. 구현이나 검증을 확인했다는 뜻은 아닙니다."
+      title="출처 이슈가 닫혀서 붙은 상태입니다. 구현을 확인한 것은 아닙니다."
     >
       <Badge variant="outline">{text}</Badge>
       <span className="text-muted-foreground text-[11px] leading-none">{note}</span>

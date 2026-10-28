@@ -1,8 +1,7 @@
 """GitHub 원본 → 표준 모델 매핑. 순수 함수만 둔다(DB·네트워크 없음).
 
-우리 저장소는 요구사항 41건을 GitHub 이슈로 관리한다(작업 규약 §2). 그래서 이슈가
-두 갈래로 갈린다 — 「유형: 요구사항」 라벨이 붙은 것은 requirement, 나머지는 issue.
-GitHub 만 쓰는 용역업체 케이스가 그대로 여기서 성립한다.
+이슈는 모두 일반 이슈(issue)로 간다. 요구사항은 명세서로만 만든다(ARC-030).
+to_requirement 는 예전에 이슈로 만든 요구사항의 열림·닫힘을 이슈에서 읽을 때만 쓴다.
 """
 
 import re
@@ -31,20 +30,6 @@ def issue_type(payload: dict[str, Any]) -> str | None:
         if matched:
             return matched.group(1).strip()
     return None
-
-
-def classify_issue(payload: dict[str, Any], rules: MappingRules = _DEFAULT_RULES) -> str:
-    """이슈 하나가 표준 모델의 어느 테이블로 갈지 정한다.
-
-    라벨이 1차 근거고, 어떤 라벨이 요구사항인지는 연결별 설정이다(SWFR.CON.002).
-    라벨이 없어도 제목이 [SWFR.xxx.001] 꼴이면 요구사항으로 본다 —
-    라벨 정리가 안 된 저장소에서도 추적 ID 는 제목에 남아 있기 때문이다.
-    """
-    if rules.requirement_label in labels(payload):
-        return "REQUIREMENT"
-    if _CODE_IN_TITLE.match(payload.get("title") or ""):
-        return "REQUIREMENT"
-    return "ISSUE"
 
 
 def to_requirement(payload: dict[str, Any]) -> dict[str, Any]:

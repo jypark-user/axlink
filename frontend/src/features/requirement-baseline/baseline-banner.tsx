@@ -10,7 +10,7 @@ const WORKING_WORD: Record<string, string> = {
   SUBMITTED: '발주기관 확정 대기',
 };
 
-/** 요구사항 화면 머리에 두는 기준선 상태. 미등록·미확정이면 지금 목록이 무엇인지 같이 적는다. */
+/** 요구사항 화면 머리에 두는 기준선 상태. 확정 전이면 지금 목록이 기준선이 아니라고 알린다. */
 export function BaselineBanner({
   projectId,
   state,
@@ -36,9 +36,9 @@ export function BaselineBanner({
             {c.sourceFilename}
             {c.sourceDocVersion ? ` (문서 v${c.sourceDocVersion})` : ''} 기준입니다.
             {state.outsideBaselineCount > 0 &&
-              ` 기준선 밖 요구사항 ${state.outsideBaselineCount}건은 명세서에 없던 기존 항목입니다.`}
+              ` 명세서에 없던 기존 요구사항 ${state.outsideBaselineCount}건은 기준선 밖에 있습니다.`}
             {state.unresolvedCodeCount > 0 &&
-              ` 명세서에 없는 ID 를 가리킨 근거 ${state.unresolvedCodeCount}종이 있습니다.`}
+              ` 커밋·이슈에 요구사항에 없는 ID 가 ${state.unresolvedCodeCount}개 적혀 있습니다.`}
           </AlertDescription>
         </div>
         {link}
@@ -55,9 +55,9 @@ export function BaselineBanner({
         </AlertTitle>
         <AlertDescription>
           {state.requirementCount > 0
-            ? `지금 목록 ${state.requirementCount}건은 확정된 기준선이 아니라 도구 이슈에서 만든 요구사항입니다.`
-            : '확정된 요구사항이 없습니다.'}
-          {working ? ' 명세서 목록은 발주기관이 확정한 뒤 여기에 반영됩니다.' : ''}
+            ? `지금 목록 ${state.requirementCount}건은 확정된 기준선이 아닙니다.`
+            : '명세서를 등록해 요구사항 목록을 만드세요.'}
+          {working ? ' 발주기관이 확정하면 명세서 목록으로 바뀝니다.' : ''}
         </AlertDescription>
       </div>
       {link}

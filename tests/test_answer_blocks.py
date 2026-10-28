@@ -71,8 +71,8 @@ def test_처리_중_이슈만_고르면_닫힌_것은_안_들어온다(issues):
     assert [c.key for c in open_table.data.columns][:2] == ["title", "status"]
     assert "처리 중 일반 이슈" in open_table.title
     # 무엇을 뺀 범위인지 표 설명과 범위 줄이 같이 말한다
-    assert open_table.data.measureLabel == "일반 이슈 (요구사항으로 분류된 항목 제외)"
-    assert "(요구사항으로 분류된 항목 제외)" in open_table.scope_line
+    assert open_table.data.measureLabel == "일반 이슈 (예전에 요구사항으로 만든 이슈 제외)"
+    assert "(예전에 요구사항으로 만든 이슈 제외)" in open_table.scope_line
     # 정렬 기준을 범위 줄에 밝힌다. 미지정은 등급이 아니라 별도 묶음이다(GH-116)
     assert "정렬:" in open_table.scope_line and "별도 묶음" in open_table.scope_line
 

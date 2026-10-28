@@ -12,7 +12,7 @@ import pytest
 from app.common import crypto, errors
 from app.db import tx
 from app.integration import repository as integ_repo
-from app.standard import mapping, mapping_redmine
+from app.standard import mapping_redmine
 from app.standard import service as standard
 from app.standard.mapping_rules import MappingRules
 from tests.conftest import requires_db
@@ -25,7 +25,6 @@ PID = "c0000000-0000-4000-8000-000000000001"
 def test_비어_있으면_기본값이고_기본값은_종전과_같다():
     rules = MappingRules.from_json(None)
     assert rules == MappingRules.from_json({})
-    assert rules.requirement_label == "유형: 요구사항"
     assert rules.risk_tracker == "리스크"
     assert rules.req_id_field == "REQ ID"
 
@@ -44,13 +43,14 @@ def test_모르는_키는_오타로_거절한다():
         MappingRules.from_json({"riskTracker": ""})  # 빈 값
 
 
-# ── 판별이 규칙을 따른다
+def test_예전_요구사항_라벨_키는_받기만_하고_쓰지_않는다():
+    """ARC-030 전 설정에 남은 키. 거절하면 그 연결의 수집이 멈춘다. 저장할 때는 빠진다."""
+    rules = MappingRules.from_json({"requirementLabel": "Requirement", "riskTracker": "위험"})
+    assert rules.risk_tracker == "위험"
+    assert "requirementLabel" not in rules.to_json()
 
-def test_요구사항_라벨을_바꿀_수_있다():
-    payload = {"title": "결제 화면", "labels": [{"name": "Requirement"}]}
-    assert mapping.classify_issue(payload) == "ISSUE"
-    rules = MappingRules.from_json({"requirementLabel": "Requirement"})
-    assert mapping.classify_issue(payload, rules) == "REQUIREMENT"
+
+# ── 판별이 규칙을 따른다
 
 
 def test_리스크_트래커와_REQ_ID_필드를_바꿀_수_있다():
@@ -77,13 +77,13 @@ def test_등록과_변경이_설정으로_된다(client, client_token, monkeypat
     body = {
         "tool": "GITHUB", "name": "규칙 시험", "baseUrl": "https://api.github.com",
         "targetResource": "o/r", "credential": {"accessToken": "t"},
-        "mappingRules": {"requirementLabel": "Requirement"},
+        "mappingRules": {"reqIdField": "요구사항ID"},
     }
     created = client.post(f"/api/projects/{PID}/connections", json=body, headers=_auth(token))
     assert created.status_code == 201, created.text
     cid = created.json()["id"]
     try:
-        assert created.json()["mappingRuleCount"] == 3  # 기본값 포함 전체 저장
+        assert created.json()["mappingRuleCount"] == 2  # 기본값 포함 전체 저장
 
         # 변경 — 코드 수정 없이
         res = client.patch(

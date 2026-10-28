@@ -21,10 +21,10 @@ export type RequirementFilter =
 export const NO_FILTER: RequirementFilter = { kind: 'all' };
 
 const SOURCE_STATE_WORD: Record<SourceState, string> = {
-  OPEN: '원천 이슈 열림',
-  CLOSED: '원천 이슈 닫힘',
-  UNKNOWN: '원천 기록 없음',
-  NONE: '원천 연결 없음',
+  OPEN: '출처 이슈 열림',
+  CLOSED: '출처 이슈 닫힘',
+  UNKNOWN: '출처 이슈 기록 없음',
+  NONE: '출처 이슈 없음',
 };
 
 export function sourceStateWord(state: SourceState): string {
@@ -79,12 +79,12 @@ export function sourceFilter(
   return { kind: 'source', connectionId: s.connectionId, sourceLabel: s.label, state };
 }
 
-/** '구현' 칸에 원천 이슈 닫힘으로 붙은 상태가 몇 건 들었는지. 구현·검증 확인과 구분한다. */
+/** '구현' 칸에 출처 이슈가 닫혀서 붙은 상태가 몇 건 들었는지. 실제 구현 확인과 구분한다. */
 export function implementedNote(n: RequirementSummaryResponse): string {
   const implemented = n.byStatus.find((s) => s.status === 'IMPLEMENTED')?.count ?? 0;
   const head =
     n.implementedFromSourceClosed === implemented
       ? `구현 ${implemented}건은 모두`
       : `구현 ${implemented}건 중 ${n.implementedFromSourceClosed}건은`;
-  return `${head} GitHub 원천 이슈가 닫혀서 붙은 상태입니다. 구현·검증 완료를 뜻하지 않습니다.`;
+  return `${head} 출처 이슈가 닫혀서 '구현'이 된 것입니다. 실제 구현을 확인한 것은 아닙니다.`;
 }

@@ -16,7 +16,7 @@ from app.db import fetch_one, tx
 from app.integration import repository as integ_repo
 from app.standard import repository, trace_service
 from app.standard import service as standard
-from tests.conftest import requires_db
+from tests.conftest import requires_db, seed_issue_requirements
 
 PID = "c0000000-0000-4000-8000-000000000001"
 
@@ -62,6 +62,7 @@ class _Sources:
     def __init__(self) -> None:
         self.ids: dict[str, str] = {}
         self.repo: dict[str, str] = {}
+        self.project: dict[str, str] = {}
         self.extra_projects: list[str] = []
 
     def connect(self, cur, key: str, tool: str, name: str, target: str, base_url: str,
@@ -70,10 +71,11 @@ class _Sources:
         org = str(cur.fetchone()["organization_id"])
         conn = integ_repo.insert(
             cur, project_id, org, tool, name, base_url, target,
-            crypto.encrypt("k"), "k***", {}, requirement_from_issues=True,
+            crypto.encrypt("k"), "k***", {},
         )
         self.ids[key] = str(conn["id"])
         self.repo[key] = target
+        self.project[key] = project_id
         return self.ids[key]
 
     def load(self, cur, key: str, items: list[tuple[str, str, dict]]) -> None:
@@ -81,6 +83,10 @@ class _Sources:
         job = integ_repo.insert_sync_job(cur, cid, "BACKFILL", None, datetime.now(UTC))
         for external_id, kind, payload in items:
             integ_repo.upsert_raw_artifact(cur, cid, external_id, kind, payload, job)
+        # 요구사항 라벨 이슈는 예전처럼 요구사항으로 만들어 둔다(수집은 더 만들지 않는다)
+        seed_issue_requirements(
+            cur, self.project.get(key, PID), cid, [(e, p) for e, k, p in items if k == "issue"]
+        )
         now = datetime.now(UTC)
         integ_repo.finish_sync_job(cur, job, "SUCCEEDED", {}, now, now)  # 다시 받을 수 있게
 

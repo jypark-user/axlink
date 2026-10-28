@@ -20,51 +20,6 @@ _SOURCE_CONFLICT = """
 """
 
 
-# 정의(코드·제목·본문·중요도)를 명세서가 정한 행은 수집이 덮지 않는다. 문서에서 온 행과
-# 기준선에 든 행이 그렇다(GH-139). 이슈는 원천 연결과 근거 상태만 준다
-_DEFINED_ELSEWHERE = "(requirement.source_kind = 'DOCUMENT' or requirement.baseline_id is not null)"
-
-
-def _keep_definition(column: str) -> str:
-    return (
-        f"{column} = case when {_DEFINED_ELSEWHERE} then requirement.{column} "
-        f"else excluded.{column} end"
-    )
-
-
-def upsert_requirement(
-    cur: Any, project_id: str, connection_id: str, external_id: str, rec: dict[str, Any]
-) -> str:
-    row = fetch_one(
-        cur,
-        f"""
-        insert into requirement
-          (project_id, code, title, body, priority, status, evidence_status, assignee,
-           source_created_at, source_updated_at,
-           tool_connection_id, external_id, external_url, source_kind)
-        values (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, 'TOOL')
-        {_SOURCE_CONFLICT}
-        do update set
-           {_keep_definition("code")}, {_keep_definition("title")},
-           {_keep_definition("body")}, {_keep_definition("priority")},
-           -- 수집은 근거 상태만 바꾼다. 발주기관 지정이 있으면 지금 상태는 지정대로 둔다(ARC-025)
-           evidence_status = excluded.evidence_status,
-           status = coalesce(requirement.decided_status, excluded.evidence_status),
-           assignee = excluded.assignee,
-           source_created_at = excluded.source_created_at,
-           source_updated_at = excluded.source_updated_at,
-           external_url = excluded.external_url, updated_at = now()
-        returning id
-        """,
-        (
-            project_id, rec["code"], rec["title"], rec["body"], rec["priority"], rec["status"],
-            rec["status"], rec["assignee"], rec["source_created_at"], rec["source_updated_at"],
-            connection_id, external_id, rec["external_url"],
-        ),
-    )
-    return str(row["id"])
-
-
 def find_requirement_by_source(
     cur: Any, connection_id: str, external_id: str
 ) -> dict[str, Any] | None:
@@ -76,23 +31,12 @@ def find_requirement_by_source(
     )
 
 
-def find_requirement_by_code(cur: Any, project_id: str, code: str) -> dict[str, Any] | None:
-    return fetch_one(
-        cur,
-        "select id, code, tool_connection_id, external_id from requirement "
-        "where project_id = %s and code = %s",
-        (project_id, code),
-    )
-
-
 def update_requirement_evidence(
     cur: Any, requirement_id: str, connection_id: str, external_id: str, rec: dict[str, Any]
 ) -> None:
-    """이슈를 요구사항의 원천으로 잇고 근거 상태만 바꾼다. 정의는 건드리지 않는다.
-
-    문서로 먼저 만든 같은 코드의 행에 이슈를 붙일 때와, 이슈에서 요구사항을 만들지 않는
-    연결(기준선 확정 뒤)이 이미 이어진 요구사항을 갱신할 때 쓴다.
-    """
+    """예전에 이슈로 만든 요구사항(ARC-030 전)을 그 이슈의 열림·닫힘에 맞춘다.
+    근거 상태만 바꾸고 정의(코드·제목·본문·중요도)는 건드리지 않는다. 발주기관이 지정한
+    상태가 있으면 지금 상태는 지정대로 둔다(ARC-025)."""
     cur.execute(
         """
         update requirement
@@ -107,15 +51,6 @@ def update_requirement_evidence(
             rec["source_created_at"], rec["source_updated_at"], requirement_id,
         ),
     )
-
-
-def has_confirmed_baseline(cur: Any, project_id: str) -> bool:
-    row = fetch_one(
-        cur,
-        "select 1 as x from requirement_baseline where project_id = %s and status = 'CONFIRMED'",
-        (project_id,),
-    )
-    return row is not None
 
 
 def upsert_issue(
@@ -452,7 +387,7 @@ _REQUIREMENT_COLUMNS = """
          and tl.link_kind = 'TESTS' and tl.status = 'ACTIVE'
     ) as trace_complete
 """
-# 원천 이슈 상태는 수집한 원천 기록에서 읽는다. 내부 상태(IMPLEMENTED 등)에서 역산하지 않는다.
+# 출처 이슈 상태는 수집한 원본 기록에서 읽는다. 내부 상태(IMPLEMENTED 등)에서 역산하지 않는다.
 # 지금 요구사항을 만드는 원천은 GitHub 뿐이라 GitHub 의 state 만 읽는다. 다른 도구는 UNKNOWN
 _SOURCE_STATE = """
     case
