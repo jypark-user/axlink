@@ -77,8 +77,9 @@ const PRIORITIES: Priority[] = ['MUST', 'SHOULD', 'COULD', 'WONT'];
 const GUIDE = '/guide/requirement-baseline';
 
 /**
- * 요구사항 기준선 (GH-139). 용역사가 명세서를 등록·정리·제출하고 발주기관이 확정한다.
- * 확정 전 목록은 요구사항 화면·지표에 나오지 않는다.
+ * 요구사항 등록·확정 (GH-139, 내부 이름은 기준선). 용역사가 명세서를 등록·정리·제출하고 발주기관이
+ * 확정한다. 확정 전 목록은 요구사항 화면·지표에 나오지 않는다. 화면에는 "기준선" 대신 "확정된
+ * 요구사항 목록·확정본" 으로 쓴다. 확정은 목록을 정하는 것이고 구현·검증 완료나 인수가 아니다.
  */
 export function BaselinePage(): ReactNode {
   const { project } = useProjectContext();
@@ -96,8 +97,8 @@ export function BaselinePage(): ReactNode {
   return (
     <>
       <PageHeader
-        title="요구사항 기준선"
-        description="용역사가 명세서를 올려 요구사항 목록을 만들고 발주기관이 확정합니다. 확정한 목록만 요구사항 현황에 반영됩니다."
+        title="요구사항 등록·확정"
+        description="용역사가 요구사항 명세서를 등록하고, 발주기관이 검토해 사업의 요구사항 목록으로 확정합니다."
         actions={
           <Button asChild variant="outline">
             <Link to={GUIDE}>
@@ -196,10 +197,10 @@ function NoBaseline({
 
   return (
     <Window
-      title="등록된 기준선이 없습니다"
+      title="등록된 요구사항 명세서가 없습니다"
       hint={
         s.requirementCount > 0
-          ? `지금 요구사항 ${s.requirementCount}건은 기준선 밖에 있습니다. 명세서를 확정하면 ID 가 같은 요구사항은 기준선에 들어갑니다.`
+          ? `지금 요구사항 ${s.requirementCount}건은 확정된 목록이 아닙니다. 명세서를 확정하면 ID 가 같은 요구사항은 확정된 요구사항 목록에 들어갑니다.`
           : '명세서를 등록해 요구사항 목록을 만듭니다.'
       }
     >
@@ -306,7 +307,7 @@ function Working({
   return (
     <>
       <Window
-        title={`기준선 v${b.version} · ${STATUS_WORD[b.status]}`}
+        title={`확정 전 요구사항 목록 · ${STATUS_WORD[b.status]}`}
         hint={<BaselineMeta b={b} />}
         action={
           <div className="flex flex-wrap gap-2">
@@ -410,7 +411,7 @@ function Working({
           onSubmit={(applySpecCodes) =>
             run(
               () => api.post(`${url}/confirm`, { applySpecCodes }),
-              '요구사항 기준선을 확정했습니다.',
+              '요구사항 목록을 확정했습니다.',
             ).then(() => setDialog(null))
           }
         />
@@ -433,7 +434,7 @@ function BaselineMeta({ b }: { b: BaselineResponse }): ReactNode {
   );
 }
 
-/** 기준선 한눈 요약. 요구사항 수와 기존 요구사항과의 대조. */
+/** 목록 한눈 요약. 요구사항 수와 기존 요구사항과의 대조. */
 function Summary({ b }: { b: BaselineResponse }): ReactNode {
   if (b.items.length === 0) return null;
   const facts: [string, number][] = [['요구사항', b.items.length]];
@@ -613,13 +614,14 @@ function ImpactPanel({ b }: { b: BaselineResponse }): ReactNode {
   return (
     <Window
       title={confirmed ? '확정 결과' : '확정하면'}
-      hint="기존 요구사항의 ID, 추적 링크, 상태 지정, 이력은 바뀌지 않습니다."
+      hint="목록 확정은 요구사항의 구현·검증 완료나 인수를 뜻하지 않습니다. 기존 요구사항의 ID, 추적 링크, 상태 지정, 이력은 바뀌지 않습니다."
     >
       <div className="flex flex-col gap-3 text-sm">
         <div>
           <p className="font-medium">명세서에 없는 기존 요구사항 {b.missing.length}건</p>
           <p className="text-muted-foreground">
-            지우지 않고 기준선 밖에 남깁니다. 정리는 변경 관리에서 합니다.
+            지우지 않고 확정된 명세서에 포함되지 않은 요구사항으로 남깁니다. 정리는 변경 관리에서
+            합니다.
           </p>
           {b.missing.length > 0 && (
             <ul className="mt-1 list-disc pl-5">
@@ -651,7 +653,10 @@ function ConfirmedBaseline({
     <DataState state={detail} onRetry={detail.reload}>
       {(b) => (
         <>
-          <Window title={`기준선 v${b.version} · 확정`} hint={<BaselineMeta b={b} />}>
+          <Window
+            title={`확정된 요구사항 목록 · 확정본 v${b.version}`}
+            hint={<BaselineMeta b={b} />}
+          >
             <Summary b={b} />
             <ItemsTable items={b.items} parents={b.parents} editable={false} />
           </Window>
@@ -775,11 +780,12 @@ function ConfirmDialog({
     <Dialog open onOpenChange={(o) => !o && onClose()}>
       <DialogContent className="sm:max-w-2xl">
         <DialogHeader>
-          <DialogTitle>요구사항 기준선 v{b.version} 확정</DialogTitle>
+          <DialogTitle>요구사항 목록 확정 (확정본 v{b.version})</DialogTitle>
           <DialogDescription>
             새 요구사항 {b.counts.NEW}건이 만들어지고, 기존 요구사항{' '}
-            {b.counts.SAME + b.counts.CHANGED}건은 ID 를 유지한 채 기준선에 들어갑니다. 확정한
-            뒤에는 변경 관리 절차로만 바꿀 수 있습니다.
+            {b.counts.SAME + b.counts.CHANGED}건은 ID 를 유지한 채 확정된 요구사항 목록에
+            들어갑니다. 확정한 뒤에는 변경 관리 절차로만 바꿀 수 있습니다. 확정은 목록을 정하는
+            것이며 요구사항의 구현·검증 완료나 인수를 뜻하지 않습니다.
           </DialogDescription>
         </DialogHeader>
         {changed.length > 0 && (

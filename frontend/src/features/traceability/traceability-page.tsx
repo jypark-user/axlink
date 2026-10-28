@@ -63,7 +63,7 @@ export function TraceabilityPage(): ReactNode {
     return () => clearTimeout(t);
   }, [text]);
 
-  // 기준선 상태. 미확정이면 지금 목록이 무엇인지 머리에 같이 적는다(GH-139)
+  // 목록 확정 상태(기준선). 미확정이면 지금 목록이 무엇인지 머리에 같이 적는다(GH-139)
   const baseline = useAsync<BaselineStateResponse>(
     () => api.get<BaselineStateResponse>(`/projects/${project.id}/requirement-baseline`),
     [project.id],
