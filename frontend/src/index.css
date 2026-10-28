@@ -358,6 +358,13 @@
     height: 100%;
   }
 
+  /* 환경 표시 띠가 위에 붙으면 그 아래 화면이 남은 높이만 쓴다. 화면 높이를 그대로 쓰면
+     띠 높이만큼 아래가 잘린다(body 가 넘치는 부분을 숨긴다) */
+  #root {
+    display: flex;
+    flex-direction: column;
+  }
+
   body {
     background-color: var(--background);
     color: var(--foreground);
