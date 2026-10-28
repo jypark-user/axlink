@@ -193,11 +193,35 @@ export const api = {
   download,
 };
 
-function uploadXhr<T>(
+/**
+ * 진행률 때문에 XMLHttpRequest 로 보낸다. 다른 요청과 같이 401 이면 한 번 갱신하고 한 번만
+ * 다시 보낸다. 401 은 서버가 파일을 받기 전에 거절한 것이라 다시 보내도 두 번 접수되지 않는다.
+ * 그 밖의 실패(400·500·네트워크)는 다시 보내지 않는다.
+ */
+async function uploadXhr<T>(
   path: string,
   form: FormData,
   onProgress?: (ratio: number) => void,
 ): Promise<T> {
+  let res = await sendXhr(path, form, onProgress);
+  if (res.status === 401) {
+    const refreshed = await refreshSession();
+    if (refreshed) res = await sendXhr(path, form, onProgress);
+    if (!refreshed || res.status === 401) {
+      tokenStore.clear();
+      unauthorizedHandler?.();
+    }
+  }
+  if (res.status === 204) return undefined as T;
+  if (res.status >= 200 && res.status < 300) return res.payload as T;
+  throw ApiError.from(res.status, res.payload);
+}
+
+function sendXhr(
+  path: string,
+  form: FormData,
+  onProgress?: (ratio: number) => void,
+): Promise<{ status: number; payload: unknown }> {
   return new Promise((resolve, reject) => {
     const xhr = new XMLHttpRequest();
     xhr.open('POST', `${BASE}${path}`);
@@ -213,9 +237,7 @@ function uploadXhr<T>(
       } catch {
         payload = null;
       }
-      if (xhr.status === 204) return resolve(undefined as T);
-      if (xhr.status >= 200 && xhr.status < 300) return resolve(payload as T);
-      reject(ApiError.from(xhr.status, payload));
+      resolve({ status: xhr.status, payload });
     };
     xhr.onerror = () => reject(new ApiError(0, 'NETWORK', '네트워크 오류가 발생했습니다.'));
     xhr.send(form);
