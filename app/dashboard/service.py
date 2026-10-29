@@ -195,7 +195,7 @@ def schedule(cur: Any, project_id: str, at: date) -> WbsScheduleResponse:
     if items:
         warnings.append(
             "WBS 파일이 없어 Redmine 이슈의 시작일·종료일을 일정으로 씁니다. 가중치가 없으므로 "
-            "진척률 산정의 기준선(L1)은 아닙니다."
+            "진척률 산정 기준(L1)으로는 쓰지 않습니다."
         )
         return WbsScheduleResponse(
             source=WBS_SOURCE_REDMINE,

@@ -513,7 +513,7 @@ function ProjectRequirements({ projectId }: { projectId: string }): ReactNode {
       ),
     [projectId],
   );
-  // 기준선 상태. 문서 초안·제출 중 목록은 확정 요구사항이 아니라 여기 싣지 않는다(GH-139)
+  // 목록 확정 상태(기준선). 문서 초안·제출 중 목록은 확정 요구사항이 아니라 여기 싣지 않는다(GH-139)
   const baseline = useAsync<BaselineStateResponse>(
     () => api.get<BaselineStateResponse>(`/projects/${projectId}/requirement-baseline`),
     [projectId],
@@ -524,10 +524,10 @@ function ProjectRequirements({ projectId }: { projectId: string }): ReactNode {
   const hint = !b
     ? undefined
     : b.confirmed
-      ? `요구사항 기준선 v${b.confirmed.version} 기준 ${rows.length}건입니다.`
+      ? `확정된 요구사항 목록(확정본 v${b.confirmed.version}) 기준 ${rows.length}건입니다.`
       : rows.length > 0
-        ? `${rows.length}건. 기준선은 아직 확정되지 않았습니다.`
-        : '아직 요구사항이 없습니다. 명세서를 등록해 기준선을 만듭니다.';
+        ? `${rows.length}건. 요구사항 목록은 아직 확정되지 않았습니다.`
+        : '아직 요구사항이 없습니다. 용역사가 명세서를 등록하고 발주기관이 확정하면 목록이 생깁니다.';
 
   return (
     <Window
@@ -536,7 +536,7 @@ function ProjectRequirements({ projectId }: { projectId: string }): ReactNode {
       action={
         <div className="flex gap-2">
           <Button asChild variant="outline" size="sm">
-            <Link to={`/p/${projectId}/requirement-baseline`}>기준선</Link>
+            <Link to={`/p/${projectId}/requirement-baseline`}>요구사항 등록·확정</Link>
           </Button>
           {rows.length > 0 && (
             <Button asChild variant="outline" size="sm">

@@ -160,7 +160,7 @@ def test_WBS_파일이_없으면_Redmine_이슈_일정으로_대신한다(client
     body = res.json()
     assert body["source"] == "REDMINE"
     assert body["notice"] is None
-    assert any("기준선(L1)은 아닙니다" in w for w in body["warnings"])
+    assert any("진척률 산정 기준(L1)으로는 쓰지 않습니다" in w for w in body["warnings"])
     ids = [i["wbsId"] for i in body["items"]]
     assert ids == ["#11", "#12"]  # 날짜 없는 #13 은 빠진다
     first, second = body["items"]

@@ -62,7 +62,7 @@ def _load(
     _check_project(cur, principal, project_id)
     row = repo.find(cur, project_id, baseline_id, lock=lock)
     if row is None:
-        raise errors.not_found("요구사항 기준선", baseline_id)
+        raise errors.not_found("요구사항 명세서 등록", baseline_id)
     return row
 
 
@@ -268,11 +268,11 @@ def create(
         # 1단계는 최초 기준선만이다. 확정 뒤 새 명세서는 기준선을 바꾸지 않는다
         raise errors.ApiError(
             409, "BASELINE_CONFIRMED",
-            "요구사항 기준선이 이미 확정됐습니다. 변경은 변경 관리 절차로 합니다.",
+            "요구사항 목록이 이미 확정됐습니다. 변경은 변경 관리 절차로 합니다.",
         )
     if repo.find_open(cur, project_id) is not None:
         raise errors.ApiError(
-            409, "BASELINE_IN_PROGRESS", "작성 중이거나 확정을 기다리는 기준선이 있습니다."
+            409, "BASELINE_IN_PROGRESS", "정리 중이거나 확정을 기다리는 요구사항 명세서가 있습니다."
         )
     document = repo.find_document(cur, document_id)
     if document is None or str(document["project_id"]) != project_id:
@@ -377,7 +377,7 @@ def submit(
 def return_to_author(
     cur: Any, principal: AuthPrincipal, project_id: str, baseline_id: str, reason: str
 ) -> BaselineResponse:
-    _require_role(principal, CONFIRM_ROLES, "기준선 반려는 발주기관이 합니다.")
+    _require_role(principal, CONFIRM_ROLES, "요구사항 목록을 돌려보내는 것은 발주기관이 합니다.")
     row = _load(cur, principal, project_id, baseline_id, lock=True)
     _require_status(row, "SUBMITTED")
     text = reason.strip()
@@ -392,11 +392,11 @@ def confirm(
     apply_spec_codes: list[str],
 ) -> BaselineResponse:
     """최초 기준선 확정. 호출한 쪽의 트랜잭션 하나로 끝난다. 중간에 실패하면 전부 되돌아간다."""
-    _require_role(principal, CONFIRM_ROLES, "요구사항 기준선 확정은 발주기관이 합니다.")
+    _require_role(principal, CONFIRM_ROLES, "요구사항 목록 확정은 발주기관이 합니다.")
     row = _load(cur, principal, project_id, baseline_id, lock=True)
     _require_status(row, "SUBMITTED")
     if repo.find_confirmed(cur, project_id) is not None:
-        raise errors.ApiError(409, "BASELINE_CONFIRMED", "요구사항 기준선이 이미 확정됐습니다.")
+        raise errors.ApiError(409, "BASELINE_CONFIRMED", "요구사항 목록이 이미 확정됐습니다.")
 
     items = repo.items(cur, baseline_id)
     if any(
