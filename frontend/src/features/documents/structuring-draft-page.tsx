@@ -20,8 +20,6 @@ import { isApiError } from '@/lib/api-error';
 import { label } from '@/lib/labels';
 import { useAsync } from '@/lib/use-async';
 import {
-  PM_ACTIVITIES,
-  SI_PHASES,
   WORK_PRODUCT_TYPES,
   type DraftRequirement,
   type Priority,
@@ -34,7 +32,6 @@ import {
 const PRIORITIES: Priority[] = ['MUST', 'SHOULD', 'COULD', 'WONT'];
 /** 확정은 산출물 등록이다. 승인은 발주기관이 산출물 화면에서 따로 한다. */
 const STATUSES: WorkProductStatus[] = ['DRAFT', 'SUBMITTED'];
-const NONE = 'NONE';
 
 export function StructuringDraftPage(): ReactNode {
   const { projectId, documentId } = useParams();
@@ -51,8 +48,6 @@ export function StructuringDraftPage(): ReactNode {
   const [title, setTitle] = useState('');
   const [version, setVersion] = useState('');
   const [authoredDate, setAuthoredDate] = useState('');
-  const [pmActivity, setPmActivity] = useState<string>(NONE);
-  const [siActivity, setSiActivity] = useState<string>(NONE);
   const [status, setStatus] = useState<WorkProductStatus>('DRAFT');
   const [requirements, setRequirements] = useState<DraftRequirement[]>([]);
   const [pending, setPending] = useState(false);
@@ -63,8 +58,6 @@ export function StructuringDraftPage(): ReactNode {
     setTitle(draft.title ?? '');
     setVersion(draft.version ?? '1.0');
     setAuthoredDate(draft.authoredDate ?? '');
-    setPmActivity(draft.pmActivity ?? NONE);
-    setSiActivity(draft.siActivity ?? NONE);
     setRequirements(draft.requirements);
   }, [draft]);
 
@@ -82,8 +75,6 @@ export function StructuringDraftPage(): ReactNode {
           title: title.trim(),
           version: version.trim(),
           authoredDate: authoredDate || null,
-          pmActivity: pmActivity === NONE ? null : pmActivity,
-          siActivity: siActivity === NONE ? null : siActivity,
           requirements,
           workProductStatus: status,
         },
@@ -177,20 +168,6 @@ export function StructuringDraftPage(): ReactNode {
                   승인은 확정과 별도로 발주기관이 산출물 화면에서 합니다.
                 </p>
               </div>
-              <ActivitySelect
-                id="pmActivity"
-                title="PM 활동"
-                value={pmActivity}
-                options={[...PM_ACTIVITIES]}
-                onChange={setPmActivity}
-              />
-              <ActivitySelect
-                id="siActivity"
-                title="SI 활동"
-                value={siActivity}
-                options={[...SI_PHASES]}
-                onChange={setSiActivity}
-              />
             </div>
 
             <div className="flex flex-col gap-3">
@@ -259,38 +236,5 @@ export function StructuringDraftPage(): ReactNode {
         )}
       </DataState>
     </>
-  );
-}
-
-function ActivitySelect({
-  id,
-  title,
-  value,
-  options,
-  onChange,
-}: {
-  id: string;
-  title: string;
-  value: string;
-  options: string[];
-  onChange: (next: string) => void;
-}): ReactNode {
-  return (
-    <div className="flex flex-col gap-1.5">
-      <Label htmlFor={id}>{title}</Label>
-      <Select value={value} onValueChange={onChange}>
-        <SelectTrigger id={id}>
-          <SelectValue />
-        </SelectTrigger>
-        <SelectContent>
-          <SelectItem value={NONE}>없음</SelectItem>
-          {options.map((o) => (
-            <SelectItem key={o} value={o}>
-              {o}
-            </SelectItem>
-          ))}
-        </SelectContent>
-      </Select>
-    </div>
   );
 }

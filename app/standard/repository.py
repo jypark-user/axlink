@@ -150,18 +150,20 @@ def upsert_work_product(
     그런데 WBS 처럼 사업 내내 갱신되는 문서는 항목 하나에 여러 버전이 쌓인다.
     덮어쓰면 "계획을 언제 바꿨는가" 에 답할 수 없다. 그 질문이 진척 감독의 본체다.
 
-    항목 속성(적용 여부·기한·활동 구분·승인)은 버전이 아니라 항목에 속한다.
+    항목 속성(적용 여부·기한·승인)은 버전이 아니라 항목에 속한다.
     새 버전이 앞 버전에서 물려받는다. 승인은 물려받지 않는다. 새 버전은 다시 확인받아야 한다.
+    활동 구분은 물려받지 않고 유형에서 정한다(work_product_type.ACTIVITIES).
     """
     current = fetch_one(
         cur,
         """
-        select id, version, applicable, due_date, pm_activity, si_activity
+        select id, version, applicable, due_date
           from work_product
          where project_id = %s and type = %s and is_current
         """,
         (project_id, rec["type"]),
     )
+    pm_activity, si_activity = work_product_type.activity_of(rec["type"])
 
     # 같은 버전이 다시 왔다. 내용이 안 바뀐 것이므로 새 행을 만들지 않는다.
     if current is not None and current["version"] == rec["version"]:
@@ -204,8 +206,7 @@ def upsert_work_product(
             project_id, rec["type"], rec["version"], rec["title"],
             current["applicable"] if current else True,
             current["due_date"] if current else None,
-            (current["pm_activity"] if current else None) or "PM_1",
-            current["si_activity"] if current else None,
+            pm_activity, si_activity,
             rec["file_uri"], rec["external_url"], connection_id, external_id,
             rec.get("source_revision"),
         ),
@@ -226,7 +227,7 @@ def place_document_work_product(
     current = fetch_one(
         cur,
         """
-        select id, version, pm_activity, si_activity
+        select id, version
           from work_product
          where project_id = %s and type = %s and is_current
         """,
@@ -247,10 +248,7 @@ def place_document_work_product(
             f"버전 {rec['version']} 은 승인된 버전이라 고쳐 쓸 수 없습니다. 새 버전으로 올리세요.",
         )
 
-    pm_activity = rec.get("pm_activity") or (current["pm_activity"] if current else None)
-    si_activity = rec.get("si_activity") or (current["si_activity"] if current else None)
-    if pm_activity is None and si_activity is None:
-        pm_activity = "PM_1"
+    pm_activity, si_activity = work_product_type.activity_of(rec["type"])
     approved = rec["status"] == "APPROVED"
 
     if current is not None and (same_version is None or same_version["id"] != current["id"]):

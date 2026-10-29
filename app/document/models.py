@@ -95,8 +95,6 @@ class StructuringDraftResponse(BaseModel):
     title: str | None
     version: str | None
     authoredDate: str | None  # noqa: N815
-    pmActivity: str | None  # noqa: N815
-    siActivity: str | None  # noqa: N815
     requirements: list[DraftRequirement]
     createdAt: str  # noqa: N815
 
@@ -106,8 +104,7 @@ class StructuringConfirmRequest(BaseModel):
     title: str
     version: str
     authoredDate: str | None = None  # noqa: N815
-    pmActivity: str | None = None  # noqa: N815
-    siActivity: str | None = None  # noqa: N815
+    # 활동 구분(PM·SI)은 받지 않는다. 산출물 유형이 정한다. 예전 화면이 보내면 무시된다
     requirements: list[DraftRequirement] = []
     workProductStatus: str = "DRAFT"  # noqa: N815
 

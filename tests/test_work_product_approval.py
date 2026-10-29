@@ -174,7 +174,7 @@ def test_승인된_버전을_같은_버전_표기로_고쳐_쓰지_않는다(cli
     assert _post(client, client_token("r2"), submitted, "approve").status_code == 204
     rec = {
         "type": TYPE, "title": "덮어쓰기", "version": "T1", "status": "SUBMITTED",
-        "pm_activity": None, "si_activity": None, "authored_at": None, "file_uri": "x",
+        "authored_at": None, "file_uri": "x",
     }
     with tx() as cur, pytest.raises(errors.ApiError) as caught:
         standard_repo.place_document_work_product(cur, PID, None, None, rec)

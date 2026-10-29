@@ -155,7 +155,7 @@ def test_im001_upload_drafts_41_requirements(client, as_pm, im001):
     assert draft["title"] == "AX Link 요구사항정의서 (IM-001)"
     assert draft["version"] == "0.4"
     assert draft["authoredDate"] == "2026-08-27"
-    assert draft["siActivity"] == "SI_2" and draft["pmActivity"] is None  # 자리의 활동 구분
+    assert "pmActivity" not in draft and "siActivity" not in draft  # 활동은 유형이 정한다
 
     codes = [r["code"] for r in draft["requirements"]]
     assert len(codes) == 41
@@ -171,8 +171,6 @@ def _confirm_body(draft: dict, **overrides) -> dict:
         "title": draft["title"],
         "version": draft["version"],
         "authoredDate": draft["authoredDate"],
-        "pmActivity": draft["pmActivity"],
-        "siActivity": draft["siActivity"],
         "requirements": draft["requirements"],
         "workProductStatus": "SUBMITTED",
     }
@@ -241,8 +239,9 @@ def test_overriding_the_suggested_type_is_recorded(client, as_pm, im001):
     draft = _draft(client, as_pm, im001["id"])
     res = client.post(
         f"/api/documents/{im001['id']}/draft/confirm",
-        json=_confirm_body(draft, type="SOFTWARE_DESIGN", requirements=[], siActivity=None,
-                           workProductStatus="SUBMITTED"),
+        # 예전 화면처럼 활동을 보내도 받지 않는다
+        json=_confirm_body(draft, type="SOFTWARE_DESIGN", requirements=[], pmActivity="PM_4",
+                           siActivity=None, workProductStatus="SUBMITTED"),
         headers=_auth(as_pm),
     )
     assert res.status_code == 200, res.text
@@ -252,7 +251,7 @@ def test_overriding_the_suggested_type_is_recorded(client, as_pm, im001):
     items = client.get(f"/api/projects/{PID}/work-products", headers=_auth(as_pm)).json()["items"]
     design = next(i for i in items if i["type"] == "SOFTWARE_DESIGN")
     assert design["status"] == "SUBMITTED" and design["approvedAt"] is None
-    assert design["siActivity"] == "SI_3"  # 활동을 안 주면 자리 것을 물려받는다
+    assert (design["pmActivity"], design["siActivity"]) == (None, "SI_3")  # 설계서는 SI 설계
 
 
 @requires_db
@@ -408,7 +407,6 @@ def test_llm_picks_the_type_only_when_rules_cannot(client, as_pm, monkeypatch):
     draft = _draft(client, as_pm, doc["id"])
     assert draft["suggestedType"] == "MEETING_RECORD"
     assert draft["confidence"] == draft_service.LLM_CONFIDENCE  # 모델 판정은 규칙보다 낮게 본다
-    assert draft["pmActivity"] == "PM_2"
     assert draft["title"] == "시트: Sheet1"  # 제목은 규칙이 이미 정했으니 모델에 안 묻는다
     with tx() as cur:
         cur.execute(
@@ -425,7 +423,6 @@ def test_unparseable_llm_answer_leaves_the_type_open(client, as_pm):
     assert draft["suggestedType"] is None
     assert draft["confidence"] == 0.0
     assert draft["rejectedTypeRaw"]
-    assert draft["pmActivity"] is None and draft["siActivity"] is None
 
 
 @requires_db
