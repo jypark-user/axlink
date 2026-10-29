@@ -84,15 +84,3 @@ def set_document_status(cur: Any, document_id: str, status: str) -> None:
         (status, document_id),
     )
 
-
-def slot_activity(cur: Any, project_id: str, product_type: str) -> dict[str, Any] | None:
-    """산출물 자리의 활동 구분. 초안이 유형을 골랐으면 자리의 활동을 그대로 제안한다."""
-    return fetch_one(
-        cur,
-        """
-        select pm_activity, si_activity
-          from work_product
-         where project_id = %s and type = %s and is_current
-        """,
-        (project_id, product_type),
-    )

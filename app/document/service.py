@@ -257,7 +257,7 @@ def _run_steps(
     with txf() as cur:
         if not repository.lock_for_write(cur, document_id):
             return
-        draft_service.propose_for_upload(cur, document_id, project_id, filename, result.text)
+        draft_service.propose_for_upload(cur, document_id, filename, result.text)
     steps["draft_s"] = _since(t)
     with txf() as cur:
         repository.finish(cur, document_id, steps)

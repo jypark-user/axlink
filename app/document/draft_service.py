@@ -30,8 +30,6 @@ from app.standard.work_product_type import DISPLAY_NAMES
 
 LLM_CONFIDENCE = 0.5  # 모델이 고른 유형은 규칙이 정한 것보다 낮게 본다. 사람이 다시 본다
 _PRIORITIES = ("MUST", "SHOULD", "COULD", "WONT")
-_PM_ACTIVITIES = ("PM_1", "PM_2", "PM_3", "PM_4")
-_SI_ACTIVITIES = ("SI_1", "SI_2", "SI_3", "SI_4", "SI_5", "SI_6")
 # 확정은 문서를 산출물 한 버전으로 등록하는 일이다. 승인은 발주기관이 그 버전을 받아들이는
 # 다른 행위라 여기서 하지 않는다(work-products/{id}/approve).
 _CONFIRMABLE_STATUSES = ("DRAFT", "SUBMITTED")
@@ -51,7 +49,6 @@ _TITLE_SYSTEM = (
 def propose(
     cur: Any,
     document_id: str,
-    project_id: str,
     filename: str,
     text: str,
     llm_factory: Callable[[], LlmPort],
@@ -108,12 +105,6 @@ def propose(
             draft["llmError"] = exc.message
             repository.note_error(cur, document_id, f"유형 판별을 건너뛰었습니다. {exc.message}")
 
-    activity = (
-        draft_repository.slot_activity(cur, project_id, product_type) if product_type else None
-    )
-    draft["pmActivity"] = activity["pm_activity"] if activity else None
-    draft["siActivity"] = activity["si_activity"] if activity else None
-
     draft_id = draft_repository.upsert(cur, document_id, model, draft, product_type, type_rejected)
     draft_repository.set_document_status(cur, document_id, "STRUCTURED")
     return draft_id
@@ -142,8 +133,6 @@ def _to_response(row: dict[str, Any]) -> StructuringDraftResponse:
         title=draft.get("title"),
         version=draft.get("version"),
         authoredDate=draft.get("authoredDate"),
-        pmActivity=draft.get("pmActivity"),
-        siActivity=draft.get("siActivity"),
         requirements=[DraftRequirement(**r) for r in draft.get("requirements", [])],
         createdAt=row["created_at"].isoformat(),
     )
@@ -185,10 +174,6 @@ def _validate(req: StructuringConfirmRequest) -> dict[str, Any]:
         raise errors.validation_failed(
             "확정 상태는 " + " · ".join(_CONFIRMABLE_STATUSES) + " 중 하나여야 합니다."
         )
-    if req.pmActivity is not None and req.pmActivity not in _PM_ACTIVITIES:
-        raise errors.validation_failed(f"PM 활동이 아닙니다: {req.pmActivity}")
-    if req.siActivity is not None and req.siActivity not in _SI_ACTIVITIES:
-        raise errors.validation_failed(f"SI 활동이 아닙니다: {req.siActivity}")
     authored_at = None
     if req.authoredDate:
         try:
@@ -220,8 +205,6 @@ def _validate(req: StructuringConfirmRequest) -> dict[str, Any]:
         "title": title,
         "version": version,
         "status": req.workProductStatus,
-        "pm_activity": req.pmActivity,
-        "si_activity": req.siActivity,
         "authored_at": authored_at,
         "requirements": requirements,
     }
@@ -258,8 +241,6 @@ def confirm(
     )
 
 
-def propose_for_upload(
-    cur: Any, document_id: str, project_id: str, filename: str, text: str
-) -> None:
+def propose_for_upload(cur: Any, document_id: str, filename: str, text: str) -> None:
     """업로드 흐름에서 부른다. 구현체 선택은 llm_port 한 곳이다."""
-    propose(cur, document_id, project_id, filename, text, llm_port)
+    propose(cur, document_id, filename, text, llm_port)

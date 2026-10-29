@@ -1484,8 +1484,6 @@ export interface StructuringDraftResponse {
   title: string | null;
   version: string | null;
   authoredDate: string | null;
-  pmActivity: PmActivity | null;
-  siActivity: SiPhase | null;
   requirements: DraftRequirement[];
   createdAt: string;
 }
@@ -1495,8 +1493,6 @@ export interface StructuringConfirmRequest {
   title: string;
   version: string;
   authoredDate: string | null;
-  pmActivity: PmActivity | null;
-  siActivity: SiPhase | null;
   requirements: DraftRequirement[];
   workProductStatus: WorkProductStatus;
 }

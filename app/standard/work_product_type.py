@@ -32,7 +32,8 @@ DISPLAY_NAMES: dict[str, str] = {
 
 
 # 활동 구분. V1 시드가 데모 사업에 넣은 표와 같다. 사업을 새로 만들 때 이 표로
-# 22개 항목을 먼저 만든다(ARC-005 4절). 항목 없이 수집이 먼저 닿으면 PM_1 기본값이 들어간다.
+# 22개 항목을 먼저 만든다(ARC-005 4절). 활동은 유형이 정한다. 사람이 고르지 않고,
+# 수집·문서 확정이 새 버전을 만들 때도 이 표에서 다시 읽는다.
 ACTIVITIES: dict[str, tuple[str | None, str | None]] = {
     "STATEMENT_OF_WORK": ("PM_1", None),
     "PROJECT_PLAN": ("PM_1", None),
@@ -57,6 +58,12 @@ ACTIVITIES: dict[str, tuple[str | None, str | None]] = {
     "SOFTWARE_CONFIGURATION": (None, "SI_6"),
     "MAINTENANCE_DOC": (None, "SI_6"),
 }
+
+
+def activity_of(product_type: str) -> tuple[str | None, str | None]:
+    """유형의 (PM 활동, SI 활동). 모르는 유형은 스키마 CHECK 가 막지만, 활동 제약
+    (둘 중 하나는 있어야 한다)에 먼저 걸리지 않게 계획 단계로 둔다."""
+    return ACTIVITIES.get(product_type, ("PM_1", None))
 
 
 def display_name(product_type: str) -> str:
