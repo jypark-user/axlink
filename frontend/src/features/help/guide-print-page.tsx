@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState, type ReactNode } from 'react';
+import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
 import { ArrowLeft, FileDown } from 'lucide-react';
 import { DataState } from '@/components/common/data-state';
@@ -13,11 +13,14 @@ import { GuideMarkdown } from '@/features/help/guide-markdown';
 const ALL = 'all';
 const IMAGE = /!\[[^\]]*\]\(([^)\s]+)\)/g;
 
-// 인쇄 여백과 쪽 나눔. 화면 틀 밖의 페이지라 본문만 남는다
+// 인쇄 여백과 쪽 나눔. 화면 틀 밖의 페이지라 본문만 남는다.
+// 앱 공통 스타일은 body 를 화면 높이에 묶고 넘치는 부분을 숨긴다(앱 틀이 안쪽 칸을 스크롤한다).
+// 인쇄할 때는 그 묶음을 풀어 문서 전체가 쪽으로 이어지게 한다
 const PRINT_CSS = `
 @page { size: A4; margin: 16mm 14mm; }
 @media print {
   html, body { background: #fff !important; }
+  html, body, #root { height: auto !important; overflow: visible !important; }
   tr, img, pre, blockquote { break-inside: avoid; }
   a { color: inherit !important; text-decoration: none !important; }
 }
@@ -86,8 +89,18 @@ export function GuidePrintPage(): ReactNode {
     [],
   );
 
+  // 키보드(↓·PgDn·End)로도 바로 내려가게 틀에 초점을 둔다. 누르기 전에는 틀이 키를 받지 않는다
+  const frame = useRef<HTMLDivElement>(null);
+  useEffect(() => frame.current?.focus({ preventScroll: true }), []);
+
   return (
-    <div className="bg-background text-foreground min-h-screen">
+    // 화면에서는 이 틀이 스크롤한다. body 가 넘치는 부분을 숨기므로 페이지 자체는 움직이지 않는다
+    <div
+      ref={frame}
+      tabIndex={-1}
+      data-testid="guide-print-scroll"
+      className="bg-background text-foreground h-full min-h-0 overflow-y-auto outline-none print:h-auto print:overflow-visible"
+    >
       <style>{PRINT_CSS}</style>
       <DataState state={state} onRetry={state.reload}>
         {({ entries, docs }) => {

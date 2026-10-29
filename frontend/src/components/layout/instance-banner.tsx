@@ -23,7 +23,7 @@ export function InstanceBanner(): ReactNode {
   return (
     <div
       role="status"
-      className="bg-warning-muted text-warning border-warning/40 border-b px-4 py-1 text-center text-xs font-semibold print:hidden"
+      className="bg-warning-muted text-warning border-warning/40 shrink-0 border-b px-4 py-1 text-center text-xs font-semibold print:hidden"
     >
       {label}
     </div>
