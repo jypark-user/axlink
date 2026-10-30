@@ -358,7 +358,7 @@ function LlmSettingsForm({
             {selected.contextLength > 0
               ? selected.contextLength.toLocaleString('ko-KR')
               : '알 수 없음'}
-            {' · '}도구 호출 {selected.supportsTools ? '지원' : '미지원'}
+            {' · '}도구 호출 {selected.supportsTools ? '지원' : '미지원'}(AX Link 는 쓰지 않음)
             {selected.tokPerSec !== null && selected.measuredAt
               ? ` · 실측 ${selected.tokPerSec.toFixed(1)} tok/s (${formatDateTime(selected.measuredAt)})`
               : ' · 생성 속도 미측정'}
@@ -374,13 +374,6 @@ function LlmSettingsForm({
             서버가 이 모델의 용도를 알려 주지 않았습니다(확인 필요). 저장할 때 짧은 생성을 해 보고,
             되면 저장합니다.
             {selected.verifiedAt ? ` 마지막 확인 ${formatDateTime(selected.verifiedAt)}.` : ''}
-          </p>
-        )}
-        {selected && !embeddingOnly && !selected.supportsTools && (
-          <p className="rounded bg-destructive/10 p-2 text-xs text-destructive">
-            ⚠ 이 모델은 도구 호출을 지원하지 않습니다. 에이전트가 도구 호출로 동작한다면 이 모델로는
-            동작하지 않습니다. AX Link 의 질의·초안·위젯 선택은 도구 호출을 쓰지 않아 지금 기능에는
-            영향이 없습니다.
           </p>
         )}
       </div>
