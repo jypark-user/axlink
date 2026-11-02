@@ -13,6 +13,7 @@ import {
 import { useSidebar } from '@/components/ui/sidebar';
 import { useAuth } from '@/features/auth/auth-context';
 import { useNavigate } from 'react-router-dom';
+import { PasswordDialog } from '@/features/auth/password-dialog';
 import { SettingsDialog } from '@/features/settings/settings-dialog';
 import { cn } from '@/lib/utils';
 import type { Role } from '@/types/api';
@@ -36,6 +37,7 @@ export function UserMenu() {
   const navigate = useNavigate();
   const { state, isMobile } = useSidebar();
   const [settingsOpen, setSettingsOpen] = useState(false);
+  const [passwordOpen, setPasswordOpen] = useState(false);
   if (!me) return null;
 
   const collapsed = state === 'collapsed' && !isMobile;
@@ -84,6 +86,14 @@ export function UserMenu() {
               설정
             </DropdownMenuItem>
             <DropdownMenuItem
+              onSelect={(e) => {
+                e.preventDefault();
+                setPasswordOpen(true);
+              }}
+            >
+              비밀번호 바꾸기
+            </DropdownMenuItem>
+            <DropdownMenuItem
               onSelect={async (e) => {
                 e.preventDefault();
                 await logout();
@@ -108,6 +118,7 @@ export function UserMenu() {
         </Button>
       </div>
       {settingsOpen && <SettingsDialog onClose={() => setSettingsOpen(false)} />}
+      {passwordOpen && <PasswordDialog onClose={() => setPasswordOpen(false)} />}
     </>
   );
 }

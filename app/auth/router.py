@@ -10,6 +10,7 @@ from app.auth.models import (
     LoginRequest,
     LoginResponse,
     MeResponse,
+    PasswordChangeRequest,
     RefreshTokenRequest,
 )
 from app.db import tx
@@ -57,3 +58,12 @@ def accept_invitation(
 ) -> LoginResponse:
     with tx() as cur:
         return service.accept_invitation(cur, req, user_agent)
+
+
+@router.post("/password", status_code=204, response_class=Response)
+def change_password(principal: Principal, req: PasswordChangeRequest) -> Response:
+    """자기 비밀번호 바꾸기. 발급받은 첫 비밀번호를 받은 사람이 바꾼다."""
+    with tx() as cur:
+        service.change_password(cur, principal, req)
+    return Response(status_code=204)
+

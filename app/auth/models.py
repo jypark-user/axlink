@@ -56,3 +56,11 @@ class AuthPrincipal(BaseModel):
     org_id: str
     org_type: str
     role: str
+
+
+class PasswordChangeRequest(BaseModel):
+    """자기 비밀번호 바꾸기. 발급받은 첫 비밀번호를 바꿀 때 쓴다(GH-187)."""
+
+    currentPassword: str = Field(min_length=1)  # noqa: N815
+    newPassword: str = Field(min_length=8, max_length=72)  # noqa: N815 — bcrypt 는 72바이트까지
+

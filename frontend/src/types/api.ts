@@ -258,6 +258,29 @@ export interface UserResponse {
   createdAt: string;
 }
 
+/** 최고관리자 화면의 조직(GH-187). 발주기관은 여기서 만들고, 용역사는 초대 가입으로 생긴다 */
+export interface OrganizationResponse {
+  id: string;
+  name: string;
+  type: 'CLIENT' | 'CONTRACTOR';
+  status: 'ACTIVE' | 'DISABLED';
+  userCount: number;
+  activeUserCount: number;
+  projectCount: number;
+  createdAt: string;
+}
+
+/** 발급한 발주기관 계정. 첫 비밀번호는 이 응답에만 있다 */
+export interface ClientUserCreatedResponse {
+  id: string;
+  organizationId: string;
+  username: string;
+  name: string;
+  role: Role;
+  status: UserStatus;
+  temporaryPassword: string;
+}
+
 export interface ProjectCreateRequest {
   name: string;
   startDate: string;

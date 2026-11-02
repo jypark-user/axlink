@@ -17,6 +17,7 @@ from app.auth.models import (
     LoginRequest,
     LoginResponse,
     MeResponse,
+    PasswordChangeRequest,
 )
 from app.common import errors
 from app.common.hashes import random_token, sha256_hex
@@ -199,3 +200,20 @@ def _organization(cur: Any, user: dict[str, Any]) -> dict[str, Any]:
     if org is None:
         raise errors.ApiError(500, "INTERNAL", "계정의 조직 정보를 찾을 수 없습니다.")
     return org
+
+
+def change_password(cur: Any, principal: AuthPrincipal, req: PasswordChangeRequest) -> None:
+    """지금 비밀번호를 맞춰야 바꾼다. 다른 기기의 로그인은 그대로 둔다."""
+    user = repository.find_user_by_id(cur, principal.user_id)
+    if user is None or not _verify_password(req.currentPassword, user["password_hash"]):
+        raise errors.ApiError(400, "PASSWORD_MISMATCH", "지금 비밀번호가 맞지 않습니다.")
+    if req.newPassword == req.currentPassword:
+        raise errors.validation_failed("지금과 다른 비밀번호를 입력하세요.")
+    if len(req.newPassword.encode("utf-8")) > 72:
+        raise errors.validation_failed("비밀번호가 너무 깁니다.")
+    password_hash = bcrypt.hashpw(req.newPassword.encode("utf-8"), bcrypt.gensalt()).decode()
+    cur.execute(
+        "update app_user set password_hash = %s, updated_at = now() where id = %s",
+        (password_hash, principal.user_id),
+    )
+
