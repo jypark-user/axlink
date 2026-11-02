@@ -17,6 +17,7 @@ import { toQueryString } from '@/lib/query';
 import { cn } from '@/lib/utils';
 import { useAsync } from '@/lib/use-async';
 import { useAuth } from '@/features/auth/auth-context';
+import { RequirementDetailSheet } from '@/features/traceability/requirement-detail-sheet';
 import { StatusDecisionDialog } from '@/features/traceability/status-decision-dialog';
 import {
   filterLabel,
@@ -49,6 +50,7 @@ export function TraceabilityPage(): ReactNode {
   // 요구사항 상태 지정은 발주기관이 한다(ARC-025). 용역사는 지정 결과와 사유만 본다
   const canDecide = me?.role === 'CLIENT' || me?.role === 'SUPER_ADMIN';
   const [deciding, setDeciding] = useState<TraceabilityRowResponse | null>(null);
+  const [opened, setOpened] = useState<string | null>(null);
   const [page, setPage] = useState(0);
   const [filter, setFilter] = useState<RequirementFilter>(NO_FILTER);
   const [text, setText] = useState('');
@@ -86,7 +88,10 @@ export function TraceabilityPage(): ReactNode {
     [project.id, page, filter, q],
   );
 
-  const columns = useMemo(() => buildColumns(canDecide ? setDeciding : null), [canDecide]);
+  const columns = useMemo(
+    () => buildColumns(canDecide ? setDeciding : null, setOpened),
+    [canDecide],
+  );
   const active = filterLabel(filter);
   const narrowed = active !== null || q !== '';
   const emptyText = narrowed ? '조건에 맞는 요구사항이 없습니다.' : '요구사항이 없습니다.';
@@ -156,6 +161,11 @@ export function TraceabilityPage(): ReactNode {
           }
         </DataState>
       </div>
+      <RequirementDetailSheet
+        projectId={project.id}
+        requirementId={opened}
+        onClose={() => setOpened(null)}
+      />
       <StatusDecisionDialog
         projectId={project.id}
         row={deciding}
@@ -360,12 +370,23 @@ function Chip({
 
 function buildColumns(
   onDecide: ((row: TraceabilityRowResponse) => void) | null,
+  onOpen: (requirementId: string) => void,
 ): ColumnDef<TraceabilityRowResponse, unknown>[] {
   return [
     {
       accessorKey: 'requirementCode',
       header: ({ column }) => <SortableHeader column={column}>코드</SortableHeader>,
-      cell: ({ row }) => <span className="font-mono text-xs">{row.original.requirementCode}</span>,
+      // 코드를 누르면 상세가 열린다. 행 전체를 누르게 하면 칸 안 단추·링크와 겹친다
+      cell: ({ row }) => (
+        <button
+          type="button"
+          onClick={() => onOpen(row.original.requirementId)}
+          className="text-primary font-mono text-xs hover:underline"
+          aria-label={`${row.original.requirementCode} 상세`}
+        >
+          {row.original.requirementCode}
+        </button>
+      ),
     },
     {
       accessorKey: 'requirementTitle',

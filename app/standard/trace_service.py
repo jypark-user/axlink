@@ -21,6 +21,7 @@ from app.standard import repository, requirement_decision, trace_rules
 from app.standard.mapping_rules import MappingRules
 from app.standard.models import (
     EntityHistoryResponse,
+    RequirementBaselineSource,
     RequirementDetailResponse,
     RequirementSummaryResponse,
     SourceRef,
@@ -460,4 +461,23 @@ def requirement_detail(
             )
             for h in repository.entity_history(cur, "REQUIREMENT", requirement_id)
         ],
+        baselineSource=_baseline_source(cur, requirement_id),
+    )
+
+
+def _baseline_source(cur: Any, requirement_id: str) -> RequirementBaselineSource | None:
+    src = repository.requirement_baseline_source(cur, requirement_id)
+    if src is None:
+        return None
+    return RequirementBaselineSource(
+        baselineId=str(src["baseline_id"]),
+        version=src["version"],
+        status=src["status"],
+        confirmedAt=src["confirmed_at"].isoformat() if src["confirmed_at"] else None,
+        confirmedBy=src["confirmed_by_name"],
+        documentId=str(src["document_upload_id"]) if src["document_upload_id"] else None,
+        sourceFilename=src["source_filename"],
+        sourceDocVersion=src["source_doc_version"],
+        location=src["source_location"],
+        match=src["match_result"],
     )
