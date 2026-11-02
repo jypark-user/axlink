@@ -337,6 +337,34 @@ def test_값이_하나인_집계는_그림_없이_글로만_답한다(client, co
 
 
 @requires_db
+def test_질문에_적은_기간으로_집계한다(client, conversation, monkeypatch):
+    """GH-123. "이번 달" 을 물었는데 기간 필터가 없어 그림이 수집 첫날부터 그려졌다."""
+    seen: list = []
+    real_run = ask_service.semantic.run
+
+    def spy(cur, principal, spec, *args, **kwargs):
+        seen.append(spec.query.filters)
+        return real_run(cur, principal, spec, *args, **kwargs)
+
+    scripted = ScriptedLlm(
+        {"route": "AGGREGATE", "measure": "progress_representative_pct",
+         "dimensions": ["period_day"], "template": "LINE_CHART", "title": "진척 추세",
+         "query": "진척 추세"},
+        "이번 달 진척 추세입니다.",
+    )
+    monkeypatch.setattr(ask_service, "llm_port", lambda: scripted)
+    monkeypatch.setattr(ask_service.semantic, "run", spy)
+    monkeypatch.setattr(settings, "rag_min_similarity", 0.99)
+
+    conversation_id, token = conversation()
+    events = _ask(client, token, conversation_id, "이번 달 진척 추세 보여줘")
+    assert events[-1][0] == "done"
+    assert seen, "집계를 부르지 않았다"
+    period = [(f.field, f.op, f.value) for f in seen[0]]
+    assert period == [("period", "IN_MONTH", "current")]
+
+
+@requires_db
 def test_집계에_없는_숫자는_화면에_나가기_전에_막는다(client, conversation, monkeypatch):
     """QUR.RAG.002, ARC-017. 지어낸 숫자는 어떤 조각에도 실리지 않고 저장도 안 된다."""
     with tx() as cur:

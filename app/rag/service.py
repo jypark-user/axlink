@@ -37,6 +37,7 @@ from app.rag import (
     intents,
     number_guard,
     overview,
+    question_period,
     route_cache,
     routing,
     search,
@@ -649,6 +650,8 @@ def _aggregate(
     차원을 빼고 한 번 더 본다. 그래도 막히면 집계를 포기한다. 값을 억지로 만들지 않는다.
     조회 자체가 깨지면 _QueryFailed 다. 그것을 값 없음으로 말하지 않는다."""
     assert decision.measure is not None and decision.template is not None
+    # 질문에 적힌 기간("이번 달")은 글자에서 읽어 필터로 건다. 모델에게 고르게 하지 않는다
+    period = question_period.filter_for(p.question, decision.measure)
     attempts = [(decision.template, list(decision.dimensions))]
     if decision.dimensions:
         attempts.append(("STAT_CARD", []))
@@ -659,7 +662,7 @@ def _aggregate(
             query=WidgetQuery(
                 measure=decision.measure.key,
                 dimensions=dimensions,
-                filters=[],
+                filters=[period] if period else [],
                 projectScope=list(p.scope),
             ),
             options=WidgetOptions(sort="desc"),
