@@ -84,6 +84,26 @@ def to_issue(payload: dict[str, Any]) -> dict[str, Any]:
     }
 
 
+def to_milestone(payload: dict[str, Any]) -> dict[str, Any]:
+    """GitHub 마일스톤 → milestone 행(ARC-023). 기한은 날짜만 쓴다(GitHub 은 자정 UTC 로 준다)."""
+    due = payload.get("due_on")
+    return {
+        "number": payload.get("number"),
+        "title": (payload.get("title") or "").strip()[:500] or f"마일스톤 {payload.get('number')}",
+        "due_on": due[:10] if due else None,
+        "state": "CLOSED" if payload.get("state") == "closed" else "OPEN",
+        "closed_at": payload.get("closed_at"),
+        "source_url": payload.get("html_url"),
+        "source_updated_at": payload.get("updated_at"),
+    }
+
+
+def milestone_number(payload: dict[str, Any]) -> int | None:
+    """이슈 원본에 지정된 마일스톤 번호. 없으면 None."""
+    ms = payload.get("milestone")
+    return ms.get("number") if isinstance(ms, dict) else None
+
+
 def to_code_change(kind: str, payload: dict[str, Any]) -> dict[str, Any] | None:
     if kind == "commit":
         return _commit(payload)
