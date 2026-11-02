@@ -290,6 +290,17 @@ def test_신규_사업은_등록_정리_제출_확정을_거쳐서만_요구사�
     state = client.get(_base(), headers=po).json()
     assert state["state"] == "CONFIRMED" and state["confirmed"]["version"] == 1
 
+    # 요구사항 상세에서 명세서 판본과 원문 위치로 바로 간다(GH-158)
+    detail = client.get(
+        f"/api/projects/{PID}/requirements/{mine['SWFR.TST.103']['id']}", headers=po
+    ).json()
+    src = detail["baselineSource"]
+    assert src["baselineId"] == bid and src["version"] == 1 and src["status"] == "CONFIRMED"
+    assert src["sourceFilename"] == "요구사항명세서.docx" and src["sourceDocVersion"] == "1.0"
+    assert src["location"] == "표 1 · 5행" and src["match"] == "NEW"
+    assert src["documentId"] == doc and src["confirmedAt"] is not None
+    assert any(h["field"] == "baseline" for h in detail["history"])
+
     # 같은 확정을 또 보내거나, 확정 뒤 새 명세서를 올려도 기준선은 그대로다
     assert client.post(f"{_base()}/{bid}/confirm", json={}, headers=po).status_code == 409
     again = client.post(_base(), json={"documentId": doc}, headers=pm)

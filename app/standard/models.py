@@ -217,10 +217,28 @@ class EntityHistoryResponse(BaseModel):
     changedAt: str  # noqa: N815
 
 
+class RequirementBaselineSource(BaseModel):
+    """이 요구사항이 들어온 확정 명세서와 원문 위치(GH-158, ARC-028).
+
+    명세서로 확정한 요구사항은 원천 도구가 없다. 출처는 명세서 판본과 그 안의 표·행이다."""
+
+    baselineId: str  # noqa: N815
+    version: int
+    status: str  # CONFIRMED 만 내보낸다
+    confirmedAt: str | None  # noqa: N815
+    confirmedBy: str | None  # noqa: N815
+    documentId: str | None  # noqa: N815 — 자료 화면에서 열 문서
+    sourceFilename: str  # noqa: N815
+    sourceDocVersion: str | None  # noqa: N815
+    location: str | None  # 명세서 안 위치("표 3 · 2행")
+    match: str | None  # 확정 때 판정. NEW · SAME · CHANGED
+
+
 class RequirementDetailResponse(RequirementResponse):
     body: str
     traceLinks: list[TraceLinkResponse]  # noqa: N815
     history: list[EntityHistoryResponse]
+    baselineSource: RequirementBaselineSource | None = None  # noqa: N815
 
 
 class RequirementDecisionRequest(BaseModel):

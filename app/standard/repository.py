@@ -1084,6 +1084,24 @@ def get_requirement(cur: Any, project_id: str, requirement_id: str) -> dict[str,
     )
 
 
+def requirement_baseline_source(cur: Any, requirement_id: str) -> dict[str, Any] | None:
+    """요구사항이 든 확정 명세서와 그 항목의 원문 위치. 확정되지 않은 판본은 내보내지 않는다."""
+    return fetch_one(
+        cur,
+        """
+        select b.id as baseline_id, b.version, b.status, b.confirmed_at,
+               fu.name as confirmed_by_name, b.document_upload_id, b.source_filename,
+               b.source_doc_version, i.source_location, i.match_result
+          from requirement r
+          join requirement_baseline_item i on i.id = r.baseline_item_id
+          join requirement_baseline b on b.id = i.baseline_id
+          left join app_user fu on fu.id = b.confirmed_by_user_id
+         where r.id = %s and b.status = 'CONFIRMED'
+        """,
+        (requirement_id,),
+    )
+
+
 def entity_history(cur: Any, entity_type: str, entity_id: str) -> list[dict[str, Any]]:
     return fetch_all(
         cur,

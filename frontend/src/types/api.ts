@@ -666,10 +666,27 @@ export interface RequirementResponse {
   inBaseline: boolean;
 }
 
+/** 요구사항이 들어온 확정 명세서와 그 안의 원문 위치(GH-158). 명세서로 확정한 요구사항만 있다. */
+export interface RequirementBaselineSource {
+  baselineId: string;
+  version: number;
+  status: string;
+  confirmedAt: string | null;
+  confirmedBy: string | null;
+  documentId: string | null;
+  sourceFilename: string;
+  sourceDocVersion: string | null;
+  /** 명세서 안 위치("표 3 · 2행") */
+  location: string | null;
+  /** 확정 때 판정 NEW · SAME · CHANGED */
+  match: string | null;
+}
+
 export interface RequirementDetailResponse extends RequirementResponse {
   body: string;
   traceLinks: TraceLinkResponse[];
   history: EntityHistoryResponse[];
+  baselineSource: RequirementBaselineSource | null;
 }
 
 /** 일반 이슈 화면 카드. 목록 쪽과 상관없이 사업 전체를 서버가 센다. */
