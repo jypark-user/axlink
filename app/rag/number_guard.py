@@ -194,14 +194,34 @@ class Fact:
 def facts_from_lines(
     lines: Iterable[str], source: str, subject: str = "", as_of: frozenset[DateKey] = frozenset()
 ) -> list[Fact]:
-    """집계·그림의 줄. 대상어는 그 묶음 전체(제목·지표명·라벨·산출 근거)의 낱말이다."""
+    """집계·그림의 줄. 대상어는 그 묶음 전체(제목·지표명·라벨·산출 근거)의 낱말이다.
+
+    기간 축 집계는 줄 머리말에 그 행의 날짜가 있다("- 일 2026-09-18: 29.7%"). 그 값의 기준
+    시점은 집계한 날이 아니라 그 날짜다(GH-123). 머리말에 날짜가 없는 줄만 as_of 를 쓴다."""
     lines = list(lines)
     words = keywords(" ".join([subject, *lines]))
     return [
-        Fact(value, unit, words, source, as_of, label=label)
+        Fact(value, unit, words, source, _row_dates(line) or as_of, label=label)
         for line in lines
         for value, unit, label in _labelled(line)
     ]
+
+
+_YEAR_MONTH = re.compile(r"(?<!\d)(\d{4})-(\d{1,2})(?![\d\-])")
+
+
+def _row_dates(line: str) -> frozenset[DateKey]:
+    """줄 머리말(첫 콜론 앞)의 날짜. 2026-09-18 은 그날, 2026-09 는 그 달이다."""
+    colon = line.find(":")
+    if colon < 0:
+        return frozenset()
+    head = line[:colon]
+    found = dates_in(head)
+    for m in _YEAR_MONTH.finditer(_DATE_FULL.sub(" ", head)):
+        month = int(m.group(2))
+        if 1 <= month <= 12:
+            found.add((int(m.group(1)), month, None))
+    return frozenset(found)
 
 
 # 값의 뜻을 풀어 쓴 줄. 설명 문장의 낱말을 라벨로 쓰면 다른 값이 막힌다

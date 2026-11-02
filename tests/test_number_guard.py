@@ -86,6 +86,40 @@ def test_기준_시점이_다르면_막는다():
     assert _reasons(_checker(), "10월 2일 기준 진척률은 29.7%입니다.") == []
 
 
+def _trend_checker() -> g.Checker:
+    """기간 축 집계. 집계한 날은 10-07 이고 행마다 날짜가 따로 있다(GH-123 재현 값)."""
+    facts = g.facts_from_lines(
+        ["- 일 2026-09-18: 29.7%", "- 일 2026-10-06: 73.4%", "- 산출 근거: 일별 스냅샷의 진척률"],
+        "집계",
+        subject="진척률 추세",
+        as_of=g.as_of_date("2026-10-07T03:00:00Z"),
+    )
+    facts += g.facts_from_lines(
+        ["- 월 2026-09: 41.0%", "- 월 2026-10: 73.4%"], "그림 1", subject="월별 진척률",
+        as_of=g.as_of_date("2026-10-07T03:00:00Z"),
+    )
+    return g.Checker(facts, subjects=g.DOMAIN_TERMS | g.keywords("진척률 추세 월별"))
+
+
+def test_기간_축_값은_그_행의_날짜가_기준_시점이다():
+    ck = _trend_checker()
+    # GH-123: 날짜를 맞게 쓴 추세 문장이 집계한 날(10-07)과 다르다고 막혔다
+    assert _reasons(ck, "9월 18일 진척률은 29.7%였고 10월 6일에는 73.4%로 올랐습니다.") == []
+    assert _reasons(ck, "2026년 9월 진척률은 41.0%입니다.") == []
+    # 다른 행의 날짜에 붙이면 여전히 막는다
+    assert _reasons(ck, "10월 6일 진척률은 29.7%입니다.") == ["29.7%:기준 시점 불일치"]
+    assert _reasons(ck, "2026년 10월 진척률은 41.0%입니다.") == ["41%:기준 시점 불일치"]
+    # 근거에 없는 값은 그대로 막는다(GH-123 의 7건)
+    assert _reasons(ck, "이 기간 7건이 늘었습니다.") == ["7건:근거에 없는 값"]
+
+
+def test_머리말에_날짜가_없는_줄은_집계한_날을_쓴다():
+    assert g._row_dates("- 대표 진척률: 29.7%") == frozenset()
+    assert g._row_dates("- 산출 근거: 2026-09-18 부터 센다") == frozenset()
+    assert g._row_dates("- 일 2026-09-18: 29.7%") == {(2026, 9, 18)}
+    assert g._row_dates("- 월 2026-09: 41.0%") == {(2026, 9, None)}
+
+
 def test_질문의_숫자는_근거가_아니다():
     ck = _checker("진척률이 30% 넘었어?")
     assert _reasons(ck, "네, 진척률은 30%를 넘었습니다.") == ["30%:근거에 없는 값"]
