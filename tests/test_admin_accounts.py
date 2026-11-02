@@ -24,7 +24,7 @@ def made():
     with tx() as cur:
         every = ids["users"] + ids["orgs"]
         cur.execute("delete from entity_history where entity_id::text = any(%s)", (every,))
-        cur.execute("delete from refresh_token where user_id::text = any(%s)", (ids["users"],))
+        cur.execute("delete from refresh_token where app_user_id::text = any(%s)", (ids["users"],))
         cur.execute("delete from app_user where id::text = any(%s)", (ids["users"],))
         cur.execute("delete from organization where id::text = any(%s)", (ids["orgs"],))
 

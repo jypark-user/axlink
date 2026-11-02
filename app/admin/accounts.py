@@ -195,7 +195,7 @@ def create_client_user(
             )
     except psycopg.errors.UniqueViolation as exc:
         raise errors.ApiError(409, "USERNAME_EXISTS", "이미 쓰고 있는 아이디입니다.") from exc
-    _history(cur, principal, "USER", user_id, "created", None, f"{username} ({org['name']})")
+    _history(cur, principal, "APP_USER", user_id, "created", None, f"{username} ({org['name']})")
     return ClientUserCreatedResponse(
         id=user_id, organizationId=str(org["id"]), username=username, name=name,
         role="CLIENT", status="ACTIVE", temporaryPassword=temporary,
@@ -222,4 +222,4 @@ def set_user_status(
     cur.execute(
         "update app_user set status = %s, updated_at = now() where id = %s", (req.status, user_id)
     )
-    _history(cur, principal, "USER", user_id, "status", user["status"], req.status)
+    _history(cur, principal, "APP_USER", user_id, "status", user["status"], req.status)
