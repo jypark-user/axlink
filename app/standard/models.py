@@ -46,6 +46,15 @@ class RequirementResponse(BaseModel):
     inBaseline: bool = False  # noqa: N815
 
 
+class IssueMilestone(BaseModel):
+    """이슈에 원천이 지정한 마일스톤(ARC-023). 이름·기한·상태는 원천 값 그대로다."""
+
+    title: str
+    dueOn: str | None  # noqa: N815
+    state: str  # OPEN | CLOSED
+    url: str | None
+
+
 class IssueResponse(BaseModel):
     """작업·결함 한 건. 도구가 달라도 같은 모양이다(GitHub 이슈, Redmine 작업·결함)."""
 
@@ -60,6 +69,7 @@ class IssueResponse(BaseModel):
     resolvedAt: str | None  # noqa: N815
     source: SourceRef
     updatedAt: str  # noqa: N815
+    milestone: IssueMilestone | None = None
 
 
 class IssueSummaryResponse(BaseModel):

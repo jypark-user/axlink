@@ -86,6 +86,53 @@ def upsert_issue(
     return str(row["id"])
 
 
+def upsert_milestone(
+    cur: Any, project_id: str, connection_id: str, external_id: str, rec: dict[str, Any]
+) -> str:
+    """원천 마일스톤 하나(ARC-023). 매 수집마다 목록 전체가 오므로 기한·상태는 늘 원천 값이다."""
+    row = fetch_one(
+        cur,
+        """
+        insert into milestone
+          (project_id, tool_connection_id, external_id, number, title, due_on, state,
+           closed_at, source_url, source_updated_at)
+        values (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+        on conflict (tool_connection_id, external_id)
+        do update set
+           number = excluded.number, title = excluded.title, due_on = excluded.due_on,
+           state = excluded.state, closed_at = excluded.closed_at,
+           source_url = excluded.source_url, source_updated_at = excluded.source_updated_at,
+           updated_at = now()
+        returning id
+        """,
+        (
+            project_id, connection_id, external_id, rec["number"], rec["title"], rec["due_on"],
+            rec["state"], rec["closed_at"], rec["source_url"], rec["source_updated_at"],
+        ),
+    )
+    return str(row["id"])
+
+
+def link_issue_milestones(
+    cur: Any, connection_id: str, links: list[tuple[str, int | None]]
+) -> None:
+    """이슈마다 원천이 지정한 마일스톤 번호로 같은 연결의 마일스톤을 잇는다.
+    번호가 없으면 비운다."""
+    for issue_id, number in links:
+        cur.execute(
+            """
+            update issue
+               set milestone_id = (select m.id from milestone m
+                                    where m.tool_connection_id = %s and m.number = %s)
+             where id = %s
+               and milestone_id is distinct from (select m.id from milestone m
+                                                   where m.tool_connection_id = %s
+                                                     and m.number = %s)
+            """,
+            (connection_id, number, issue_id, connection_id, number),
+        )
+
+
 def upsert_risk(
     cur: Any, project_id: str, connection_id: str, external_id: str, rec: dict[str, Any]
 ) -> str:
@@ -545,11 +592,14 @@ _ISSUE_COLUMNS = """
     i.id, i.project_id, i.issue_key, i.title, i.status, i.severity, i.assignee,
     i.resolved_at, i.source_updated_at, i.updated_at, i.source_priority,
     i.tool_connection_id, i.external_id, i.external_url, i.source_kind,
-    c.tool as tool_name, c.name as connection_name, c.target_resource
+    c.tool as tool_name, c.name as connection_name, c.target_resource,
+    m.title as milestone_title, m.due_on as milestone_due_on, m.state as milestone_state,
+    m.source_url as milestone_url
 """
 _ISSUE_FROM = """
     from issue i
     left join tool_connection c on c.id = i.tool_connection_id
+    left join milestone m on m.id = i.milestone_id
 """
 
 

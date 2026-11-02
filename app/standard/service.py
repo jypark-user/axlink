@@ -30,6 +30,7 @@ from app.standard import (
 )
 from app.standard.mapping_rules import MappingRules
 from app.standard.models import (
+    IssueMilestone,
     IssueResponse,
     IssueSourceCount,
     IssueSummaryResponse,
@@ -62,6 +63,8 @@ def promote_connection(cur: Any, connection: dict[str, Any], port: EmbeddingPort
     if connection["tool"] == "REDMINE":
         return _promote_redmine(cur, connection, rules, port, result, sources)
 
+    # 원본은 종류 이름 순서로 읽혀 이슈가 마일스톤보다 먼저 온다. 잇기는 다 읽은 뒤에 한다
+    milestone_links: list[tuple[str, int | None]] = []
     for raw in _raw_artifacts(cur, connection_id):
         payload, kind, external_id = raw["payload_jsonb"], raw["object_kind"], raw["external_id"]
 
@@ -79,6 +82,7 @@ def promote_connection(cur: Any, connection: dict[str, Any], port: EmbeddingPort
             else:
                 rec = mapping.to_issue(payload)
                 row_id = repository.upsert_issue(cur, project_id, connection_id, external_id, rec)
+                milestone_links.append((row_id, mapping.milestone_number(payload)))
                 target = "ISSUE"
                 sources.append(
                     indexing.IndexSource(
@@ -90,8 +94,13 @@ def promote_connection(cur: Any, connection: dict[str, Any], port: EmbeddingPort
                         uri=rec["external_url"],
                     )
                 )
-        elif kind in ("milestone", "tree", "design_doc"):
-            # 원본 보존이 목적이다. 일정 지표(SWFR.PIP.007)와 산출물 판정(ARC-016)이 여기서 읽는다.
+        elif kind == "milestone":
+            # 이름·기한·상태를 일반 이슈 화면에 보인다(ARC-023). 일정 준수율은 SWFR.PIP.007 몫이다
+            rec = mapping.to_milestone(payload)
+            repository.upsert_milestone(cur, project_id, connection_id, external_id, rec)
+            target = "MILESTONE"
+        elif kind in ("tree", "design_doc"):
+            # 원본 보존이 목적이다. 산출물 판정(ARC-016)이 여기서 읽는다.
             # 저장소 설계 문서는 산출물로 올리지 않는다. 원본이 곧 설계 근거의 출발점이다(ARC-024)
             result.raw_only += 1
             continue
@@ -115,6 +124,7 @@ def promote_connection(cur: Any, connection: dict[str, Any], port: EmbeddingPort
         result.upserted += 1
         result.by_type[target] = result.by_type.get(target, 0) + 1
 
+    repository.link_issue_milestones(cur, connection_id, milestone_links)
     return _finish_indexing(cur, port, result, sources, project_id)
 
 
@@ -324,6 +334,7 @@ def list_issues(
             resolvedAt=r["resolved_at"].isoformat() if r["resolved_at"] else None,
             source=_source_ref(r),
             updatedAt=(r["source_updated_at"] or r["updated_at"]).isoformat(),
+            milestone=_milestone(r),
         )
         for r in rows
     ]
@@ -387,4 +398,16 @@ def work_product_checklist(
         approvedCount=sum(1 for i in items if i.status == "APPROVED"),
         totalCount=len(items),
         items=items,
+    )
+
+
+def _milestone(r: dict[str, Any]) -> IssueMilestone | None:
+    if r.get("milestone_title") is None:
+        return None
+    due = r.get("milestone_due_on")
+    return IssueMilestone(
+        title=r["milestone_title"],
+        dueOn=due.isoformat() if due else None,
+        state=r["milestone_state"],
+        url=r.get("milestone_url"),
     )

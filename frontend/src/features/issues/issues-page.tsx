@@ -27,6 +27,7 @@ import { badgeVariantFor, label } from '@/lib/labels';
 import { fetchAllPages } from '@/lib/paging';
 import { toQueryString } from '@/lib/query';
 import { useAsync } from '@/lib/use-async';
+import { localToday, milestoneText } from '@/features/issues/milestone-text';
 import type {
   IssueResponse,
   IssueSourceCount,
@@ -249,6 +250,9 @@ function IssueDetailSheet({
                   </span>
                 )}
               </DetailRow>
+              <DetailRow term="마일스톤">
+                <MilestoneCell issue={issue} />
+              </DetailRow>
               <DetailRow term="담당">{issue.assignee ?? '-'}</DetailRow>
               <DetailRow term="수정일">
                 <span className="tnum">{formatDateTime(issue.updatedAt)}</span>
@@ -263,6 +267,30 @@ function IssueDetailSheet({
         )}
       </SheetContent>
     </Sheet>
+  );
+}
+
+/** 원천 마일스톤. 기한이 지났는데 열려 있으면 기한만 강조한다(지연 판정은 하지 않는다). */
+function MilestoneCell({ issue }: { issue: IssueResponse }): ReactNode {
+  const m = milestoneText(issue.milestone, localToday());
+  if (!issue.milestone) return <span className="text-muted-foreground text-xs">{m.text}</span>;
+  return (
+    <span
+      className="text-xs"
+      title={m.overdue ? '기한이 지났고 원천에서 아직 열려 있습니다' : undefined}
+    >
+      {issue.milestone.title}
+      {m.due && (
+        <span className={m.overdue ? 'text-warning font-medium' : 'text-muted-foreground'}>
+          {' '}
+          · {m.due}
+        </span>
+      )}
+      <span className="text-muted-foreground">
+        {' '}
+        · {issue.milestone.state === 'CLOSED' ? '완료' : '진행 중'}
+      </span>
+    </span>
   );
 }
 
@@ -322,6 +350,11 @@ function buildColumns(): ColumnDef<IssueResponse, unknown>[] {
       cell: ({ row }) => (
         <Badge variant={badgeVariantFor(row.original.status)}>{label(row.original.status)}</Badge>
       ),
+    },
+    {
+      id: 'milestone',
+      header: '마일스톤',
+      cell: ({ row }) => <MilestoneCell issue={row.original} />,
     },
     {
       accessorKey: 'assignee',

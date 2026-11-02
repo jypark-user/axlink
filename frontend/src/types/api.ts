@@ -708,6 +708,17 @@ export interface IssueResponse {
   resolvedAt: string | null;
   source: SourceRef;
   updatedAt: string;
+  /** 원천이 지정한 마일스톤. 없으면 null (ARC-023) */
+  milestone: IssueMilestone | null;
+}
+
+/** 원천 마일스톤의 이름·기한·상태. 원천 값 그대로다 */
+export interface IssueMilestone {
+  title: string;
+  /** 기한 YYYY-MM-DD. 원천에 없으면 null */
+  dueOn: string | null;
+  state: 'OPEN' | 'CLOSED';
+  url: string | null;
 }
 
 export interface WorkProductResponse {
