@@ -1,10 +1,11 @@
-"""최고관리자 운영 화면 API. 지금은 서버 오류 기록만 있다."""
+"""최고관리자 운영 화면 API. 서버 오류 기록, 발주기관 조직·계정 발급(GH-187)."""
 
 from typing import Annotated, Any
 
-from fastapi import APIRouter, Query
+from fastapi import APIRouter, Query, Response
 from pydantic import BaseModel
 
+from app.admin import accounts
 from app.auth.deps import Principal
 from app.common import error_log, errors
 from app.common.paging import PageResponse
@@ -69,3 +70,49 @@ def clear_errors(principal: Principal) -> None:
     _require_admin(principal)
     with tx() as cur:
         error_log.clear(cur)
+
+
+# --- 발주기관 조직·계정 (GH-187) ---------------------------------------------
+
+
+@router.get("/organizations", response_model=list[accounts.OrganizationResponse])
+def list_organizations(
+    principal: Principal, type: str | None = None  # noqa: A002 — 화면 쿼리 이름
+) -> list[accounts.OrganizationResponse]:
+    with tx() as cur:
+        return accounts.list_organizations(cur, principal, type)
+
+
+@router.post("/organizations", response_model=accounts.OrganizationResponse, status_code=201)
+def create_organization(
+    principal: Principal, req: accounts.OrganizationCreateRequest
+) -> accounts.OrganizationResponse:
+    with tx() as cur:
+        return accounts.create_organization(cur, principal, req)
+
+
+@router.patch("/organizations/{org_id}", response_model=accounts.OrganizationResponse)
+def rename_organization(
+    org_id: str, principal: Principal, req: accounts.OrganizationUpdateRequest
+) -> accounts.OrganizationResponse:
+    with tx() as cur:
+        return accounts.rename_organization(cur, principal, org_id, req)
+
+
+@router.post("/users", response_model=accounts.ClientUserCreatedResponse, status_code=201)
+def create_client_user(
+    principal: Principal, req: accounts.ClientUserCreateRequest
+) -> accounts.ClientUserCreatedResponse:
+    """발주기관 담당자 계정. 첫 비밀번호는 이 응답에만 담긴다."""
+    with tx() as cur:
+        return accounts.create_client_user(cur, principal, req)
+
+
+@router.patch("/users/{user_id}/status", status_code=204, response_class=Response)
+def set_user_status(
+    user_id: str, principal: Principal, req: accounts.UserStatusRequest
+) -> Response:
+    with tx() as cur:
+        accounts.set_user_status(cur, principal, user_id, req)
+    return Response(status_code=204)
+
