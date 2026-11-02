@@ -4,9 +4,13 @@
 연결은 용역사(CONTRACTOR)가 자기 사업에 붙인다. 접근 범위는 사업 단위로 막는다.
 """
 
+from collections.abc import Iterator
+from contextlib import contextmanager
 from datetime import UTC, datetime
 from typing import Any
 from urllib.parse import urlsplit
+
+import psycopg
 
 from app.auth import repository as auth_repo
 from app.auth.models import AuthPrincipal
@@ -34,6 +38,19 @@ def _require_project(cur: Any, principal: AuthPrincipal, project_id: str) -> Non
     )
     if project_id not in allowed:
         raise errors.project_access_denied()
+
+
+@contextmanager
+def _unique_target(cur: Any) -> Iterator[None]:
+    """같은 사업·도구·서버·대상의 연결은 하나다(V57). 서버가 다르면 대상 식별자가 같아도 된다."""
+    try:
+        with cur.connection.transaction():
+            yield
+    except psycopg.errors.UniqueViolation as exc:
+        raise errors.ApiError(
+            409, "CONNECTION_DUPLICATE",
+            "이 사업에 같은 서버의 같은 대상이 이미 연결돼 있습니다. 기존 연결을 고쳐 쓰세요.",
+        ) from exc
 
 
 # http 를 받는 같은 기계 주소. 문자열 앞부분이 아니라 실제 호스트로 비교한다
@@ -127,11 +144,12 @@ def create(
     hint = crypto.hint(token)
     # 저장 전에 규칙 형식을 검증한다 — 오타 난 키가 조용히 저장되면 못 찾는다.
     rules = MappingRules.from_json(req.mappingRules) if req.mappingRules else None
-    row = repository.insert(
-        cur, project_id, principal.org_id, req.tool, req.name, req.baseUrl,
-        req.targetResource, encrypted, hint,
-        rules.to_json() if rules else None,
-    )
+    with _unique_target(cur):
+        row = repository.insert(
+            cur, project_id, principal.org_id, req.tool, req.name, req.baseUrl,
+            req.targetResource, encrypted, hint,
+            rules.to_json() if rules else None,
+        )
     return _to_response(cur, principal, row)
 
 
@@ -202,12 +220,13 @@ def update(
         value is not None and value != conn[column]
         for value, column in ((req.baseUrl, "base_url"), (req.targetResource, "target_resource"))
     )
-    repository.update_connection(
-        cur, connection_id, datetime.now(UTC),
-        name=req.name, base_url=req.baseUrl, target_resource=req.targetResource,
-        auth_encrypted=encrypted, auth_hint=hint,
-        reset_status=changed_target or req.credential is not None,
-    )
+    with _unique_target(cur):
+        repository.update_connection(
+            cur, connection_id, datetime.now(UTC),
+            name=req.name, base_url=req.baseUrl, target_resource=req.targetResource,
+            auth_encrypted=encrypted, auth_hint=hint,
+            reset_status=changed_target or req.credential is not None,
+        )
     return _to_response(cur, principal, repository.find_by_id(cur, connection_id))
 
 

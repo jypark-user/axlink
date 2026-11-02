@@ -408,3 +408,38 @@ def test_retry_links_new_job_to_failed_one(client, as_pm, monkeypatch):
     # 성공한 잡은 재시도 대상이 아니다
     again = client.post(f"/api/sync-jobs/{retried['id']}/retry", headers=_auth(token))
     assert again.status_code == 400
+
+
+def _redmine_body(base_url: str, name: str) -> dict:
+    return {
+        "tool": "REDMINE", "name": name, "baseUrl": base_url, "targetResource": "pms",
+        "credential": {"accessToken": "rm_fakeKey1234567890abcdef"},
+    }
+
+
+@requires_db
+def test_같은_프로젝트_식별자도_서버가_다르면_따로_연결한다(client, as_pm):
+    """GH-145. 예전에는 서버 주소 없이 (사업, 도구, 대상) 으로 막혀 둘째 연결이 500 이었다."""
+    token, _ = as_pm
+    url = f"/api/projects/{PID}/connections"
+    a = client.post(url, json=_redmine_body("https://rm-a.example", "A 서버"), headers=_auth(token))
+    b = client.post(url, json=_redmine_body("https://rm-b.example", "B 서버"), headers=_auth(token))
+    assert a.status_code == 201, a.text
+    assert b.status_code == 201, b.text
+    assert a.json()["id"] != b.json()["id"]
+
+    # 같은 서버는 대소문자·끝 빗금이 달라도 같은 서버다
+    dup = client.post(
+        url, json=_redmine_body("https://RM-A.example/", "A 서버 다시"), headers=_auth(token)
+    )
+    assert dup.status_code == 409, dup.text
+    assert dup.json()["code"] == "CONNECTION_DUPLICATE"
+
+    # 고쳐서 같은 서버·대상으로 만들어도 막는다. 원래 값은 그대로다
+    moved = client.patch(
+        f"/api/connections/{b.json()['id']}", json={"baseUrl": "https://rm-a.example/"},
+        headers=_auth(token),
+    )
+    assert moved.status_code == 409, moved.text
+    listed = client.get(url, headers=_auth(token)).json()
+    assert {c["baseUrl"] for c in listed} == {"https://rm-a.example", "https://rm-b.example"}
