@@ -2,6 +2,7 @@ import { render, screen } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
 import { describe, expect, it, vi } from 'vitest';
 import { RequirementDetailSheet } from '@/features/traceability/requirement-detail-sheet';
+import { evidenceLocation } from '@/features/traceability/trace-evidence';
 import type { RequirementDetailResponse } from '@/types/api';
 
 // 요구사항 상세(GH-158). 확정 명세서의 원문 위치, 끊긴 연결의 사유, 변경 이력이 화면에 보여야 한다.
@@ -41,6 +42,47 @@ const detail = {
       externalUrl: 'https://github.com/o/r/commit/abc1234',
       createdAt: '2026-10-29T08:00:00Z',
       statusReason: '커밋 메시지가 바뀌어 근거가 사라졌다',
+    },
+    {
+      id: 'l2',
+      projectId: 'p1',
+      fromType: 'REPO_DOCUMENT',
+      fromId: 'doc1',
+      fromLabel: 'ARC-004',
+      toType: 'REQUIREMENT',
+      toId: 'r1',
+      toLabel: 'SWFR.CON.001',
+      linkKind: 'DESIGNS',
+      origin: 'AUTO',
+      status: 'ACTIVE',
+      evidenceKind: 'DOC_REQ_REF',
+      evidenceText: '| SWFR.CON.001 | 포트 인터페이스 | 4.1 |',
+      externalUrl: 'https://github.com/o/r/blob/abc1234def/docs/20-design/ARC-004.md#L88',
+      createdAt: '2026-10-29T08:00:00Z',
+      evidenceMeta: {
+        path: 'docs/20-design/ARC-004.md',
+        line: 88,
+        section: '9. 대응표',
+        commitSha: 'abc1234def5678',
+        docStatusText: '확정',
+      },
+    },
+    {
+      id: 'l3',
+      projectId: 'p1',
+      fromType: 'ISSUE',
+      fromId: 'i1',
+      fromLabel: 'GH-77 수기 연결 이슈',
+      toType: 'REQUIREMENT',
+      toId: 'r1',
+      toLabel: 'SWFR.CON.001',
+      linkKind: 'IMPLEMENTS',
+      origin: 'MANUAL',
+      status: 'ACTIVE',
+      evidenceKind: null,
+      evidenceText: null,
+      externalUrl: null,
+      createdAt: '2026-10-29T08:00:00Z',
     },
   ],
   history: [
@@ -96,6 +138,32 @@ describe('요구사항 상세', () => {
     expect(await screen.findByText(/근거 사라짐/)).toBeInTheDocument();
     expect(screen.getByText(/커밋 메시지가 바뀌어 근거가 사라졌다/)).toBeInTheDocument();
     expect(screen.getByText(/v1 \(새로 들어옴\)/)).toBeInTheDocument();
+  });
+
+  // 연결마다 근거 유형과 원문 위치가 보여야 사람이 확인할 수 있다 (SWFR.PIP.004)
+  it('연결마다 근거 유형과 원문 위치를 보인다. 수기 연결은 그렇게 적는다', async () => {
+    render(
+      <MemoryRouter>
+        <RequirementDetailSheet projectId="p1" requirementId="r1" onClose={() => {}} />
+      </MemoryRouter>,
+    );
+    expect(await screen.findByText(/저장소 설계 문서의 요구사항 참조/)).toBeInTheDocument();
+    expect(
+      screen.getByText(
+        /docs\/20-design\/ARC-004.md · 88줄 · 9. 대응표 · 커밋 abc1234 · 문서 상태 확정/,
+      ),
+    ).toBeInTheDocument();
+    expect(screen.getByText(/사람이 직접 이음/)).toBeInTheDocument();
+    // 알지 못하는 유형은 숨기지 않고 그대로 적는다
+    expect(screen.getByText(/COMMIT_MESSAGE/)).toBeInTheDocument();
+    const doc = screen.getByRole('link', { name: /ARC-004/ });
+    expect(doc).toHaveAttribute('href', expect.stringContaining('#L88'));
+  });
+
+  it('원문 위치는 저장된 값만 잇고 없으면 null 이다', () => {
+    expect(evidenceLocation(null)).toBeNull();
+    expect(evidenceLocation({})).toBeNull();
+    expect(evidenceLocation({ path: 'a.md', line: 3 })).toBe('a.md · 3줄');
   });
 
   it('닫혀 있으면 불러오지 않는다', () => {

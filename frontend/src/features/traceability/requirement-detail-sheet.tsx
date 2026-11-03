@@ -14,6 +14,7 @@ import { RequirementStatusBadge } from '@/components/common/requirement-status';
 import { api } from '@/lib/http';
 import { formatDateTime } from '@/lib/format';
 import { label } from '@/lib/labels';
+import { EVIDENCE_KIND_TEXT, evidenceLocation } from '@/features/traceability/trace-evidence';
 import { cn } from '@/lib/utils';
 import { useAsync } from '@/lib/use-async';
 import type {
@@ -245,9 +246,22 @@ function LinkItem({
           {link.origin === 'MANUAL' ? ' · 수기' : ''}
         </span>
       </div>
+      {(link.evidenceKind || link.origin === 'MANUAL') && (
+        <p className="text-muted-foreground mt-1 text-xs">
+          근거 유형:{' '}
+          {link.evidenceKind
+            ? (EVIDENCE_KIND_TEXT[link.evidenceKind] ?? link.evidenceKind)
+            : '사람이 직접 이음'}
+        </p>
+      )}
       {link.evidenceText && (
         <p className="text-muted-foreground mt-1 truncate text-xs" title={link.evidenceText}>
-          근거: {link.evidenceText}
+          근거 원문: {link.evidenceText}
+        </p>
+      )}
+      {evidenceLocation(link.evidenceMeta) && (
+        <p className="text-muted-foreground mt-1 truncate text-xs">
+          원문 위치: {evidenceLocation(link.evidenceMeta)}
         </p>
       )}
       {link.statusReason && (
