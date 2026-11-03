@@ -1,42 +1,42 @@
 req_id,req_title,task_item,design_id,test_id,issue_no,commit_sha,status,updated_at
-QUR.CON.001,커넥터는 원천 도구의 데이터를 변경하지 않아야 한다 (읽기 전용),SFR.CON.002,ARC-003 ARC-004 IM-003(초안),TST-007,,,draft,2026-11-02
-QUR.PIP.001,근거가 없는 추적관계를 생성하지 않아야 한다,SFR.PIP.002,ARC-007 ARC-024 ARC-028 IM-003(초안),TST-013,,18791ebb f82d470a,implemented,2026-11-02
-QUR.RAG.001,외부 클라우드 LLM에 의존하지 않고 외부 인터넷 연결 없이 질의·응답이 동작해야 한다,SFR.RAG.001,ARC-011 IM-003(초안),TST-031,,,draft,2026-11-02
-QUR.RAG.002,"답변에 포함되는 수치는 집계 결과에서만 제공하며, LLM이 수치를 생성하지 않아야 한다",SFR.RAG.003,ARC-009 ARC-010 ARC-013 ARC-014 ARC-015 ARC-017 ARC-020 IM-003(초안),TST-037,GH-123,a8fbabb8 d0e83231,implemented,2026-11-02
-QUR.WEB.001,발주기관 화면에서 원천 데이터를 수정하는 기능을 제공하지 않아야 한다,SFR.WEB.001,IM-003(초안),TST-023,,56ab42a1 a0d6978b d19ce37a,implemented,2026-11-02
-QUR.WEB.002,"도구 고유 용어 대신 관리 용어를 사용하고, 각 지표에 산출 근거를 함께 제시해야 한다",SFR.WEB.002,ARC-018 ARC-025(초안) IM-003(초안),TST-024,,5d52bb9b 8276236c,implemented,2026-11-02
-QUR.WEB.003,"요청과 보고는 AX Link 내부에만 기록하며, 원천 도구에는 어떤 데이터도 기록하지 않아야 한다",SFR.WEB.003,ARC-008 IM-003(초안),TST-028,,,draft,2026-11-02
-SER.SEC.001,도구 인증정보(토큰·API Key)를 암호화하여 저장하고 화면·로그에 노출하지 않아야 한다,SFR.SEC.001,ARC-029 IM-003(초안),TST-039,,2f820d79,implemented,2026-11-02
-SER.SEC.002,"외부 인터넷 접속 없이 설치·구동이 가능해야 하며, 필요한 반입 요소를 문서화해야 한다",SFR.SEC.001,ARC-026 IM-003(초안),TST-040,,,draft,2026-11-02
-SER.SEC.003,"발주기관·용역업체 역할을 구분하고, 용역업체는 자신이 연결된 프로젝트만 조회할 수 있어야 한다",SFR.SEC.001,ARC-008 ARC-010 ARC-029 IM-003(초안),TST-041,GH-138 GH-187 GH-9,1f4b8155 4acb45cc 5fc860cb 652648aa b2b1a33f c04f8d28 c6f27a62 e4fe77de,implemented,2026-11-02
-SWFR.CON.001,"커넥터는 공통 인터페이스를 구현하며, 신규 도구 연동이 커넥터 구현체 추가만으로 가능해야 한다",SFR.CON.001,ARC-003 IM-003(초안),TST-001,GH-1,172a6ba2,implemented,2026-11-02
-SWFR.CON.002,연동 대상과 필드 매핑을 코드 수정 없이 설정으로 변경할 수 있어야 한다,SFR.CON.001,ARC-005 IM-003(초안),TST-002,GH-2 RM-4,523c3a65 94f4e3ae,implemented,2026-11-02
-SWFR.CON.003,GitHub에서 저장소·커밋·Pull Request·이슈·마일스톤을 수집해야 한다,SFR.CON.002,ARC-003 ARC-023(초안) IM-003(초안),TST-003,GH-130 GH-3,33d1efd2 5bc940cd 6cfa2453 a94ea2bd e9935d7e,implemented,2026-11-02
-SWFR.CON.004,Redmine에서 프로젝트·이슈·버전·트래커·이슈관계를 수집해야 한다,SFR.CON.002,ARC-003 IM-003(초안),TST-004,GH-136 GH-4 RM-2,14245a70 9095aa0b 969cba57 ad40f9aa,implemented,2026-11-02
-SWFR.CON.005,"마지막 수집 시점 이후의 변경분만 수집하며, 반복 수집이 재현 가능해야 한다",SFR.CON.002,ARC-003 IM-003(초안),TST-005,GH-5 RM-3,5334e2b5 62c1a22c c83f7638 cfbc26f6,implemented,2026-11-02
-SWFR.CON.006,연동 대상 도구의 인증정보를 등록하고 연결 상태를 확인할 수 있어야 한다,SFR.CON.002,IM-003(초안),TST-006,GH-142 GH-145 GH-6,0731e06a 0b84469b 1b2a7b7c 1d38b3df 37c2e6de 50a3b5d3 50f2e9fb 7d9c159d 894c1392 c7e80684 d0cf4ed6 e459d716 e4c7a0f5 f5782ffb,implemented,2026-11-02
-SWFR.CON.007,"PDF·DOCX·XLSX·HWP·HWPX에서 텍스트와 표를 추출하되, 표는 행·열 구조를 유지해야 한다",SFR.CON.003,ARC-009 ARC-021 IM-003(초안),TST-008,GH-10 GH-121 GH-8 GH-9,2baa4e4c 2df88818 67d0156a 6aa9858a 76d0b7cf 7de89481 8ae98b79 8b4e76dd 95660a6a a6a519df b1c0caa2 c7f26423 cc2e6259 dcbd06d3 f4cb667c f8ba3438,implemented,2026-11-02
-SWFR.DEM.001,수집 → 표준화 → 집계 → 화면 → 질의로 이어지는 전 과정을 하나의 시스템에서 시연할 수 있어야 한다,SFR.DEM.001,ARC-026 IM-003(초안),TST-038,,f4dc5cf5,implemented,2026-11-02
-SWFR.PIP.001,ISO/IEC 29110-5-1-2 Basic Profile의 산출물 분류를 참조하여 관리 객체를 정의해야 한다,SFR.PIP.001,ARC-005 ARC-009 IM-003(초안),TST-009,GH-10 GH-184 GH-9,4d51978e 85bd6355 8741fb90 c4ce9058,implemented,2026-11-02
-SWFR.PIP.002,"이종 도구의 데이터를 표준 모델로 정규화하여 적재하고, 각 항목의 원천 도구·원본 ID·원문 위치를 보존해야 한다",SFR.PIP.001,ARC-005 ARC-009 ARC-027 ARC-028 ARC-030 IM-003(초안),TST-010,GH-10 GH-116 GH-139 GH-21,1651103e 1cf482c2 1d82c71c 41f96cec 658f2e97 ea44fbf1 ef6f060c,implemented,2026-11-02
-SWFR.PIP.003,요구사항·이슈·산출물·커밋 간의 추적관계를 생성해야 한다,SFR.PIP.002,ARC-007 ARC-016 ARC-024 ARC-027 ARC-028 ARC-030 IM-003(초안),TST-011,GH-1 GH-11 GH-12 GH-13 GH-132 GH-139 GH-140 GH-142 GH-145 GH-162,03adbf90 3fb960f9 4f33fb6d 534b1666 58472331 60badae8 7719f73e 82dfc185 88ead08f 94b23c9d a7407dc5 b2719760 e1dcc9d9 f2b2d346 fe7e8263,implemented,2026-11-02
-SWFR.PIP.004,추적관계마다 근거(원문 위치·링크)와 근거 유형을 보존하여 확인 가능해야 한다,SFR.PIP.002,ARC-007 ARC-024 IM-003(초안),TST-012,,,draft,2026-11-02
-SWFR.PIP.005,일별 스냅샷을 생성하여 진척·품질 추이를 산출해야 한다,SFR.PIP.003,ARC-006 IM-003(초안),TST-014,GH-14,5832ba2c 63559483 730a3192 9e8f9cf4 a47504e9 abb3537e c63b2df5 e0c441f5 eccdd35b f508b42f,implemented,2026-11-02
-SWFR.PIP.006,진척 지표는 WBS 가중치와 실적을 기준으로 진척률을 산출해야 한다,SFR.PIP.003,ARC-006 ARC-016 ARC-019 IM-003(초안),TST-015,,,draft,2026-11-02
-SWFR.PIP.007,일정 지표는 마일스톤 달성 기준으로 일정 준수율을 산출해야 한다,SFR.PIP.003,"ARC-006(미결) ARC-023(초안) IM-003(초안,미결)",TST-016,GH-132,5c53c729,implemented,2026-11-02
-SWFR.PIP.008,품질 지표는 결함 처리율·위험 처리율·요구사항 이행률(시험 통과로 검증된 요구사항 ÷ 전체 요구사항)을 산출해야 한다,SFR.PIP.003,ARC-006 ARC-025(초안) IM-003(초안),TST-017,,76789812 ea848996 f20d8ab9,implemented,2026-11-02
-SWFR.PIP.009,산출물 지표는 산출물 제출·검토 현황을 산출해야 한다,SFR.PIP.003,ARC-005 ARC-006 ARC-016 ARC-019 IM-003(초안),TST-018,,1de882a7 61c83110 db550e1e f04a3675,implemented,2026-11-02
-SWFR.PIP.010,"WBS 문서를 파싱하여 항목·가중치·계획기간·연결 산출물을 인식하고, 항목별 산출물 제출 여부로 진척 근거를 확인해야 한다. WBS가 없거나 항목이 누락된 경우 이슈 진척도 등 대체 근거로 산출하되 추정임을 표시하고, 근거가 없으면 산출하지 않는다",SFR.PIP.003,ARC-016 IM-003(초안),TST-019,GH-116 GH-121 GH-48,4bc185cc 75225139 879f59db a50960e5 a96bc4b5 aba3f58e d781a6ab daa7b577 ee52ed34,implemented,2026-11-02
-SWFR.RAG.001,자연어 질의에 대해 온프레미스 LLM으로 응답을 생성해야 한다,SFR.RAG.001,ARC-010 ARC-011 ARC-012 ARC-013 ARC-014 ARC-015 IM-003(초안),TST-029,GH-82 GH-85 GH-90 GH-91,11172f8e 20998e5e 2b85b9d8 8fdaf18b b4e3951f b9044221 cbe4312e df802902 f7f94760 fe4adfa5,implemented,2026-11-02
-SWFR.RAG.002,"모델 호출을 인터페이스로 분리하여, 모델·실행환경 교체 시 상위 계층이 변경되지 않아야 한다",SFR.RAG.001,ARC-011 ARC-022 IM-003(초안),TST-030,GH-30 GH-87 RM-5,00227310 76e84545 9b9943f4 a51b2881 c8e52e38 d3f7acfc,implemented,2026-11-02
-SWFR.RAG.003,수집 문서를 청킹하되 각 청크의 원문 위치(문서·시트·행·문단)를 보존해야 한다,SFR.RAG.002,ARC-009 ARC-010 IM-003(초안),TST-032,GH-32 GH-43,474fc928,implemented,2026-11-02
-SWFR.RAG.004,한국어를 지원하는 임베딩 모델로 색인하고 유사도 검색을 제공해야 한다,SFR.RAG.002,ARC-010 IM-003(초안),TST-033,,3184da7d,implemented,2026-11-02
-SWFR.RAG.005,문서 검색 결과와 집계 데이터 조회 결과를 결합하여 응답해야 한다,SFR.RAG.002,ARC-010 ARC-012 ARC-013 ARC-014 ARC-015 ARC-020 IM-003(초안),TST-034,GH-127 GH-91,02a1914f 238be718 2f0eaea5 60a8c8c9 6688d816 801ebbd2 83d66b97 90a2fabf 92821933 94432788 d5803568 dff57de3 f1005746,implemented,2026-11-02
-SWFR.RAG.006,답변에 근거 문서명·원문 위치·이동 링크를 함께 제시해야 한다,SFR.RAG.003,ARC-010 IM-003(초안),TST-035,,,draft,2026-11-02
-SWFR.RAG.007,검색 근거가 부족한 경우 답변을 생성하지 않고 근거 부족을 안내해야 한다,SFR.RAG.003,ARC-010 ARC-013 ARC-015 ARC-017 ARC-020 ARC-022 IM-003(초안),TST-036,,247b68c3,implemented,2026-11-02
-SWFR.WEB.001,진척률·일정 준수·품질·리스크·산출물 현황을 하나의 화면에서 확인할 수 있어야 한다,SFR.WEB.001,ARC-006 ARC-011 ARC-012 ARC-013 ARC-016 ARC-018 ARC-023(초안) ARC-027 IM-003(초안),TST-020,GH-10 GH-69 GH-89,1d21d7fd 5e809838 616dcc01 6a21d862 76a79c17 95d169e0 9e4fe2b1,implemented,2026-11-02
-SWFR.WEB.002,요구사항과 연결된 이슈·산출물·커밋의 추적관계를 조회할 수 있어야 한다,SFR.WEB.001,ARC-007 ARC-018 ARC-024 ARC-025(초안) ARC-027 IM-003(초안),TST-021,GH-140 GH-158 GH-21,158c52e0 4b1a89e4 531a58f6 67e0071d 72ea09e7 7b7b2a89 7c417590 89b8b8f0 b3bdff23 b83817d8 bda5f9c0 da4f5f96 e6551997,implemented,2026-11-02
-SWFR.WEB.003,담당자가 맡은 복수 프로젝트의 목록과 프로젝트별 요약 지표를 제공해야 한다,SFR.WEB.001,IM-003(초안),TST-022,,934d052a,implemented,2026-11-02
-SWFR.WEB.004,"요청 등록: 발주기관은 WBS 항목·산출물·이슈·리스크·지표를 대상으로 확인 요청을 등록할 수 있어야 하며, 시스템은 등록 시점의 해당 항목 상태(실적률·산출물 제출 여부·이슈 상태·관련 지표값)를 함께 저장해야 한다",SFR.WEB.003,ARC-008 ARC-016 ARC-019 IM-003(초안),TST-025,,531ecddb a808ce51 b3912079 dc78303d,implemented,2026-11-02
-SWFR.WEB.005,"조치 보고: 용역업체는 요청에 대한 조치 결과를 보고할 수 있어야 하며, 시스템은 요청 등록 시점의 저장 상태와 현재 상태를 비교한 변경 내역을 보고 내용과 나란히 제시해야 한다",SFR.WEB.003,ARC-008 ARC-019 IM-003(초안),TST-026,,1d7283c2 3403cebd bff126c3 e8004297 fec3f0fd,implemented,2026-11-02
-SWFR.WEB.006,"상태 관리: 요청은 「요청」→「조치보고」→「확인완료」 상태를 가지며, 확인완료와 재요청은 발주기관만, 조치보고는 용역업체만 수행할 수 있어야 한다. 미처리 요청 건수를 프로젝트 목록과 현황 화면에 표시해야 한다",SFR.WEB.003,ARC-008 ARC-019 IM-003(초안),TST-027,,e065dc15,implemented,2026-11-02
+QUR.CON.001,커넥터는 원천 도구의 데이터를 변경하지 않아야 한다 (읽기 전용),SFR.CON.002,ARC-003 ARC-004 IM-003(초안),TST-007,,,draft,2026-11-03
+QUR.PIP.001,근거가 없는 추적관계를 생성하지 않아야 한다,SFR.PIP.002,ARC-007 ARC-024 ARC-028 IM-003(초안),TST-013,,18791ebb f82d470a,implemented,2026-11-03
+QUR.RAG.001,외부 클라우드 LLM에 의존하지 않고 외부 인터넷 연결 없이 질의·응답이 동작해야 한다,SFR.RAG.001,ARC-011 IM-003(초안),TST-031,,,draft,2026-11-03
+QUR.RAG.002,"답변에 포함되는 수치는 집계 결과에서만 제공하며, LLM이 수치를 생성하지 않아야 한다",SFR.RAG.003,ARC-009 ARC-010 ARC-013 ARC-014 ARC-015 ARC-017 ARC-020 IM-003(초안),TST-037,GH-123,a8fbabb8 d0e83231,implemented,2026-11-03
+QUR.WEB.001,발주기관 화면에서 원천 데이터를 수정하는 기능을 제공하지 않아야 한다,SFR.WEB.001,IM-003(초안),TST-023,,56ab42a1 a0d6978b d19ce37a,implemented,2026-11-03
+QUR.WEB.002,"도구 고유 용어 대신 관리 용어를 사용하고, 각 지표에 산출 근거를 함께 제시해야 한다",SFR.WEB.002,ARC-018 ARC-025(초안) IM-003(초안),TST-024,,5d52bb9b 8276236c,implemented,2026-11-03
+QUR.WEB.003,"요청과 보고는 AX Link 내부에만 기록하며, 원천 도구에는 어떤 데이터도 기록하지 않아야 한다",SFR.WEB.003,ARC-008 IM-003(초안),TST-028,,,draft,2026-11-03
+SER.SEC.001,도구 인증정보(토큰·API Key)를 암호화하여 저장하고 화면·로그에 노출하지 않아야 한다,SFR.SEC.001,ARC-029 IM-003(초안),TST-039,,2f820d79,implemented,2026-11-03
+SER.SEC.002,"외부 인터넷 접속 없이 설치·구동이 가능해야 하며, 필요한 반입 요소를 문서화해야 한다",SFR.SEC.001,ARC-026 IM-003(초안),TST-040,GH-40,096df9ef,implemented,2026-11-03
+SER.SEC.003,"발주기관·용역업체 역할을 구분하고, 용역업체는 자신이 연결된 프로젝트만 조회할 수 있어야 한다",SFR.SEC.001,ARC-008 ARC-010 ARC-029 IM-003(초안),TST-041,GH-138 GH-187 GH-9,1f4b8155 4acb45cc 5fc860cb 652648aa b2b1a33f c04f8d28 c6f27a62 e4fe77de,implemented,2026-11-03
+SWFR.CON.001,"커넥터는 공통 인터페이스를 구현하며, 신규 도구 연동이 커넥터 구현체 추가만으로 가능해야 한다",SFR.CON.001,ARC-003 IM-003(초안),TST-001,GH-1,172a6ba2,implemented,2026-11-03
+SWFR.CON.002,연동 대상과 필드 매핑을 코드 수정 없이 설정으로 변경할 수 있어야 한다,SFR.CON.001,ARC-005 IM-003(초안),TST-002,GH-2 RM-4,523c3a65 94f4e3ae,implemented,2026-11-03
+SWFR.CON.003,GitHub에서 저장소·커밋·Pull Request·이슈·마일스톤을 수집해야 한다,SFR.CON.002,ARC-003 ARC-023(초안) IM-003(초안),TST-003,GH-130 GH-3,33d1efd2 5bc940cd 6cfa2453 a94ea2bd e9935d7e,implemented,2026-11-03
+SWFR.CON.004,Redmine에서 프로젝트·이슈·버전·트래커·이슈관계를 수집해야 한다,SFR.CON.002,ARC-003 IM-003(초안),TST-004,GH-136 GH-4 RM-2,14245a70 9095aa0b 969cba57 ad40f9aa,implemented,2026-11-03
+SWFR.CON.005,"마지막 수집 시점 이후의 변경분만 수집하며, 반복 수집이 재현 가능해야 한다",SFR.CON.002,ARC-003 IM-003(초안),TST-005,GH-5 RM-3,5334e2b5 62c1a22c c83f7638 cfbc26f6,implemented,2026-11-03
+SWFR.CON.006,연동 대상 도구의 인증정보를 등록하고 연결 상태를 확인할 수 있어야 한다,SFR.CON.002,IM-003(초안),TST-006,GH-142 GH-145 GH-6,0731e06a 0b84469b 1b2a7b7c 1d38b3df 37c2e6de 50a3b5d3 50f2e9fb 7d9c159d 894c1392 c7e80684 d0cf4ed6 e459d716 e4c7a0f5 f5782ffb,implemented,2026-11-03
+SWFR.CON.007,"PDF·DOCX·XLSX·HWP·HWPX에서 텍스트와 표를 추출하되, 표는 행·열 구조를 유지해야 한다",SFR.CON.003,ARC-009 ARC-021 IM-003(초안),TST-008,GH-10 GH-121 GH-8 GH-9,2baa4e4c 2df88818 67d0156a 6aa9858a 76d0b7cf 7de89481 8ae98b79 8b4e76dd 95660a6a a6a519df b1c0caa2 c7f26423 cc2e6259 dcbd06d3 f4cb667c f8ba3438,implemented,2026-11-03
+SWFR.DEM.001,수집 → 표준화 → 집계 → 화면 → 질의로 이어지는 전 과정을 하나의 시스템에서 시연할 수 있어야 한다,SFR.DEM.001,ARC-026 IM-003(초안),TST-038,,f4dc5cf5,implemented,2026-11-03
+SWFR.PIP.001,ISO/IEC 29110-5-1-2 Basic Profile의 산출물 분류를 참조하여 관리 객체를 정의해야 한다,SFR.PIP.001,ARC-005 ARC-009 IM-003(초안),TST-009,GH-10 GH-184 GH-9,4d51978e 85bd6355 8741fb90 c4ce9058,implemented,2026-11-03
+SWFR.PIP.002,"이종 도구의 데이터를 표준 모델로 정규화하여 적재하고, 각 항목의 원천 도구·원본 ID·원문 위치를 보존해야 한다",SFR.PIP.001,ARC-005 ARC-009 ARC-027 ARC-028 ARC-030 IM-003(초안),TST-010,GH-10 GH-116 GH-139 GH-21,1651103e 1cf482c2 1d82c71c 41f96cec 658f2e97 ea44fbf1 ef6f060c,implemented,2026-11-03
+SWFR.PIP.003,요구사항·이슈·산출물·커밋 간의 추적관계를 생성해야 한다,SFR.PIP.002,ARC-007 ARC-016 ARC-024 ARC-027 ARC-028 ARC-030 IM-003(초안),TST-011,GH-1 GH-11 GH-12 GH-13 GH-132 GH-139 GH-140 GH-142 GH-145 GH-162,03adbf90 3fb960f9 4f33fb6d 534b1666 58472331 60badae8 7719f73e 82dfc185 88ead08f 94b23c9d a7407dc5 b2719760 e1dcc9d9 f2b2d346 fe7e8263,implemented,2026-11-03
+SWFR.PIP.004,추적관계마다 근거(원문 위치·링크)와 근거 유형을 보존하여 확인 가능해야 한다,SFR.PIP.002,ARC-007 ARC-024 IM-003(초안),TST-012,,,draft,2026-11-03
+SWFR.PIP.005,일별 스냅샷을 생성하여 진척·품질 추이를 산출해야 한다,SFR.PIP.003,ARC-006 IM-003(초안),TST-014,GH-14,5832ba2c 63559483 730a3192 9e8f9cf4 a47504e9 abb3537e c63b2df5 e0c441f5 eccdd35b f508b42f,implemented,2026-11-03
+SWFR.PIP.006,진척 지표는 WBS 가중치와 실적을 기준으로 진척률을 산출해야 한다,SFR.PIP.003,ARC-006 ARC-016 ARC-019 IM-003(초안),TST-015,,,draft,2026-11-03
+SWFR.PIP.007,일정 지표는 마일스톤 달성 기준으로 일정 준수율을 산출해야 한다,SFR.PIP.003,"ARC-006(미결) ARC-023(초안) IM-003(초안,미결)",TST-016,GH-132,5c53c729,implemented,2026-11-03
+SWFR.PIP.008,품질 지표는 결함 처리율·위험 처리율·요구사항 이행률(시험 통과로 검증된 요구사항 ÷ 전체 요구사항)을 산출해야 한다,SFR.PIP.003,ARC-006 ARC-025(초안) IM-003(초안),TST-017,,76789812 ea848996 f20d8ab9,implemented,2026-11-03
+SWFR.PIP.009,산출물 지표는 산출물 제출·검토 현황을 산출해야 한다,SFR.PIP.003,ARC-005 ARC-006 ARC-016 ARC-019 IM-003(초안),TST-018,,1de882a7 61c83110 db550e1e f04a3675,implemented,2026-11-03
+SWFR.PIP.010,"WBS 문서를 파싱하여 항목·가중치·계획기간·연결 산출물을 인식하고, 항목별 산출물 제출 여부로 진척 근거를 확인해야 한다. WBS가 없거나 항목이 누락된 경우 이슈 진척도 등 대체 근거로 산출하되 추정임을 표시하고, 근거가 없으면 산출하지 않는다",SFR.PIP.003,ARC-016 IM-003(초안),TST-019,GH-116 GH-121 GH-48,4bc185cc 75225139 879f59db a50960e5 a96bc4b5 aba3f58e d781a6ab daa7b577 ee52ed34,implemented,2026-11-03
+SWFR.RAG.001,자연어 질의에 대해 온프레미스 LLM으로 응답을 생성해야 한다,SFR.RAG.001,ARC-010 ARC-011 ARC-012 ARC-013 ARC-014 ARC-015 IM-003(초안),TST-029,GH-82 GH-85 GH-90 GH-91,11172f8e 20998e5e 2b85b9d8 8fdaf18b b4e3951f b9044221 cbe4312e df802902 f7f94760 fe4adfa5,implemented,2026-11-03
+SWFR.RAG.002,"모델 호출을 인터페이스로 분리하여, 모델·실행환경 교체 시 상위 계층이 변경되지 않아야 한다",SFR.RAG.001,ARC-011 ARC-022 IM-003(초안),TST-030,GH-30 GH-87 RM-5,00227310 76e84545 9b9943f4 a51b2881 c8e52e38 d3f7acfc,implemented,2026-11-03
+SWFR.RAG.003,수집 문서를 청킹하되 각 청크의 원문 위치(문서·시트·행·문단)를 보존해야 한다,SFR.RAG.002,ARC-009 ARC-010 IM-003(초안),TST-032,GH-32 GH-43,474fc928,implemented,2026-11-03
+SWFR.RAG.004,한국어를 지원하는 임베딩 모델로 색인하고 유사도 검색을 제공해야 한다,SFR.RAG.002,ARC-010 IM-003(초안),TST-033,,3184da7d,implemented,2026-11-03
+SWFR.RAG.005,문서 검색 결과와 집계 데이터 조회 결과를 결합하여 응답해야 한다,SFR.RAG.002,ARC-010 ARC-012 ARC-013 ARC-014 ARC-015 ARC-020 IM-003(초안),TST-034,GH-127 GH-91,02a1914f 238be718 2f0eaea5 60a8c8c9 6688d816 801ebbd2 83d66b97 90a2fabf 92821933 94432788 d5803568 dff57de3 f1005746,implemented,2026-11-03
+SWFR.RAG.006,답변에 근거 문서명·원문 위치·이동 링크를 함께 제시해야 한다,SFR.RAG.003,ARC-010 IM-003(초안),TST-035,,,draft,2026-11-03
+SWFR.RAG.007,검색 근거가 부족한 경우 답변을 생성하지 않고 근거 부족을 안내해야 한다,SFR.RAG.003,ARC-010 ARC-013 ARC-015 ARC-017 ARC-020 ARC-022 IM-003(초안),TST-036,,247b68c3,implemented,2026-11-03
+SWFR.WEB.001,진척률·일정 준수·품질·리스크·산출물 현황을 하나의 화면에서 확인할 수 있어야 한다,SFR.WEB.001,ARC-006 ARC-011 ARC-012 ARC-013 ARC-016 ARC-018 ARC-023(초안) ARC-027 IM-003(초안),TST-020,GH-10 GH-69 GH-89,1d21d7fd 5e809838 616dcc01 6a21d862 76a79c17 95d169e0 9e4fe2b1,implemented,2026-11-03
+SWFR.WEB.002,요구사항과 연결된 이슈·산출물·커밋의 추적관계를 조회할 수 있어야 한다,SFR.WEB.001,ARC-007 ARC-018 ARC-024 ARC-025(초안) ARC-027 IM-003(초안),TST-021,GH-140 GH-158 GH-21,158c52e0 4b1a89e4 531a58f6 67e0071d 72ea09e7 7b7b2a89 7c417590 89b8b8f0 b3bdff23 b83817d8 bda5f9c0 da4f5f96 e6551997,implemented,2026-11-03
+SWFR.WEB.003,담당자가 맡은 복수 프로젝트의 목록과 프로젝트별 요약 지표를 제공해야 한다,SFR.WEB.001,IM-003(초안),TST-022,,934d052a,implemented,2026-11-03
+SWFR.WEB.004,"요청 등록: 발주기관은 WBS 항목·산출물·이슈·리스크·지표를 대상으로 확인 요청을 등록할 수 있어야 하며, 시스템은 등록 시점의 해당 항목 상태(실적률·산출물 제출 여부·이슈 상태·관련 지표값)를 함께 저장해야 한다",SFR.WEB.003,ARC-008 ARC-016 ARC-019 IM-003(초안),TST-025,,531ecddb a808ce51 b3912079 dc78303d,implemented,2026-11-03
+SWFR.WEB.005,"조치 보고: 용역업체는 요청에 대한 조치 결과를 보고할 수 있어야 하며, 시스템은 요청 등록 시점의 저장 상태와 현재 상태를 비교한 변경 내역을 보고 내용과 나란히 제시해야 한다",SFR.WEB.003,ARC-008 ARC-019 IM-003(초안),TST-026,,1d7283c2 3403cebd bff126c3 e8004297 fec3f0fd,implemented,2026-11-03
+SWFR.WEB.006,"상태 관리: 요청은 「요청」→「조치보고」→「확인완료」 상태를 가지며, 확인완료와 재요청은 발주기관만, 조치보고는 용역업체만 수행할 수 있어야 한다. 미처리 요청 건수를 프로젝트 목록과 현황 화면에 표시해야 한다",SFR.WEB.003,ARC-008 ARC-019 IM-003(초안),TST-027,,e065dc15,implemented,2026-11-03

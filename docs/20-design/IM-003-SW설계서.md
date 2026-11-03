@@ -785,7 +785,7 @@ dashboard.layout_json = { lg: [{i, x, y, w, h, minW, minH}] }
 | QUR.RAG.002 수치는 집계에서만 | 1.1 · 7.5 | ARC-009 · ARC-010 · ARC-013 · ARC-014 · ARC-015 · ARC-017 · ARC-020 |
 | SWFR.DEM.001 전 과정 한 시스템 | 2.6 · 2.4 | - (확정 ARC 없음) |
 | SER.SEC.001 자격증명 암호화 | 10 | - (확정 ARC 없음) |
-| SER.SEC.002 폐쇄망 설치 | 10 · 2.1 | 인프라-배치방안 |
+| SER.SEC.002 폐쇄망 설치 | 10 · 2.1 | 인프라-배치방안 · 40-manual/폐쇄망-반입-목록 |
 | SER.SEC.003 역할 구분 · 사업 범위 | 9.1 · 10 | ARC-008 · ARC-010 |
 
 ---
