@@ -1,5 +1,5 @@
 import { useState, type ReactNode } from 'react';
-import { GripVertical, Pencil, RefreshCw, Trash2 } from 'lucide-react';
+import { GripVertical, Info, Pencil, RefreshCw, Trash2 } from 'lucide-react';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import {
   AlertDialog,
@@ -46,6 +46,9 @@ export function WidgetHost({
   );
   /** 삭제는 저장과 무관하게 즉시다 — 되돌릴 수 없으니 한 번은 묻는다. */
   const [confirming, setConfirming] = useState(false);
+  /** 산출 근거를 펼쳐 둔 상태. 지표마다 근거가 붙는다 (QUR.WEB.002) — 늘 펴 두면 그림이 밀려 누르면 보인다. */
+  const [basisOpen, setBasisOpen] = useState(false);
+  const basis = state.data?.basis ?? null;
   const Renderer = resolveWidgetRenderer(widget.spec?.template ?? widget.template);
   const title = widget.spec?.title ?? widget.title;
   const empty = state.data !== null && state.data.rows.length === 0 && state.data.total === null;
@@ -71,6 +74,18 @@ export function WidgetHost({
         </CardDescription>
         <CardAction className="flex items-center gap-1">
           {/* 편집 중에는 배치가 일이다 — 새로고침은 치우고 삭제만 남긴다. */}
+          {!editing && basis && (
+            <Button
+              size="icon"
+              variant="ghost"
+              aria-label="산출 근거"
+              aria-pressed={basisOpen}
+              className={cn(basisOpen && 'text-primary')}
+              onClick={() => setBasisOpen((v) => !v)}
+            >
+              <Info className="size-4" />
+            </Button>
+          )}
           {!editing && (
             <Button size="icon" variant="ghost" aria-label="새로고침" onClick={state.reload}>
               <RefreshCw className="size-4" />
@@ -133,6 +148,14 @@ export function WidgetHost({
           <Renderer spec={widget.spec} data={state.data} />
         )}
       </CardContent>
+      {!editing && basisOpen && basis && (
+        <div className="border-border mx-4 mb-3 rounded-md border bg-muted/40 px-3 py-2">
+          <p className="text-muted-foreground text-xs font-semibold tracking-wide">산출 근거</p>
+          <p className="text-foreground mt-1 text-xs leading-relaxed" data-testid="widget-basis">
+            {basis}
+          </p>
+        </div>
+      )}
       {state.data?.truncated && (
         <div className="px-4 pb-2">
           <Badge variant="warning">상위 {state.data.rows.length}건만 표시</Badge>
