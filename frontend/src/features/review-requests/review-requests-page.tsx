@@ -176,7 +176,9 @@ function buildColumns(): ColumnDef<ReviewRequestResponse, unknown>[] {
 export function ReviewRequestsPage(): ReactNode {
   const { project } = useProjectContext();
   const { me } = useAuth();
+  // 요청은 운영 지원을 위해 최고관리자도 열 수 있다. 확인완료·다시 요청은 발주기관만이다 (SWFR.WEB.006)
   const isClient = me?.role === 'CLIENT' || me?.role === 'SUPER_ADMIN';
+  const canDecide = me?.role === 'CLIENT';
   const state = useAsync<PageResponse<ReviewRequestResponse>>(
     () =>
       api.get<PageResponse<ReviewRequestResponse>>(
@@ -246,6 +248,7 @@ export function ReviewRequestsPage(): ReactNode {
       <DetailSheet
         requestId={selectedId}
         isClient={isClient}
+        canDecide={canDecide}
         onClose={() => setSelectedId(null)}
         onChanged={state.reload}
       />
@@ -489,11 +492,14 @@ const SNAPSHOT_FIELD_LABEL: Record<string, string> = {
 function DetailSheet({
   requestId,
   isClient,
+  canDecide,
   onClose,
   onChanged,
 }: {
   requestId: string | null;
   isClient: boolean;
+  /** 확인완료·다시 요청·철회 버튼. 발주기관 계정에만 보인다. */
+  canDecide: boolean;
   onClose: () => void;
   onChanged: () => void;
 }): ReactNode {
@@ -708,7 +714,7 @@ function DetailSheet({
                 </section>
               )}
 
-              {isClient && detail.status === 'REPORTED' && (
+              {canDecide && detail.status === 'REPORTED' && (
                 <section className="flex flex-col gap-2">
                   <Label htmlFor="rrAgain">다시 요청할 내용 (미흡할 때만)</Label>
                   <Textarea
@@ -790,7 +796,7 @@ function DetailSheet({
                 </section>
               )}
 
-              {isClient &&
+              {canDecide &&
                 isCompletion &&
                 detail.status === 'CONFIRMED' &&
                 lastRecord?.kind === 'CONFIRMED' && (
