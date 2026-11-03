@@ -1097,6 +1097,8 @@ export interface WidgetDataResponse {
   appliedProjectIds: string[];
   truncated: boolean;
   generatedAt: string;
+  /** 이 값이 어떻게 산출됐는지 사람 말로 적은 문장. 카탈로그 정의에서 오고 답변 프롬프트도 같은 문장을 쓴다 (QUR.WEB.002). */
+  basis: string | null;
 }
 
 export interface WidgetResponse {

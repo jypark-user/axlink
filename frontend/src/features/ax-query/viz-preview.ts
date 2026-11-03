@@ -134,6 +134,8 @@ export function sampleInfographic(template: WidgetTemplate): SseInfographicEvent
       appliedProjectIds: [],
       truncated: false,
       generatedAt: new Date().toISOString(),
+      // 미리보기 값은 집계가 아니라 그림 표본이다. 산출 근거를 붙이면 거짓이 된다
+      basis: null,
     },
   };
 }
