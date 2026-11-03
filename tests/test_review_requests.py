@@ -111,10 +111,18 @@ def test_full_cycle_with_state_diff(client, client_token, issue_target):
     assert "resolved_at" in changed
     assert [e["kind"] for e in rep["events"]] == ["REQUESTED", "REPORTED"]
 
-    # 용역사는 확인완료를 못 한다. 발주기관이 미흡하다고 다시 요청한다
+    # 용역사는 확인완료를 못 한다. 최고관리자도 확인완료·다시 요청은 대신하지 못한다 (SWFR.WEB.006)
     assert client.post(
         f"/api/review-requests/{rid}/confirm", headers=_auth(contractor_tok)
     ).status_code == 403
+    admin_tok = client_token("r1")
+    assert client.post(
+        f"/api/review-requests/{rid}/confirm", headers=_auth(admin_tok)
+    ).status_code == 403
+    assert client.post(
+        f"/api/review-requests/{rid}/rerequest", json={"body": "x"}, headers=_auth(admin_tok)
+    ).status_code == 403
+    # 발주기관이 미흡하다고 다시 요청한다
     again = client.post(
         f"/api/review-requests/{rid}/rerequest",
         json={"body": "재발 방지 조치도 적어 주세요."},
