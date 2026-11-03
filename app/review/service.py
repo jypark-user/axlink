@@ -39,15 +39,29 @@ def _require_project(cur: Any, principal: AuthPrincipal, project_id: str) -> Non
         raise errors.project_access_denied()
 
 
-def _require_client(principal: AuthPrincipal) -> None:
+def _require_requester(principal: AuthPrincipal) -> None:
+    """요청을 여는 쪽. 운영 지원을 위해 최고관리자도 일반 확인 요청은 열 수 있다."""
     if principal.role not in ("CLIENT", "SUPER_ADMIN"):
-        raise errors.ApiError(403, "FORBIDDEN", "발주기관만 요청하고 확인할 수 있습니다.")
+        raise errors.ApiError(403, "FORBIDDEN", "발주기관만 확인을 요청할 수 있습니다.")
+
+
+def _require_client(principal: AuthPrincipal) -> None:
+    """확인완료·다시 요청은 발주기관만 한다 (SWFR.WEB.006). 최고관리자도 대신하지 않는다.
+
+    요청을 닫는 것은 조치가 충분하다고 발주기관이 판단하는 행위다. 운영자가 닫으면
+    "발주기관이 확인했다"는 기록이 거짓이 된다.
+    """
+    if principal.role != "CLIENT":
+        raise errors.ApiError(
+            403, "FORBIDDEN", "확인완료와 다시 요청은 그 사업의 발주기관만 할 수 있습니다."
+        )
 
 
 def _require_completion_client(principal: AuthPrincipal) -> None:
     """작업 완료 확인·철회는 그 사업 발주기관만 한다. 최고관리자도 하지 않는다.
 
-    일반 확인 요청은 운영 지원을 위해 최고관리자도 열고 닫을 수 있다(_require_client).
+    일반 확인 요청은 운영 지원을 위해 최고관리자도 열 수 있다(_require_requester).
+    닫는 것은 둘 다 발주기관만이다(_require_client).
     완료 확인은 계약 당사자인 발주기관이 작업 완료를 인정하는 행위라 대신할 수 없다.
     사업 접근은 _load·_require_project 가 따로 본다.
     """
@@ -174,7 +188,7 @@ def create(
     if completion_mode:
         _require_completion_client(principal)
     else:
-        _require_client(principal)
+        _require_requester(principal)
     _require_project(cur, principal, project_id)
     if req.targetType not in TARGET_TYPES:
         raise errors.validation_failed(f"지원하지 않는 대상 종류입니다: {req.targetType}")

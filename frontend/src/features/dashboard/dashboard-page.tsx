@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useState, type ReactNode } from 'react';
 import { createPortal } from 'react-dom';
-import { useParams } from 'react-router-dom';
+import { Link, useParams } from 'react-router-dom';
 import { Responsive, WidthProvider, type Layouts } from 'react-grid-layout';
 import 'react-grid-layout/css/styles.css';
 import 'react-resizable/css/styles.css';
@@ -10,6 +10,7 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { DataState, EmptyState } from '@/components/common/data-state';
 import { PageHeader } from '@/components/layout/page-header';
 import { RESOURCE_DOCK_ID } from '@/components/layout/app-shell';
+import { useOptionalProject } from '@/components/layout/project-shell';
 import { useToast } from '@/components/common/toaster';
 import { api } from '@/lib/http';
 import { cn } from '@/lib/utils';
@@ -65,6 +66,8 @@ async function resolveDashboardId(
 export function DashboardPage(): ReactNode {
   const { dashboardId, projectId } = useParams();
   const { toast } = useToast();
+  // 미처리 확인 요청 건수는 현황 화면에도 보인다 (SWFR.WEB.006). 사업 밖 대시보드에는 없다
+  const project = useOptionalProject();
 
   const state = useAsync<DashboardDetailResponse | null>(async () => {
     const id = await resolveDashboardId(dashboardId, projectId);
@@ -177,7 +180,26 @@ export function DashboardPage(): ReactNode {
     <>
       <PageHeader
         title="대시보드"
-        description={dashboard?.name}
+        description={
+          project ? (
+            <>
+              {dashboard?.name}
+              {dashboard?.name && ' · '}
+              <Link
+                to={`/p/${project.id}/reviews`}
+                className={cn(
+                  'underline-offset-2 hover:underline',
+                  project.openReviewRequestCount > 0 ? 'text-primary font-medium' : undefined,
+                )}
+                data-testid="open-review-count"
+              >
+                미처리 확인 요청 {project.openReviewRequestCount}건
+              </Link>
+            </>
+          ) : (
+            dashboard?.name
+          )
+        }
         actions={
           dashboard?.editable ? (
             editing && projectId ? (
