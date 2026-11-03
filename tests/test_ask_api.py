@@ -225,7 +225,11 @@ def test_문서_질문은_근거와_각주가_붙어_저장된다(
     assert sources[0]["sourceType"] == "DOCUMENT_UPLOAD"
     assert sources[0]["projectName"] == "차세대 통합관제 시스템 구축"
     assert sources[0]["externalUrl"] is None  # 저장 경로는 링크가 아니다
-    assert sources[0]["documentUrl"] == f"/p/{PID}/documents"
+    # 출처에서 그 문서 화면으로 바로 간다 (SWFR.RAG.006)
+    assert sources[0]["documentUrl"] == f"/p/{PID}/documents/{indexed_document}"
+    # 위치는 조각의 표제 경로다. 근거 순서는 가짜 벡터라 고정이 아니어서 조각으로 찾는다
+    cited = next(s for s in sources if "22종" in s["snippet"])
+    assert cited["location"] == "과업지시서 > 2. 납품 산출물"
 
     done = events[-1][1]
     assert done["finishReason"] == "STOP"
@@ -245,6 +249,9 @@ def test_문서_질문은_근거와_각주가_붙어_저장된다(
         s["footnoteNo"] for s in sources
     ]
     assert assistant["sources"][0]["snippet"] == sources[0]["snippet"]
+    # 저장된 출처도 위치와 문서 링크를 그대로 돌려준다
+    assert assistant["sources"][0]["location"] == sources[0]["location"]
+    assert assistant["sources"][0]["documentUrl"] == sources[0]["documentUrl"]
     assert assistant["infographics"] == []
 
     page = client.get("/api/conversations?size=50", headers=_auth(token)).json()
@@ -597,3 +604,55 @@ def test_청크도_표도_없으면_모델을_부르지_않는다(
     assert "리스크" in text and "없어" in text
     assert events[-1][1]["finishReason"] == "NO_DATA"
     assert scripted.stream_calls == 0
+
+
+# ---------------------------------------------------------------- 결합 응답 (SWFR.RAG.005)
+
+
+@requires_db
+def test_집계와_문서_근거가_둘_다_있으면_한_답에_결합한다(
+    client, conversation, indexed_document, monkeypatch
+):
+    """지표로 셀 수 있는 질문에 문서 근거도 걸리면 MIXED 다. 집계 값과 문서 조각이 같은
+    프롬프트에 들어가고, 답에는 집계 수치와 문서 출처가 함께 나온다. 수치는 두 재료 안의
+    것만 통과한다."""
+    with tx() as cur:
+        expected = cur.execute(
+            "select count(*) as n from issue where project_id = %s", (PID,)
+        ).fetchone()["n"]
+    scripted = ScriptedLlm(
+        {"route": "AGGREGATE", "measure": "issue_count", "dimensions": [],
+         "template": "STAT_CARD", "title": "이슈 건수", "query": "납품 산출물 이슈 건수"},
+        f"이슈는 {expected}건이고, 납품 산출물은 22종이다[1].",
+    )
+    monkeypatch.setattr(ask_service, "llm_port", lambda: scripted)
+    monkeypatch.setattr(settings, "rag_min_similarity", -1.0)  # Fake 임베딩이라 문턱을 내린다
+    monkeypatch.setattr(settings, "rag_top_k", 20)
+
+    conversation_id, token = conversation()
+    events = _ask(client, token, conversation_id, "납품 산출물은 몇 종이고 이슈는 몇 건이야?")
+    names = [e for e, _ in events]
+    start = events[0][1]
+    assert start["routing"]["type"] == "MIXED"
+    assert start["routing"]["measureKey"] == "issue_count"
+    assert start["retrievedChunkCount"] >= 1
+
+    # 두 재료가 한 프롬프트에 있다
+    prompt = scripted.prompts[0]
+    assert "## 집계 값" in prompt and f"이슈 건수: {expected}" in prompt
+    assert "## 근거" in prompt and "[1] 과업지시서" in prompt
+
+    # 답에는 집계 수치가 그대로, 문서 출처가 각주로 붙는다. 둘 다 지어낸 숫자가 아니다
+    assert names[-1] == "done" and events[-1][1]["finishReason"] == "STOP"
+    text = "".join(d["text"] for e, d in events if e == "delta")
+    assert text == f"이슈는 {expected}건이고, 납품 산출물은 22종이다[1]."
+    sources = next(d for e, d in events if e == "sources")["sources"]
+    assert sources and sources[0]["sourceType"] == "DOCUMENT_UPLOAD"
+    assert sources[0]["sourceLabel"] == "과업지시서"
+
+    # 저장된 답도 같은 길(MIXED)과 출처를 돌려준다
+    messages = client.get(
+        f"/api/conversations/{conversation_id}/messages", headers=_auth(token)
+    ).json()
+    assert messages[1]["routing"]["type"] == "MIXED"
+    assert messages[1]["sources"][0]["sourceType"] == "DOCUMENT_UPLOAD"

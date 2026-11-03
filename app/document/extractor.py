@@ -125,6 +125,10 @@ def _docx(path: Path) -> ExtractResult:
     return ExtractResult("\n\n".join(parts), len(doc.tables))
 
 
+# XLSX 표의 첫 열 이름. 엑셀 행 번호가 들어가고, 청킹이 이 이름으로 그 열을 알아본다
+ROW_COLUMN = "행"
+
+
 def _xlsx(path: Path) -> ExtractResult:
     from openpyxl import load_workbook
 
@@ -134,13 +138,17 @@ def _xlsx(path: Path) -> ExtractResult:
     try:
         for name in wb.sheetnames:
             rows = []
-            for row in wb[name].iter_rows(values_only=True):
+            for no, row in enumerate(wb[name].iter_rows(values_only=True), 1):
                 if all(v is None for v in row):
                     continue
                 if total >= MAX_XLSX_ROWS:
                     cut = True
                     break
-                rows.append(["" if v is None else str(v) for v in row])
+                # 첫 칸에 엑셀 행 번호를 둔다. 빈 행을 건너뛰어도 원본 행을 가리키게 하려는
+                # 것이고, 청킹이 이 번호로 조각의 행 범위를 남긴다(SWFR.RAG.003). 첫 행은 표
+                # 머리글이라 번호 대신 열 이름을 적는다
+                cells = ["" if v is None else str(v) for v in row]
+                rows.append([ROW_COLUMN if not rows else str(no), *cells])
                 total += 1
             if rows:
                 sheets += 1

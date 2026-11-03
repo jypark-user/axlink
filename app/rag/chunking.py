@@ -31,7 +31,19 @@ _MAX_HEADING_DEPTH = 6
 _MARKDOWN_HEADING = re.compile(r"^(#{1,6})\s+(.+?)\s*$")
 _KOREAN_HEADING = re.compile(r"^(제\s*\d+\s*([장절]))\s*(.*)$")
 _NUMBERED_HEADING = re.compile(r"^(\d+(?:\.\d+)*)\.?\s+(\S.*)$")
-_SENTENCE_BREAK = re.compile(r"(?<=[.!?。])\s+|\n{2,}")
+# 표 행(| … |)은 줄마다 한 문장이다. 안 그러면 표 하나가 한 문장이 돼 길이로 잘리고,
+# 행 가운데서 끊긴 조각은 어느 행인지 말할 수 없다
+_SENTENCE_BREAK = re.compile(r"(?<=[.!?。])\s+|\n{2,}|\n(?=\|)")
+
+# 추출기가 PDF·PPTX 쪽 경계에 남기는 표식. 청크 위치(쪽)로 옮기고 본문에서는 뺀다
+_PAGE_MARK = re.compile(r"^<!--\s*(\d+)쪽\s*-->\s*(.*)$")
+_PAGE_MARK_EMPTY = "텍스트 없음"
+# 쪽 표식을 본문 흐름 안에 잠시 끼워 두는 꼴. 조각을 나눈 뒤 읽어 내고 지운다.
+# 제어 문자는 strip 이 공백으로 보고 잘라 내서 못 쓴다. 문서에 나올 일 없는 괄호를 쓴다
+_PAGE_TOKEN = re.compile(r"⟦쪽(\d+)⟧")
+# XLSX 추출기가 첫 열에 두는 엑셀 행 번호. 머리글이 이 이름이면 그 표의 첫 칸은 행 번호다
+_ROW_COLUMN = "행"
+_TABLE_ROW = re.compile(r"^\|\s*([^|]*?)\s*\|")
 
 # "1." "가." "비고  1." 처럼 항목 번호로 끝나는 조각. 공문서는 본문에도 번호를 다는데,
 # 그 마침표에서 끊으면 원문 한 줄이 파편으로 흩어진다. 정규식에 예외를 계속 붙이는
@@ -83,17 +95,62 @@ def chunk(source_type: str, title: str, body: str | None) -> list[ChunkDraft]:
         sections = _split_sections(text)
 
     drafts: list[ChunkDraft] = []
+    page: int | None = None  # 지금까지 읽은 마지막 쪽. 다음 조각의 시작 쪽이다
     for heading_path, section_text in sections:
-        for content in _pack(section_text):
+        numbered_rows = _has_row_numbers(section_text)
+        for packed in _pack(section_text):
+            content, page, where = _locate(packed, page, numbered_rows)
             drafts.append(
                 ChunkDraft(
                     chunk_index=len(drafts),
                     content=content,
                     token_count=estimate_tokens(content),
-                    meta={"headingPath": heading_path},
+                    meta={"headingPath": heading_path, **where},
                 )
             )
     return drafts
+
+
+def _locate(packed: str, page: int | None, numbered_rows: bool) -> tuple[str, int | None, dict]:
+    """조각에서 쪽 표식과 행 번호를 읽어 위치로 옮기고, 표식은 본문에서 뺀다.
+
+    쪽은 조각이 시작할 때의 쪽이다. 조각이 쪽 표식으로 시작하면 그 쪽이고, 아니면 앞 조각이
+    끝난 쪽을 잇는다. 조각 안에서 쪽이 넘어가면 끝 쪽도 남긴다. 돌려주는 page 는 조각이
+    끝난 쪽이다.
+    """
+    where: dict = {}
+    marks = [int(m) for m in _PAGE_TOKEN.findall(packed)]
+    content = _PAGE_TOKEN.sub("", packed)
+    content = "\n".join(line.rstrip() for line in content.split("\n") if line.strip())
+    if marks:
+        starts_on_mark = _PAGE_TOKEN.match(packed.lstrip()) is not None
+        start = marks[0] if starts_on_mark or page is None else page
+        where["page"] = start
+        if marks[-1] != start:
+            where["pageEnd"] = marks[-1]
+        page = marks[-1]
+    elif page is not None:
+        where["page"] = page
+    if numbered_rows:
+        rows = [int(n) for n in (_first_cell(line) for line in content.split("\n")) if n]
+        if rows:
+            where["rowStart"], where["rowEnd"] = min(rows), max(rows)
+    return content, page, where
+
+
+def _first_cell(line: str) -> str | None:
+    """표 행이면 첫 칸. 숫자(엑셀 행 번호)일 때만 돌려준다."""
+    m = _TABLE_ROW.match(line)
+    return m.group(1) if m and m.group(1).isdigit() else None
+
+
+def _has_row_numbers(section_text: str) -> bool:
+    """구획의 표 머리글 첫 칸이 '행' 이면 그 표의 첫 칸은 엑셀 행 번호다."""
+    for line in section_text.split("\n"):
+        m = _TABLE_ROW.match(line)
+        if m:
+            return m.group(1) == _ROW_COLUMN
+    return False
 
 
 def _split_sections(text: str) -> list[tuple[list[str], str]]:
@@ -109,6 +166,14 @@ def _split_sections(text: str) -> list[tuple[list[str], str]]:
         buffer.clear()
 
     for line in text.splitlines():
+        mark = _PAGE_MARK.match(line.strip())
+        if mark:
+            # 쪽 표식은 본문 흐름 안에 잠시 끼워 둔다. 조각을 나눈 뒤 위치로 옮긴다
+            rest = mark.group(2).strip()
+            buffer.append(f"⟦쪽{mark.group(1)}⟧")
+            if rest and rest != _PAGE_MARK_EMPTY:
+                buffer.append(rest)
+            continue
         parsed = _parse_heading(line)
         if parsed is None:
             buffer.append(line)

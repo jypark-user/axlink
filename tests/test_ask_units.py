@@ -86,6 +86,21 @@ def test_프롬프트는_근거에_번호와_원문_위치를_붙인다():
     assert "## 집계 값" not in prompt
 
 
+def test_원문_위치는_표제_쪽_행을_잇고_걸치면_범위로_쓴다():
+    # 쪽·행 범위는 청크 meta 에서 온다 (SWFR.RAG.003). 화면과 프롬프트가 같은 문장을 쓴다
+    with_heading = _chunk("c", heading=["3. 계약사항"], page_no=7)
+    assert answer.location_text(with_heading) == "3. 계약사항 / p.7"
+    assert answer.location_text(_chunk("c", page_no=7, page_end=9)) == "p.7~9"
+    assert answer.location_text(_chunk("c", page_no=7, page_end=7)) == "p.7"
+    assert (
+        answer.location_text(_chunk("c", heading=["시트: WBS"], row_start=12, row_end=18))
+        == "시트: WBS / 12~18행"
+    )
+    assert answer.location_text(_chunk("c", row_start=12, row_end=12)) == "12행"
+    assert answer.location_text(_chunk("c")) is None
+    assert answer.location_label(_chunk("c", page_no=2)) == " (p.2)"
+
+
 def test_출처_조각은_위치를_앞에_두고_길이를_자른다():
     chunk = _chunk("c1", heading=["1장"], content="가 " * 400)
     text = answer.snippet(chunk, limit=50)
@@ -190,6 +205,7 @@ def _chunk(
     similarity: float = 0.8,
     heading: list[str] | None = None,
     content: str = "본문",
+    **where,
 ) -> RetrievedChunk:
     return RetrievedChunk(
         id=chunk_id,
@@ -202,8 +218,9 @@ def _chunk(
         chunk_index=0,
         content=content,
         heading_path=heading or [],
-        page_no=None,
+        page_no=where.pop("page_no", None),
         similarity=similarity,
+        **where,
     )
 
 
