@@ -206,9 +206,18 @@ export const DASHBOARD_PRESETS: DashboardPreset[] = [
   {
     id: 'overview',
     name: '전체 진행 현황',
-    description: '핵심 수치로 지금 위치를 읽고, 추이와 구성비로 흐름을 본다. 보고용.',
+    description:
+      '진척·일정·품질·리스크·산출물 다섯 축을 한 판에. 핵심 수치로 지금 위치를 읽고, 추이와 구성비로 흐름을 본다. 보고용.',
+    // 한 화면에 다섯 축(SWFR.WEB.001): 진척률 · 일정 · 품질 · 리스크 · 산출물. 카드 넷이 윗줄이다.
     widgets: [
       // 기간 축을 달아 카드 안에 추세선이 그려지게 한다 — 숫자만으로는 방향을 모른다.
+      {
+        template: 'STAT_CARD',
+        title: '대표 진척률',
+        intent: '가장 최근 스냅샷의 대표 진척률을 월별 추세와 함께 한 숫자로',
+        measure: 'progress_representative_pct',
+        dimensions: ['period_month'],
+      },
       {
         template: 'STAT_CARD',
         title: '일정 진척(계획 대비)',
@@ -228,6 +237,20 @@ export const DASHBOARD_PRESETS: DashboardPreset[] = [
         title: '산출물 승인률',
         intent: '산출물 승인률 현재 값',
         measure: 'work_product_approval_rate',
+      },
+      {
+        template: 'STAT_CARD',
+        title: '일반 이슈 처리율',
+        intent: '해결·종료된 일반 이슈 비율을 월별 추세와 함께 한 숫자로',
+        measure: 'issue_resolution_rate',
+        dimensions: ['period_month'],
+      },
+      {
+        template: 'BAR_CHART',
+        title: '심각도별 열린 리스크',
+        intent: '종료되지 않은 리스크가 심각도별로 몇 건인지',
+        measure: 'open_risk_count',
+        dimensions: ['risk_severity'],
       },
       // 월이 쌓이면 선이 빽빽해진다 — 면적이 흐름을 더 잘 보여 준다.
       {
