@@ -225,7 +225,9 @@ def test_문서_질문은_근거와_각주가_붙어_저장된다(
     assert sources[0]["sourceType"] == "DOCUMENT_UPLOAD"
     assert sources[0]["projectName"] == "차세대 통합관제 시스템 구축"
     assert sources[0]["externalUrl"] is None  # 저장 경로는 링크가 아니다
-    assert sources[0]["documentUrl"] == f"/p/{PID}/documents"
+    # 출처에서 그 문서 화면으로 바로 간다 (SWFR.RAG.006)
+    assert sources[0]["documentUrl"] == f"/p/{PID}/documents/{indexed_document}"
+    assert sources[0]["location"] == "과업지시서 > 2. 납품 산출물"
 
     done = events[-1][1]
     assert done["finishReason"] == "STOP"
@@ -245,6 +247,9 @@ def test_문서_질문은_근거와_각주가_붙어_저장된다(
         s["footnoteNo"] for s in sources
     ]
     assert assistant["sources"][0]["snippet"] == sources[0]["snippet"]
+    # 저장된 출처도 위치와 문서 링크를 그대로 돌려준다
+    assert assistant["sources"][0]["location"] == sources[0]["location"]
+    assert assistant["sources"][0]["documentUrl"] == sources[0]["documentUrl"]
     assert assistant["infographics"] == []
 
     page = client.get("/api/conversations?size=50", headers=_auth(token)).json()

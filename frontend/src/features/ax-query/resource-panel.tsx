@@ -269,8 +269,10 @@ function EvidenceViewer({
                       >
                         [{block.footnoteNo}]
                       </button>
-                      {block.pageNo !== null && (
-                        <span className="text-muted-foreground text-sm">p.{block.pageNo}</span>
+                      {block.location && (
+                        <span className="text-muted-foreground min-w-0 truncate text-sm">
+                          {block.location}
+                        </span>
                       )}
                       {url && (
                         <a

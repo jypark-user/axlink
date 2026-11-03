@@ -33,6 +33,10 @@ class RetrievedChunk:
     heading_path: list[str]
     page_no: int | None
     similarity: float  # 질문 벡터와의 코사인 유사도
+    # 원문 위치의 나머지. 조각이 걸친 끝 쪽, XLSX 행 범위 (SWFR.RAG.003)
+    page_end: int | None = None
+    row_start: int | None = None
+    row_end: int | None = None
     score: float = 0.0  # RRF 융합 점수. 순위 결정에만 쓴다
 
 
@@ -197,4 +201,11 @@ def _chunk(row: dict, score: float) -> RetrievedChunk:
         page_no=int(page) if isinstance(page, int) else None,
         similarity=float(row["similarity"]),
         score=score,
+        page_end=_int(meta.get("pageEnd")),
+        row_start=_int(meta.get("rowStart")),
+        row_end=_int(meta.get("rowEnd")),
     )
+
+
+def _int(value: object) -> int | None:
+    return int(value) if isinstance(value, int) and not isinstance(value, bool) else None

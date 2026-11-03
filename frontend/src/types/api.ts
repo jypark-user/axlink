@@ -1322,6 +1322,8 @@ export interface MessageSourceResponse {
   externalUrl: string | null;
   documentUrl: string | null;
   pageNo: number | null;
+  /** 원문 위치를 사람 말로(표제 경로 / 쪽 / 행). 서버 문장 그대로 보인다 (SWFR.RAG.006) */
+  location: string | null;
 }
 
 export interface MessageResponse {

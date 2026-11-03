@@ -232,13 +232,14 @@ def insert_sources(cur: Any, message_id: str, rows: list[dict[str, Any]]) -> Non
         """
         insert into message_source
           (message_id, footnote_no, doc_chunk_id, source_type, source_title, snippet,
-           external_url, page_no)
-        values (%s, %s, %s, %s, %s, %s, %s, %s)
+           external_url, page_no, location)
+        values (%s, %s, %s, %s, %s, %s, %s, %s, %s)
         """,
         [
             (
                 message_id, r["footnote_no"], r["doc_chunk_id"], r["source_type"],
                 r["source_title"], r["snippet"], r["external_url"], r["page_no"],
+                r.get("location"),
             )
             for r in rows
         ],
@@ -256,6 +257,7 @@ def sources_for_messages(cur: Any, message_ids: list[str]) -> list[dict[str, Any
         select s.message_id::text as message_id, s.footnote_no,
                s.doc_chunk_id::text as doc_chunk_id,
                s.source_type, s.source_title, s.snippet, s.external_url, s.page_no,
+               s.location,
                c.source_id::text as source_id, c.project_id::text as project_id,
                p.name as project_name
           from message_source s

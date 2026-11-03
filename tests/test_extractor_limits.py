@@ -43,6 +43,24 @@ def test_보통_파일은_상한에_걸리지_않는다(tmp_path):
     path = _xlsx(tmp_path, 3)
     result = extractor.extract(path, "XLSX")
     assert "작업 2" in result.text and result.warning == ""
+
+
+def test_엑셀은_첫_열에_원본_행_번호를_둔다(tmp_path):
+    # 조각의 행 범위가 원본 행을 가리켜야 한다 (SWFR.RAG.003). 빈 행을 건너뛰어도 번호는 원본대로
+    wb = Workbook()
+    ws = wb.active
+    ws.title = "WBS"
+    ws.append(["작업", "진척"])
+    ws.append(["착수", 100])
+    ws.append([None, None])  # 3행은 비어 있다
+    ws.append(["분석", 40])
+    path = tmp_path / "wbs.xlsx"
+    wb.save(path)
+
+    text = extractor.extract(path, "XLSX").text
+    assert "| 행 | 작업 | 진척 |" in text
+    assert "| 2 | 착수 | 100 |" in text
+    assert "| 3 |" not in text and "| 4 | 분석 | 40 |" in text
     pptx = tmp_path / "a.pptx"
     pptx.write_bytes(_pptx_bytes())
     assert "착수보고" in extractor.extract(pptx, "PPTX").text

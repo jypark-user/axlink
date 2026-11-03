@@ -848,6 +848,7 @@ def _source_row(footnote_no: int, chunk: RetrievedChunk) -> dict[str, Any]:
         # 컬럼이 not null 이다. 업로드 문서의 저장 경로는 링크가 아니라 비워 둔다.
         "external_url": chunk.source_uri if _is_url(chunk.source_uri) else "",
         "page_no": chunk.page_no,
+        "location": answer.location_text(chunk),
     }
 
 
@@ -862,8 +863,9 @@ def _source_from_chunk(footnote_no: int, chunk: RetrievedChunk) -> MessageSource
         projectName=chunk.project_name,
         snippet=answer.snippet(chunk),
         externalUrl=chunk.source_uri if _is_url(chunk.source_uri) else None,
-        documentUrl=_document_url(chunk.source_type, chunk.project_id),
+        documentUrl=_document_url(chunk.source_type, chunk.project_id, chunk.source_id),
         pageNo=chunk.page_no,
+        location=answer.location_text(chunk),
     )
 
 
@@ -879,16 +881,23 @@ def _source(row: dict[str, Any]) -> MessageSourceResponse:
         projectName=row["project_name"] or "",
         snippet=row["snippet"],
         externalUrl=row["external_url"] if _is_url(row["external_url"]) else None,
-        documentUrl=_document_url(row["source_type"], project_id),
+        documentUrl=_document_url(row["source_type"], project_id, row["source_id"]),
         pageNo=row["page_no"],
+        # V59 전에 남긴 출처는 위치 문장이 없다. 쪽만이라도 보인다
+        location=row.get("location") or (f"p.{row['page_no']}" if row["page_no"] else None),
     )
 
 
-def _document_url(source_type: str, project_id: str) -> str | None:
-    """업로드 문서는 외부 링크가 없다. 화면의 문서 목록으로 보낸다."""
-    if source_type == "DOCUMENT_UPLOAD" and project_id:
-        return f"/p/{project_id}/documents"
-    return None
+def _document_url(source_type: str, project_id: str, document_id: str | None) -> str | None:
+    """업로드 문서는 외부 링크가 없다. 그 문서의 화면으로 보낸다(SWFR.RAG.006).
+
+    청크가 재색인으로 사라져 문서를 모르면 문서 목록으로 보낸다.
+    """
+    if source_type != "DOCUMENT_UPLOAD" or not project_id:
+        return None
+    if document_id:
+        return f"/p/{project_id}/documents/{document_id}"
+    return f"/p/{project_id}/documents"
 
 
 def _is_url(value: str | None) -> bool:

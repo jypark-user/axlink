@@ -84,6 +84,8 @@ class MessageSourceResponse(BaseModel):
     externalUrl: str | None  # noqa: N815
     documentUrl: str | None  # noqa: N815
     pageNo: int | None  # noqa: N815
+    # 원문 위치를 사람 말로(표제 경로 / 쪽 / 행). 화면은 이 문장을 그대로 보인다 (SWFR.RAG.006)
+    location: str | None = None
 
 
 class MessageResponse(BaseModel):

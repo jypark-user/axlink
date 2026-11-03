@@ -204,9 +204,12 @@ export function SourceEvidence({
               >
                 <span className="font-mono font-semibold">[{s.footnoteNo}]</span>
                 <span className="max-w-56 truncate font-medium">{s.sourceLabel}</span>
-                {s.pageNo !== null && (
-                  <span className="text-muted-foreground text-xs font-semibold tracking-wide">
-                    p.{s.pageNo}
+                {s.location && (
+                  <span
+                    className="text-muted-foreground max-w-48 truncate text-xs font-semibold tracking-wide"
+                    title={s.location}
+                  >
+                    {s.location}
                   </span>
                 )}
               </button>

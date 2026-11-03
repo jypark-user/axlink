@@ -167,13 +167,27 @@ def _evidence(no: int, chunk: RetrievedChunk) -> str:
 
 
 def location_label(chunk: RetrievedChunk) -> str:
-    """원문 위치를 사람이 읽는 꼴로. 표제 경로가 있으면 그것, 페이지가 있으면 페이지."""
+    """원문 위치를 사람이 읽는 꼴로, 괄호에 싸서. 프롬프트 근거 머리에 붙는다."""
+    text = location_text(chunk)
+    return f" ({text})" if text else ""
+
+
+def location_text(chunk: RetrievedChunk) -> str | None:
+    """원문 위치(SWFR.RAG.003). 표제 경로, 쪽(걸치면 범위), XLSX 행 범위 순으로 잇는다."""
     bits = []
     if chunk.heading_path:
         bits.append(" > ".join(chunk.heading_path))
     if chunk.page_no is not None:
-        bits.append(f"p.{chunk.page_no}")
-    return f" ({' / '.join(bits)})" if bits else ""
+        bits.append(_span("p.", chunk.page_no, chunk.page_end, ""))
+    if chunk.row_start is not None:
+        bits.append(_span("", chunk.row_start, chunk.row_end, "행"))
+    return " / ".join(bits) if bits else None
+
+
+def _span(prefix: str, start: int, end: int | None, suffix: str) -> str:
+    if end is not None and end != start:
+        return f"{prefix}{start}~{end}{suffix}"
+    return f"{prefix}{start}{suffix}"
 
 
 def snippet(chunk: RetrievedChunk, limit: int | None = None) -> str:
