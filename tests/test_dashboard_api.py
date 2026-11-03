@@ -251,6 +251,10 @@ PRESET_WIDGETS = [
     ("HORIZONTAL_BAR_CHART", "open_issue_count", ["assignee"]),
     ("RADAR_CHART", "issue_resolution_rate", ["contractor_org"]),
     ("DONUT_CHART", "open_risk_count", ["risk_severity"]),
+    # 전체 진행 현황의 다섯 축 (SWFR.WEB.001)
+    ("STAT_CARD", "progress_representative_pct", ["period_month"]),
+    ("STAT_CARD", "issue_resolution_rate", ["period_month"]),
+    ("BAR_CHART", "open_risk_count", ["risk_severity"]),
 ]
 
 

@@ -21,6 +21,23 @@ describe('dashboard-presets', () => {
     }
   });
 
+  // 진척률·일정·품질·리스크·산출물을 한 화면에서 본다 (SWFR.WEB.001). 추천 구성 「전체 진행 현황」이 그 화면이다
+  it('전체 진행 현황은 다섯 축을 모두 담는다', () => {
+    const overview = DASHBOARD_PRESETS.find((p) => p.id === 'overview');
+    expect(overview).toBeDefined();
+    const measures = new Set(overview!.widgets.map((w) => w.measure));
+    const axes = {
+      진척률: 'progress_representative_pct',
+      일정: 'schedule_variance_pct',
+      품질: 'issue_resolution_rate',
+      리스크: 'open_risk_count',
+      산출물: 'work_product_approval_rate',
+    };
+    for (const [axis, measure] of Object.entries(axes)) {
+      expect(measures.has(measure), `${axis} 축(${measure})이 없다`).toBe(true);
+    }
+  });
+
   it('모든 프리셋이 12컬럼 안에서 겹치지 않게 배치된다', () => {
     for (const preset of DASHBOARD_PRESETS) {
       const grid = packGrid(preset.widgets);
