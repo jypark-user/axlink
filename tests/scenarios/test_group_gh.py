@@ -121,7 +121,8 @@ def test_UC_060_S04_근거_부족(target, s0, llm):
     assert scripted.stream_calls == 0
     assert _sources(events) == []
     text = _text(events)
-    assert "근거" in text and ("부족" in text or "찾지 못" in text), text
+    # 근거 부족 문안에 유사도와 문턱이 적힌다(AC-060-3)
+    assert ("찾지 못" in text or "부족" in text) and "유사도" in text and "기준" in text, text
     assert "지어낸 답" not in text
 
 
@@ -191,7 +192,7 @@ def test_UC_060_S10_모델_장애(target, s0, llm):
 
 def test_UC_060_S12_되묻기(target, s0, llm):
     """「비율이 얼마야」 → 선택지 되묻기, 생성 호출 0 (A4)."""
-    scripted = llm({"route": "CLARIFY", "options": ["issue_resolution_rate", "work_product_approval_rate"]}, "")
+    scripted = llm({"route": "CLARIFY", "options": ["measure:issue_resolution_rate", "measure:work_product_approval_rate"]}, "")
     events = _ask(target, s0, "TD-ACC-C1", "비율이 얼마야", [s0.ids["TD-PRJ-1"]])
     assert _done(events)["finishReason"] == "CLARIFY", _done(events)
     assert scripted.stream_calls == 0
@@ -277,11 +278,12 @@ def test_UC_061_S02_거절들(target, s0):
     assert target.get("/api/ai/settings", headers=auth(s0.tokens["TD-ACC-V1"])).status_code == 403
     adm = auth(s0.tokens["TD-ACC-A1"])
     assert target.get("/api/ai/settings", headers=adm).status_code == 200
-    res = target.put("/api/ai/settings", json={"model": "bge-m3"}, headers=adm)
+    base = target.get("/api/ai/settings", headers=adm).json().get("baseUrl") or "http://localhost:11434"
+    res = target.put("/api/ai/settings", json={"baseUrl": base, "model": "bge-m3"}, headers=adm)
     assert res.status_code in (400, 409, 422), res.text
-    res = target.put("/api/ai/settings", json={"model": "없는-모델:0b"}, headers=adm)
-    assert res.status_code in (400, 404, 409, 422), res.text
-    assert target.put("/api/ai/settings", json={"model": "x"}, headers=auth(s0.tokens["TD-ACC-C1"])).status_code == 403
+    res = target.put("/api/ai/settings", json={"baseUrl": base, "model": "없는-모델:0b"}, headers=adm)
+    assert res.status_code in (400, 404, 409, 422, 502), res.text
+    assert target.put("/api/ai/settings", json={"baseUrl": base, "model": "x"}, headers=auth(s0.tokens["TD-ACC-C1"])).status_code == 403
 
 
 @pytest.mark.skip(reason="시험 모델 서버가 필요하다. 5174 의 모델 서버(axlink-ollama)로 본다")
@@ -321,7 +323,8 @@ def test_UC_070_S04_손상_파일(target, s0):
     assert res.status_code in (200, 201, 202), res.text
     doc = target.get(f"/api/documents/{res.json()['id']}", headers=auth(s0.tokens["TD-ACC-V1"])).json()
     assert doc["status"] == "FAILED", doc
-    assert doc["error"] and ("읽" in doc["error"] or "본문" in doc["error"] or "열" in doc["error"]), doc["error"]
+    # 명세 문안은 「본문 읽기 실패」. 제품 문안 「파일이 손상됐거나 형식이 확장자와 다릅니다」도 같은 뜻으로 본다
+    assert doc["error"] and any(k in doc["error"] for k in ("읽", "본문", "손상")), doc["error"]
 
 
 def test_UC_070_S02_XLSX_표_행_번호(target, s0):
