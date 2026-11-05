@@ -77,7 +77,8 @@ def clear_errors(principal: Principal) -> None:
 
 @router.get("/organizations", response_model=list[accounts.OrganizationResponse])
 def list_organizations(
-    principal: Principal, type: str | None = None  # noqa: A002 — 화면 쿼리 이름
+    principal: Principal,
+    type: str | None = None,  # noqa: A002 — 화면 쿼리 이름
 ) -> list[accounts.OrganizationResponse]:
     with tx() as cur:
         return accounts.list_organizations(cur, principal, type)
@@ -108,6 +109,13 @@ def create_client_user(
         return accounts.create_client_user(cur, principal, req)
 
 
+@router.post("/users/{user_id}/password-reset", response_model=accounts.ClientUserCreatedResponse)
+def reset_password(user_id: str, principal: Principal) -> accounts.ClientUserCreatedResponse:
+    """임시 비밀번호 재발급. 새 비밀번호는 이 응답에만 담긴다."""
+    with tx() as cur:
+        return accounts.reset_password(cur, principal, user_id)
+
+
 @router.patch("/users/{user_id}/status", status_code=204, response_class=Response)
 def set_user_status(
     user_id: str, principal: Principal, req: accounts.UserStatusRequest
@@ -115,4 +123,3 @@ def set_user_status(
     with tx() as cur:
         accounts.set_user_status(cur, principal, user_id, req)
     return Response(status_code=204)
-
