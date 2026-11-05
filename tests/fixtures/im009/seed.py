@@ -381,11 +381,25 @@ class Seeder:
         return body["workProductId"]
 
     def _materialize_wbs(self) -> None:
-        self._ok(
-            self.c.get(
-                f"/api/projects/{self.ids['TD-PRJ-1']}/progress?at={d.T0.isoformat()}",
-                headers=self._h("TD-ACC-C1"),
-            )
+        """진척 조회가 현행 계획서 파일을 읽어 wbs_item 행을 만든다. 안 되면 원인을 모아 멈춘다."""
+        pid = self.ids["TD-PRJ-1"]
+        h = self._h("TD-ACC-C1")
+        prog = self._ok(
+            self.c.get(f"/api/projects/{pid}/progress?at={d.T0.isoformat()}", headers=h)
+        )
+        wbs_resp = self._ok(self.c.get(f"/api/projects/{pid}/wbs?at={d.T0.isoformat()}", headers=h))
+        if wbs_resp.get("items"):
+            return
+        wps = self._ok(self.c.get(f"/api/projects/{pid}/work-products", headers=h))
+        plan = [i for i in wps["items"] if i["type"] == "PROJECT_PLAN"]
+        root = Path(os.environ.get("AXLINK_DOCUMENT_ROOT", "var/documents")) / pid / "repo"
+        stored = sorted(x.name for x in root.glob("*")) if root.is_dir() else "(폴더 없음)"
+        raise SeedError(
+            "WBS 항목이 만들어지지 않았다. "
+            f"progress.level={prog.get('level')} warnings={prog.get('warnings')} "
+            f"planVersion={prog.get('planVersion')} / wbs.warnings={wbs_resp.get('warnings')} / "
+            f"PROJECT_PLAN={[(i.get('status'), i.get('version')) for i in plan]} / "
+            f"repo 폴더={stored}"
         )
 
     def _confirm_31(self) -> None:
