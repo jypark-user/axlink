@@ -32,6 +32,8 @@ class Faults:
     cut_after: int | None = None  # 이슈 N건 뒤 응답 끊김(TOOL_UNREACHABLE)
     drop_issue_numbers: set[int] = field(default_factory=set)  # 원천에서 사라진 이슈
     tracker_rename: dict[str, str] = field(default_factory=dict)  # 트래커 이름 변형(UC-012-S01)
+    extra_commits: list[d.Commit] = field(default_factory=list)  # 변형 커밋 추가(UC-021-S08)
+    commit_message: dict[str, str] = field(default_factory=dict)  # sha → 바뀐 메시지(UC-022-S02)
     calls: list[tuple[str, str, str]] = field(default_factory=list)  # (tool, kind, since)
 
 

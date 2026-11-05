@@ -247,7 +247,7 @@ DESIGN_DOC_R1 = """# 설계: 민원 조회
 | 항목 | 값 |
 |---|---|
 | 문서 | 설계-민원조회 |
-| 관련 요구사항 | UR.PORT.002 |
+| 관련 | UR.PORT.002 |
 | 작성 | 다온소프트 |
 
 ## 1. 개요
@@ -272,7 +272,7 @@ DESIGN_DOC_R1 = """# 설계: 민원 조회
 def design_doc_r1(path: Path) -> Path:
     """TD-DOC-R1 docs/20-design/설계-민원조회.md.
 
-    머리 표 6줄에 UR.PORT.002, 20줄에 UR.PORT.003 지나가는 언급."""
+    머리 표 「관련」 행(6줄)에 UR.PORT.002, 20줄에 UR.PORT.003 지나가는 언급."""
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(DESIGN_DOC_R1, encoding="utf-8")
     lines = DESIGN_DOC_R1.splitlines()

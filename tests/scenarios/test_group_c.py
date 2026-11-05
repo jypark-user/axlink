@@ -87,27 +87,41 @@ def test_UC_020_S07_등록_취소(target, s0):
 
 
 def test_UC_020_S01_표_형식_명세서_등록_제출(target, s0):
-    """3건 추출(A 같음·B 다름·D 새), 상위 SR.PORT.01, 제출 뒤 확정 대기. 목록·이행률 불변 (AC-020-1·4)."""
+    """3건 추출(A 같음·B 다름·D 새), 상위 SR.PORT.01, 제출 뒤 확정 대기. 목록·이행률 불변 (AC-020-1·4).
+
+    뒤 시나리오가 이 제출에 기대므로 판정은 모아서 끝에 한다(제출은 항목 판정과 무관하게 시도)."""
     v1, c1 = auth(s0.tokens["TD-ACC-V1"]), auth(s0.tokens["TD-ACC-C1"])
+    problems: list[str] = []
     before_rate = target.get(f"/api/projects/{s0.ids['TD-PRJ-1']}/requirements/summary", headers=c1).json()
     made = target.post(_base(s0), json={"documentId": s0.ids["TD-DOC-1"]}, headers=v1)
     assert made.status_code == 201, made.text
     b = made.json()
     s0.ids["BASELINE-1"] = b["id"]
     items = {i["code"]: i for i in b["items"]}
-    assert set(items) == {"UR.PORT.001", "UR.PORT.002", "UR.PORT.004"}, items.keys()
-    assert items["UR.PORT.001"]["match"] == "SAME"
-    assert items["UR.PORT.002"]["match"] == "CHANGED"
-    assert items["UR.PORT.004"]["match"] == "NEW"
-    assert all(i["location"].startswith("표 1") for i in items.values()), [i["location"] for i in items.values()]
-    assert [p["code"] for p in b["parents"]] == ["SR.PORT.01"]
-    assert b["blockingCount"] == 0
+    if set(items) != {"UR.PORT.001", "UR.PORT.002", "UR.PORT.004"}:
+        problems.append(f"추출 코드 {sorted(items)}")
+    for code, want in (("UR.PORT.001", "SAME"), ("UR.PORT.002", "CHANGED"), ("UR.PORT.004", "NEW")):
+        got = items.get(code, {}).get("match")
+        if got != want:
+            it = items.get(code, {})
+            problems.append(
+                f"{code} 판정 {got} (기대 {want}); 명세 {it.get('title')!r}/{it.get('priority')} "
+                f"기존 {it.get('existing')}"
+            )
+    if not all(i["location"].startswith("표 1") for i in items.values()):
+        problems.append(f"위치 {[i['location'] for i in items.values()]}")
+    if [p["code"] for p in b["parents"]] != ["SR.PORT.01"]:
+        problems.append(f"상위 요구사항 {[p['code'] for p in b['parents']]} (기대 ['SR.PORT.01'])")
+    if b["blockingCount"] != 0:
+        problems.append(f"막는 문제 {b['blockingCount']}")
     sub = target.post(f"{_base(s0)}/{b['id']}/submit", headers=v1)
     assert sub.status_code == 200 and sub.json()["status"] == "SUBMITTED", sub.text
-    # 제출 전·후 요구사항 목록은 기존 3건, 이행률 불변
-    assert set(_reqs(target, s0)) == {"UR.PORT.001", "UR.PORT.002", "UR.PORT.003"}
+    if set(_reqs(target, s0)) != {"UR.PORT.001", "UR.PORT.002", "UR.PORT.003"}:
+        problems.append("제출 뒤 요구사항 목록이 기존 3건과 다르다")
     after_rate = target.get(f"/api/projects/{s0.ids['TD-PRJ-1']}/requirements/summary", headers=c1).json()
-    assert after_rate["verifiedRate"] == before_rate["verifiedRate"]
+    if after_rate["verifiedRate"] != before_rate["verifiedRate"]:
+        problems.append("제출로 이행률이 바뀌었다")
+    assert not problems, problems
 
 
 def test_UC_020_S11_제출_뒤_수정(target, s0):
@@ -120,13 +134,6 @@ def test_UC_020_S11_제출_뒤_수정(target, s0):
     assert target.put(f"{_base(s0)}/{bid}/items/{item['id']}", json=body, headers=v1).status_code == 409
     assert target.put(f"{_base(s0)}/{bid}/items/{item['id']}", json=body, headers=c1).status_code in (403, 409)
     assert target.post(f"{_base(s0)}/{bid}/submit", headers=c1).status_code in (403, 409)
-
-
-def test_UC_020_S09_명세서_문서_삭제_시도(target, s0):
-    """등록이 살아 있는 동안 TD-DOC-1 삭제 → 거절 (AC-020-8)."""
-    res = target.delete(f"/api/documents/{s0.ids['TD-DOC-1']}", headers=auth(s0.tokens["TD-ACC-V1"]))
-    assert res.status_code in (400, 409), f"명세서 문서 삭제가 막히지 않았다: {res.status_code} {res.text[:200]}"
-    assert target.get(f"/api/documents/{s0.ids['TD-DOC-1']}", headers=auth(s0.tokens["TD-ACC-V1"])).status_code == 200
 
 
 def test_UC_020_S06_두_번째_등록(target, s0):
@@ -190,13 +197,17 @@ def test_UC_021_S02_기존_있는_사업의_확정(target, s0):
     before = _detail(target, s0, s0.ids["TD-REQ-A"])
     preview = target.get(f"{_base(s0)}/{bid}", headers=c1).json()
     matches = sorted(i["match"] for i in preview["items"])
-    assert matches == ["CHANGED", "NEW", "SAME"], matches
-    assert [m["code"] for m in preview["missing"]] == ["UR.PORT.003"], preview["missing"]
+    problems: list[str] = []
+    if matches != ["CHANGED", "NEW", "SAME"]:
+        problems.append(f"미리보기 판정 {matches} (기대 새1·같음1·바뀜1)")
+    if [m["code"] for m in preview["missing"]] != ["UR.PORT.003"]:
+        problems.append(f"포함되지 않음 {preview['missing']}")
     res = target.post(f"{_base(s0)}/{bid}/confirm", json={"applySpecCodes": ["UR.PORT.002"]}, headers=c1)
     assert res.status_code == 200, res.text
     c = res.json()
     assert c["status"] == "CONFIRMED"
-    assert c["counts"] == {"NEW": 1, "SAME": 1, "CHANGED": 1}, c["counts"]
+    if c["counts"] != {"NEW": 1, "SAME": 1, "CHANGED": 1}:
+        problems.append(f"확정 건수 {c['counts']}")
     assert c["confirmedBy"] == d.ACCOUNTS["TD-ACC-C1"].display
     reqs = _reqs(target, s0)
     assert len(reqs) == 4, reqs.keys()
@@ -214,6 +225,7 @@ def test_UC_021_S02_기존_있는_사업의_확정(target, s0):
     s0.ids["REQ-D"] = reqs["UR.PORT.004"]["id"]
     with tx() as cur:
         s0.ids["LINKS-AFTER-CONFIRM"] = str(len(_links(cur, pid)))
+    assert not problems, problems
 
 
 def test_UC_020_S06b_확정본_있을_때_등록(target, s0):
@@ -536,3 +548,11 @@ def test_UC_023_S03_되돌림(target, s0):
 @pytest.mark.skip(reason="AI 「요구사항 이행률」 답은 실모델이 필요하다. DEC-03·11 결정 뒤 5174 에서 본다")
 def test_UC_023_S06_일관성(target, s0):
     """목록·추적표·스냅샷·AI 답이 같은 이행률 (AC-023-4)."""
+
+
+# 삭제가 막히지 않으면 S0 가 깨지므로 가장 마지막에 돈다(AC-020-8 미구현 시 뒤 시나리오 보호)
+def test_UC_020_S09_명세서_문서_삭제_시도(target, s0):
+    """등록이 살아 있는 동안 TD-DOC-1 삭제 → 거절 (AC-020-8)."""
+    res = target.delete(f"/api/documents/{s0.ids['TD-DOC-1']}", headers=auth(s0.tokens["TD-ACC-V1"]))
+    assert res.status_code in (400, 409), f"명세서 문서 삭제가 막히지 않았다: {res.status_code} {res.text[:200]}"
+    assert target.get(f"/api/documents/{s0.ids['TD-DOC-1']}", headers=auth(s0.tokens["TD-ACC-V1"])).status_code == 200
