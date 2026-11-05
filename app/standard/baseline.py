@@ -69,7 +69,8 @@ def _load(
 def _require_status(row: dict[str, Any], *statuses: str) -> None:
     if row["status"] not in statuses:
         raise errors.ApiError(
-            409, "BASELINE_STATE",
+            409,
+            "BASELINE_STATE",
             f"지금 상태({row['status']})에서는 할 수 없습니다.",
         )
 
@@ -91,8 +92,11 @@ def _existing(row: dict[str, Any]) -> BaselineExisting:
         "문서" if row.get("source_kind") == "DOCUMENT" else "수기"
     )
     return BaselineExisting(
-        requirementId=str(row["id"]), code=row["code"], title=row["title"],
-        priority=row["priority"], source=source,
+        requirementId=str(row["id"]),
+        code=row["code"],
+        title=row["title"],
+        priority=row["priority"],
+        source=source,
     )
 
 
@@ -144,23 +148,39 @@ def _to_response(cur: Any, row: dict[str, Any], with_items: bool = True) -> Base
             ex = BaselineExisting(**before) if before else None
         else:
             hit = existing.get(item["code"]) if item["code"] else None
-            match = None if not item["code"] else (
-                "NEW" if hit is None else ("SAME" if _same(item, hit) else "CHANGED")
+            match = (
+                None
+                if not item["code"]
+                else ("NEW" if hit is None else ("SAME" if _same(item, hit) else "CHANGED"))
             )
             ex = _existing(hit) if hit else None
         if match:
             counts[match] += 1
         extracted = item["extracted_json"]
-        edited = bool(extracted) and any(
-            (extracted.get(k) or "") != (item[k] or "") for k in ("code", "title", "body")
-        ) or bool(extracted) and extracted.get("priority") != item["priority"]
-        out_items.append(BaselineItemResponse(
-            id=str(item["id"]), seq=item["seq"], code=item["code"], title=item["title"],
-            body=item["body"], priority=item["priority"], location=item["source_location"],
-            origin=item["origin"], edited=edited, problems=found, match=match, existing=ex,
-            requirementId=str(item["requirement_id"]) if item["requirement_id"] else None,
-            specApplied=item["spec_applied"],
-        ))
+        edited = (
+            bool(extracted)
+            and any((extracted.get(k) or "") != (item[k] or "") for k in ("code", "title", "body"))
+            or bool(extracted)
+            and extracted.get("priority") != item["priority"]
+        )
+        out_items.append(
+            BaselineItemResponse(
+                id=str(item["id"]),
+                seq=item["seq"],
+                code=item["code"],
+                title=item["title"],
+                body=item["body"],
+                priority=item["priority"],
+                location=item["source_location"],
+                origin=item["origin"],
+                edited=edited,
+                problems=found,
+                match=match,
+                existing=ex,
+                requirementId=str(item["requirement_id"]) if item["requirement_id"] else None,
+                specApplied=item["spec_applied"],
+            )
+        )
 
     if confirmed:
         missing = [BaselineExisting(**m) for m in result.get("missing", [])]
@@ -177,23 +197,34 @@ def _to_response(cur: Any, row: dict[str, Any], with_items: bool = True) -> Base
             children[parent].append(item["code"])
 
     return BaselineResponse(
-        id=str(row["id"]), version=row["version"], status=row["status"],
+        id=str(row["id"]),
+        version=row["version"],
+        status=row["status"],
         documentId=str(row["document_upload_id"]) if row["document_upload_id"] else None,
-        sourceFilename=row["source_filename"], sourceDocVersion=row["source_doc_version"],
-        createdBy=row["created_by_name"], createdAt=row["created_at"].isoformat(),
-        submittedBy=row["submitted_by_name"], submittedAt=_iso(row["submitted_at"]),
+        sourceFilename=row["source_filename"],
+        sourceDocVersion=row["source_doc_version"],
+        createdBy=row["created_by_name"],
+        createdAt=row["created_at"].isoformat(),
+        submittedBy=row["submitted_by_name"],
+        submittedAt=_iso(row["submitted_at"]),
         returnedReason=row["returned_reason"],
-        confirmedBy=row["confirmed_by_name"], confirmedByRole=row["confirmed_by_role"],
+        confirmedBy=row["confirmed_by_name"],
+        confirmedByRole=row["confirmed_by_role"],
         confirmedAt=_iso(row["confirmed_at"]),
         items=out_items,
         blockingCount=sum(
             1 for f in problems if any(p in structuring.BLOCKING_PROBLEMS for p in f)
         ),
         extractionEmpty=with_items and not items,
-        counts=counts, missing=missing,
+        counts=counts,
+        missing=missing,
         parents=[
-            BaselineParent(code=p["code"], title=p["title"], location=p.get("location"),
-                           children=children[p["code"]])
+            BaselineParent(
+                code=p["code"],
+                title=p["title"],
+                location=p.get("location"),
+                children=children[p["code"]],
+            )
             for p in parents
         ],
     )
@@ -230,9 +261,7 @@ def detail(
 ) -> BaselineResponse:
     row = _load(cur, principal, project_id, baseline_id)
     if row["status"] == "DRAFT" and principal.role == "CLIENT":
-        raise errors.ApiError(
-            403, "BASELINE_NOT_SUBMITTED", "용역사가 제출하면 볼 수 있습니다."
-        )
+        raise errors.ApiError(403, "BASELINE_NOT_SUBMITTED", "용역사가 제출하면 볼 수 있습니다.")
     return _to_response(cur, row)
 
 
@@ -242,14 +271,15 @@ def unresolved_refs(
     _check_project(cur, principal, project_id)
     rows = repository.list_unresolved_refs(cur, project_id)
     parents = project_parents(cur, project_id)
-    labels = repository.entity_labels(
-        cur, {(r["source_type"], str(r["source_id"])) for r in rows}
-    )
+    labels = repository.entity_labels(cur, {(r["source_type"], str(r["source_id"])) for r in rows})
     return [
         UnresolvedRefResponse(
-            code=r["code"], sourceType=r["source_type"], sourceId=str(r["source_id"]),
+            code=r["code"],
+            sourceType=r["source_type"],
+            sourceId=str(r["source_id"]),
             sourceLabel=labels.get((r["source_type"], str(r["source_id"])), ("?", None))[0],
-            evidenceText=r["evidence_text"], evidenceUrl=r["evidence_url"],
+            evidenceText=r["evidence_text"],
+            evidenceUrl=r["evidence_url"],
             parentTitle=parents.get(r["code"]),
         )
         for r in rows
@@ -267,7 +297,8 @@ def create(
     if repo.find_confirmed(cur, project_id) is not None:
         # 1단계는 최초 기준선만이다. 확정 뒤 새 명세서는 기준선을 바꾸지 않는다
         raise errors.ApiError(
-            409, "BASELINE_CONFIRMED",
+            409,
+            "BASELINE_CONFIRMED",
             "요구사항 목록이 이미 확정됐습니다. 변경은 변경 관리 절차로 합니다.",
         )
     if repo.find_open(cur, project_id) is not None:
@@ -280,13 +311,18 @@ def create(
     text = document.get("extracted_text")
     if not text:
         raise errors.ApiError(
-            409, "DOCUMENT_NOT_EXTRACTED",
+            409,
+            "DOCUMENT_NOT_EXTRACTED",
             "문서에서 글을 아직 읽지 못했습니다. 처리 뒤 다시 등록하세요.",
         )
 
     baseline_id = repo.insert(
-        cur, project_id, repo.next_version(cur, project_id), document,
-        structuring.guess_version(text), principal.user_id,
+        cur,
+        project_id,
+        repo.next_version(cur, project_id),
+        document,
+        structuring.guess_version(text),
+        principal.user_id,
     )
     # 추출 결과는 버리는 행 없이 모두 넣는다. 중복·꼴 문제는 표시하고 사람이 고친다
     extracted = structuring.spec_items(text)
@@ -308,13 +344,19 @@ def _clean_item(req: BaselineItemRequest) -> dict[str, Any]:
     if req.priority not in _PRIORITIES:
         raise errors.validation_failed(f"중요도는 {', '.join(_PRIORITIES)} 중 하나입니다.")
     return {
-        "code": req.code.strip() or None, "title": " ".join(req.title.split()),
-        "body": req.body.strip(), "priority": req.priority,
+        "code": req.code.strip() or None,
+        "title": " ".join(req.title.split()),
+        "body": req.body.strip(),
+        "priority": req.priority,
     }
 
 
 def update_item(
-    cur: Any, principal: AuthPrincipal, project_id: str, baseline_id: str, item_id: str,
+    cur: Any,
+    principal: AuthPrincipal,
+    project_id: str,
+    baseline_id: str,
+    item_id: str,
     req: BaselineItemRequest,
 ) -> BaselineResponse:
     _editable(cur, principal, project_id, baseline_id)
@@ -325,7 +367,10 @@ def update_item(
 
 
 def add_item(
-    cur: Any, principal: AuthPrincipal, project_id: str, baseline_id: str,
+    cur: Any,
+    principal: AuthPrincipal,
+    project_id: str,
+    baseline_id: str,
     req: BaselineItemRequest,
 ) -> BaselineResponse:
     _editable(cur, principal, project_id, baseline_id)
@@ -388,7 +433,10 @@ def return_to_author(
 
 
 def confirm(
-    cur: Any, principal: AuthPrincipal, project_id: str, baseline_id: str,
+    cur: Any,
+    principal: AuthPrincipal,
+    project_id: str,
+    baseline_id: str,
     apply_spec_codes: list[str],
 ) -> BaselineResponse:
     """최초 기준선 확정. 호출한 쪽의 트랜잭션 하나로 끝난다. 중간에 실패하면 전부 되돌아간다."""
@@ -407,8 +455,7 @@ def confirm(
 
     existing = repo.existing_by_code(cur, project_id, lock=True)
     changed = {
-        i["code"] for i in items
-        if i["code"] in existing and not _same(i, existing[i["code"]])
+        i["code"] for i in items if i["code"] in existing and not _same(i, existing[i["code"]])
     }
     unknown = set(apply_spec_codes) - changed
     if unknown:
@@ -437,13 +484,24 @@ def confirm(
                 for field in ("title", "priority"):
                     if hit[field] != item[field]:
                         repository.insert_entity_history(
-                            cur, entity_type="REQUIREMENT", entity_id=rid,
-                            project_id=project_id, field=field, from_value=hit[field],
-                            to_value=item[field], actor=actor,
+                            cur,
+                            entity_type="REQUIREMENT",
+                            entity_id=rid,
+                            project_id=project_id,
+                            field=field,
+                            from_value=hit[field],
+                            to_value=item[field],
+                            actor=actor,
                         )
         repository.insert_entity_history(
-            cur, entity_type="REQUIREMENT", entity_id=rid, project_id=project_id,
-            field="baseline", from_value=None, to_value=f"{label} {match}", actor=actor,
+            cur,
+            entity_type="REQUIREMENT",
+            entity_id=rid,
+            project_id=project_id,
+            field="baseline",
+            from_value=None,
+            to_value=f"{label} {match}",
+            actor=actor,
         )
         repo.record_item_match(cur, str(item["id"]), rid, match, applied)
         touched.append(rid)
@@ -453,13 +511,25 @@ def confirm(
     if row["parents_json"] is None:
         # 열이 생기기 전에 등록한 기준선. 확정본은 문서가 지워져도 상위를 잃지 않게 적어 둔다
         repo.set_parents(cur, baseline_id, _parents(cur, row, items))
-    repo.set_confirmed(cur, baseline_id, principal.user_id, principal.role, {
-        "before": before,
-        "missing": missing,
-    })
+    repo.set_confirmed(
+        cur,
+        baseline_id,
+        principal.user_id,
+        principal.role,
+        {
+            "before": before,
+            "missing": missing,
+        },
+    )
     repository.insert_entity_history(
-        cur, entity_type="REQUIREMENT_BASELINE", entity_id=baseline_id, project_id=project_id,
-        field="status", from_value="SUBMITTED", to_value="CONFIRMED", actor=actor,
+        cur,
+        entity_type="REQUIREMENT_BASELINE",
+        entity_id=baseline_id,
+        project_id=project_id,
+        field="status",
+        from_value="SUBMITTED",
+        to_value="CONFIRMED",
+        actor=actor,
     )
     # 새 코드가 생겼으니 미해결이던 참조가 풀린다. 같은 트랜잭션에서 다시 잇는다
     trace_service.build_project_links(cur, project_id)

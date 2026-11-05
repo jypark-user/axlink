@@ -53,7 +53,10 @@ def traceability(
     사업 전체 건수는 summary 가 준다.
     """
     f = repository.RequirementFilter(
-        q=q, status=status, verified=verified, source_state=sourceState,
+        q=q,
+        status=status,
+        verified=verified,
+        source_state=sourceState,
         connection_id=connectionId,
     )
     with tx() as cur:
@@ -101,7 +104,9 @@ def decide_requirement_status(
     response_model=RequirementDetailResponse,
 )
 def revert_requirement_status(
-    project_id: str, requirement_id: str, req: RequirementDecisionRevertRequest,
+    project_id: str,
+    requirement_id: str,
+    req: RequirementDecisionRevertRequest,
     principal: Principal,
 ) -> RequirementDetailResponse:
     """지정을 거두고 근거 상태로 되돌린다."""
@@ -141,7 +146,12 @@ def list_issues(
     """
     with tx() as cur:
         return service.list_issues(
-            cur, principal, project_id, q, status, PageQuery(page=page, size=size),
+            cur,
+            principal,
+            project_id,
+            q,
+            status,
+            PageQuery(page=page, size=size),
             str(connectionId) if connectionId else None,
         )
 
@@ -182,9 +192,7 @@ def reject_work_product(
 
 
 @router.get("/{project_id}/work-products", response_model=WorkProductChecklistResponse)
-def list_work_products(
-    project_id: str, principal: Principal
-) -> WorkProductChecklistResponse:
+def list_work_products(project_id: str, principal: Principal) -> WorkProductChecklistResponse:
     """산출물 체크리스트. 저장소에서 수집한 파일도 여기 항목을 채운다."""
     with tx() as cur:
         return service.work_product_checklist(cur, principal, project_id)

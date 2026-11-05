@@ -15,7 +15,11 @@ _DEFAULT_RULES = MappingRules()
 
 _STATUS = {"진행": "IN_PROGRESS", "해결": "RESOLVED"}
 _RISK_SEVERITY = {
-    "낮음": "LOW", "보통": "MEDIUM", "높음": "HIGH", "긴급": "CRITICAL", "즉시": "CRITICAL",
+    "낮음": "LOW",
+    "보통": "MEDIUM",
+    "높음": "HIGH",
+    "긴급": "CRITICAL",
+    "즉시": "CRITICAL",
 }
 
 
@@ -95,3 +99,29 @@ def to_risk(payload: dict[str, Any], base_url: str) -> dict[str, Any]:
         "closed_at": payload.get("closed_on"),
         "external_url": _url(base_url, payload),
     }
+
+
+def to_milestone(payload: dict[str, Any], base_url: str) -> dict[str, Any]:
+    """Redmine 버전 → milestone 행(SWFR.PIP.007 자료, GH-214).
+
+    Redmine 은 버전이 닫힌 날을 따로 주지 않는다. 상태가 closed 이면 마지막 갱신 시각을
+    닫힌 시각의 근거로 둔다(버전 상태를 바꾸면 updated_on 이 바뀐다). 추정값임을 화면이
+    따로 표시할 필요가 있으면 source_updated_at 과 같다는 것으로 알 수 있다.
+    """
+    closed = (payload.get("status") or "") == "closed"
+    number = payload.get("id")
+    return {
+        "number": number,
+        "title": (payload.get("name") or "").strip()[:500] or f"버전 {number}",
+        "due_on": payload.get("due_date") or None,
+        "state": "CLOSED" if closed else "OPEN",
+        "closed_at": payload.get("updated_on") if closed else None,
+        "source_url": f"{(base_url or '').rstrip('/')}/versions/{number}",
+        "source_updated_at": payload.get("updated_on"),
+    }
+
+
+def version_number(payload: dict[str, Any]) -> int | None:
+    """이슈 원본의 fixed_version id. 없으면 None."""
+    fv = payload.get("fixed_version")
+    return fv.get("id") if isinstance(fv, dict) else None

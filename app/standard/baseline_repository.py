@@ -78,7 +78,11 @@ def next_version(cur: Any, project_id: str) -> int:
 
 
 def insert(
-    cur: Any, project_id: str, version: int, document: dict[str, Any], doc_version: str | None,
+    cur: Any,
+    project_id: str,
+    version: int,
+    document: dict[str, Any],
+    doc_version: str | None,
     user_id: str,
 ) -> str:
     row = fetch_one(
@@ -91,8 +95,13 @@ def insert(
         returning id
         """,
         (
-            project_id, version, document["id"], document["original_filename"],
-            document["file_hash"], doc_version, user_id,
+            project_id,
+            version,
+            document["id"],
+            document["original_filename"],
+            document["file_hash"],
+            doc_version,
+            user_id,
         ),
     )
     return str(row["id"])
@@ -131,9 +140,15 @@ def insert_item(cur: Any, baseline_id: str, seq: int, item: dict[str, Any], orig
         returning id
         """,
         (
-            baseline_id, seq, item.get("code"), item["title"], item.get("body") or "",
-            item.get("priority") or "SHOULD", item.get("location"),
-            Jsonb(item) if origin == "EXTRACTED" else None, origin,
+            baseline_id,
+            seq,
+            item.get("code"),
+            item["title"],
+            item.get("body") or "",
+            item.get("priority") or "SHOULD",
+            item.get("location"),
+            Jsonb(item) if origin == "EXTRACTED" else None,
+            origin,
         ),
     )
     return str(row["id"])
@@ -258,8 +273,14 @@ def insert_requirement(
         returning id
         """,
         (
-            project_id, item["code"], item["title"], item["body"], item["priority"],
-            document_id, baseline_id, item["id"],
+            project_id,
+            item["code"],
+            item["title"],
+            item["body"],
+            item["priority"],
+            document_id,
+            baseline_id,
+            item["id"],
         ),
     )
     return str(row["id"])
@@ -278,8 +299,14 @@ def attach_requirement(
                    priority = %s, updated_at = now()
              where id = %s
             """,
-            (baseline_id, item["id"], item["title"], item["body"], item["priority"],
-             requirement_id),
+            (
+                baseline_id,
+                item["id"],
+                item["title"],
+                item["body"],
+                item["priority"],
+                requirement_id,
+            ),
         )
     else:
         cur.execute(
