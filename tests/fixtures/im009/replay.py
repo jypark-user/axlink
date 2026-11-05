@@ -53,11 +53,19 @@ class ReplaySource:
             if kind == "milestone":
                 return [payloads.github_milestone(m, target) for m in ms.values()]
             if kind == "commit":
-                return [
-                    payloads.github_commit(c, target)
+                commits = [
+                    c
                     for c in d.COMMITS
                     if c.connection == "TD-CON-1" and (self.state == "S1" or c.state == "S0")
                 ]
+                commits += [c for c in self.faults.extra_commits if c.connection == "TD-CON-1"]
+                out = []
+                for c in commits:
+                    eid, payload = payloads.github_commit(c, target)
+                    if c.sha in self.faults.commit_message:
+                        payload["commit"]["message"] = self.faults.commit_message[c.sha]
+                    out.append((eid, payload))
+                return out
             if kind == "pull_request":
                 return [payloads.github_pull_request(p, target) for p in d.PULL_REQUESTS_CON1]
             if kind == "tree":
