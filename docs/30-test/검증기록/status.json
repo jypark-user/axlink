@@ -4,14 +4,16 @@
   "ac_denominator": 179,
   "ac_pass": 0,
   "overall_completion": 0.0,
-  "runs_executed": 0,
-  "runs_pass": 0,
-  "executed_pass_rate": null,
+  "runs_executed": 60,
+  "runs_pass": 60,
+  "executed_pass_rate": 100.0,
   "ac_by_status": {
-    "decision-wait": 33,
-    "no-scenario": 3,
-    "not-run": 143
+    "auto-only": 124,
+    "decision-wait": 9,
+    "no-scenario": 2,
+    "not-run": 43,
+    "pass-decision-wait": 1
   },
-  "runs_total": 0,
+  "runs_total": 60,
   "runs_invalidated": 0
 }

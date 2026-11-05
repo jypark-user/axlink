@@ -358,6 +358,8 @@ def compute_status(cat: dict) -> dict:
         invalidated.update(imp.get("invalidates_runs", []))
 
     by_sc: dict[str, list[dict]] = defaultdict(list)
+    # 시나리오 없이 AC 에 바로 붙는 실행(자동 시험 등)은 AC 별로 따로 모은다
+    by_ac_direct: dict[str, list[dict]] = defaultdict(list)
     for r in sorted(runs, key=lambda r: (r.get("ts", ""), r.get("run_id", ""))):
         rid = r["run_id"]
         verdicts = dict(r.get("ac_verdicts") or {})
@@ -373,6 +375,9 @@ def compute_status(cat: dict) -> dict:
         }
         for sid in r.get("scenarios", []):
             by_sc[sid].append(view)
+        if not r.get("scenarios"):
+            for aid in set(list(verdicts) + list(r.get("acs") or [])):
+                by_ac_direct[aid].append(view)
 
     def latest(sid: str) -> dict | None:
         rs = by_sc.get(sid)
@@ -403,35 +408,51 @@ def compute_status(cat: dict) -> dict:
     ac_status: dict[str, dict] = {}
     for aid, ac in cat["acs"].items():
         scs = ac["scenarios"]
+        direct_runs = [r for r in by_ac_direct.get(aid, []) if not r["_invalidated"]]
+        direct_latest = direct_runs[-1] if direct_runs else None
         if aid in excluded_acs:
             st = "excluded"
-        elif not scs:
+        elif not scs and direct_latest is None:
             st = "no-scenario"
         else:
-            sts = [sc_status[s]["status"] for s in scs]
+            sc_sts = [sc_status[s]["status"] for s in scs]
             direct = []
             for s in scs:
                 r = latest(s)
                 if r and not r["_invalidated"] and aid in r["_ac_verdicts"]:
                     direct.append(r["_ac_verdicts"][aid])
-            if direct:
-                sts = direct
-            if all(x == "pass" for x in sts):
-                st = "pass"
-                if ac["needs"]:
-                    modes = {latest(s).get("mode") for s in scs if latest(s)}
-                    if modes and modes <= NON_LIVE_MODES:
-                        st = "pass-mock-only"
-            elif "fail" in sts:
+            if direct_latest is not None:
+                direct.append(direct_latest["_ac_verdicts"].get(aid, direct_latest["_verdict"]))
+            every = sc_sts + direct
+            modes = {latest(s).get("mode") for s in scs if latest(s)}
+            if direct_latest is not None:
+                modes.add(direct_latest.get("mode"))
+            if "fail" in every:
                 st = "fail"
-            elif "revalidate" in sts:
+            elif "revalidate" in every:
                 st = "revalidate"
-            elif "blocked" in sts:
+            elif all(x == "pass" for x in every):
+                # 시나리오 전부 + 직접 근거 전부 통과
+                st = "pass"
+            elif (
+                direct
+                and all(x == "not-run" for x in sc_sts)
+                and all(x == "pass" for x in direct)
+            ):
+                # 자동 시험 등 직접 근거만 통과, 명세의 시나리오는 아직 안 돌림 → 완료 아님
+                st = "auto-only"
+            elif "blocked" in every:
                 st = "blocked"
-            elif all(x == "not-run" for x in sts):
+            elif all(x == "not-run" for x in every):
                 st = "decision-wait" if ac["decs"] else "not-run"
             else:
                 st = "partial"
+            if st == "pass" and ac["needs"] and modes and modes <= NON_LIVE_MODES:
+                # 실연동·실모델·브라우저·폐쇄망이 필요한데 전부 모의·재생·자동
+                st = "pass-mock-only"
+            if st == "pass" and ac["decs"]:
+                # 결정 전에는 통과 판정을 내리지 않는다(IM-007 0.6)
+                st = "pass-decision-wait"
         ac_status[aid] = {
             "ac": aid,
             "uc": ac["uc"],
@@ -479,8 +500,10 @@ def compute_status(cat: dict) -> dict:
 
 STATUS_LEGEND = (
     "상태 뜻: pass 통과 · fail 실패 · blocked 실행 차단 · not-run 미실행 · "
-    "decision-wait 결정 대기(미실행) · revalidate 재검증 필요 · partial 일부 시나리오만 · "
-    "pass-mock-only 모의만 통과(미완료) · excluded 공식 범위 제외 · no-scenario 시나리오 없음"
+    "decision-wait 결정 대기(미실행) · pass-decision-wait 근거는 통과했으나 결정 전(미완료) · "
+    "auto-only 자동 시험만 통과, 명세 시나리오 미실행(미완료) · revalidate 재검증 필요 · "
+    "partial 일부만 · pass-mock-only 모의·자동만 통과(미완료) · excluded 공식 범위 제외 · "
+    "no-scenario 시나리오 없음"
 )
 
 
