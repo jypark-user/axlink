@@ -34,6 +34,11 @@ class Faults:
     tracker_rename: dict[str, str] = field(default_factory=dict)  # 트래커 이름 변형(UC-012-S01)
     extra_commits: list[d.Commit] = field(default_factory=list)  # 변형 커밋 추가(UC-021-S08)
     commit_message: dict[str, str] = field(default_factory=dict)  # sha → 바뀐 메시지(UC-022-S02)
+    wbs_variant: str | None = None  # 저장소 WBS 를 다른 파일로(TD-WBS-SUM·NOHEAD·V2·L2·MISS)
+    wbs_sha: str = "ab01ab01ab01ab01ab01ab01ab01ab01ab01ab01"  # 변형 파일을 담은 커밋 해시
+    wbs_targets: set[str] = field(default_factory=set)  # WBS 를 서빙할 추가 저장소(TD-PRJ-9 연결)
+    extra_tree_paths: list[str] = field(default_factory=list)  # 트리에 더할 경로(UC-031-S03)
+    serve_design_file: bool = False  # 설정 경로 설계서 파일(DESIGN_FILE_PATH) 제공(UC-031-S02)
     calls: list[tuple[str, str, str]] = field(default_factory=list)  # (tool, kind, since)
 
 
@@ -79,7 +84,12 @@ class ReplaySource:
                 paths = [WBS_PATH, DESIGN_DOC_PATH, "src/auth/login.py"]
                 if self.state == "S1":
                     paths.append("docs/20-design/SW설계서_v0.9.docx")
+                paths += self.faults.extra_tree_paths
                 return [payloads.github_tree(paths, head, target)]
+        if target in self.faults.wbs_targets:
+            if kind == "tree":
+                return [payloads.github_tree([WBS_PATH], "9" * 40, target)]
+            return []
         if target == d.CONNECTIONS["TD-CON-3"].target:
             if kind == "issue":
                 return [payloads.github_issue(i, target, {}) for i in d.GITHUB_ISSUES_CON3]
@@ -180,11 +190,20 @@ class ReplaySource:
     def fetch_file(self, tool: str):
         def _fetch_file(base_url, target, secret, path, ref=None):
             self._check(tool, None)
-            if tool != "GITHUB" or target != d.CONNECTIONS["TD-CON-1"].target:
+            allowed = {d.CONNECTIONS["TD-CON-1"].target, *self.faults.wbs_targets}
+            if tool != "GITHUB" or target not in allowed:
                 return None
+            if path == "docs/20-design/SW설계서_v0.9.docx" and (
+                self.state == "S1" or self.faults.serve_design_file
+            ):
+                return payloads.github_file(
+                    path, self.files["TD-DOC-3"].read_bytes(), "d3d3d3d3" + "0" * 32, target
+                )[1]
             if path == WBS_PATH:
                 key = "TD-DOC-6-S1" if self.state == "S1" else "TD-DOC-6"
                 sha = d.WBS_FILE_COMMIT_S1 if self.state == "S1" else d.WBS_FILE_COMMIT_S0
+                if self.faults.wbs_variant:
+                    key, sha = self.faults.wbs_variant, self.faults.wbs_sha
                 return payloads.github_file(path, self.files[key].read_bytes(), sha, target)[1]
             if path == DESIGN_DOC_PATH:
                 text = self.files["TD-DOC-R1"].read_bytes()
