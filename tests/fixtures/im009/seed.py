@@ -154,10 +154,14 @@ class Seeder:
             body["organizationId"] = self.ids[org_tid]
         else:
             body["organizationName"] = d.ORGS[org_tid].name
-        row = self._ok(
+        rows = self._ok(
             self.c.post(f"/api/projects/{self.ids[prj]}/participants", json=body, headers=h)
         )
-        self.ids[org_tid] = row["organizationId"]
+        name = d.ORGS[org_tid].name
+        match = [r for r in rows if r["organizationName"] == name]
+        if not match:
+            raise SeedError(f"참여 업체 {name} 가 응답에 없다: {rows}")
+        self.ids[org_tid] = match[0]["organizationId"]
 
     def _invite_and_join(self, prj: str, org_tid: str, acc_tid: str) -> None:
         h = self._h(self.ids[f"{prj}:owner"])
