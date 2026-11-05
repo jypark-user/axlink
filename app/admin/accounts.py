@@ -256,7 +256,7 @@ def reset_password(cur: Any, principal: AuthPrincipal, user_id: str) -> ClientUs
     user = fetch_one(
         cur,
         """
-        select u.id, u.organization_id, u.email as username, u.name, u.role, u.status
+        select u.id, u.organization_id, u.username, u.name, u.role, u.status
           from app_user u
          where u.id::text = %s
         """,
