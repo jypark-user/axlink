@@ -6,16 +6,16 @@
    "sha256": "deb83121a42d0c00068c90ddd92fefc133a95cb3c8303a29b7b4b505ae7c7364"
   },
   "IM-007-유스케이스명세서.md": {
-   "version": "v0.2.3",
-   "sha256": "758b636545e1d9fa72ec74d97d86dbe6aac6c5bcc54d9cae54777a3acdeb99b8"
+   "version": "v0.2.4",
+   "sha256": "27bbfa73283125fc1915430bf2c03b72a3bbc7e4fedf9546c8e0a47abfb1bed5"
   },
   "IM-007A-요구사항-세부의무-대응표.md": {
    "version": "v0.1.1",
    "sha256": "752ce40945e7475f1152f52842e67b2a32465be0c1173d28fba4db4f36bd915f"
   },
   "IM-008-용어사전.md": {
-   "version": "v0.2.2",
-   "sha256": "2a08591156091f670d0d6cca14078a26a68dd07b775b02767bfc40cc328d47f7"
+   "version": "v0.2.3",
+   "sha256": "0012268423aafe63b4506ab8af78f2c5de0e8598552a206629413c02c41ee970"
   },
   "IM-009-공통시험자료.md": {
    "version": "v0.2.1",
