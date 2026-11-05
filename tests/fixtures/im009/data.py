@@ -622,6 +622,6 @@ EXPECTED_S0 = {
     "milestones": 6,
     "requirements": 3,
     "submissions": 2,
-    "progress_pct": 30.0,
-    "plan_pct_t0": 66.9,
+    "progress_ratio": 0.3000,
+    "plan_ratio_t0": 0.6695,  # 표시값은 IM-009 7.1 참조(반올림 정정 DEF-V001)
 }
