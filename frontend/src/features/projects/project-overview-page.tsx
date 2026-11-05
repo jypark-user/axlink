@@ -45,6 +45,7 @@ import type {
   DocumentUploadResponse,
   BaselineStateResponse,
   PageResponse,
+  ProjectDetailResponse,
   RequirementResponse,
 } from '@/types/api';
 

@@ -121,6 +121,8 @@ def update(
                 f"{row['status']} 상태에서 {req.status} 로 바꿀 수 없습니다.",
             )
         fields["status"] = req.status
+        # 종료 시각은 상태와 함께 간다(ck_project__closed_at). 종료가 아니면 비운다
+        fields["closed_at"] = datetime.now(UTC) if req.status == "CLOSED" else None
         cur.execute(
             """
             insert into entity_history (entity_type, entity_id, project_id, field, from_value,
