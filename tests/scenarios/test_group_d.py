@@ -104,7 +104,7 @@ def test_UC_030_S01_저장소_WBS_인식(target, s0):
     """말단 5, 합 1.00, 산출물 미지정 0, 경고 0, 3.3 계획선(T0) 77.9% (AC-030-1·2·4·6)."""
     w = _wbs(target, s0)
     assert w["source"] == "WBS_FILE", w["source"]
-    leaves = [i for i in w["items"] if i["weight"]]
+    leaves = [i for i in w["items"] if i["weight"] and i["level"] > 0]
     assert [i["wbsId"] for i in leaves] == ["3.1", "3.2", "3.3", "3.4", "3.5"], [i["wbsId"] for i in leaves]
     assert round(sum(i["weight"] for i in leaves), 4) == 1.0
     by = {i["wbsId"]: i for i in leaves}
@@ -124,7 +124,7 @@ def test_UC_030_S02_업로드_계획서(target, s0):
     res = _confirm(target, s0, doc, "PROJECT_PLAN", "사업수행계획서", "v1")
     assert res.status_code == 200, res.text
     w = _wbs(target, s0, "TD-PRJ-9")
-    leaves = [i for i in w["items"] if i["weight"]]
+    leaves = [i for i in w["items"] if i["weight"] and i["level"] > 0]
     assert w["source"] == "WBS_FILE" and len(leaves) == 5, (w["source"], w["warnings"], len(leaves))
     assert _progress(target, s0, "TD-PRJ-9")["level"] == "L1"
 
@@ -192,7 +192,8 @@ def test_UC_031_S11_승인_중복(target, s0):
 
 def test_UC_031_S08_같은_버전_재제출(target, s0):
     """승인된 v1 로 다시 제출 → 거절 「승인된 버전」 (AC-031-8)."""
-    doc = _upload(target, s0, "TD-PRJ-1", s0.files["TD-DOC-3"], "SW설계서_v0.9-재제출.docx", DOCX)
+    # 같은 내용은 같은 문서로 합쳐지므로(중복 제거) 다른 내용의 파일을 v1 로 다시 제출한다
+    doc = _upload(target, s0, "TD-PRJ-1", s0.files["TD-DOC-5"], "SW설계서_v1-재제출.docx", DOCX)
     res = _confirm(target, s0, doc, "SOFTWARE_DESIGN", "SW설계서", "v1")
     assert res.status_code == 409, res.text
     assert "승인" in res.text
@@ -250,7 +251,7 @@ def test_UC_032_S04_중복_이미_확인(target, s0):
 
 def test_UC_032_S08_근거_고정(target, s0):
     """확인 뒤 SW설계서 v2 제출 → 요청 상세의 근거는 v1·제출 상태 그대로 (AC-032-8)."""
-    doc = _upload(target, s0, "TD-PRJ-1", s0.files["TD-DOC-3"], "SW설계서_v2.docx", DOCX)
+    doc = _upload(target, s0, "TD-PRJ-1", s0.files["TD-DOC-2"], "SW설계서_v2.docx", DOCX)
     assert _confirm(target, s0, doc, "SOFTWARE_DESIGN", "SW설계서", "v2").status_code == 200
     detail = target.get(f"/api/review-requests/{s0.ids['TD-RR-32']}", headers=auth(s0.tokens["TD-ACC-C1"])).json()
     recs = detail["completionRecords"]
@@ -294,7 +295,7 @@ def test_UC_031_S04_반려_뒤_재제출_이력(target, s0):
     assert current["version"] == "v2" and current["status"] == "SUBMITTED"
     res = target.post(f"/api/projects/{pid}/work-products/{current['id']}/reject", json={"reason": "목차 누락"}, headers=c1)
     assert res.status_code == 204, res.text
-    doc = _upload(target, s0, "TD-PRJ-1", s0.files["TD-DOC-3"], "SW설계서_v3.docx", DOCX)
+    doc = _upload(target, s0, "TD-PRJ-1", s0.files["TD-DOC-1"], "SW설계서_v3.docx", DOCX)
     assert _confirm(target, s0, doc, "SOFTWARE_DESIGN", "SW설계서", "v3").status_code == 200
     now = _checklist(target, s0)["SOFTWARE_DESIGN"]
     assert now["version"] == "v3" and now["status"] == "SUBMITTED"
@@ -380,7 +381,7 @@ def test_UC_030_S04_머리글_없음(target, s0, replay):
     prog = _progress(target, s0)
     try:
         assert any("머리글" in x for x in w["warnings"] + prog["warnings"]), (w["warnings"], prog["warnings"])
-        assert len([i for i in w["items"] if i["weight"]]) == 5, "이전 기준선 5건이 유지되지 않았다"
+        assert len([i for i in w["items"] if i["weight"] and i["level"] > 0]) == 5, "이전 기준선 5건이 유지되지 않았다"
         assert prog["representative"] is not None and round(prog["representative"], 4) == 0.3, prog
     finally:
         _restore_wbs(target, s0, replay)
@@ -451,7 +452,7 @@ def test_UC_030_S05_버전_교체_정체_승계(target, s0, replay):
     w = _wbs(target, s0)
     c = _completion(target, s0)
     try:
-        leaves = [i["wbsId"] for i in w["items"] if i["weight"]]
+        leaves = [i["wbsId"] for i in w["items"] if i["weight"] and i["level"] > 0]
         assert leaves == ["3.1", "3.2", "3.3", "3.4", "3.5", "3.6"], leaves
         by = {i["wbsId"]: i for i in c["items"]}
         assert by["3.1"]["completionStatus"] == "CONFIRMED" and by["3.1"]["keyReason"] == "CONTINUED", by["3.1"]
@@ -479,7 +480,7 @@ def test_UC_030_S09_산출물_열_누락(target, s0, replay):
     job = target.post(f"/api/connections/{cid}/sync", json={"kind": "BACKFILL"}, headers=v1).json()
     assert job["status"] == "SUCCEEDED", job
     w = _wbs(target, s0, "TD-PRJ-9")
-    leaves = {i["wbsId"]: i for i in w["items"] if i["weight"]}
+    leaves = {i["wbsId"]: i for i in w["items"] if i["weight"] and i["level"] > 0}
     assert len(leaves) == 5 and leaves["3.4"]["deliverable"] in (None, ""), leaves.get("3.4")
     assert w["deliverables"]["none"] == 1, w["deliverables"]
     items = {i["wbsId"]: i for i in _deliverables(target, s0, "TD-PRJ-9")["items"]}
@@ -494,7 +495,7 @@ def test_UC_032_S10_가중치_기준_확인(target, s0, replay):
     replay.faults = Faults(wbs_targets={"daon/prj9"}, wbs_variant="TD-WBS-V2", wbs_sha="e2e2e2e2" + "1" * 32)
     job = target.post(f"/api/connections/{cid}/sync", json={"kind": "BACKFILL"}, headers=v1).json()
     assert job["status"] == "SUCCEEDED", job
-    assert len([i for i in _wbs(target, s0, "TD-PRJ-9")["items"] if i["weight"]]) == 6
+    assert len([i for i in _wbs(target, s0, "TD-PRJ-9")["items"] if i["weight"] and i["level"] > 0]) == 6
     pid = s0.ids["TD-PRJ-9"]
     doc = _upload(target, s0, "TD-PRJ-9", s0.files["TD-DOC-2"], "시험결과서.docx", DOCX, wbs_id="3.4")
     res = _confirm(target, s0, doc, "TEST_REPORT", "시험결과서", "v1")
