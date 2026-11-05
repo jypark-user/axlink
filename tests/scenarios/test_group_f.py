@@ -145,8 +145,9 @@ def test_UC_050_S01_WBS_작업_요청(target, s0):
         problems.append("연결 이슈 #204 진행중이 저장 상태에 없다")
     if not any("progress" in k.lower() or "representative" in k.lower() for k in snap):
         problems.append("보고 진척률 30.0% 가 저장 상태에 없다")
-    if (before, _pending(target, s0)) != (0, 1):
-        problems.append(f"미처리 {before} → {_pending(target, s0)} (기대 0 → 1)")
+    if _pending(target, s0) != before + 1:
+        problems.append(f"미처리 {before} → {_pending(target, s0)} (기대 +1)")
+    s0.ids["PENDING-BASE"] = str(before)
     # 알림: 요청 직후 V1 미읽음, C1 자기 요청 알림 없음 (UC-053-S02 에서 판정)
     v1n = _get(target, s0, "/api/notifications", acc="TD-ACC-V1")
     c1n = _get(target, s0, "/api/notifications", acc="TD-ACC-C1")
@@ -170,8 +171,8 @@ def test_UC_050_S06_등록_상태_불변(target, s0):
 
 
 def test_UC_051_S03a_발주기관_공백_보고(target, s0):
-    """S1: 발주기관 보고 / 공백 보고 → 거절 (AC-051-3)."""
-    rid = s0.ids["TD-RR-1"]
+    """S1: 발주기관 보고 / 공백 보고 → 거절 (AC-051-3). TD-RR-1 흐름을 보호하려고 다른 요청(지표)에 시도한다."""
+    rid = s0.ids["RR-METRIC"]
     assert target.post(f"/api/review-requests/{rid}/report", json={"body": "x", "evidence": []}, headers=auth(s0.tokens["TD-ACC-C1"])).status_code == 403
     assert target.post(f"/api/review-requests/{rid}/report", json={"body": "   ", "evidence": []}, headers=auth(s0.tokens["TD-ACC-V1"])).status_code in (400, 422)
 
@@ -194,8 +195,8 @@ def test_UC_051_S01_조치_뒤_보고(target, s0):
         problems.append("#204 진행중 → 해결 변경이 없다")
     if not any("progress" in k.lower() or "representative" in k.lower() for k in changes):
         problems.append("보고 진척률 30.0 → 39.0 변경이 없다")
-    if _pending(target, s0) != 1:
-        problems.append(f"미처리 {_pending(target, s0)} (기대 1, 조치보고)")
+    if _pending(target, s0) != int(s0.ids["PENDING-BASE"]) + 1:
+        problems.append(f"미처리 {_pending(target, s0)} (기대 기준+1, 조치보고도 미처리)")
     c1n = _get(target, s0, "/api/notifications", acc="TD-ACC-C1")
     s0.ids["N-C1-AFTER-REPORT"] = str([i["kind"] for i in c1n["items"]]) + f"|{c1n['unread']}"
     assert not problems, problems
@@ -213,26 +214,6 @@ def test_UC_053_S02_알림_흐름(target, s0):
     if "REVIEW_REPORTED" not in s0.ids["N-C1-AFTER-REPORT"] or s0.ids["N-C1-AFTER-REPORT"].endswith("|0"):
         problems.append(f"보고 뒤 C1 알림 {s0.ids['N-C1-AFTER-REPORT']}")
     assert not problems, problems
-
-
-def test_UC_051_S02_보고_뒤_추가_변경(target, s0, replay):
-    """S1r 에서 실적 95% 로 갱신·수집 → 보고에 붙은 내역은 85%, 지금 상태는 95% (AC-051-2)."""
-    leaves = [list(r) for r in files.WBS_LEAVES_S0]
-    leaves[1][7] = 0.95
-    header, rows = files._wbs_rows(leaves)
-    path = s0.files["TD-DOC-6"].parent / "WBS-95.xlsx"
-    files._xlsx(path, "WBS", header, rows)
-    s0.files["TD-WBS-95"] = path
-    replay.faults = Faults(wbs_variant="TD-WBS-95", wbs_sha="95959595" + "0" * 32)
-    job = target.post(f"/api/connections/{s0.ids['TD-CON-1']}/sync", json={"kind": "BACKFILL"}, headers=auth(s0.tokens["TD-ACC-V1"])).json()
-    assert job["status"] == "SUCCEEDED", job
-    det = _detail(target, s0, s0.ids["TD-RR-1"])
-    reported = next(e for e in det["events"] if e["kind"] == "REPORTED")
-    assert _ratio(reported["snapshot"].get("actual")) == 0.85, reported["snapshot"]
-    assert _ratio(det["currentState"].get("actual")) == 0.95, det["currentState"]
-    # S1 파일로 되돌린다
-    replay.faults = Faults()
-    target.post(f"/api/connections/{s0.ids['TD-CON-1']}/sync", json={"kind": "BACKFILL"}, headers=auth(s0.tokens["TD-ACC-V1"]))
 
 
 # ------------------------------------------------------------------ UC-052 (S1r)
@@ -255,9 +236,9 @@ def test_UC_052_S02_재요청(target, s0):
     assert res.status_code == 200, res.text
     det = res.json()
     assert det["status"] == "REQUESTED" and det["rerequestCount"] == 1, det
-    assert _ratio(det["snapshot"].get("actual")) == 0.4  # 최초 요청 시점 상태 보존
+    assert _ratio(det["events"][0]["snapshot"].get("actual")) == 0.4  # 최초 요청 시점 상태는 이력에 보존
     assert [e["kind"] for e in det["events"]] == ["REQUESTED", "REPORTED", "REREQUESTED"], [e["kind"] for e in det["events"]]
-    assert _pending(target, s0) == 1
+    assert _pending(target, s0) == int(s0.ids["PENDING-BASE"]) + 1
 
 
 def test_UC_051_S04_재요청_뒤_재보고(target, s0):
@@ -269,19 +250,20 @@ def test_UC_051_S04_재요청_뒤_재보고(target, s0):
     kinds = [e["kind"] for e in det["events"]]
     assert kinds == ["REQUESTED", "REPORTED", "REREQUESTED", "REPORTED"], kinds
     assert det["events"][1]["body"] == d.REVIEW_REQUEST_TD_RR_1["report"]  # 이전 보고 이력
-    assert _ratio(det["snapshot"].get("actual")) == 0.4 and _ratio(det["currentState"].get("actual")) == 0.85
+    assert _ratio(det["events"][0]["snapshot"].get("actual")) == 0.4 and _ratio(det["currentState"].get("actual")) == 0.85
 
 
 def test_UC_052_S01_확인완료(target, s0):
     """확인완료 → 확인자 김주무관, 미처리 1 → 0 (AC-052-2)."""
     rid = s0.ids["TD-RR-1"]
-    assert _pending(target, s0) == 1
+    base = int(s0.ids["PENDING-BASE"])
+    assert _pending(target, s0) == base + 1
     res = target.post(f"/api/review-requests/{rid}/confirm", json={"acknowledgeCompletion": False, "note": "확인했습니다"}, headers=auth(s0.tokens["TD-ACC-C1"]))
     assert res.status_code == 200, res.text
     det = res.json()
     assert det["status"] == "CONFIRMED" and det["confirmedByName"] == d.ACCOUNTS["TD-ACC-C1"].display, det
-    assert _pending(target, s0) == 0
-    assert _ratio(det["snapshot"].get("actual")) == 0.4  # 확인 뒤 상태는 바뀌지 않는다
+    assert _pending(target, s0) == base
+    assert _ratio(det["events"][0]["snapshot"].get("actual")) == 0.4  # 확인 뒤 상태는 바뀌지 않는다
 
 
 def test_UC_052_S04_중복(target, s0):
@@ -302,7 +284,31 @@ def test_UC_052_S05_전체_주기(target, s0):
     kinds = [e["kind"] for e in det["events"]]
     assert kinds == ["REQUESTED", "REPORTED", "REREQUESTED", "REPORTED", "CONFIRMED"], kinds
     assert det["rerequestCount"] == 1 and det["status"] == "CONFIRMED"
-    assert _pending(target, s0) == 0
+    assert _pending(target, s0) == int(s0.ids["PENDING-BASE"])
+
+
+# ------------------------------------------------------------------ 주기 뒤: 추가 변경·활동 기록
+
+
+def test_UC_051_S02_보고_뒤_추가_변경(target, s0, replay):
+    """S1r 에서 실적 95% 로 갱신·수집 → 보고에 붙은 내역은 85%, 지금 상태는 95% (AC-051-2)."""
+    leaves = [list(r) for r in files.WBS_LEAVES_S0]
+    leaves[1][7] = 0.95
+    header, rows = files._wbs_rows(leaves)
+    path = s0.files["TD-DOC-6"].parent / "WBS-95.xlsx"
+    files._xlsx(path, "WBS", header, rows)
+    s0.files["TD-WBS-95"] = path
+    replay.faults = Faults(wbs_variant="TD-WBS-95", wbs_sha="95959595" + "0" * 32)
+    job = target.post(f"/api/connections/{s0.ids['TD-CON-1']}/sync", json={"kind": "BACKFILL"}, headers=auth(s0.tokens["TD-ACC-V1"])).json()
+    assert job["status"] == "SUCCEEDED", job
+    det = _detail(target, s0, s0.ids["TD-RR-1"])
+    reported = next(e for e in det["events"] if e["kind"] == "REPORTED")
+    assert _ratio(reported["snapshot"].get("actual")) == 0.85, reported["snapshot"]
+    assert _ratio(det["currentState"].get("actual")) == 0.95, det["currentState"]
+    # S1 파일로 되돌린다
+    replay.faults = Faults()
+    target.post(f"/api/connections/{s0.ids['TD-CON-1']}/sync", json={"kind": "BACKFILL"}, headers=auth(s0.tokens["TD-ACC-V1"]))
+
 
 
 # ------------------------------------------------------------------ UC-053

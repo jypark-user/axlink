@@ -14,7 +14,8 @@ from tests.fixtures.im009 import data as d
 
 REDMINE_STATUS = {
     "신규": {"id": 1, "name": "신규", "is_closed": False},
-    "진행중": {"id": 2, "name": "진행중", "is_closed": False},
+    # IM-009 는 「진행중」으로 적지만 Redmine 기본 상태 이름은 「진행」이다. 원천 어휘를 쓴다
+    "진행중": {"id": 2, "name": "진행", "is_closed": False},
     "해결": {"id": 3, "name": "해결", "is_closed": False},
     "종료": {"id": 5, "name": "종료", "is_closed": True},
 }
