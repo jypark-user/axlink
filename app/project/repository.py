@@ -88,8 +88,15 @@ def insert_project(
         values (%s, %s, %s, %s, %s, %s, %s, 'PLANNING', 'SI_1')
         returning id
         """,
-        (client_org_id, name, start_date, end_date, description, contractor_name,
-         delete_password_hash),
+        (
+            client_org_id,
+            name,
+            start_date,
+            end_date,
+            description,
+            contractor_name,
+            delete_password_hash,
+        ),
     )
     return str(row["id"])
 
@@ -111,9 +118,7 @@ def update_project(cur: Any, project_id: str, fields: dict[str, Any]) -> None:
         column = _UPDATABLE[key]
         sets.append(f"{column} = %s")
         params.append(value)
-    cur.execute(
-        f"update project set {', '.join(sets)} where id = %s", (*params, project_id)
-    )
+    cur.execute(f"update project set {', '.join(sets)} where id = %s", (*params, project_id))
 
 
 def find_delete_hash(cur: Any, project_id: str) -> str | None:
@@ -250,8 +255,13 @@ def insert_user(
 
 # --- 초대 -----------------------------------------------------------------
 
+
 def insert_invite(
-    cur: Any, project_id: str, token_hash: str, expires_at: datetime, created_by: str,
+    cur: Any,
+    project_id: str,
+    token_hash: str,
+    expires_at: datetime,
+    created_by: str,
     organization_id: str | None = None,
 ) -> dict[str, Any]:
     return fetch_one(
@@ -264,6 +274,33 @@ def insert_invite(
         """,
         (project_id, token_hash, expires_at, created_by, organization_id),
     )
+
+
+def list_open_invites(cur: Any, project_id: str, now: datetime) -> list[dict[str, Any]]:
+    """아직 쓸 수 있는 초대 링크. 취소·만료된 것은 뺀다. 토큰 원문은 없다(해시만 저장)."""
+    return fetch_all(
+        cur,
+        """
+        select i.id, i.project_id, i.expires_at, i.revoked_at, i.created_at,
+               i.organization_id, co.name as contractor_org_name
+          from project_invite i
+          left join organization co on co.id = i.organization_id
+         where i.project_id = %s and i.revoked_at is null and i.expires_at > %s
+         order by i.created_at desc
+        """,
+        (project_id, now),
+    )
+
+
+def revoke_invite(cur: Any, project_id: str, invite_id: str, now: datetime) -> bool:
+    cur.execute(
+        """
+        update project_invite set revoked_at = %s
+         where id::text = %s and project_id = %s and revoked_at is null
+        """,
+        (now, invite_id, project_id),
+    )
+    return cur.rowcount == 1
 
 
 def find_invite_by_hash(cur: Any, token_hash: str) -> dict[str, Any] | None:

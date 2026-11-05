@@ -1,4 +1,4 @@
-import { useState, type ReactNode } from 'react';
+import { useEffect, useState, type ReactNode } from 'react';
 import { Copy } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
@@ -41,7 +41,36 @@ export function InviteLinkDialog({
   const [issued, setIssued] = useState<ProjectInviteResponse | null>(null);
   const [orgId, setOrgId] = useState<string>('');
   const [busy, setBusy] = useState(false);
+  const [openInvites, setOpenInvites] = useState<ProjectInviteResponse[]>([]);
   const active = participants.filter((p) => p.status === 'ACTIVE');
+
+  // 아직 쓸 수 있는 링크. 토큰은 다시 보이지 않으므로 업체·만료일만 보여 주고 취소만 할 수 있다
+  const loadInvites = async () => {
+    try {
+      setOpenInvites(await api.get<ProjectInviteResponse[]>(`/projects/${projectId}/invites`));
+    } catch {
+      setOpenInvites([]);
+    }
+  };
+  useEffect(() => {
+    if (open) void loadInvites();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open, projectId]);
+
+  const revoke = async (invite: ProjectInviteResponse) => {
+    if (!window.confirm('이 초대 링크를 취소할까요? 취소한 링크로는 가입할 수 없습니다.')) return;
+    try {
+      await api.del(`/projects/${projectId}/invites/${invite.id}`);
+      toast({ title: '초대 링크를 취소했습니다.', variant: 'success' });
+      void loadInvites();
+    } catch (err) {
+      toast({
+        title: '초대 링크를 취소하지 못했습니다.',
+        description: isApiError(err) ? err.message : undefined,
+        variant: 'error',
+      });
+    }
+  };
 
   // 닫을 때 비운다. 다시 열면 업체를 새로 고른다
   const handleOpenChange = (next: boolean) => {
@@ -116,6 +145,24 @@ export function InviteLinkDialog({
                 링크 만들기
               </Button>
             </div>
+            {openInvites.length > 0 && (
+              <div className="border-t pt-3">
+                <p className="text-xs font-medium">아직 쓸 수 있는 링크</p>
+                <ul className="mt-1 flex flex-col gap-1">
+                  {openInvites.map((i) => (
+                    <li key={i.id} className="flex items-center justify-between gap-2 text-xs">
+                      <span>
+                        {i.organizationName ?? '새 업체 직접 등록'} ·{' '}
+                        {new Date(i.expiresAt).toLocaleDateString()} 만료
+                      </span>
+                      <Button size="sm" variant="ghost" onClick={() => void revoke(i)}>
+                        취소
+                      </Button>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            )}
           </div>
         ) : (
           <div className="flex flex-col gap-2">

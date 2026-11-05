@@ -93,6 +93,54 @@ def test_update_validates_dates_and_phase(client, client_token, cleanup):
 
 
 @requires_db
+def test_revoked_invite_is_rejected(client, client_token, cleanup):
+    """발주기관이 취소한 초대 링크로는 가입할 수 없다(AC-003-4, GH-209)."""
+    token = client_token("r2")
+    pid = client.post(
+        "/api/projects", json=_project_body(name="시험 사업-초대취소"), headers=_auth(token)
+    ).json()["id"]
+    invite = client.post(f"/api/projects/{pid}/invites", json={}, headers=_auth(token)).json()
+
+    listed = client.get(f"/api/projects/{pid}/invites", headers=_auth(token))
+    assert listed.status_code == 200, listed.text
+    assert [i["id"] for i in listed.json()] == [invite["id"]]
+    assert all(i["token"] is None for i in listed.json())
+
+    # 용역사는 취소하지 못한다
+    denied = client.delete(
+        f"/api/projects/{pid}/invites/{invite['id']}", headers=_auth(client_token("r3"))
+    )
+    assert denied.status_code == 403
+
+    assert (
+        client.delete(
+            f"/api/projects/{pid}/invites/{invite['id']}", headers=_auth(token)
+        ).status_code
+        == 204
+    )
+    assert client.get(f"/api/projects/{pid}/invites", headers=_auth(token)).json() == []
+    assert client.get(f"/api/auth/invitations/{invite['token']}").status_code == 404
+    rejected = client.post(
+        "/api/auth/invitations/accept",
+        json={
+            "token": invite["token"],
+            "contractorOrgName": "시험용역사-취소",
+            "username": "test-revoked",
+            "name": "취소된 링크",
+            "password": "password-1234",
+        },
+    )
+    assert rejected.status_code == 404
+    # 두 번 취소는 404
+    assert (
+        client.delete(
+            f"/api/projects/{pid}/invites/{invite['id']}", headers=_auth(token)
+        ).status_code
+        == 404
+    )
+
+
+@requires_db
 def test_invite_accept_assign_revoke_delete(client, client_token, cleanup):
     """S2-1 전체 흐름. 초대 → 미리보기 → 가입 → 자기 사업만 보임 → 해제 → 재할당 → 삭제."""
     client_tok = client_token("r2")
@@ -130,8 +178,11 @@ def test_invite_accept_assign_revoke_delete(client, client_token, cleanup):
     dup = client.post(
         "/api/auth/invitations/accept",
         json={
-            "token": token, "contractorOrgName": "시험용역사-A", "username": "test-pm-a",
-            "name": "중복", "password": "passw0rd1",
+            "token": token,
+            "contractorOrgName": "시험용역사-A",
+            "username": "test-pm-a",
+            "name": "중복",
+            "password": "passw0rd1",
         },
     )
     assert dup.status_code == 400
@@ -152,8 +203,10 @@ def test_invite_accept_assign_revoke_delete(client, client_token, cleanup):
     users = client.get(
         "/api/users?role=CONTRACTOR&status=ACTIVE&size=100", headers=_auth(client_tok)
     ).json()
-    assert any(u["username"] == "test-pm-a" and u["organizationName"] == "시험용역사-A"
-               for u in users["content"])
+    assert any(
+        u["username"] == "test-pm-a" and u["organizationName"] == "시험용역사-A"
+        for u in users["content"]
+    )
     assert client.get("/api/users", headers=_auth(contractor_tok)).status_code == 403
 
     # 해제하면 접근이 끊기고, 다시 할당하면 살아난다 (같은 줄을 되살린다)
@@ -178,7 +231,9 @@ def test_invite_accept_assign_revoke_delete(client, client_token, cleanup):
     )
     assert wrong.status_code == 403
     right = client.request(
-        "DELETE", f"/api/projects/{pid}", json={"password": "delete-me-1234"},
+        "DELETE",
+        f"/api/projects/{pid}",
+        json={"password": "delete-me-1234"},
         headers=_auth(client_tok),
     )
     assert right.status_code == 204
