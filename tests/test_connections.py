@@ -300,6 +300,7 @@ def test_backfill_tolerates_missing_permission(client, as_pm, monkeypatch):
     assert "pull_request" in (job["error"] or "")  # 건너뛴 항목을 정직하게 남긴다
 
 
+@requires_db
 def test_backfill_fails_when_issue_permission_missing(client, as_pm, monkeypatch):
     """필수 대상(이슈)의 권한이 빠지면 성공·부분 성공이 아니라 실패다(AC-011-6b, GH-212)."""
     token, created = as_pm
