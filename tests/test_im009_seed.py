@@ -69,8 +69,9 @@ def test_s0_진척과_계획선_T0(client, seeded):
     h = _auth(s.tokens["TD-ACC-C1"])
     prog = client.get(f"/api/projects/{pid}/progress?at={d.T0.isoformat()}", headers=h).json()
     # 7.1: 보고 진척률 30.0%, 계획선 66.9%, 편차 −36.9%p
-    assert round(prog["representative"], 1) == d.EXPECTED_S0["progress_pct"], prog
-    assert round(prog["wbsPlanned"], 1) == d.EXPECTED_S0["plan_pct_t0"], prog
+    # API 는 비율(0~1)로 준다. 문서 표시값(%)과 비교하려고 100 을 곱한다
+    assert round(prog["representative"] * 100, 1) == d.EXPECTED_S0["progress_pct"], prog
+    assert round(prog["wbsPlanned"] * 100, 1) == d.EXPECTED_S0["plan_pct_t0"], prog
 
 
 @requires_db
