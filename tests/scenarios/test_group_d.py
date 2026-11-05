@@ -74,6 +74,18 @@ def _confirm(target, s0, doc_id: str, type_code: str, title: str, version: str, 
     }, headers=auth(s0.tokens[acc]))
 
 
+def _fresh_docx(s0, name: str, marker: str):
+    """내용이 다른 DOCX 를 즉석에서 만든다. 같은 내용은 같은 문서로 합쳐지므로 판본마다 다르게."""
+    from docx import Document
+
+    path = s0.files["TD-DOC-3"].parent / name
+    doc = Document()
+    doc.add_heading(f"SW설계서 {marker}", level=1)
+    doc.add_paragraph(f"이 판본은 {marker} 이다. 외부 연계 규격은 2026-08-25 협의를 마쳤다.")
+    doc.save(path)
+    return path
+
+
 def _completion_cycle(target, s0, wbs_id: str, scope: str, wp_id: str) -> str:
     pid = s0.ids["TD-PRJ-1"]
     req = target.post(f"/api/projects/{pid}/review-requests", json={
@@ -193,7 +205,7 @@ def test_UC_031_S11_승인_중복(target, s0):
 def test_UC_031_S08_같은_버전_재제출(target, s0):
     """승인된 v1 로 다시 제출 → 거절 「승인된 버전」 (AC-031-8)."""
     # 같은 내용은 같은 문서로 합쳐지므로(중복 제거) 다른 내용의 파일을 v1 로 다시 제출한다
-    doc = _upload(target, s0, "TD-PRJ-1", s0.files["TD-DOC-5"], "SW설계서_v1-재제출.docx", DOCX)
+    doc = _upload(target, s0, "TD-PRJ-1", _fresh_docx(s0, "SW설계서_v1-재제출.docx", "v1 재제출"), "SW설계서_v1-재제출.docx", DOCX)
     res = _confirm(target, s0, doc, "SOFTWARE_DESIGN", "SW설계서", "v1")
     assert res.status_code == 409, res.text
     assert "승인" in res.text
@@ -251,7 +263,7 @@ def test_UC_032_S04_중복_이미_확인(target, s0):
 
 def test_UC_032_S08_근거_고정(target, s0):
     """확인 뒤 SW설계서 v2 제출 → 요청 상세의 근거는 v1·제출 상태 그대로 (AC-032-8)."""
-    doc = _upload(target, s0, "TD-PRJ-1", s0.files["TD-DOC-2"], "SW설계서_v2.docx", DOCX)
+    doc = _upload(target, s0, "TD-PRJ-1", _fresh_docx(s0, "SW설계서_v2.docx", "v2"), "SW설계서_v2.docx", DOCX)
     assert _confirm(target, s0, doc, "SOFTWARE_DESIGN", "SW설계서", "v2").status_code == 200
     detail = target.get(f"/api/review-requests/{s0.ids['TD-RR-32']}", headers=auth(s0.tokens["TD-ACC-C1"])).json()
     recs = detail["completionRecords"]
@@ -295,7 +307,7 @@ def test_UC_031_S04_반려_뒤_재제출_이력(target, s0):
     assert current["version"] == "v2" and current["status"] == "SUBMITTED"
     res = target.post(f"/api/projects/{pid}/work-products/{current['id']}/reject", json={"reason": "목차 누락"}, headers=c1)
     assert res.status_code == 204, res.text
-    doc = _upload(target, s0, "TD-PRJ-1", s0.files["TD-DOC-1"], "SW설계서_v3.docx", DOCX)
+    doc = _upload(target, s0, "TD-PRJ-1", _fresh_docx(s0, "SW설계서_v3.docx", "v3"), "SW설계서_v3.docx", DOCX)
     assert _confirm(target, s0, doc, "SOFTWARE_DESIGN", "SW설계서", "v3").status_code == 200
     now = _checklist(target, s0)["SOFTWARE_DESIGN"]
     assert now["version"] == "v3" and now["status"] == "SUBMITTED"
