@@ -1,0 +1,17 @@
+{
+  "ac_total": 179,
+  "ac_excluded_approved": 0,
+  "ac_denominator": 179,
+  "ac_pass": 0,
+  "overall_completion": 0.0,
+  "runs_executed": 0,
+  "runs_pass": 0,
+  "executed_pass_rate": null,
+  "ac_by_status": {
+    "decision-wait": 33,
+    "no-scenario": 3,
+    "not-run": 143
+  },
+  "runs_total": 0,
+  "runs_invalidated": 0
+}

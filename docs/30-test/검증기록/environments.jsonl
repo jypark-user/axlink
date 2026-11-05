@@ -1,0 +1,4 @@
+# environments — 한 줄에 JSON 객체 하나. 스키마는 README.md. 과거 줄은 고치지 않는다.
+{"env_id": "ENV-001", "ts": "2026-11-05T15:50:00+09:00", "env": "docker-desktop", "state": "stopped", "detail": "backend 로그 마지막 2026-11-04T16:33:21+09:00 State:stopping, 손상 메시지 없음. wsl docker-desktop Stopped", "observer": "claude-code"}
+{"env_id": "ENV-002", "ts": "2026-11-05T15:50:00+09:00", "env": "5173", "state": "down", "last_known": {"code": "main-c9ecc04", "db": "V55"}, "detail": "curl 응답 없음(도커 정지)", "observer": "claude-code"}
+{"env_id": "ENV-003", "ts": "2026-11-05T15:50:00+09:00", "env": "5174", "state": "down", "last_known": {"code": "main-7f27085", "db": "V58"}, "detail": "curl 응답 없음(도커 정지). 마지막 반영 기록 var/int-5174/이미지-기록.md 11-02 18:10", "observer": "claude-code"}
