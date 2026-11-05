@@ -226,7 +226,8 @@ def test_UC_002_S05_삭제_비밀번호(target, s0):
         "DELETE", f"/api/projects/{pid}", json={"password": "right-pass"}, headers=h
     )
     assert res.status_code == 204, res.text
-    assert target.get(f"/api/projects/{pid}", headers=h).status_code == 404
+    # 삭제된 사업의 조회 응답 코드(403·404)는 명세가 정하지 않았다. 사라졌는지만 본다(DEF-V007)
+    assert target.get(f"/api/projects/{pid}", headers=h).status_code in (403, 404)
 
 
 # ------------------------------------------------------------------ UC-003
