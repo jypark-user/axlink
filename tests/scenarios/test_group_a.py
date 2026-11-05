@@ -314,6 +314,8 @@ def test_UC_003_S03_대표사의_권한_확대_시도(target, s0):
         == 403
     )
     assert target.post(f"/api/projects/{pid}/invites", json={}, headers=v1).status_code == 403
+    # 초대 목록·취소(GH-209)도 용역사는 못 쓴다. 404 는 미구현, 403 이 권한 거절이다
+    assert target.get(f"/api/projects/{pid}/invites", headers=v1).status_code == 403
     assert (
         target.patch(
             f"/api/connections/{s0.ids['TD-CON-3']}/owner",
