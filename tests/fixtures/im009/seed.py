@@ -531,10 +531,13 @@ class Seeder:
         """원천 변경(WBS 3.2 85%, R4 해결, TD-CMT-2·설계서 파일) → 수집 → 09-15~09-26 스냅샷."""
         items = self._raw_items("S1")
         with tx() as cur:
+            # 09-15~09-25 스냅샷은 원천이 바뀌기 전 값(30.0/…)이어야 한다. 조치가 09-26 수집에
+            # 반영되므로 그날 행만 바뀐 뒤에 찍는다(IM-009 6절 S1, 7.1 「전일 대비」).
+            self._snapshots(cur, "TD-PRJ-1", d.T0, d.T1 - timedelta(days=1))
             for tid in ("TD-CON-1", "TD-CON-2"):
                 self._load(cur, tid, items[tid])
             self._promote_all(cur)
-            self._snapshots(cur, "TD-PRJ-1", d.T0, d.T1)
+            self._snapshots(cur, "TD-PRJ-1", d.T1, d.T1)
         self.state = "S1"
         return self
 
