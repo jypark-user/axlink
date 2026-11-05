@@ -23,7 +23,12 @@
 
 usage:  python scripts/verification_records.py catalog
         python scripts/verification_records.py status [--md]
+        python scripts/verification_records.py record-junit <junit.xml> --cycle C01
+            --mode auto --code <commit> --env <이름> --evidence <경로>
+          : 시나리오 시험(test_UC_001_S01_…)의 junit 을 읽어
+            시나리오 1건 = 실행 1줄로 runs.jsonl 에 더한다
 """
+
 from __future__ import annotations
 
 import argparse
@@ -435,9 +440,7 @@ def compute_status(cat: dict) -> dict:
                 # 시나리오 전부 + 직접 근거 전부 통과
                 st = "pass"
             elif (
-                direct
-                and all(x == "not-run" for x in sc_sts)
-                and all(x == "pass" for x in direct)
+                direct and all(x == "not-run" for x in sc_sts) and all(x == "pass" for x in direct)
             ):
                 # 자동 시험 등 직접 근거만 통과, 명세의 시나리오는 아직 안 돌림 → 완료 아님
                 st = "auto-only"
@@ -559,12 +562,128 @@ def write_status(st: dict, md: bool) -> None:
     (RECORDS / "status.md").write_text("\n".join(lines), encoding="utf-8")
 
 
+SCENARIO_TEST = re.compile(r"test_UC_(\d{3})_S(\d{2}[a-z]?)_")
+
+
+def next_run_number(cycle: str) -> int:
+    runs = read_jsonl(RECORDS / "runs.jsonl")
+    nums = [int(r["run_id"].split("-R")[1]) for r in runs if r["run_id"].startswith(cycle + "-R")]
+    return (max(nums) + 1) if nums else 1
+
+
+def _verdict_of(tc) -> tuple[str, str]:
+    skipped = tc.find("skipped")
+    if skipped is not None:
+        return "not-run", (skipped.get("message") or "skipped")[:300]
+    failure, error = tc.find("failure"), tc.find("error")
+    if error is not None:
+        return "blocked", (error.get("message") or error.text or "")[:600]
+    if failure is not None:
+        return "fail", (failure.get("message") or failure.text or "")[:600]
+    return "pass", ""
+
+
+def record_junit(a: argparse.Namespace) -> int:
+    """시나리오 시험 junit → runs.jsonl.
+
+    시험 이름의 UC-###-S## 로 시나리오를 찾고 AC 는 카탈로그에서 푼다."""
+    import xml.etree.ElementTree as ET
+
+    cat = json.loads((RECORDS / "catalog.json").read_text(encoding="utf-8"))
+    root = ET.parse(a.junit).getroot()
+    junit_sha = sha256(Path(a.junit))
+    n = next_run_number(a.cycle)
+    written = 0
+    src = cat["sources"]
+    with (RECORDS / "runs.jsonl").open("a", encoding="utf-8") as out:
+        for tc in root.iter("testcase"):
+            m = SCENARIO_TEST.search(tc.get("name", ""))
+            if not m:
+                continue
+            sid = f"UC-{m.group(1)}-S{m.group(2)}"
+            sc = cat["scenarios"].get(sid)
+            if sc is None:
+                print(f"카탈로그에 없는 시나리오 {sid}: {tc.get('name')}")
+                continue
+            verdict, reason = _verdict_of(tc)
+            acs = sc["acs"]
+            obligations = sorted(
+                {o for x in acs for o in cat["acs"].get(x, {}).get("obligations", [])}
+            )
+            evidence = [{"path": a.evidence, "sha256": junit_sha, "kind": "junit"}]
+            if a.url:
+                evidence.append({"path": a.url, "kind": "url"})
+            row = {
+                "run_id": f"{a.cycle}-R{n:04d}",
+                "cycle_id": a.cycle,
+                "ts": a.ts or datetime_now(),
+                "operator": a.operator,
+                "scenarios": [sid],
+                "acs": acs,
+                "ac_verdicts": {x: verdict for x in acs},
+                "obligations": obligations,
+                "requirements": sorted({o.split("-o")[0] for o in obligations}),
+                "spec": {
+                    "im007": src["IM-007-유스케이스명세서.md"]["version"],
+                    "im007a": src["IM-007A-요구사항-세부의무-대응표.md"]["version"],
+                    "im009": src["IM-009-공통시험자료.md"]["version"],
+                    "baseline": a.baseline,
+                },
+                "code": {"commit": a.code, "db_version": a.db},
+                "env": {
+                    "name": a.env,
+                    "tools": a.tools.split(",") if a.tools else [],
+                    "model": a.model,
+                },
+                "mode": a.mode,
+                "start_state": {"state": sc["state"][:200], "actor": "", "project": ""},
+                "procedure": f"pytest {tc.get('classname')}::{tc.get('name')}",
+                "expected": sc["expected"],
+                "actual": "통과" if verdict == "pass" else reason,
+                "verdict": verdict,
+                "reason": reason,
+                "evidence": evidence,
+                "defects": [],
+                "rerun_of": None,
+                "notes": a.notes,
+            }
+            out.write(json.dumps(row, ensure_ascii=False) + "\n")
+            n += 1
+            written += 1
+    print(f"runs.jsonl 에 {written}줄 추가")
+    return 0
+
+
+def datetime_now() -> str:
+    from datetime import UTC, datetime
+
+    return datetime.now(UTC).isoformat(timespec="seconds").replace("+00:00", "Z")
+
+
 def main() -> int:
     ap = argparse.ArgumentParser()
-    ap.add_argument("cmd", choices=["catalog", "status"])
+    ap.add_argument("cmd", choices=["catalog", "status", "record-junit"])
+    ap.add_argument("junit", nargs="?")
     ap.add_argument("--md", action="store_true", help="status.md 도 만든다")
+    ap.add_argument("--cycle", default="C01")
+    ap.add_argument("--mode", default="auto", choices=["auto", "api", "replay", "mock", "live"])
+    ap.add_argument("--code", default="")
+    ap.add_argument("--db", default="")
+    ap.add_argument("--env", default="github-actions ubuntu-latest")
+    ap.add_argument("--tools", default="")
+    ap.add_argument("--model", default="없음")
+    ap.add_argument("--evidence", default="")
+    ap.add_argument("--url", default="")
+    ap.add_argument("--operator", default="claude-code")
+    ap.add_argument("--baseline", default="baseline-2026-11-05")
+    ap.add_argument("--ts", default="")
+    ap.add_argument("--notes", default="")
     a = ap.parse_args()
     RECORDS.mkdir(parents=True, exist_ok=True)
+    if a.cmd == "record-junit":
+        if not a.junit:
+            ap.error("junit 경로가 필요하다")
+        return record_junit(a)
     if a.cmd == "catalog":
         cat = build_catalog()
         (RECORDS / "catalog.json").write_text(
