@@ -47,10 +47,37 @@ def test_targets_come_from_standard_model(client, client_token):
 
     metrics = client.get(f"/api/projects/{PID}/review-targets?type=METRIC", headers=_auth(token))
     assert [m["key"] for m in metrics.json()] == [
-        "REPRESENTATIVE", "PROGRESS_WBS", "PROGRESS_ISSUE", "PROGRESS_WORK_PRODUCT"
+        "REPRESENTATIVE",
+        "PROGRESS_WBS",
+        "PROGRESS_ISSUE",
+        "PROGRESS_WORK_PRODUCT",
     ]
     bad = client.get(f"/api/projects/{PID}/review-targets?type=NOPE", headers=_auth(token))
     assert bad.status_code == 400
+
+
+@requires_db
+def test_blank_report_is_rejected(client, client_token, issue_target):
+    """공백 보고문은 거절되고 상태는 요청 그대로다(AC-051-3, GH-220)."""
+    client_tok, contractor_tok = client_token("r2"), client_token("r3")
+    created = client.post(
+        f"/api/projects/{PID}/review-requests",
+        json={
+            "targetType": "ISSUE",
+            "targetKey": issue_target,
+            "title": "공백 보고 시험",
+            "body": "",
+        },
+        headers=_auth(client_tok),
+    ).json()
+    res = client.post(
+        f"/api/review-requests/{created['id']}/report",
+        json={"body": "   ", "evidence": []},
+        headers=_auth(contractor_tok),
+    )
+    assert res.status_code == 400, res.text
+    detail = client.get(f"/api/review-requests/{created['id']}", headers=_auth(client_tok)).json()
+    assert detail["status"] == "REQUESTED" and detail["reportBody"] is None
 
 
 @requires_db
@@ -85,9 +112,12 @@ def test_full_cycle_with_state_diff(client, client_token, issue_target):
     assert next(p for p in listed["content"] if p["id"] == PID)["openReviewRequestCount"] == 1
 
     # 발주기관은 보고를 못 하고, 용역사는 요청 상태에서만 보고한다
-    assert client.post(
-        f"/api/review-requests/{rid}/report", json={"body": "x"}, headers=_auth(client_tok)
-    ).status_code == 403
+    assert (
+        client.post(
+            f"/api/review-requests/{rid}/report", json={"body": "x"}, headers=_auth(client_tok)
+        ).status_code
+        == 403
+    )
 
     # 그 사이 이슈가 닫혔다. 보고 시점에 시스템이 그 차이를 잡아낸다 (SWFR.WEB.005)
     with tx() as cur:
@@ -112,16 +142,23 @@ def test_full_cycle_with_state_diff(client, client_token, issue_target):
     assert [e["kind"] for e in rep["events"]] == ["REQUESTED", "REPORTED"]
 
     # 용역사는 확인완료를 못 한다. 최고관리자도 확인완료·다시 요청은 대신하지 못한다 (SWFR.WEB.006)
-    assert client.post(
-        f"/api/review-requests/{rid}/confirm", headers=_auth(contractor_tok)
-    ).status_code == 403
+    assert (
+        client.post(
+            f"/api/review-requests/{rid}/confirm", headers=_auth(contractor_tok)
+        ).status_code
+        == 403
+    )
     admin_tok = client_token("r1")
-    assert client.post(
-        f"/api/review-requests/{rid}/confirm", headers=_auth(admin_tok)
-    ).status_code == 403
-    assert client.post(
-        f"/api/review-requests/{rid}/rerequest", json={"body": "x"}, headers=_auth(admin_tok)
-    ).status_code == 403
+    assert (
+        client.post(f"/api/review-requests/{rid}/confirm", headers=_auth(admin_tok)).status_code
+        == 403
+    )
+    assert (
+        client.post(
+            f"/api/review-requests/{rid}/rerequest", json={"body": "x"}, headers=_auth(admin_tok)
+        ).status_code
+        == 403
+    )
     # 발주기관이 미흡하다고 다시 요청한다
     again = client.post(
         f"/api/review-requests/{rid}/rerequest",
@@ -151,17 +188,24 @@ def test_full_cycle_with_state_diff(client, client_token, issue_target):
     assert detail["openReviewRequestCount"] == 0
 
     # 확인완료 후엔 다시 보고할 수 없다
-    assert client.post(
-        f"/api/review-requests/{rid}/report", json={"body": "x"}, headers=_auth(contractor_tok)
-    ).status_code == 400
+    assert (
+        client.post(
+            f"/api/review-requests/{rid}/report", json={"body": "x"}, headers=_auth(contractor_tok)
+        ).status_code
+        == 400
+    )
 
 
 @requires_db
 def test_request_on_missing_target_is_rejected(client, client_token):
     res = client.post(
         f"/api/projects/{PID}/review-requests",
-        json={"targetType": "ISSUE", "targetKey": "00000000-0000-4000-8000-000000000000",
-              "title": "없는 이슈", "body": ""},
+        json={
+            "targetType": "ISSUE",
+            "targetKey": "00000000-0000-4000-8000-000000000000",
+            "title": "없는 이슈",
+            "body": "",
+        },
         headers=_auth(client_token("r2")),
     )
     assert res.status_code == 400
