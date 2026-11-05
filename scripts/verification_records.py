@@ -71,6 +71,7 @@ SC_REF = re.compile(r"UC-(\d{3})-S(\d{2}[a-z]?(?:·S?\d{2}[a-z]?)*)")
 
 # 실연동·실모델·브라우저·폐쇄망이 필요한지는 시나리오의 「검증」 열 낱말로 가른다.
 NEEDS_WORDS = {
+    "API": "api",  # 실행 서버(5174)에 직접 호출. TestClient 자동 실행만으로는 통과 아님
     "실연동": "live-tool",
     "실모델": "live-model",
     "브라우저": "browser",
@@ -596,11 +597,14 @@ def record_junit(a: argparse.Namespace) -> int:
     written = 0
     src = cat["sources"]
     with (RECORDS / "runs.jsonl").open("a", encoding="utf-8") as out:
+        only = set(a.only.split(",")) if a.only else None
         for tc in root.iter("testcase"):
             m = SCENARIO_TEST.search(tc.get("name", ""))
             if not m:
                 continue
             sid = f"UC-{m.group(1)}-S{m.group(2)}"
+            if only is not None and sid not in only:
+                continue
             sc = cat["scenarios"].get(sid)
             if sc is None:
                 print(f"카탈로그에 없는 시나리오 {sid}: {tc.get('name')}")
@@ -643,8 +647,8 @@ def record_junit(a: argparse.Namespace) -> int:
                 "verdict": verdict,
                 "reason": reason,
                 "evidence": evidence,
-                "defects": [],
-                "rerun_of": None,
+                "defects": a.defects.split(",") if a.defects else [],
+                "rerun_of": a.rerun_of or None,
                 "notes": a.notes,
             }
             out.write(json.dumps(row, ensure_ascii=False) + "\n")
@@ -678,6 +682,9 @@ def main() -> int:
     ap.add_argument("--baseline", default="baseline-2026-11-05")
     ap.add_argument("--ts", default="")
     ap.add_argument("--notes", default="")
+    ap.add_argument("--only", default="", help="기록할 시나리오 ID 들(쉼표). 비우면 전부")
+    ap.add_argument("--rerun-of", default="", help="재실행이면 이전 실행 ID")
+    ap.add_argument("--defects", default="", help="관련 결함 ID 들(쉼표)")
     a = ap.parse_args()
     RECORDS.mkdir(parents=True, exist_ok=True)
     if a.cmd == "record-junit":

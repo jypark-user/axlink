@@ -671,7 +671,9 @@
     "UC-001-S03"
    ],
    "decs": [],
-   "needs": [],
+   "needs": [
+    "api"
+   ],
    "obligations": []
   },
   "AC-001-2": {
@@ -682,7 +684,9 @@
     "UC-001-S01"
    ],
    "decs": [],
-   "needs": [],
+   "needs": [
+    "api"
+   ],
    "obligations": [
     "SER.SEC.001-o3"
    ]
@@ -695,7 +699,9 @@
     "UC-001-S02"
    ],
    "decs": [],
-   "needs": [],
+   "needs": [
+    "api"
+   ],
    "obligations": []
   },
   "AC-001-4": {
@@ -706,7 +712,9 @@
     "UC-001-S05"
    ],
    "decs": [],
-   "needs": [],
+   "needs": [
+    "api"
+   ],
    "obligations": []
   },
   "AC-001-5": {
@@ -717,7 +725,9 @@
     "UC-001-S06"
    ],
    "decs": [],
-   "needs": [],
+   "needs": [
+    "api"
+   ],
    "obligations": []
   },
   "AC-002-1": {
@@ -729,6 +739,7 @@
    ],
    "decs": [],
    "needs": [
+    "api",
     "browser"
    ],
    "obligations": []
@@ -741,7 +752,9 @@
     "UC-002-S02"
    ],
    "decs": [],
-   "needs": [],
+   "needs": [
+    "api"
+   ],
    "obligations": []
   },
   "AC-002-3": {
@@ -752,7 +765,9 @@
     "UC-002-S04"
    ],
    "decs": [],
-   "needs": [],
+   "needs": [
+    "api"
+   ],
    "obligations": []
   },
   "AC-002-4": {
@@ -763,7 +778,9 @@
     "UC-002-S03"
    ],
    "decs": [],
-   "needs": [],
+   "needs": [
+    "api"
+   ],
    "obligations": []
   },
   "AC-003-1": {
@@ -775,6 +792,7 @@
    ],
    "decs": [],
    "needs": [
+    "api",
     "browser"
    ],
    "obligations": [
@@ -790,6 +808,7 @@
    ],
    "decs": [],
    "needs": [
+    "api",
     "browser"
    ],
    "obligations": [
@@ -806,7 +825,9 @@
    "decs": [
     "DEC-10"
    ],
-   "needs": [],
+   "needs": [
+    "api"
+   ],
    "obligations": []
   },
   "AC-003-4": {
@@ -818,7 +839,9 @@
     "UC-003-S05"
    ],
    "decs": [],
-   "needs": [],
+   "needs": [
+    "api"
+   ],
    "obligations": [
     "SER.SEC.003-o3"
    ]
@@ -833,7 +856,9 @@
    "decs": [
     "DEC-10"
    ],
-   "needs": [],
+   "needs": [
+    "api"
+   ],
    "obligations": []
   },
   "AC-004-1": {
@@ -844,7 +869,9 @@
     "UC-004-S02"
    ],
    "decs": [],
-   "needs": [],
+   "needs": [
+    "api"
+   ],
    "obligations": []
   },
   "AC-004-2": {
@@ -856,6 +883,7 @@
    ],
    "decs": [],
    "needs": [
+    "api",
     "browser"
    ],
    "obligations": [
@@ -871,7 +899,9 @@
     "UC-004-S04"
    ],
    "decs": [],
-   "needs": [],
+   "needs": [
+    "api"
+   ],
    "obligations": []
   },
   "AC-004-4": {
@@ -882,7 +912,9 @@
     "UC-004-S05"
    ],
    "decs": [],
-   "needs": [],
+   "needs": [
+    "api"
+   ],
    "obligations": []
   },
   "AC-010-1": {
@@ -895,6 +927,7 @@
    ],
    "decs": [],
    "needs": [
+    "api",
     "browser",
     "live-tool"
    ],
@@ -946,7 +979,9 @@
     "UC-010-S04"
    ],
    "decs": [],
-   "needs": [],
+   "needs": [
+    "api"
+   ],
    "obligations": [
     "SER.SEC.003-o4"
    ]
@@ -959,7 +994,9 @@
     "UC-010-S05"
    ],
    "decs": [],
-   "needs": [],
+   "needs": [
+    "api"
+   ],
    "obligations": []
   },
   "AC-010-6": {
@@ -987,7 +1024,9 @@
     "UC-010-S08"
    ],
    "decs": [],
-   "needs": [],
+   "needs": [
+    "api"
+   ],
    "obligations": [
     "SWFR.CON.002-o1"
    ]
@@ -1137,7 +1176,9 @@
     "UC-011-S06"
    ],
    "decs": [],
-   "needs": [],
+   "needs": [
+    "api"
+   ],
    "obligations": []
   },
   "AC-011-9": {
@@ -1221,7 +1262,9 @@
    "decs": [
     "DEC-09"
    ],
-   "needs": [],
+   "needs": [
+    "api"
+   ],
    "obligations": [
     "SWFR.CON.002-o1",
     "SWFR.CON.002-o2"
@@ -1235,7 +1278,9 @@
     "UC-012-S05"
    ],
    "decs": [],
-   "needs": [],
+   "needs": [
+    "api"
+   ],
    "obligations": [
     "SWFR.CON.002-o2"
    ]
@@ -1250,7 +1295,9 @@
    "decs": [
     "DEC-09"
    ],
-   "needs": [],
+   "needs": [
+    "api"
+   ],
    "obligations": [
     "SWFR.CON.002-o2"
    ]
@@ -1263,7 +1310,9 @@
     "UC-012-S02"
    ],
    "decs": [],
-   "needs": [],
+   "needs": [
+    "api"
+   ],
    "obligations": [
     "SWFR.PIP.005-o1"
    ]
@@ -1291,6 +1340,7 @@
    ],
    "decs": [],
    "needs": [
+    "api",
     "browser"
    ],
    "obligations": [
@@ -1307,7 +1357,9 @@
     "UC-020-S04"
    ],
    "decs": [],
-   "needs": [],
+   "needs": [
+    "api"
+   ],
    "obligations": []
   },
   "AC-020-3": {
@@ -1320,7 +1372,9 @@
    "decs": [
     "DEC-05"
    ],
-   "needs": [],
+   "needs": [
+    "api"
+   ],
    "obligations": []
   },
   "AC-020-4": {
@@ -1332,6 +1386,7 @@
    ],
    "decs": [],
    "needs": [
+    "api",
     "browser"
    ],
    "obligations": []
@@ -1344,7 +1399,9 @@
     "UC-020-S06"
    ],
    "decs": [],
-   "needs": [],
+   "needs": [
+    "api"
+   ],
    "obligations": []
   },
   "AC-020-6": {
@@ -1355,7 +1412,9 @@
     "UC-020-S07"
    ],
    "decs": [],
-   "needs": [],
+   "needs": [
+    "api"
+   ],
    "obligations": []
   },
   "AC-020-7": {
@@ -1379,7 +1438,9 @@
     "UC-020-S09"
    ],
    "decs": [],
-   "needs": [],
+   "needs": [
+    "api"
+   ],
    "obligations": []
   },
   "AC-020-9": {
@@ -1403,6 +1464,7 @@
    ],
    "decs": [],
    "needs": [
+    "api",
     "browser"
    ],
    "obligations": []
@@ -1415,7 +1477,9 @@
     "UC-021-S02"
    ],
    "decs": [],
-   "needs": [],
+   "needs": [
+    "api"
+   ],
    "obligations": []
   },
   "AC-021-3": {
@@ -1426,7 +1490,9 @@
     "UC-021-S02"
    ],
    "decs": [],
-   "needs": [],
+   "needs": [
+    "api"
+   ],
    "obligations": []
   },
   "AC-021-4": {
@@ -1439,6 +1505,7 @@
    ],
    "decs": [],
    "needs": [
+    "api",
     "browser"
    ],
    "obligations": []
@@ -1493,6 +1560,7 @@
     "DEC-05"
    ],
    "needs": [
+    "api",
     "browser"
    ],
    "obligations": []
@@ -1508,6 +1576,7 @@
     "DEC-07"
    ],
    "needs": [
+    "api",
     "browser"
    ],
    "obligations": []
@@ -1523,6 +1592,7 @@
     "DEC-11"
    ],
    "needs": [
+    "api",
     "live-model"
    ],
    "obligations": []
@@ -1538,6 +1608,7 @@
    ],
    "decs": [],
    "needs": [
+    "api",
     "browser"
    ],
    "obligations": [
@@ -1562,6 +1633,7 @@
    ],
    "decs": [],
    "needs": [
+    "api",
     "browser"
    ],
    "obligations": [
@@ -1622,7 +1694,9 @@
     "UC-022-S07"
    ],
    "decs": [],
-   "needs": [],
+   "needs": [
+    "api"
+   ],
    "obligations": [
     "SWFR.WEB.002-o1"
    ]
@@ -1667,7 +1741,9 @@
    "decs": [
     "DEC-03"
    ],
-   "needs": [],
+   "needs": [
+    "api"
+   ],
    "obligations": [
     "SWFR.PIP.008-o4"
    ]
@@ -1694,7 +1770,9 @@
     "UC-023-S03"
    ],
    "decs": [],
-   "needs": [],
+   "needs": [
+    "api"
+   ],
    "obligations": [
     "SWFR.PIP.008-o4"
    ]
@@ -1712,6 +1790,7 @@
     "DEC-11"
    ],
    "needs": [
+    "api",
     "live-model"
    ],
    "obligations": [
@@ -1728,7 +1807,9 @@
    "decs": [
     "DEC-05"
    ],
-   "needs": [],
+   "needs": [
+    "api"
+   ],
    "obligations": []
   },
   "AC-023-6": {
@@ -1739,7 +1820,9 @@
     "UC-023-S05"
    ],
    "decs": [],
-   "needs": [],
+   "needs": [
+    "api"
+   ],
    "obligations": []
   },
   "AC-030-1": {
@@ -1752,7 +1835,9 @@
     "UC-030-S10"
    ],
    "decs": [],
-   "needs": [],
+   "needs": [
+    "api"
+   ],
    "obligations": []
   },
   "AC-030-2": {
@@ -1836,7 +1921,9 @@
     "UC-030-S08"
    ],
    "decs": [],
-   "needs": [],
+   "needs": [
+    "api"
+   ],
    "obligations": [
     "SWFR.PIP.010-o10",
     "QUR.WEB.001-o1"
@@ -1853,6 +1940,7 @@
     "DEC-14"
    ],
    "needs": [
+    "api",
     "browser"
    ],
    "obligations": [
@@ -1885,6 +1973,7 @@
    ],
    "decs": [],
    "needs": [
+    "api",
     "browser"
    ],
    "obligations": [
@@ -1904,6 +1993,7 @@
     "DEC-05"
    ],
    "needs": [
+    "api",
     "browser"
    ],
    "obligations": [
@@ -1919,6 +2009,7 @@
    ],
    "decs": [],
    "needs": [
+    "api",
     "browser"
    ],
    "obligations": [
@@ -1935,6 +2026,7 @@
    ],
    "decs": [],
    "needs": [
+    "api",
     "browser"
    ],
    "obligations": [
@@ -1949,7 +2041,9 @@
     "UC-031-S06"
    ],
    "decs": [],
-   "needs": [],
+   "needs": [
+    "api"
+   ],
    "obligations": []
   },
   "AC-031-8": {
@@ -1960,7 +2054,9 @@
     "UC-031-S08"
    ],
    "decs": [],
-   "needs": [],
+   "needs": [
+    "api"
+   ],
    "obligations": []
   },
   "AC-031-9": {
@@ -1973,7 +2069,9 @@
    "decs": [
     "DEC-12"
    ],
-   "needs": [],
+   "needs": [
+    "api"
+   ],
    "obligations": [
     "SWFR.PIP.009-o2"
    ]
@@ -1986,7 +2084,9 @@
     "UC-032-S03"
    ],
    "decs": [],
-   "needs": [],
+   "needs": [
+    "api"
+   ],
    "obligations": [
     "SWFR.WEB.006-o5"
    ]
@@ -1999,7 +2099,9 @@
     "UC-032-S04"
    ],
    "decs": [],
-   "needs": [],
+   "needs": [
+    "api"
+   ],
    "obligations": []
   },
   "AC-032-3": {
@@ -2011,7 +2113,9 @@
     "UC-032-S10"
    ],
    "decs": [],
-   "needs": [],
+   "needs": [
+    "api"
+   ],
    "obligations": [
     "SWFR.PIP.006-o4"
    ]
@@ -2024,7 +2128,9 @@
     "UC-032-S02"
    ],
    "decs": [],
-   "needs": [],
+   "needs": [
+    "api"
+   ],
    "obligations": []
   },
   "AC-032-5": {
@@ -2068,7 +2174,9 @@
     "UC-032-S08"
    ],
    "decs": [],
-   "needs": [],
+   "needs": [
+    "api"
+   ],
    "obligations": []
   },
   "AC-033-1": {
@@ -2083,6 +2191,7 @@
     "DEC-10"
    ],
    "needs": [
+    "api",
     "browser"
    ],
    "obligations": []
@@ -2132,6 +2241,7 @@
    ],
    "decs": [],
    "needs": [
+    "api",
     "browser"
    ],
    "obligations": [
@@ -2151,6 +2261,7 @@
     "DEC-12"
    ],
    "needs": [
+    "api",
     "browser"
    ],
    "obligations": [
@@ -2167,6 +2278,7 @@
    ],
    "decs": [],
    "needs": [
+    "api",
     "browser"
    ],
    "obligations": [
@@ -2182,6 +2294,7 @@
    ],
    "decs": [],
    "needs": [
+    "api",
     "browser"
    ],
    "obligations": [
@@ -2198,7 +2311,9 @@
    "decs": [
     "DEC-01"
    ],
-   "needs": [],
+   "needs": [
+    "api"
+   ],
    "obligations": [
     "SWFR.PIP.007-o1",
     "SWFR.WEB.003-o3"
@@ -2213,6 +2328,7 @@
    ],
    "decs": [],
    "needs": [
+    "api",
     "browser"
    ],
    "obligations": [
@@ -2231,6 +2347,7 @@
    ],
    "decs": [],
    "needs": [
+    "api",
     "browser",
     "live-model"
    ],
@@ -2249,6 +2366,7 @@
    ],
    "decs": [],
    "needs": [
+    "api",
     "browser"
    ],
    "obligations": [
@@ -2265,6 +2383,7 @@
    ],
    "decs": [],
    "needs": [
+    "api",
     "browser"
    ],
    "obligations": [
@@ -2284,6 +2403,7 @@
     "DEC-17"
    ],
    "needs": [
+    "api",
     "browser"
    ],
    "obligations": [
@@ -2303,6 +2423,7 @@
    ],
    "decs": [],
    "needs": [
+    "api",
     "browser"
    ],
    "obligations": [
@@ -2317,7 +2438,9 @@
     "UC-041-S05"
    ],
    "decs": [],
-   "needs": [],
+   "needs": [
+    "api"
+   ],
    "obligations": [
     "SWFR.PIP.005-o1",
     "SWFR.PIP.005-o2"
@@ -2347,7 +2470,9 @@
    "decs": [
     "DEC-01"
    ],
-   "needs": [],
+   "needs": [
+    "api"
+   ],
    "obligations": [
     "SWFR.PIP.007-o1",
     "SWFR.PIP.007-o2"
@@ -2363,7 +2488,9 @@
    "decs": [
     "DEC-02"
    ],
-   "needs": [],
+   "needs": [
+    "api"
+   ],
    "obligations": [
     "SWFR.PIP.008-o1"
    ]
@@ -2390,6 +2517,7 @@
    ],
    "decs": [],
    "needs": [
+    "api",
     "browser"
    ],
    "obligations": []
@@ -2402,7 +2530,9 @@
     "UC-042-S02"
    ],
    "decs": [],
-   "needs": [],
+   "needs": [
+    "api"
+   ],
    "obligations": []
   },
   "AC-042-3": {
@@ -2425,6 +2555,7 @@
    ],
    "decs": [],
    "needs": [
+    "api",
     "browser"
    ],
    "obligations": [
@@ -2439,7 +2570,9 @@
     "UC-042-S04"
    ],
    "decs": [],
-   "needs": [],
+   "needs": [
+    "api"
+   ],
    "obligations": []
   },
   "AC-043-1": {
@@ -2451,6 +2584,7 @@
    ],
    "decs": [],
    "needs": [
+    "api",
     "browser"
    ],
    "obligations": [
@@ -2467,7 +2601,9 @@
     "UC-043-S02"
    ],
    "decs": [],
-   "needs": [],
+   "needs": [
+    "api"
+   ],
    "obligations": [
     "SWFR.CON.004-o2",
     "SWFR.CON.004-o3",
@@ -2484,7 +2620,9 @@
     "UC-043-S03"
    ],
    "decs": [],
-   "needs": [],
+   "needs": [
+    "api"
+   ],
    "obligations": []
   },
   "AC-043-4": {
@@ -2496,6 +2634,7 @@
    ],
    "decs": [],
    "needs": [
+    "api",
     "browser"
    ],
    "obligations": []
@@ -2508,7 +2647,9 @@
     "UC-043-S04"
    ],
    "decs": [],
-   "needs": [],
+   "needs": [
+    "api"
+   ],
    "obligations": [
     "SWFR.PIP.008-o5"
    ]
@@ -2523,7 +2664,9 @@
    "decs": [
     "DEC-02"
    ],
-   "needs": [],
+   "needs": [
+    "api"
+   ],
    "obligations": [
     "SWFR.PIP.008-o1",
     "SWFR.PIP.008-o2"
@@ -2537,7 +2680,9 @@
     "UC-043-S06"
    ],
    "decs": [],
-   "needs": [],
+   "needs": [
+    "api"
+   ],
    "obligations": []
   },
   "AC-050-1": {
@@ -2551,7 +2696,9 @@
     "UC-050-S06"
    ],
    "decs": [],
-   "needs": [],
+   "needs": [
+    "api"
+   ],
    "obligations": [
     "SWFR.WEB.004-o1",
     "SWFR.WEB.004-o2",
@@ -2570,7 +2717,9 @@
    "decs": [
     "DEC-12"
    ],
-   "needs": [],
+   "needs": [
+    "api"
+   ],
    "obligations": [
     "SWFR.WEB.004-o5"
    ]
@@ -2585,7 +2734,9 @@
    "decs": [
     "DEC-05"
    ],
-   "needs": [],
+   "needs": [
+    "api"
+   ],
    "obligations": [
     "SWFR.WEB.004-o7"
    ]
@@ -2613,7 +2764,9 @@
     "UC-050-S01"
    ],
    "decs": [],
-   "needs": [],
+   "needs": [
+    "api"
+   ],
    "obligations": []
   },
   "AC-051-1": {
@@ -2625,6 +2778,7 @@
    ],
    "decs": [],
    "needs": [
+    "api",
     "browser"
    ],
    "obligations": [
@@ -2642,6 +2796,7 @@
    ],
    "decs": [],
    "needs": [
+    "api",
     "browser"
    ],
    "obligations": [
@@ -2656,7 +2811,9 @@
     "UC-051-S03"
    ],
    "decs": [],
-   "needs": [],
+   "needs": [
+    "api"
+   ],
    "obligations": [
     "SWFR.WEB.005-o1",
     "SWFR.WEB.006-o2"
@@ -2670,7 +2827,9 @@
     "UC-051-S04"
    ],
    "decs": [],
-   "needs": [],
+   "needs": [
+    "api"
+   ],
    "obligations": [
     "SWFR.WEB.005-o3"
    ]
@@ -2700,7 +2859,9 @@
    "decs": [
     "DEC-05"
    ],
-   "needs": [],
+   "needs": [
+    "api"
+   ],
    "obligations": [
     "SWFR.WEB.006-o2"
    ]
@@ -2715,6 +2876,7 @@
    ],
    "decs": [],
    "needs": [
+    "api",
     "browser"
    ],
    "obligations": [
@@ -2730,7 +2892,9 @@
     "UC-052-S05"
    ],
    "decs": [],
-   "needs": [],
+   "needs": [
+    "api"
+   ],
    "obligations": [
     "SWFR.WEB.005-o3"
    ]
@@ -2770,7 +2934,9 @@
     "UC-053-S02"
    ],
    "decs": [],
-   "needs": [],
+   "needs": [
+    "api"
+   ],
    "obligations": []
   },
   "AC-053-3": {
@@ -2781,7 +2947,9 @@
     "UC-053-S02"
    ],
    "decs": [],
-   "needs": [],
+   "needs": [
+    "api"
+   ],
    "obligations": []
   },
   "AC-053-4": {
@@ -2792,7 +2960,9 @@
     "UC-053-S03"
    ],
    "decs": [],
-   "needs": [],
+   "needs": [
+    "api"
+   ],
    "obligations": []
   },
   "AC-053-5": {
@@ -2911,6 +3081,7 @@
     "DEC-15"
    ],
    "needs": [
+    "api",
     "browser"
    ],
    "obligations": [
@@ -3020,7 +3191,9 @@
     "UC-061-S02"
    ],
    "decs": [],
-   "needs": [],
+   "needs": [
+    "api"
+   ],
    "obligations": []
   },
   "AC-061-2": {
@@ -3033,6 +3206,7 @@
    ],
    "decs": [],
    "needs": [
+    "api",
     "browser"
    ],
    "obligations": [
@@ -3060,7 +3234,9 @@
     "UC-061-S04"
    ],
    "decs": [],
-   "needs": [],
+   "needs": [
+    "api"
+   ],
    "obligations": [
     "QUR.RAG.001-o2"
    ]
@@ -3074,6 +3250,7 @@
    ],
    "decs": [],
    "needs": [
+    "api",
     "browser"
    ],
    "obligations": []
@@ -3086,7 +3263,9 @@
     "UC-070-S03"
    ],
    "decs": [],
-   "needs": [],
+   "needs": [
+    "api"
+   ],
    "obligations": []
   },
   "AC-070-2": {
@@ -3099,6 +3278,7 @@
    ],
    "decs": [],
    "needs": [
+    "api",
     "browser"
    ],
    "obligations": [
@@ -3116,6 +3296,7 @@
    ],
    "decs": [],
    "needs": [
+    "api",
     "browser"
    ],
    "obligations": []
@@ -3181,6 +3362,7 @@
    ],
    "decs": [],
    "needs": [
+    "api",
     "browser"
    ],
    "obligations": [
@@ -3233,7 +3415,9 @@
     "AC-001-2"
    ],
    "decs": [],
-   "needs": []
+   "needs": [
+    "api"
+   ]
   },
   "UC-001-S02": {
    "id": "UC-001-S02",
@@ -3248,7 +3432,9 @@
     "AC-001-3"
    ],
    "decs": [],
-   "needs": []
+   "needs": [
+    "api"
+   ]
   },
   "UC-001-S03": {
    "id": "UC-001-S03",
@@ -3263,7 +3449,9 @@
     "AC-001-1"
    ],
    "decs": [],
-   "needs": []
+   "needs": [
+    "api"
+   ]
   },
   "UC-001-S04": {
    "id": "UC-001-S04",
@@ -3276,7 +3464,9 @@
    "verify": "API",
    "acs": [],
    "decs": [],
-   "needs": []
+   "needs": [
+    "api"
+   ]
   },
   "UC-001-S05": {
    "id": "UC-001-S05",
@@ -3291,7 +3481,9 @@
     "AC-001-4"
    ],
    "decs": [],
-   "needs": []
+   "needs": [
+    "api"
+   ]
   },
   "UC-001-S06": {
    "id": "UC-001-S06",
@@ -3306,7 +3498,9 @@
     "AC-001-5"
    ],
    "decs": [],
-   "needs": []
+   "needs": [
+    "api"
+   ]
   },
   "UC-002-S01": {
    "id": "UC-002-S01",
@@ -3322,6 +3516,7 @@
    ],
    "decs": [],
    "needs": [
+    "api",
     "browser"
    ]
   },
@@ -3338,7 +3533,9 @@
     "AC-002-2"
    ],
    "decs": [],
-   "needs": []
+   "needs": [
+    "api"
+   ]
   },
   "UC-002-S03": {
    "id": "UC-002-S03",
@@ -3353,7 +3550,9 @@
     "AC-002-4"
    ],
    "decs": [],
-   "needs": []
+   "needs": [
+    "api"
+   ]
   },
   "UC-002-S04": {
    "id": "UC-002-S04",
@@ -3368,7 +3567,9 @@
     "AC-002-3"
    ],
    "decs": [],
-   "needs": []
+   "needs": [
+    "api"
+   ]
   },
   "UC-002-S05": {
    "id": "UC-002-S05",
@@ -3381,7 +3582,9 @@
    "verify": "API",
    "acs": [],
    "decs": [],
-   "needs": []
+   "needs": [
+    "api"
+   ]
   },
   "UC-003-S01": {
    "id": "UC-003-S01",
@@ -3398,6 +3601,7 @@
    ],
    "decs": [],
    "needs": [
+    "api",
     "browser"
    ]
   },
@@ -3414,7 +3618,9 @@
     "AC-003-4"
    ],
    "decs": [],
-   "needs": []
+   "needs": [
+    "api"
+   ]
   },
   "UC-003-S03": {
    "id": "UC-003-S03",
@@ -3431,7 +3637,9 @@
    "decs": [
     "DEC-10"
    ],
-   "needs": []
+   "needs": [
+    "api"
+   ]
   },
   "UC-003-S04": {
    "id": "UC-003-S04",
@@ -3448,7 +3656,9 @@
    "decs": [
     "DEC-10"
    ],
-   "needs": []
+   "needs": [
+    "api"
+   ]
   },
   "UC-003-S05": {
    "id": "UC-003-S05",
@@ -3463,7 +3673,9 @@
     "AC-003-4"
    ],
    "decs": [],
-   "needs": []
+   "needs": [
+    "api"
+   ]
   },
   "UC-004-S01": {
    "id": "UC-004-S01",
@@ -3493,7 +3705,9 @@
     "AC-004-1"
    ],
    "decs": [],
-   "needs": []
+   "needs": [
+    "api"
+   ]
   },
   "UC-004-S03": {
    "id": "UC-004-S03",
@@ -3509,6 +3723,7 @@
    ],
    "decs": [],
    "needs": [
+    "api",
     "browser"
    ]
   },
@@ -3525,7 +3740,9 @@
     "AC-004-3"
    ],
    "decs": [],
-   "needs": []
+   "needs": [
+    "api"
+   ]
   },
   "UC-004-S05": {
    "id": "UC-004-S05",
@@ -3540,7 +3757,9 @@
     "AC-004-4"
    ],
    "decs": [],
-   "needs": []
+   "needs": [
+    "api"
+   ]
   },
   "UC-010-S01": {
    "id": "UC-010-S01",
@@ -3592,7 +3811,9 @@
     "AC-010-1"
    ],
    "decs": [],
-   "needs": []
+   "needs": [
+    "api"
+   ]
   },
   "UC-010-S04": {
    "id": "UC-010-S04",
@@ -3607,7 +3828,9 @@
     "AC-010-4"
    ],
    "decs": [],
-   "needs": []
+   "needs": [
+    "api"
+   ]
   },
   "UC-010-S05": {
    "id": "UC-010-S05",
@@ -3622,7 +3845,9 @@
     "AC-010-5"
    ],
    "decs": [],
-   "needs": []
+   "needs": [
+    "api"
+   ]
   },
   "UC-010-S06": {
    "id": "UC-010-S06",
@@ -3667,7 +3892,9 @@
     "AC-010-7"
    ],
    "decs": [],
-   "needs": []
+   "needs": [
+    "api"
+   ]
   },
   "UC-011-S01": {
    "id": "UC-011-S01",
@@ -3829,7 +4056,9 @@
     "AC-011-8"
    ],
    "decs": [],
-   "needs": []
+   "needs": [
+    "api"
+   ]
   },
   "UC-011-S07a": {
    "id": "UC-011-S07a",
@@ -3960,7 +4189,9 @@
    "decs": [
     "DEC-09"
    ],
-   "needs": []
+   "needs": [
+    "api"
+   ]
   },
   "UC-012-S02": {
    "id": "UC-012-S02",
@@ -3975,7 +4206,9 @@
     "AC-012-4"
    ],
    "decs": [],
-   "needs": []
+   "needs": [
+    "api"
+   ]
   },
   "UC-012-S03": {
    "id": "UC-012-S03",
@@ -3988,7 +4221,9 @@
    "verify": "API",
    "acs": [],
    "decs": [],
-   "needs": []
+   "needs": [
+    "api"
+   ]
   },
   "UC-012-S04": {
    "id": "UC-012-S04",
@@ -4019,7 +4254,9 @@
     "AC-012-2"
    ],
    "decs": [],
-   "needs": []
+   "needs": [
+    "api"
+   ]
   },
   "UC-020-S01": {
    "id": "UC-020-S01",
@@ -4036,6 +4273,7 @@
    ],
    "decs": [],
    "needs": [
+    "api",
     "browser"
    ]
   },
@@ -4069,7 +4307,9 @@
     "AC-020-2"
    ],
    "decs": [],
-   "needs": []
+   "needs": [
+    "api"
+   ]
   },
   "UC-020-S04": {
    "id": "UC-020-S04",
@@ -4084,7 +4324,9 @@
     "AC-020-2"
    ],
    "decs": [],
-   "needs": []
+   "needs": [
+    "api"
+   ]
   },
   "UC-020-S05": {
    "id": "UC-020-S05",
@@ -4099,7 +4341,9 @@
     "AC-020-3"
    ],
    "decs": [],
-   "needs": []
+   "needs": [
+    "api"
+   ]
   },
   "UC-020-S06": {
    "id": "UC-020-S06",
@@ -4114,7 +4358,9 @@
     "AC-020-5"
    ],
    "decs": [],
-   "needs": []
+   "needs": [
+    "api"
+   ]
   },
   "UC-020-S07": {
    "id": "UC-020-S07",
@@ -4129,7 +4375,9 @@
     "AC-020-6"
    ],
    "decs": [],
-   "needs": []
+   "needs": [
+    "api"
+   ]
   },
   "UC-020-S08": {
    "id": "UC-020-S08",
@@ -4161,7 +4409,9 @@
     "AC-020-8"
    ],
    "decs": [],
-   "needs": []
+   "needs": [
+    "api"
+   ]
   },
   "UC-020-S10": {
    "id": "UC-020-S10",
@@ -4174,7 +4424,9 @@
    "verify": "API",
    "acs": [],
    "decs": [],
-   "needs": []
+   "needs": [
+    "api"
+   ]
   },
   "UC-020-S11": {
    "id": "UC-020-S11",
@@ -4187,7 +4439,9 @@
    "verify": "API",
    "acs": [],
    "decs": [],
-   "needs": []
+   "needs": [
+    "api"
+   ]
   },
   "UC-021-S01": {
    "id": "UC-021-S01",
@@ -4205,6 +4459,7 @@
    ],
    "decs": [],
    "needs": [
+    "api",
     "browser"
    ]
   },
@@ -4224,7 +4479,9 @@
     "AC-021-4"
    ],
    "decs": [],
-   "needs": []
+   "needs": [
+    "api"
+   ]
   },
   "UC-021-S03": {
    "id": "UC-021-S03",
@@ -4240,6 +4497,7 @@
    ],
    "decs": [],
    "needs": [
+    "api",
     "browser"
    ]
   },
@@ -4256,7 +4514,9 @@
     "AC-021-8"
    ],
    "decs": [],
-   "needs": []
+   "needs": [
+    "api"
+   ]
   },
   "UC-021-S05": {
    "id": "UC-021-S05",
@@ -4269,7 +4529,9 @@
    "verify": "API",
    "acs": [],
    "decs": [],
-   "needs": []
+   "needs": [
+    "api"
+   ]
   },
   "UC-021-S06": {
    "id": "UC-021-S06",
@@ -4345,6 +4607,7 @@
     "DEC-11"
    ],
    "needs": [
+    "api",
     "live-model"
    ]
   },
@@ -4363,6 +4626,7 @@
    ],
    "decs": [],
    "needs": [
+    "api",
     "browser"
    ]
   },
@@ -4469,7 +4733,9 @@
     "AC-022-6"
    ],
    "decs": [],
-   "needs": []
+   "needs": [
+    "api"
+   ]
   },
   "UC-022-S08": {
    "id": "UC-022-S08",
@@ -4551,7 +4817,9 @@
    "decs": [
     "DEC-03"
    ],
-   "needs": []
+   "needs": [
+    "api"
+   ]
   },
   "UC-023-S02": {
    "id": "UC-023-S02",
@@ -4581,7 +4849,9 @@
     "AC-023-3"
    ],
    "decs": [],
-   "needs": []
+   "needs": [
+    "api"
+   ]
   },
   "UC-023-S04": {
    "id": "UC-023-S04",
@@ -4596,7 +4866,9 @@
     "AC-023-5"
    ],
    "decs": [],
-   "needs": []
+   "needs": [
+    "api"
+   ]
   },
   "UC-023-S05": {
    "id": "UC-023-S05",
@@ -4611,7 +4883,9 @@
     "AC-023-6"
    ],
    "decs": [],
-   "needs": []
+   "needs": [
+    "api"
+   ]
   },
   "UC-023-S06": {
    "id": "UC-023-S06",
@@ -4627,6 +4901,7 @@
    ],
    "decs": [],
    "needs": [
+    "api",
     "live-model"
    ]
   },
@@ -4661,7 +4936,9 @@
     "AC-030-1"
    ],
    "decs": [],
-   "needs": []
+   "needs": [
+    "api"
+   ]
   },
   "UC-030-S03": {
    "id": "UC-030-S03",
@@ -4751,7 +5028,9 @@
     "AC-030-7"
    ],
    "decs": [],
-   "needs": []
+   "needs": [
+    "api"
+   ]
   },
   "UC-030-S09": {
    "id": "UC-030-S09",
@@ -4782,7 +5061,9 @@
     "AC-030-1"
    ],
    "decs": [],
-   "needs": []
+   "needs": [
+    "api"
+   ]
   },
   "UC-031-S01": {
    "id": "UC-031-S01",
@@ -4801,6 +5082,7 @@
    ],
    "decs": [],
    "needs": [
+    "api",
     "browser"
    ]
   },
@@ -4850,6 +5132,7 @@
    ],
    "decs": [],
    "needs": [
+    "api",
     "browser"
    ]
   },
@@ -4866,7 +5149,9 @@
     "AC-031-4"
    ],
    "decs": [],
-   "needs": []
+   "needs": [
+    "api"
+   ]
   },
   "UC-031-S06": {
    "id": "UC-031-S06",
@@ -4881,7 +5166,9 @@
     "AC-031-7"
    ],
    "decs": [],
-   "needs": []
+   "needs": [
+    "api"
+   ]
   },
   "UC-031-S07": {
    "id": "UC-031-S07",
@@ -4911,7 +5198,9 @@
     "AC-031-8"
    ],
    "decs": [],
-   "needs": []
+   "needs": [
+    "api"
+   ]
   },
   "UC-031-S09": {
    "id": "UC-031-S09",
@@ -4926,7 +5215,9 @@
     "AC-031-6"
    ],
    "decs": [],
-   "needs": []
+   "needs": [
+    "api"
+   ]
   },
   "UC-031-S10": {
    "id": "UC-031-S10",
@@ -4943,7 +5234,9 @@
    "decs": [
     "DEC-12"
    ],
-   "needs": []
+   "needs": [
+    "api"
+   ]
   },
   "UC-031-S11": {
    "id": "UC-031-S11",
@@ -4956,7 +5249,9 @@
    "verify": "API",
    "acs": [],
    "decs": [],
-   "needs": []
+   "needs": [
+    "api"
+   ]
   },
   "UC-032-S01": {
    "id": "UC-032-S01",
@@ -4971,7 +5266,9 @@
     "AC-032-3"
    ],
    "decs": [],
-   "needs": []
+   "needs": [
+    "api"
+   ]
   },
   "UC-032-S02": {
    "id": "UC-032-S02",
@@ -4986,7 +5283,9 @@
     "AC-032-4"
    ],
    "decs": [],
-   "needs": []
+   "needs": [
+    "api"
+   ]
   },
   "UC-032-S03": {
    "id": "UC-032-S03",
@@ -5001,7 +5300,9 @@
     "AC-032-1"
    ],
    "decs": [],
-   "needs": []
+   "needs": [
+    "api"
+   ]
   },
   "UC-032-S04": {
    "id": "UC-032-S04",
@@ -5016,7 +5317,9 @@
     "AC-032-2"
    ],
    "decs": [],
-   "needs": []
+   "needs": [
+    "api"
+   ]
   },
   "UC-032-S05": {
    "id": "UC-032-S05",
@@ -5076,7 +5379,9 @@
     "AC-032-8"
    ],
    "decs": [],
-   "needs": []
+   "needs": [
+    "api"
+   ]
   },
   "UC-032-S09": {
    "id": "UC-032-S09",
@@ -5089,7 +5394,9 @@
    "verify": "API",
    "acs": [],
    "decs": [],
-   "needs": []
+   "needs": [
+    "api"
+   ]
   },
   "UC-032-S10": {
    "id": "UC-032-S10",
@@ -5104,7 +5411,9 @@
     "AC-032-3"
    ],
    "decs": [],
-   "needs": []
+   "needs": [
+    "api"
+   ]
   },
   "UC-033-S01": {
    "id": "UC-033-S01",
@@ -5122,6 +5431,7 @@
     "DEC-10"
    ],
    "needs": [
+    "api",
     "browser"
    ]
   },
@@ -5155,7 +5465,9 @@
     "AC-033-1"
    ],
    "decs": [],
-   "needs": []
+   "needs": [
+    "api"
+   ]
   },
   "UC-040-S01": {
    "id": "UC-040-S01",
@@ -5174,6 +5486,7 @@
    ],
    "decs": [],
    "needs": [
+    "api",
     "browser"
    ]
   },
@@ -5190,7 +5503,9 @@
     "AC-040-1"
    ],
    "decs": [],
-   "needs": []
+   "needs": [
+    "api"
+   ]
   },
   "UC-040-S03": {
    "id": "UC-040-S03",
@@ -5205,7 +5520,9 @@
     "AC-040-2"
    ],
    "decs": [],
-   "needs": []
+   "needs": [
+    "api"
+   ]
   },
   "UC-040-S04": {
    "id": "UC-040-S04",
@@ -5222,7 +5539,9 @@
    "decs": [
     "DEC-01"
    ],
-   "needs": []
+   "needs": [
+    "api"
+   ]
   },
   "UC-040-S05": {
    "id": "UC-040-S05",
@@ -5255,6 +5574,7 @@
    ],
    "decs": [],
    "needs": [
+    "api",
     "browser"
    ]
   },
@@ -5272,6 +5592,7 @@
    ],
    "decs": [],
    "needs": [
+    "api",
     "browser"
    ]
   },
@@ -5290,7 +5611,9 @@
    "decs": [
     "DEC-17"
    ],
-   "needs": []
+   "needs": [
+    "api"
+   ]
   },
   "UC-041-S04": {
    "id": "UC-041-S04",
@@ -5323,7 +5646,9 @@
     "AC-041-7"
    ],
    "decs": [],
-   "needs": []
+   "needs": [
+    "api"
+   ]
   },
   "UC-041-S06": {
    "id": "UC-041-S06",
@@ -5355,7 +5680,9 @@
    "decs": [
     "DEC-01"
    ],
-   "needs": []
+   "needs": [
+    "api"
+   ]
   },
   "UC-041-S08": {
    "id": "UC-041-S08",
@@ -5372,7 +5699,9 @@
    "decs": [
     "DEC-02"
    ],
-   "needs": []
+   "needs": [
+    "api"
+   ]
   },
   "UC-041-S12": {
    "id": "UC-041-S12",
@@ -5404,7 +5733,9 @@
     "AC-041-6"
    ],
    "decs": [],
-   "needs": []
+   "needs": [
+    "api"
+   ]
   },
   "UC-041-S10": {
    "id": "UC-041-S10",
@@ -5455,6 +5786,7 @@
    ],
    "decs": [],
    "needs": [
+    "api",
     "browser"
    ]
   },
@@ -5471,7 +5803,9 @@
     "AC-042-2"
    ],
    "decs": [],
-   "needs": []
+   "needs": [
+    "api"
+   ]
   },
   "UC-042-S03": {
    "id": "UC-042-S03",
@@ -5501,7 +5835,9 @@
     "AC-042-5"
    ],
    "decs": [],
-   "needs": []
+   "needs": [
+    "api"
+   ]
   },
   "UC-043-S01": {
    "id": "UC-043-S01",
@@ -5518,6 +5854,7 @@
    ],
    "decs": [],
    "needs": [
+    "api",
     "browser"
    ]
   },
@@ -5534,7 +5871,9 @@
     "AC-043-2"
    ],
    "decs": [],
-   "needs": []
+   "needs": [
+    "api"
+   ]
   },
   "UC-043-S03": {
    "id": "UC-043-S03",
@@ -5549,7 +5888,9 @@
     "AC-043-3"
    ],
    "decs": [],
-   "needs": []
+   "needs": [
+    "api"
+   ]
   },
   "UC-043-S04": {
    "id": "UC-043-S04",
@@ -5564,7 +5905,9 @@
     "AC-043-5"
    ],
    "decs": [],
-   "needs": []
+   "needs": [
+    "api"
+   ]
   },
   "UC-043-S05": {
    "id": "UC-043-S05",
@@ -5581,7 +5924,9 @@
    "decs": [
     "DEC-02"
    ],
-   "needs": []
+   "needs": [
+    "api"
+   ]
   },
   "UC-043-S06": {
    "id": "UC-043-S06",
@@ -5596,7 +5941,9 @@
     "AC-043-7"
    ],
    "decs": [],
-   "needs": []
+   "needs": [
+    "api"
+   ]
   },
   "UC-043-S07": {
    "id": "UC-043-S07",
@@ -5609,7 +5956,9 @@
    "verify": "API",
    "acs": [],
    "decs": [],
-   "needs": []
+   "needs": [
+    "api"
+   ]
   },
   "UC-050-S01": {
    "id": "UC-050-S01",
@@ -5625,7 +5974,9 @@
     "AC-050-5"
    ],
    "decs": [],
-   "needs": []
+   "needs": [
+    "api"
+   ]
   },
   "UC-050-S02": {
    "id": "UC-050-S02",
@@ -5641,7 +5992,9 @@
     "AC-050-2"
    ],
    "decs": [],
-   "needs": []
+   "needs": [
+    "api"
+   ]
   },
   "UC-050-S03": {
    "id": "UC-050-S03",
@@ -5656,7 +6009,9 @@
     "AC-050-1"
    ],
    "decs": [],
-   "needs": []
+   "needs": [
+    "api"
+   ]
   },
   "UC-050-S04": {
    "id": "UC-050-S04",
@@ -5671,7 +6026,9 @@
     "AC-050-3"
    ],
    "decs": [],
-   "needs": []
+   "needs": [
+    "api"
+   ]
   },
   "UC-050-S05": {
    "id": "UC-050-S05",
@@ -5720,6 +6077,7 @@
    ],
    "decs": [],
    "needs": [
+    "api",
     "browser"
    ]
   },
@@ -5751,7 +6109,9 @@
     "AC-051-3"
    ],
    "decs": [],
-   "needs": []
+   "needs": [
+    "api"
+   ]
   },
   "UC-051-S04": {
    "id": "UC-051-S04",
@@ -5766,7 +6126,9 @@
     "AC-051-4"
    ],
    "decs": [],
-   "needs": []
+   "needs": [
+    "api"
+   ]
   },
   "UC-051-S05": {
    "id": "UC-051-S05",
@@ -5799,6 +6161,7 @@
    ],
    "decs": [],
    "needs": [
+    "api",
     "browser"
    ]
   },
@@ -5815,7 +6178,9 @@
     "AC-052-3"
    ],
    "decs": [],
-   "needs": []
+   "needs": [
+    "api"
+   ]
   },
   "UC-052-S03": {
    "id": "UC-052-S03",
@@ -5830,7 +6195,9 @@
     "AC-052-1"
    ],
    "decs": [],
-   "needs": []
+   "needs": [
+    "api"
+   ]
   },
   "UC-052-S04": {
    "id": "UC-052-S04",
@@ -5894,7 +6261,9 @@
     "AC-053-3"
    ],
    "decs": [],
-   "needs": []
+   "needs": [
+    "api"
+   ]
   },
   "UC-053-S03": {
    "id": "UC-053-S03",
@@ -5909,7 +6278,9 @@
     "AC-053-4"
    ],
    "decs": [],
-   "needs": []
+   "needs": [
+    "api"
+   ]
   },
   "UC-053-S04": {
    "id": "UC-053-S04",
@@ -6042,6 +6413,7 @@
    ],
    "decs": [],
    "needs": [
+    "api",
     "browser"
    ]
   },
@@ -6061,6 +6433,7 @@
     "DEC-15"
    ],
    "needs": [
+    "api",
     "browser"
    ]
   },
@@ -6259,6 +6632,7 @@
    ],
    "decs": [],
    "needs": [
+    "api",
     "browser"
    ]
   },
@@ -6276,7 +6650,9 @@
     "AC-061-2"
    ],
    "decs": [],
-   "needs": []
+   "needs": [
+    "api"
+   ]
   },
   "UC-061-S03": {
    "id": "UC-061-S03",
@@ -6306,7 +6682,9 @@
     "AC-061-4"
    ],
    "decs": [],
-   "needs": []
+   "needs": [
+    "api"
+   ]
   },
   "UC-070-S01": {
    "id": "UC-070-S01",
@@ -6324,6 +6702,7 @@
    ],
    "decs": [],
    "needs": [
+    "api",
     "browser"
    ]
   },
@@ -6432,7 +6811,9 @@
     "AC-070-1"
    ],
    "decs": [],
-   "needs": []
+   "needs": [
+    "api"
+   ]
   },
   "UC-070-S04": {
    "id": "UC-070-S04",
@@ -6506,7 +6887,9 @@
    "verify": "API",
    "acs": [],
    "decs": [],
-   "needs": []
+   "needs": [
+    "api"
+   ]
   }
  },
  "commons": {
