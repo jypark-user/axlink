@@ -21,7 +21,7 @@ UC-004-S03,UC-004,pass,C01-R0079,auto,,api·browser,1
 UC-004-S04,UC-004,pass,C01-R0080,auto,,api,1
 UC-004-S05,UC-004,pass,C01-R0081,auto,,api,1
 UC-010-S01,UC-010,not-run,,,,browser·live-tool,0
-UC-010-S02,UC-010,fail,C01-R0083,replay,,live-tool,1
+UC-010-S02,UC-010,fail,C01-R0105,replay,,live-tool,2
 UC-010-S03,UC-010,pass,C01-R0084,replay,,api,1
 UC-010-S04,UC-010,pass,C01-R0085,replay,,api,1
 UC-010-S05,UC-010,pass,C01-R0086,replay,,api,1
