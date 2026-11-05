@@ -93,6 +93,42 @@ def test_update_validates_dates_and_phase(client, client_token, cleanup):
 
 
 @requires_db
+def test_close_keeps_data_and_stops_schedule(client, client_token, cleanup):
+    """종료 처리 뒤 데이터는 그대로 조회되고 예약 수집·스냅샷 대상에서 빠진다(AC-002-3, GH-208)."""
+    from app.scheduler import _load_schedules
+
+    token = client_token("r2")
+    pid = client.post(
+        "/api/projects", json=_project_body(name="시험 사업-종료"), headers=_auth(token)
+    ).json()["id"]
+    with tx() as cur:
+        assert pid in {s.project_id for s in _load_schedules(cur)}
+
+    # 용역사는 못 바꾼다
+    denied = client.patch(
+        f"/api/projects/{pid}", json={"status": "CLOSED"}, headers=_auth(client_token("r3"))
+    )
+    assert denied.status_code == 403
+    bad = client.patch(f"/api/projects/{pid}", json={"status": "DONE"}, headers=_auth(token))
+    assert bad.status_code == 409
+
+    closed = client.patch(f"/api/projects/{pid}", json={"status": "CLOSED"}, headers=_auth(token))
+    assert closed.status_code == 200, closed.text
+    assert closed.json()["status"] == "CLOSED"
+    # 데이터는 그대로
+    assert client.get(f"/api/projects/{pid}", headers=_auth(token)).status_code == 200
+    assert client.get(f"/api/projects/{pid}/work-products", headers=_auth(token)).json()[
+        "totalCount"
+    ] == 22
+    # 예약 수집·스냅샷 대상에서 빠진다
+    with tx() as cur:
+        assert pid not in {s.project_id for s in _load_schedules(cur)}
+    # 종료는 되돌리지 않는다
+    back = client.patch(f"/api/projects/{pid}", json={"status": "ACTIVE"}, headers=_auth(token))
+    assert back.status_code == 409
+
+
+@requires_db
 def test_invite_accept_assign_revoke_delete(client, client_token, cleanup):
     """S2-1 전체 흐름. 초대 → 미리보기 → 가입 → 자기 사업만 보임 → 해제 → 재할당 → 삭제."""
     client_tok = client_token("r2")
