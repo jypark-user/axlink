@@ -53,7 +53,8 @@ def _fail_if_core_denied(connector: Any, denied: list[str]) -> None:
     if denied and (blocked or set(denied) >= set(connector.item_kinds)):
         names = ", ".join(blocked or denied)
         raise errors.ApiError(
-            403, "TOOL_AUTH",
+            403,
+            "TOOL_AUTH",
             f"인증이 거부되었거나 읽기 권한이 없어 수집하지 못했습니다: {names}. "
             "연결 테스트로 토큰·권한을 확인해 주세요.",
         )
@@ -136,6 +137,7 @@ def run_sync(
             # 표준 모델 반영 건수로 쓴다(화면 라벨이 "반영"이다).
             if not repository.upsert_raw_artifact(cur, cid, external_id, kind, payload, job_id):
                 stats["skippedUnchanged"] += 1
+
         return put
 
     try:
@@ -145,8 +147,14 @@ def run_sync(
                 for start, until in _passes(plan, since):
                     got = _drain(
                         connector.fetch_items(
-                            base, target, token, kind, _PER_PAGE, _MAX_PAGES,
-                            since=start, until=until,
+                            base,
+                            target,
+                            token,
+                            kind,
+                            _PER_PAGE,
+                            _MAX_PAGES,
+                            since=start,
+                            until=until,
                         ),
                         take(kind),
                     )
@@ -168,17 +176,28 @@ def run_sync(
     except errors.ApiError as exc:
         finished = datetime.now(UTC)
         repository.finish_sync_job(
-            cur, job_id, "FAILED", stats, now, finished,
-            error=exc.message, error_code=_ERROR_CODE.get(exc.code, "TOOL_UNAVAILABLE"),
+            cur,
+            job_id,
+            "FAILED",
+            stats,
+            now,
+            finished,
+            error=exc.message,
+            error_code=_ERROR_CODE.get(exc.code, "TOOL_UNAVAILABLE"),
         )
         repository.mark_synced(cur, cid, finished, exc.message)
         from app.activity import service as activity
 
         activity.record(
-            cur, project_id=str(connection["project_id"]), kind=activity.SYNC_FAILED,
-            audience=activity.ALL, actor_label="동기화",
+            cur,
+            project_id=str(connection["project_id"]),
+            kind=activity.SYNC_FAILED,
+            audience=activity.ALL,
+            actor_label="동기화",
             summary=f"동기화 실패: {connection.get('name') or connection['tool']} · {exc.message}",
-            target_type="SYNC_JOB", target_key=str(job_id), occurred_at=finished,
+            target_type="SYNC_JOB",
+            target_key=str(job_id),
+            occurred_at=finished,
         )
         return job_id
 
@@ -211,6 +230,32 @@ def run_sync(
         cur, job_id, "SUCCEEDED", stats, now, finished, error=note, error_code=None
     )
     repository.mark_synced(cur, cid, finished, note)
+    changed = stats["fetched"] - stats["skippedUnchanged"]
+    if changed > 0:
+        # 수집도 사업의 사건이다(IM-007 AC-053-4, GH-221). 바뀐 원본이 있을 때만 남긴다 —
+        # 변경 없는 회차까지 적으면 기록이 수집 주기로 메워진다
+        from app.activity import service as activity
+
+        activity.record(
+            cur,
+            project_id=str(connection["project_id"]),
+            kind=activity.SYNC_CHANGED,
+            audience=activity.ALL,
+            actor_label="동기화",
+            summary=(
+                f"수집 완료: {connection.get('name') or connection['tool']} · "
+                f"바뀐 원본 {changed}건 · 반영 {stats['upserted']}건"
+            ),
+            target_type="SYNC_JOB",
+            target_key=str(job_id),
+            occurred_at=finished,
+            detail={
+                "fetched": stats["fetched"],
+                "changed": changed,
+                "upserted": stats["upserted"],
+                "denied": denied,
+            },
+        )
     return job_id
 
 
@@ -232,9 +277,7 @@ def _collect_files(
     skipped: list[str] = []
     for path in settings.collect_file_map:
         try:
-            payload = connector.fetch_file(
-                base, target, token, path, settings.collect_ref or None
-            )
+            payload = connector.fetch_file(base, target, token, path, settings.collect_ref or None)
         except errors.ApiError as exc:
             # 토큰에 파일 읽기 권한이 없는 경우다. 이슈·커밋은 되는데 파일만 막힐 수 있다.
             if exc.code not in ("TOOL_AUTH", "TOOL_NOT_FOUND"):
@@ -270,21 +313,37 @@ def _carry_files(cur: Any, cid: str, external_id: str, kind: str, payload: dict)
 
 
 def _collect_details(
-    cur: Any, cid: str, connector: Any, base: str, target: str, token: str, job_id: str,
-    stats: dict[str, int], rules: MappingRules,
+    cur: Any,
+    cid: str,
+    connector: Any,
+    base: str,
+    target: str,
+    token: str,
+    job_id: str,
+    stats: dict[str, int],
+    rules: MappingRules,
 ) -> None:
     """설계 문서와 변경 파일을 필요한 만큼만 받는다. 실패는 삭제·끊김이 아니다.
 
     차례로 하나씩 부른다. 남은 호출 한도가 낮거나 레이트리밋이면 멈추고 다음 회차로 넘긴다.
     호출 수는 잡 통계에 남긴다(요청·그대로·실패·삭제).
     """
-    for key in ("docCalls", "docUnchanged", "docFailed", "docDeleted",
-                "fileCalls", "fileCached", "fileFailed", "rateLimitStop"):
+    for key in (
+        "docCalls",
+        "docUnchanged",
+        "docFailed",
+        "docDeleted",
+        "fileCalls",
+        "fileCached",
+        "fileFailed",
+        "rateLimitStop",
+    ):
         stats.setdefault(key, 0)
     try:
         if rules.design_globs and hasattr(connector, "fetch_file"):
-            _collect_design_docs(cur, cid, connector, base, target, token, job_id, stats,
-                                 rules.design_globs)
+            _collect_design_docs(
+                cur, cid, connector, base, target, token, job_id, stats, rules.design_globs
+            )
         if settings.collect_change_files and hasattr(connector, "fetch_change_files"):
             _collect_change_files(cur, cid, connector, base, target, token, job_id, stats)
     except errors.ApiError as exc:
@@ -294,8 +353,15 @@ def _collect_details(
 
 
 def _collect_design_docs(
-    cur: Any, cid: str, connector: Any, base: str, target: str, token: str, job_id: str,
-    stats: dict[str, int], globs: list[str],
+    cur: Any,
+    cid: str,
+    connector: Any,
+    base: str,
+    target: str,
+    token: str,
+    job_id: str,
+    stats: dict[str, int],
+    globs: list[str],
 ) -> None:
     tree = repository.raw_payload(cur, cid, "tree:HEAD")
     if not tree or not isinstance(tree.get("blobs"), dict):
@@ -332,9 +398,13 @@ def _collect_design_docs(
             continue
         payload = {
             # 비교 기준은 트리의 blob SHA 다(같은 커밋이면 contents 의 sha 와 같다)
-            "repo": target, "path": path, "commit_sha": commit, "blob_sha": blob,
+            "repo": target,
+            "path": path,
+            "commit_sha": commit,
+            "blob_sha": blob,
             "html_url": f"{html_base}{path}" if html_base else got.get("htmlUrl"),
-            "text": text, "deleted": False,
+            "text": text,
+            "deleted": False,
         }
         repository.upsert_raw_artifact(cur, cid, f"doc:{path}", "design_doc", payload, job_id)
 
@@ -349,13 +419,23 @@ def _collect_design_docs(
             continue  # 저장소에는 있는데 패턴에서 빠졌다. 지운 게 아니다
         stats["docDeleted"] += 1
         repository.upsert_raw_artifact(
-            cur, cid, external_id, "design_doc",
-            {**old, "deleted": True, "deleted_at_commit": commit}, job_id,
+            cur,
+            cid,
+            external_id,
+            "design_doc",
+            {**old, "deleted": True, "deleted_at_commit": commit},
+            job_id,
         )
 
 
 def _collect_change_files(
-    cur: Any, cid: str, connector: Any, base: str, target: str, token: str, job_id: str,
+    cur: Any,
+    cid: str,
+    connector: Any,
+    base: str,
+    target: str,
+    token: str,
+    job_id: str,
     stats: dict[str, int],
 ) -> None:
     rows = repository.raw_changes_without_files(cur, cid)
