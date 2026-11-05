@@ -260,7 +260,6 @@ def test_backfill_ingests_raw_artifacts(client, as_pm, monkeypatch):
     assert again["stats"]["indexed"] == 0
 
 
-@requires_db
 def _denied_github(monkeypatch, denied_kind: str) -> None:
     """한 항목종류만 권한이 빠진 GitHub 을 흉내 낸다. 나머지는 커밋 하나를 돌려준다."""
     monkeypatch.setattr(
@@ -283,6 +282,7 @@ def _denied_github(monkeypatch, denied_kind: str) -> None:
     monkeypatch.setattr(github, "fetch_file", lambda *a, **k: None)
 
 
+@requires_db
 def test_backfill_tolerates_missing_permission(client, as_pm, monkeypatch):
     """선택 대상(PR)의 권한이 빠져도 통째로 실패하지 않고 그 종류만 건너뛴다(AC-011-6c)."""
     token, created = as_pm
