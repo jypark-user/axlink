@@ -73,8 +73,10 @@ def _kind_url(base: str, target: str, kind: str) -> tuple[str, dict[str, Any]]:
     if kind == "issue":
         # status_id=* 가 없으면 열린 이슈만 온다. 닫힌 이슈도 이력이다.
         return f"{base}/issues.json", {
-            "project_id": target, "status_id": "*",
-            "sort": "updated_on:asc", "include": "relations",
+            "project_id": target,
+            "status_id": "*",
+            "sort": "updated_on:asc",
+            "include": "relations",
         }
     if kind == "version":
         return f"{base}/projects/{target}/versions.json", {}
@@ -107,8 +109,14 @@ def verify(base_url: str, target: str, secret: str) -> ProbeResult:
 
 
 def fetch_items(
-    base_url: str, target: str, secret: str, kind: str, per_page: int, max_pages: int,
-    since: datetime | None = None, until: datetime | None = None,
+    base_url: str,
+    target: str,
+    secret: str,
+    kind: str,
+    per_page: int,
+    max_pages: int,
+    since: datetime | None = None,
+    until: datetime | None = None,
 ) -> Generator[tuple[str, dict], None, PageResult | None]:
     """항목종류 하나를 offset 페이지로 가져온다. (external_id, payload) 를 낸다.
 
@@ -129,7 +137,9 @@ def fetch_items(
     with httpx.Client(timeout=settings.connector_timeout) as client:
         for page in range(max_pages):
             res = _get(
-                client, url, headers,
+                client,
+                url,
+                headers,
                 params={**params, "limit": per_page, "offset": page * per_page},
             )
             if res.status_code in (401, 403):
@@ -146,8 +156,9 @@ def fetch_items(
                 return None
     # 상한에 걸렸다. 다 읽은 것이 아니다
     if kind == "issue" and last:
-        return PageResult(resume_since=datetime.strptime(last, "%Y-%m-%dT%H:%M:%SZ")
-                          .replace(tzinfo=UTC))
+        return PageResult(
+            resume_since=datetime.strptime(last, "%Y-%m-%dT%H:%M:%SZ").replace(tzinfo=UTC)
+        )
     return PageResult()
 
 
@@ -169,13 +180,24 @@ class RedmineConnector:
         return verify(base_url, target, secret)
 
     def fetch_items(
-        self, base_url: str, target: str, secret: str,
-        kind: str, per_page: int, max_pages: int,
-        since: datetime | None = None, until: datetime | None = None,
+        self,
+        base_url: str,
+        target: str,
+        secret: str,
+        kind: str,
+        per_page: int,
+        max_pages: int,
+        since: datetime | None = None,
+        until: datetime | None = None,
     ) -> Generator[tuple[str, dict[str, Any]], None, PageResult | None]:
         return fetch_items(base_url, target, secret, kind, per_page, max_pages, since, until)
 
     def fetch_file(
-        self, base_url: str, target: str, secret: str, path: str, ref: str | None = None,
+        self,
+        base_url: str,
+        target: str,
+        secret: str,
+        path: str,
+        ref: str | None = None,
     ) -> dict[str, Any] | None:
         return fetch_file(base_url, target, secret, path, ref)

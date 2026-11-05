@@ -495,6 +495,9 @@ export interface MappingRuleReplaceRequest {
 
 export interface SyncJobStats {
   fetched: number;
+  /** 새로 생기거나 바뀐 원본 건수. 변경이 없으면 0 */
+  changed: number;
+  /** 표준 모델로 올린 건수(재승격 포함) */
   upserted: number;
   unmapped: number;
   indexed: number;
