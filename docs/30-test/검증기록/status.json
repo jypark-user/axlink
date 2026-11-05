@@ -4,8 +4,8 @@
   "ac_denominator": 179,
   "ac_pass": 0,
   "overall_completion": 0.0,
-  "runs_executed": 60,
-  "runs_pass": 60,
+  "runs_executed": 61,
+  "runs_pass": 61,
   "executed_pass_rate": 100.0,
   "ac_by_status": {
     "auto-only": 124,
@@ -14,6 +14,6 @@
     "not-run": 43,
     "pass-decision-wait": 1
   },
-  "runs_total": 60,
+  "runs_total": 61,
   "runs_invalidated": 0
 }
