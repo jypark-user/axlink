@@ -8,6 +8,7 @@ from datetime import UTC, date, datetime, timedelta
 from typing import Any
 
 import bcrypt
+import psycopg
 
 from app.auth import repository as auth_repository
 from app.auth.models import AuthPrincipal
@@ -61,9 +62,7 @@ def _parse_date(value: str, field: str) -> date:
         raise errors.validation_failed(f"{field} 는 YYYY-MM-DD 형식이어야 합니다.") from exc
 
 
-def create(
-    cur: Any, principal: AuthPrincipal, req: ProjectCreateRequest
-) -> ProjectDetailResponse:
+def create(cur: Any, principal: AuthPrincipal, req: ProjectCreateRequest) -> ProjectDetailResponse:
     """사업 하나 = 기본 대시보드 하나 + 산출물 목록 22개 항목. 셋을 한 트랜잭션에 만든다."""
     _require_client(principal)
     start, end = _parse_date(req.startDate, "startDate"), _parse_date(req.endDate, "endDate")
@@ -72,10 +71,24 @@ def create(
     if not req.description.strip():
         raise errors.validation_failed("설명을 입력하세요.")
     delete_hash = bcrypt.hashpw(req.deletePassword.encode("utf-8"), bcrypt.gensalt()).decode()
-    project_id = repository.insert_project(
-        cur, principal.org_id, req.name.strip(), start, end, req.description.strip(),
-        req.contractorName.strip() or None, delete_hash,
-    )
+    try:
+        # 같은 발주기관 안에서 사업명은 하나다(uq_project__client_name). 위반은 거절이지 서버 오류가
+        # 아니다(IM-007 AC-002-4, GH-204). 저장점으로 감싸 트랜잭션은 살려 둔다.
+        with cur.connection.transaction():
+            project_id = repository.insert_project(
+                cur,
+                principal.org_id,
+                req.name.strip(),
+                start,
+                end,
+                req.description.strip(),
+                req.contractorName.strip() or None,
+                delete_hash,
+            )
+    except psycopg.errors.UniqueViolation as exc:
+        raise errors.ApiError(
+            409, "PROJECT_NAME_EXISTS", "같은 이름의 사업이 이미 있습니다. 다른 이름을 쓰세요."
+        ) from exc
     repository.insert_default_dashboard(cur, project_id, principal.user_id)
     standard_repository.create_checklist(cur, project_id)
     return get_detail(cur, principal, project_id)
@@ -120,9 +133,7 @@ def update(
     return get_detail(cur, principal, project_id)
 
 
-def delete(
-    cur: Any, principal: AuthPrincipal, project_id: str, req: ProjectDeleteRequest
-) -> None:
+def delete(cur: Any, principal: AuthPrincipal, project_id: str, req: ProjectDeleteRequest) -> None:
     """지우면 수집분까지 전부 사라진다. 등록 때 정한 비밀번호를 맞춰야 한다."""
     _require_client(principal)
     _require_allowed(cur, principal, project_id)
@@ -135,6 +146,7 @@ def delete(
 
 
 # --- 용역사 할당 -------------------------------------------------------------
+
 
 def _to_assignment(row: dict[str, Any]) -> AssignmentResponse:
     return AssignmentResponse(
@@ -200,6 +212,7 @@ def remove_assignment(
 
 # --- 초대 링크 --------------------------------------------------------------
 
+
 def create_invite(
     cur: Any, principal: AuthPrincipal, project_id: str, req: InviteCreateRequest | None = None
 ) -> ProjectInviteResponse:
@@ -219,7 +232,11 @@ def create_invite(
         org_id, org_name = str(part["organization_id"]), part["organization_name"]
     token = random_token()
     row = repository.insert_invite(
-        cur, project_id, sha256_hex(token), datetime.now(UTC) + _INVITE_TTL, principal.user_id,
+        cur,
+        project_id,
+        sha256_hex(token),
+        datetime.now(UTC) + _INVITE_TTL,
+        principal.user_id,
         org_id,
     )
     return ProjectInviteResponse(
@@ -235,6 +252,7 @@ def create_invite(
 
 
 # --- 참여 업체 (GH-138) ------------------------------------------------------
+
 
 def _to_participant(row: dict[str, Any]) -> ParticipantResponse:
     return ParticipantResponse(
@@ -296,13 +314,23 @@ def add_participant(
         raise errors.ApiError(409, "ALREADY_PARTICIPANT", "이미 참여 업체입니다.")
     note = (req.workNote or "").strip() or None
     pid = participants.insert(cur, project_id, org_id, req.role, note, principal.user_id)
-    participants.history(cur, project_id, pid, "participant", None,
-                         f"{org['name']} {req.role}", _actor(cur, principal))
+    participants.history(
+        cur,
+        project_id,
+        pid,
+        "participant",
+        None,
+        f"{org['name']} {req.role}",
+        _actor(cur, principal),
+    )
     return list_participants(cur, principal, project_id)
 
 
 def update_participant(
-    cur: Any, principal: AuthPrincipal, project_id: str, participant_id: str,
+    cur: Any,
+    principal: AuthPrincipal,
+    project_id: str,
+    participant_id: str,
     req: ParticipantUpdateRequest,
 ) -> list[ParticipantResponse]:
     participants.require_manager(cur, principal, project_id)
@@ -353,14 +381,13 @@ def remove_participant(
         """,
         (now, now, project_id, row["organization_id"]),
     )
-    participants.history(cur, project_id, participant_id, "status", "ACTIVE", "REMOVED",
-                         _actor(cur, principal))
+    participants.history(
+        cur, project_id, participant_id, "status", "ACTIVE", "REMOVED", _actor(cur, principal)
+    )
     return list_participants(cur, principal, project_id)
 
 
-def get_detail(
-    cur: Any, principal: AuthPrincipal, project_id: str
-) -> ProjectDetailResponse:
+def get_detail(cur: Any, principal: AuthPrincipal, project_id: str) -> ProjectDetailResponse:
     allowed = auth_repository.allowed_project_ids(
         cur, principal.role, principal.org_id, principal.user_id
     )

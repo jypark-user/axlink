@@ -71,6 +71,27 @@ def test_create_project_seeds_dashboard_and_checklist(client, client_token, clea
 
 
 @requires_db
+def test_same_name_in_same_org_is_rejected_not_500(client, client_token, cleanup):
+    """같은 발주기관에 같은 이름은 409 와 사유다(AC-002-4, GH-204)."""
+    token = client_token("r2")
+    first = client.post(
+        "/api/projects", json=_project_body(name="시험 사업-중복"), headers=_auth(token)
+    )
+    assert first.status_code == 201, first.text
+    again = client.post(
+        "/api/projects", json=_project_body(name="시험 사업-중복"), headers=_auth(token)
+    )
+    assert again.status_code == 409, again.text
+    assert again.json()["code"] == "PROJECT_NAME_EXISTS"
+    assert "이미" in again.json()["message"]
+    # 거절 뒤에도 같은 세션으로 다른 이름은 바로 등록된다(트랜잭션이 깨지지 않았다)
+    other = client.post(
+        "/api/projects", json=_project_body(name="시험 사업-중복-2"), headers=_auth(token)
+    )
+    assert other.status_code == 201, other.text
+
+
+@requires_db
 def test_update_validates_dates_and_phase(client, client_token, cleanup):
     token = client_token("r2")
     pid = client.post("/api/projects", json=_project_body(), headers=_auth(token)).json()["id"]
@@ -130,8 +151,11 @@ def test_invite_accept_assign_revoke_delete(client, client_token, cleanup):
     dup = client.post(
         "/api/auth/invitations/accept",
         json={
-            "token": token, "contractorOrgName": "시험용역사-A", "username": "test-pm-a",
-            "name": "중복", "password": "passw0rd1",
+            "token": token,
+            "contractorOrgName": "시험용역사-A",
+            "username": "test-pm-a",
+            "name": "중복",
+            "password": "passw0rd1",
         },
     )
     assert dup.status_code == 400
@@ -152,8 +176,10 @@ def test_invite_accept_assign_revoke_delete(client, client_token, cleanup):
     users = client.get(
         "/api/users?role=CONTRACTOR&status=ACTIVE&size=100", headers=_auth(client_tok)
     ).json()
-    assert any(u["username"] == "test-pm-a" and u["organizationName"] == "시험용역사-A"
-               for u in users["content"])
+    assert any(
+        u["username"] == "test-pm-a" and u["organizationName"] == "시험용역사-A"
+        for u in users["content"]
+    )
     assert client.get("/api/users", headers=_auth(contractor_tok)).status_code == 403
 
     # 해제하면 접근이 끊기고, 다시 할당하면 살아난다 (같은 줄을 되살린다)
@@ -178,7 +204,9 @@ def test_invite_accept_assign_revoke_delete(client, client_token, cleanup):
     )
     assert wrong.status_code == 403
     right = client.request(
-        "DELETE", f"/api/projects/{pid}", json={"password": "delete-me-1234"},
+        "DELETE",
+        f"/api/projects/{pid}",
+        json={"password": "delete-me-1234"},
         headers=_auth(client_tok),
     )
     assert right.status_code == 204
