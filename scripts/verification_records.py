@@ -80,6 +80,8 @@ NEEDS_WORDS = {
 }
 # 실제 환경이 아닌 실행 방식. needs 가 있는 AC 는 이것만으로 통과하지 않는다.
 NON_LIVE_MODES = {"mock", "replay", "auto"}
+# Goal 조건: 통과 근거는 5174(내부 검증 환경)에서 실행한 것이어야 한다. CI 실행은 보조 근거다.
+TARGET_ENV_PREFIXES = ("5174",)
 
 
 def sha256(path: Path) -> str:
@@ -454,6 +456,15 @@ def compute_status(cat: dict) -> dict:
             if st == "pass" and ac["needs"] and modes and modes <= NON_LIVE_MODES:
                 # 실연동·실모델·브라우저·폐쇄망이 필요한데 전부 모의·재생·자동
                 st = "pass-mock-only"
+            if st == "pass":
+                envs = {
+                    str((latest(s) or {}).get("env", {}).get("name", "")) for s in scs if latest(s)
+                }
+                if direct_latest is not None:
+                    envs.add(str(direct_latest.get("env", {}).get("name", "")))
+                if not any(e.startswith(TARGET_ENV_PREFIXES) for e in envs):
+                    # 통과했지만 5174 실행 근거가 없다(CI 만). Goal 완료로 세지 않는다
+                    st = "pass-ci-only"
             if st == "pass" and ac["decs"]:
                 # 결정 전에는 통과 판정을 내리지 않는다(IM-007 0.6)
                 st = "pass-decision-wait"
@@ -505,7 +516,8 @@ def compute_status(cat: dict) -> dict:
 STATUS_LEGEND = (
     "상태 뜻: pass 통과 · fail 실패 · blocked 실행 차단 · not-run 미실행 · "
     "decision-wait 결정 대기(미실행) · pass-decision-wait 근거는 통과했으나 결정 전(미완료) · "
-    "auto-only 자동 시험만 통과, 명세 시나리오 미실행(미완료) · revalidate 재검증 필요 · "
+    "auto-only 자동 시험만 통과, 명세 시나리오 미실행(미완료) · "
+    "pass-ci-only 통과했으나 5174 실행 근거 없음(미완료) · revalidate 재검증 필요 · "
     "partial 일부만 · pass-mock-only 모의·자동만 통과(미완료) · excluded 공식 범위 제외 · "
     "no-scenario 시나리오 없음"
 )

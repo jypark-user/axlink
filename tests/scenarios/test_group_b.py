@@ -67,7 +67,8 @@ def test_UC_010_S02_Redmine_REST_비활성(target, s0, replay):
         "tool": "REDMINE",
         "name": "REST 꺼짐",
         "baseUrl": "https://redmine.example.test",
-        "targetResource": "citizen-portal",
+        # TD-CON-2 와 같은 서버·대상은 중복으로 막힌다(DEF-V013). 다른 식별자를 쓴다
+        "targetResource": "rest-off-project",
         "credential": {"accessToken": "key"},
     }
     made = target.post(

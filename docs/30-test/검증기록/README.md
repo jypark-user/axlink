@@ -109,7 +109,7 @@ scenarios}`), `rerun`(다시 돌릴 시나리오), `skip`(다시 돌리지 않�
 - **실행 시험 통과율** = 통과 실행 ÷ 실제 실행(통과·실패)한 실행. 차단·미실행은 분모에 넣지 않는다.
 - **별도 건수** = AC 상태별 건수(fail · blocked · not-run · decision-wait · pass-decision-wait · auto-only · revalidate · partial · pass-mock-only · excluded).
 
-AC 가 `pass` 가 되는 조건은 셋이 모두 맞을 때다. ① 명세의 시나리오가 전부 실행되어 통과 ② 직접 근거(자동 시험)가 있으면 그것도 통과 ③ DEC 에 걸리지 않음. 자동 시험만 통과하고 시나리오를 안 돌린 AC 는 `auto-only`, 근거는 통과했으나 DEC 결정 전이면 `pass-decision-wait` 로 둔다. 둘 다 완료가 아니다.
+AC 가 `pass` 가 되는 조건은 넷이 모두 맞을 때다. ① 명세의 시나리오가 전부 실행되어 통과 ② 직접 근거(자동 시험)가 있으면 그것도 통과 ③ DEC 에 걸리지 않음 ④ 통과 근거 가운데 하나는 5174(내부 검증 환경, `env.name` 이 5174 로 시작)에서 실행한 것. CI 실행만 있으면 `pass-ci-only` 로 두고 완료로 세지 않는다(Goal 2절). 자동 시험만 통과하고 시나리오를 안 돌린 AC 는 `auto-only`, 근거는 통과했으나 DEC 결정 전이면 `pass-decision-wait` 로 둔다. 둘 다 완료가 아니다.
 
 `decision-wait` 는 「그 AC 가 참조하는 시나리오 가운데 DEC 에 걸린 것이 있고 아직 실행 기록이 없다」는 뜻이다.
 DEC 가 AC 의 일부(예: DEC-05 관리자 부분)에만 걸리면 나머지 부분은 실행하고 `ac_verdicts` 에 판정을 적되,
