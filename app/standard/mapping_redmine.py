@@ -15,7 +15,11 @@ _DEFAULT_RULES = MappingRules()
 
 _STATUS = {"진행": "IN_PROGRESS", "해결": "RESOLVED"}
 _RISK_SEVERITY = {
-    "낮음": "LOW", "보통": "MEDIUM", "높음": "HIGH", "긴급": "CRITICAL", "즉시": "CRITICAL",
+    "낮음": "LOW",
+    "보통": "MEDIUM",
+    "높음": "HIGH",
+    "긴급": "CRITICAL",
+    "즉시": "CRITICAL",
 }
 
 

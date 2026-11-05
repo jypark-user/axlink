@@ -55,6 +55,13 @@ class IssueMilestone(BaseModel):
     url: str | None
 
 
+class IssueRelation(BaseModel):
+    """도구가 만든 이슈 사이 관계(Redmine 이슈관계). 출발점 쪽에만 싣는다."""
+
+    type: str  # relates | precedes | follows | blocks | duplicates ...
+    issueKey: str  # noqa: N815 — RM-203 같은 상대 이슈 키
+
+
 class IssueResponse(BaseModel):
     """작업·결함 한 건. 도구가 달라도 같은 모양이다(GitHub 이슈, Redmine 작업·결함)."""
 
@@ -70,6 +77,11 @@ class IssueResponse(BaseModel):
     source: SourceRef
     updatedAt: str  # noqa: N815
     milestone: IssueMilestone | None = None
+    # 원천 분류·연결 정보(SWFR.CON.004, AC-043-2). Redmine 트래커 이름, 요구사항 ID 커스텀 필드,
+    # 이슈관계. GitHub 은 라벨을 tracker 자리에 쓰지 않는다(None)
+    tracker: str | None = None
+    requirementRefs: list[str] = []  # noqa: N815
+    relations: list[IssueRelation] = []
 
 
 class IssueSummaryResponse(BaseModel):

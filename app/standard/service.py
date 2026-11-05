@@ -45,7 +45,7 @@ from app.standard.models import (
 class PromoteResult:
     upserted: int = 0
     unmapped: int = 0
-    raw_only: int = 0    # 원본 보존이 목적인 종류(마일스톤·버전·트래커). 실패가 아니다
+    raw_only: int = 0  # 원본 보존이 목적인 종류(마일스톤·버전·트래커). 실패가 아니다
     indexed: int = 0
     unchanged: int = 0
     by_type: dict[str, int] = field(default_factory=dict)

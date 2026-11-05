@@ -23,8 +23,12 @@ REQUIREMENT_STATUS_DECIDED = "REQUIREMENT_STATUS_DECIDED"
 REQUIREMENT_STATUS_REVERTED = "REQUIREMENT_STATUS_REVERTED"
 
 _STATUS_WORD = {
-    "DEFINED": "정의", "DESIGNED": "설계", "IMPLEMENTED": "구현",
-    "VERIFIED": "검증", "ACCEPTED": "인수", "REJECTED": "반려",
+    "DEFINED": "정의",
+    "DESIGNED": "설계",
+    "IMPLEMENTED": "구현",
+    "VERIFIED": "검증",
+    "ACCEPTED": "인수",
+    "REJECTED": "반려",
 }
 
 
@@ -79,8 +83,12 @@ def _label(row: dict[str, Any]) -> str:
 
 
 def decide(
-    cur: Any, principal: AuthPrincipal, project_id: str, requirement_id: str,
-    status: str, reason: str,
+    cur: Any,
+    principal: AuthPrincipal,
+    project_id: str,
+    requirement_id: str,
+    status: str,
+    reason: str,
 ) -> dict[str, Any]:
     row = _target(cur, principal, project_id, requirement_id)
     if status not in repository.REQUIREMENT_STATUSES:
@@ -91,25 +99,46 @@ def decide(
     repository.set_requirement_decision(cur, requirement_id, status, text, principal.user_id)
     actor = _actor(cur, principal)
     repository.insert_entity_history(
-        cur, entity_type="REQUIREMENT", entity_id=requirement_id, project_id=project_id,
-        field="status", from_value=before, to_value=status, actor=actor,
+        cur,
+        entity_type="REQUIREMENT",
+        entity_id=requirement_id,
+        project_id=project_id,
+        field="status",
+        from_value=before,
+        to_value=status,
+        actor=actor,
     )
     repository.insert_entity_history(
-        cur, entity_type="REQUIREMENT", entity_id=requirement_id, project_id=project_id,
-        field="status_decision", from_value=row["evidence_status"], to_value=text, actor=actor,
+        cur,
+        entity_type="REQUIREMENT",
+        entity_id=requirement_id,
+        project_id=project_id,
+        field="status_decision",
+        from_value=row["evidence_status"],
+        to_value=text,
+        actor=actor,
     )
     activity.record(
-        cur, project_id=project_id, kind=REQUIREMENT_STATUS_DECIDED,
-        audience=activity.CONTRACTOR, actor=principal, actor_label=actor,
+        cur,
+        project_id=project_id,
+        kind=REQUIREMENT_STATUS_DECIDED,
+        audience=activity.CONTRACTOR,
+        actor=principal,
+        actor_label=actor,
         summary=f"요구사항 상태 지정: {_label(row)} → {_STATUS_WORD.get(status, status)}",
-        target_type="REQUIREMENT", target_key=requirement_id,
+        target_type="REQUIREMENT",
+        target_key=requirement_id,
         detail={"from": before, "to": status, "evidence": row["evidence_status"], "reason": text},
     )
     return repository.get_requirement(cur, project_id, requirement_id)
 
 
 def revert(
-    cur: Any, principal: AuthPrincipal, project_id: str, requirement_id: str, reason: str,
+    cur: Any,
+    principal: AuthPrincipal,
+    project_id: str,
+    requirement_id: str,
+    reason: str,
 ) -> dict[str, Any]:
     row = _target(cur, principal, project_id, requirement_id)
     if not row["decided_status"]:
@@ -122,19 +151,36 @@ def revert(
     repository.clear_requirement_decision(cur, requirement_id)
     actor = _actor(cur, principal)
     repository.insert_entity_history(
-        cur, entity_type="REQUIREMENT", entity_id=requirement_id, project_id=project_id,
-        field="status", from_value=before, to_value=row["evidence_status"], actor=actor,
+        cur,
+        entity_type="REQUIREMENT",
+        entity_id=requirement_id,
+        project_id=project_id,
+        field="status",
+        from_value=before,
+        to_value=row["evidence_status"],
+        actor=actor,
     )
     repository.insert_entity_history(
-        cur, entity_type="REQUIREMENT", entity_id=requirement_id, project_id=project_id,
-        field="status_decision_revert", from_value=before, to_value=text, actor=actor,
+        cur,
+        entity_type="REQUIREMENT",
+        entity_id=requirement_id,
+        project_id=project_id,
+        field="status_decision_revert",
+        from_value=before,
+        to_value=text,
+        actor=actor,
     )
     activity.record(
-        cur, project_id=project_id, kind=REQUIREMENT_STATUS_REVERTED,
-        audience=activity.CONTRACTOR, actor=principal, actor_label=actor,
+        cur,
+        project_id=project_id,
+        kind=REQUIREMENT_STATUS_REVERTED,
+        audience=activity.CONTRACTOR,
+        actor=principal,
+        actor_label=actor,
         summary=f"요구사항 상태 지정 해제: {_label(row)} → 근거대로 "
-                f"{_STATUS_WORD.get(row['evidence_status'], row['evidence_status'])}",
-        target_type="REQUIREMENT", target_key=requirement_id,
+        f"{_STATUS_WORD.get(row['evidence_status'], row['evidence_status'])}",
+        target_type="REQUIREMENT",
+        target_key=requirement_id,
         detail={"from": before, "to": row["evidence_status"], "reason": text},
     )
     return repository.get_requirement(cur, project_id, requirement_id)
