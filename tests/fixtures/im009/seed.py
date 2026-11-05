@@ -252,7 +252,7 @@ class Seeder:
     def _load(self, cur: Any, con_tid: str, items: list[tuple[str, str, dict]]) -> None:
         cid = self.ids[con_tid]
         job = integ_repo.insert_sync_job(cur, cid, "BACKFILL", None, datetime.now(UTC))
-        for external_id, kind, payload in items:
+        for kind, external_id, payload in items:
             integ_repo.upsert_raw_artifact(cur, cid, external_id, kind, payload, job)
         now = datetime.now(UTC)
         integ_repo.finish_sync_job(cur, job, "SUCCEEDED", {}, now, now)
