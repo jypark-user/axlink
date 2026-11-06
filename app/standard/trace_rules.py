@@ -34,12 +34,8 @@ _DESIGN_NAMES = {"설계"}
 _TEST_NAMES = {"시험", "테스트"}
 # 산출물 자리의 성격. 설계 문서는 설계로, 시험 문서는 시험으로 잇고 나머지는 납품으로 본다.
 _DESIGN_PRODUCTS = {"SOFTWARE_DESIGN"}
-_TEST_PRODUCTS = {
-    "TEST_CASES_PROCEDURES",
-    "TEST_REPORT",
-    "VERIFICATION_RESULTS",
-    "VALIDATION_RESULTS",
-}
+_TEST_PRODUCTS = {"TEST_CASES_PROCEDURES", "TEST_REPORT", "VERIFICATION_RESULTS",
+                  "VALIDATION_RESULTS"}
 
 # 근거 유형. trace_link.evidence_kind CHECK 와 같다.
 TEXT_REQ_CODE = "TEXT_REQ_CODE"
@@ -132,19 +128,8 @@ def commit_link_kind(message: str) -> str:
 _TEST_FILE = re.compile(
     r"(^|/)(tests?)/|(^|/)test_[^/]+\.py$|_test\.py$|\.(test|spec)\.[cm]?[jt]sx?$"
 )
-_DOC_EXT = (
-    ".md",
-    ".txt",
-    ".docx",
-    ".doc",
-    ".xlsx",
-    ".xls",
-    ".pptx",
-    ".pdf",
-    ".hwp",
-    ".hwpx",
-    ".csv",
-)
+_DOC_EXT = (".md", ".txt", ".docx", ".doc", ".xlsx", ".xls", ".pptx", ".pdf", ".hwp", ".hwpx",
+            ".csv")
 
 
 def file_category(path: str, design_globs: list[str]) -> str:
@@ -225,10 +210,7 @@ def redmine_issue_link_kind(payload: dict[str, Any]) -> str:
 
 
 def _from_text(
-    text: str,
-    link_kind: str,
-    known_codes: set[str],
-    known_paths: set[str],
+    text: str, link_kind: str, known_codes: set[str], known_paths: set[str],
     with_refs: bool,
 ) -> list[Evidence]:
     found: list[Evidence] = []
@@ -243,12 +225,8 @@ def _from_text(
 
 
 def _change_evidence(
-    text: str,
-    title: str,
-    files: list[str] | None,
-    design_globs: list[str],
-    known_codes: set[str],
-    known_paths: set[str],
+    text: str, title: str, files: list[str] | None, design_globs: list[str],
+    known_codes: set[str], known_paths: set[str],
 ) -> tuple[list[Evidence], list[Exclusion]]:
     kinds, reason = change_link_kinds(title, files, design_globs)
     found: list[Evidence] = []
@@ -267,9 +245,7 @@ def _change_evidence(
 
 
 def commit_evidence(
-    payload: dict[str, Any],
-    known_codes: set[str],
-    known_paths: set[str],
+    payload: dict[str, Any], known_codes: set[str], known_paths: set[str],
     design_globs: list[str] | None = None,
 ) -> list[Evidence]:
     """GitHub 커밋. 제목·본문 전체를 본다. 본문은 code_change 에 없고 원본에만 있다."""
@@ -277,38 +253,31 @@ def commit_evidence(
 
 
 def commit_evidence_with_exclusions(
-    payload: dict[str, Any],
-    known_codes: set[str],
-    known_paths: set[str],
+    payload: dict[str, Any], known_codes: set[str], known_paths: set[str],
     design_globs: list[str] | None = None,
 ) -> tuple[list[Evidence], list[Exclusion]]:
-    message = (payload.get("commit") or {}).get("message") or ""
+    message = ((payload.get("commit") or {}).get("message") or "")
     title = message.strip().splitlines()[0] if message.strip() else ""
-    return _change_evidence(
-        message, title, _files_of(payload), design_globs or [], known_codes, known_paths
-    )
+    return _change_evidence(message, title, _files_of(payload), design_globs or [],
+                            known_codes, known_paths)
 
 
 def pull_request_evidence(
-    payload: dict[str, Any],
-    known_codes: set[str],
-    known_paths: set[str],
+    payload: dict[str, Any], known_codes: set[str], known_paths: set[str],
     design_globs: list[str] | None = None,
 ) -> list[Evidence]:
-    return pull_request_evidence_with_exclusions(payload, known_codes, known_paths, design_globs)[0]
+    return pull_request_evidence_with_exclusions(
+        payload, known_codes, known_paths, design_globs)[0]
 
 
 def pull_request_evidence_with_exclusions(
-    payload: dict[str, Any],
-    known_codes: set[str],
-    known_paths: set[str],
+    payload: dict[str, Any], known_codes: set[str], known_paths: set[str],
     design_globs: list[str] | None = None,
 ) -> tuple[list[Evidence], list[Exclusion]]:
     title = payload.get("title") or ""
     text = f"{title}\n{payload.get('body') or ''}"
-    return _change_evidence(
-        text, title, _files_of(payload), design_globs or [], known_codes, known_paths
-    )
+    return _change_evidence(text, title, _files_of(payload), design_globs or [],
+                            known_codes, known_paths)
 
 
 def design_doc_evidence(payload: dict[str, Any], known_codes: set[str]) -> list[Evidence]:
@@ -323,28 +292,16 @@ def design_doc_evidence(payload: dict[str, Any], known_codes: set[str]) -> list[
     ordered = sorted(info.refs, key=lambda r: (r.qualifier is None, r.line_no))
     for ref in ordered:
         meta = {
-            "repo": payload.get("repo"),
-            "path": payload.get("path"),
-            "commitSha": payload.get("commit_sha"),
-            "blobSha": payload.get("blob_sha"),
-            "line": ref.line_no,
-            "section": ref.section,
-            "form": ref.form,
-            "qualifier": ref.qualifier,
-            "docId": info.doc_id,
-            "docStatus": info.status,
-            "docStatusText": info.status_text,
+            "repo": payload.get("repo"), "path": payload.get("path"),
+            "commitSha": payload.get("commit_sha"), "blobSha": payload.get("blob_sha"),
+            "line": ref.line_no, "section": ref.section, "form": ref.form,
+            "qualifier": ref.qualifier, "docId": info.doc_id,
+            "docStatus": info.status, "docStatusText": info.status_text,
         }
-        out.append(
-            Evidence(
-                DOC_REQ_REF,
-                _clip(ref.line),
-                ("REQ", ref.code),
-                DESIGNS,
-                meta,
-                f"{base}#L{ref.line_no}" if base else None,
-            )
-        )
+        out.append(Evidence(
+            DOC_REQ_REF, _clip(ref.line), ("REQ", ref.code), DESIGNS, meta,
+            f"{base}#L{ref.line_no}" if base else None,
+        ))
     return out
 
 
@@ -359,7 +316,9 @@ def github_issue_evidence(
     return _from_text(text, github_issue_link_kind(payload), known_codes, known_paths, False)
 
 
-def requirement_issue_evidence(payload: dict[str, Any], known_paths: set[str]) -> list[Evidence]:
+def requirement_issue_evidence(
+    payload: dict[str, Any], known_paths: set[str]
+) -> list[Evidence]:
     """요구사항 이슈 자신. 본문에 적힌 산출물 경로만 본다(요구사항끼리는 잇지 않는다)."""
     text = f"{payload.get('title') or ''}\n{payload.get('body') or ''}"
     return [
@@ -381,14 +340,10 @@ def redmine_issue_evidence(
         values = field["value"] if isinstance(field["value"], list) else [field["value"]]
         for value in values:
             for code, _ in req_codes(str(value), known_codes):
-                found.append(
-                    Evidence(
-                        CUSTOM_FIELD,
-                        _clip(f"{rules.req_id_field}: {value}"),
-                        ("REQ", code),
-                        link_kind,
-                    )
-                )
+                found.append(Evidence(
+                    CUSTOM_FIELD, _clip(f"{rules.req_id_field}: {value}"),
+                    ("REQ", code), link_kind,
+                ))
 
     text = f"{payload.get('subject') or ''}\n{payload.get('description') or ''}"
     found += _from_text(text, link_kind, known_codes, known_paths, False)
@@ -399,12 +354,8 @@ def redmine_issue_evidence(
         if str(rel.get("issue_id") or "") != own or not rel.get("issue_to_id"):
             continue
         rel_type = rel.get("relation_type") or "relates"
-        found.append(
-            Evidence(
-                ISSUE_RELATION,
-                _clip(f"{rel_type} RM-{rel['issue_to_id']}"),
-                ("RM", str(rel["issue_to_id"])),
-                link_kind,
-            )
-        )
+        found.append(Evidence(
+            ISSUE_RELATION, _clip(f"{rel_type} RM-{rel['issue_to_id']}"),
+            ("RM", str(rel["issue_to_id"])), link_kind,
+        ))
     return found

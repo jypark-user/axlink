@@ -750,6 +750,17 @@ export interface IssueResponse {
   updatedAt: string;
   /** 원천이 지정한 마일스톤. 없으면 null (ARC-023) */
   milestone: IssueMilestone | null;
+  /** Redmine 트래커 이름. GitHub 은 null */
+  tracker?: string | null;
+  /** 요구사항 ID 커스텀 필드에 적힌 코드 */
+  requirementRefs?: string[];
+  /** 도구가 만든 이슈관계(출발점 쪽) */
+  relations?: IssueRelation[];
+}
+
+export interface IssueRelation {
+  type: string;
+  issueKey: string;
 }
 
 /** 원천 마일스톤의 이름·기한·상태. 원천 값 그대로다 */

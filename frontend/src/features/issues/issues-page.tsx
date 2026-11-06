@@ -254,6 +254,15 @@ function IssueDetailSheet({
                 <MilestoneCell issue={issue} />
               </DetailRow>
               <DetailRow term="담당">{issue.assignee ?? '-'}</DetailRow>
+              {issue.tracker && <DetailRow term="트래커">{issue.tracker}</DetailRow>}
+              {(issue.requirementRefs?.length ?? 0) > 0 && (
+                <DetailRow term="요구사항 ID">{issue.requirementRefs?.join(', ')}</DetailRow>
+              )}
+              {(issue.relations?.length ?? 0) > 0 && (
+                <DetailRow term="이슈관계">
+                  {issue.relations?.map((r) => `${r.type} ${r.issueKey}`).join(', ')}
+                </DetailRow>
+              )}
               <DetailRow term="수정일">
                 <span className="tnum">{formatDateTime(issue.updatedAt)}</span>
               </DetailRow>

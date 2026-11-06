@@ -25,10 +25,10 @@ CONFIRMED, DRAFT, UNKNOWN = "CONFIRMED", "DRAFT", "UNKNOWN"
 @dataclass(frozen=True)
 class Ref:
     code: str
-    line_no: int  # 1부터
-    line: str  # 그 줄 원문(앞뒤 공백 정리)
-    section: str  # 가장 가까운 절 제목. 없으면 ""
-    form: str  # RELATED_ROW | MAPPING_TABLE | SECTION_TITLE
+    line_no: int        # 1부터
+    line: str           # 그 줄 원문(앞뒤 공백 정리)
+    section: str        # 가장 가까운 절 제목. 없으면 ""
+    form: str           # RELATED_ROW | MAPPING_TABLE | SECTION_TITLE
     qualifier: str | None = None  # "미결" · "검토 필요" 처럼 참조에 붙은 한정어
 
 
@@ -59,7 +59,7 @@ def _codes(text: str, known: set[str]) -> list[tuple[str, str | None]]:
         if ranged or code not in known:
             continue
         # 괄호 한정어(`CODE`(미결)) 또는 코드 바로 뒤의 한정어(CODE 미결)
-        tail = text[m.end() : m.end() + 8]
+        tail = text[m.end(): m.end() + 8]
         qualifier = next(
             (q for q in _QUALIFIERS if (paren and q in paren) or tail.lstrip().startswith(q)), None
         )

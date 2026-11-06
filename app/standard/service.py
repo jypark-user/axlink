@@ -8,6 +8,7 @@
 """
 
 import base64
+import re
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
@@ -31,6 +32,7 @@ from app.standard import (
 from app.standard.mapping_rules import MappingRules
 from app.standard.models import (
     IssueMilestone,
+    IssueRelation,
     IssueResponse,
     IssueSourceCount,
     IssueSummaryResponse,
@@ -45,7 +47,7 @@ from app.standard.models import (
 class PromoteResult:
     upserted: int = 0
     unmapped: int = 0
-    raw_only: int = 0  # 원본 보존이 목적인 종류(마일스톤·버전·트래커). 실패가 아니다
+    raw_only: int = 0    # 원본 보존이 목적인 종류(마일스톤·버전·트래커). 실패가 아니다
     indexed: int = 0
     unchanged: int = 0
     by_type: dict[str, int] = field(default_factory=dict)
@@ -232,6 +234,37 @@ def _source_ref(row: dict[str, Any]) -> SourceRef:
     )
 
 
+_REQ_CODE_RE = re.compile(r"\b([A-Z]{2,5}(?:\.[A-Z]{2,5})+\.\d{3})\b")
+
+
+def _source_details(row: dict[str, Any]) -> dict[str, Any]:
+    """원시본에서 트래커·요구사항 ID 커스텀 필드·이슈관계를 읽는다(AC-043-2, GH-224).
+
+    표준 모델에 열을 더하지 않고 보관된 원본을 그대로 보인다. 원본이 곧 근거다."""
+    payload = row.get("raw_payload") or {}
+    if row.get("tool_name") != "REDMINE" or not isinstance(payload, dict):
+        return {"tracker": None, "requirementRefs": [], "relations": []}
+    tracker = ((payload.get("tracker") or {}).get("name") or "").strip() or None
+    refs: list[str] = []
+    for custom in payload.get("custom_fields") or []:
+        value = custom.get("value")
+        values = value if isinstance(value, list) else [value]
+        for v in values:
+            for code in _REQ_CODE_RE.findall(str(v or "")):
+                if code not in refs:
+                    refs.append(code)
+    own = str(payload.get("id") or "")
+    relations = [
+        IssueRelation(
+            type=str(rel.get("relation_type") or "relates"),
+            issueKey=f"RM-{rel['issue_to_id']}",
+        )
+        for rel in payload.get("relations") or []
+        if str(rel.get("issue_id") or "") == own and rel.get("issue_to_id")
+    ]
+    return {"tracker": tracker, "requirementRefs": refs, "relations": relations}
+
+
 def _source_number(external_id: str | None) -> str | None:
     """GitHub 은 'issue:12', Redmine 일감은 '12' 로 들어온다. 화면에는 번호만 낸다."""
     if not external_id:
@@ -335,6 +368,7 @@ def list_issues(
             source=_source_ref(r),
             updatedAt=(r["source_updated_at"] or r["updated_at"]).isoformat(),
             milestone=_milestone(r),
+            **_source_details(r),
         )
         for r in rows
     ]

@@ -33,8 +33,7 @@ def _target(
         raise errors.not_found("산출물", work_product_id)
     if not row["is_current"]:
         raise errors.ApiError(
-            409,
-            "NOT_CURRENT_VERSION",
+            409, "NOT_CURRENT_VERSION",
             "현행 버전이 아닙니다. 승인·반려는 지금 올라와 있는 버전에만 합니다.",
         )
     return row
@@ -48,20 +47,14 @@ def approve(cur: Any, principal: AuthPrincipal, project_id: str, work_product_id
     row = _target(cur, principal, project_id, work_product_id)
     if row["status"] != "SUBMITTED":
         raise errors.ApiError(
-            409,
-            "NOT_SUBMITTED",
+            409, "NOT_SUBMITTED",
             "제출된 버전만 승인할 수 있습니다. 지금 상태: " + str(row["status"]),
         )
     repository.approve_work_product(cur, work_product_id, principal.user_id)
     activity.record(
-        cur,
-        project_id=project_id,
-        kind=activity.WORK_PRODUCT_APPROVED,
-        audience=activity.CONTRACTOR,
-        summary=f"산출물 승인: {_label(row)}",
-        actor=principal,
-        target_type="WORK_PRODUCT",
-        target_key=work_product_id,
+        cur, project_id=project_id, kind=activity.WORK_PRODUCT_APPROVED,
+        audience=activity.CONTRACTOR, summary=f"산출물 승인: {_label(row)}", actor=principal,
+        target_type="WORK_PRODUCT", target_key=work_product_id,
         detail={"version": row["version"]},
     )
 
@@ -75,19 +68,13 @@ def reject(
     row = _target(cur, principal, project_id, work_product_id)
     if row["status"] not in ("SUBMITTED", "APPROVED"):
         raise errors.ApiError(
-            409,
-            "NOT_SUBMITTED",
+            409, "NOT_SUBMITTED",
             "제출되거나 승인된 버전만 반려할 수 있습니다. 지금 상태: " + str(row["status"]),
         )
     repository.reject_work_product(cur, work_product_id, reason)
     activity.record(
-        cur,
-        project_id=project_id,
-        kind=activity.WORK_PRODUCT_REJECTED,
-        audience=activity.CONTRACTOR,
-        summary=f"산출물 반려: {_label(row)}",
-        actor=principal,
-        target_type="WORK_PRODUCT",
-        target_key=work_product_id,
+        cur, project_id=project_id, kind=activity.WORK_PRODUCT_REJECTED,
+        audience=activity.CONTRACTOR, summary=f"산출물 반려: {_label(row)}", actor=principal,
+        target_type="WORK_PRODUCT", target_key=work_product_id,
         detail={"version": row["version"], "reason": reason, "was": row["status"]},
     )
