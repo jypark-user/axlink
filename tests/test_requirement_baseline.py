@@ -25,21 +25,13 @@ def _auth(token: str) -> dict[str, str]:
     return {"Authorization": f"Bearer {token}"}
 
 
-def _gh_issue(
-    number: int,
-    title: str,
-    labels: list[str],
-    closed: bool = False,
-    body: str = "| 중요도 | 필수 |",
-) -> dict:
+def _gh_issue(number: int, title: str, labels: list[str], closed: bool = False,
+              body: str = "| 중요도 | 필수 |") -> dict:
     return {
-        "number": number,
-        "title": title,
-        "body": body,
+        "number": number, "title": title, "body": body,
         "labels": [{"name": n} for n in labels],
         "state": "closed" if closed else "open",
-        "created_at": "2026-10-01T00:00:00Z",
-        "updated_at": "2026-10-02T00:00:00Z",
+        "created_at": "2026-10-01T00:00:00Z", "updated_at": "2026-10-02T00:00:00Z",
         "html_url": f"https://github.com/x/base/issues/{number}",
     }
 
@@ -48,16 +40,8 @@ def _connect(cur, name: str = "기준선 시험 저장소", project_id: str = PI
     cur.execute("select organization_id from app_user where username = 'r3'")
     org = str(cur.fetchone()["organization_id"])
     conn = integ_repo.insert(
-        cur,
-        project_id,
-        org,
-        "GITHUB",
-        name,
-        "https://api.github.com",
-        f"x/base-{uuid.uuid4().hex[:6]}",
-        crypto.encrypt("k"),
-        "k***",
-        {},
+        cur, project_id, org, "GITHUB", name, "https://api.github.com",
+        f"x/base-{uuid.uuid4().hex[:6]}", crypto.encrypt("k"), "k***", {},
     )
     return conn
 
@@ -79,7 +63,9 @@ def _promote(cur, conn_id: str):
 def _cleanup(cur, conn_ids: list[str], codes: list[str], project_id: str = PID) -> None:
     cur.execute("delete from requirement_baseline where project_id = %s", (project_id,))
     cur.execute("delete from requirement_unresolved_ref where project_id = %s", (project_id,))
-    cur.execute("delete from trace_link where project_id = %s and origin = 'AUTO'", (project_id,))
+    cur.execute(
+        "delete from trace_link where project_id = %s and origin = 'AUTO'", (project_id,)
+    )
     cur.execute(
         "delete from entity_history where entity_type = 'REQUIREMENT' and entity_id in "
         "(select id from requirement where project_id = %s and "
@@ -110,11 +96,8 @@ def test_명세서_요구사항과_같은_코드의_이슈는_일반_이슈로_�
     try:
         for _ in range(2):
             with tx() as cur:
-                doc_req = fetch_one(
-                    cur,
-                    "select id from requirement where project_id = %s and code = %s",
-                    (PID, code),
-                )
+                doc_req = fetch_one(cur, "select id from requirement where project_id = %s "
+                                         "and code = %s", (PID, code))
                 if doc_req is None:
                     doc_req = fetch_one(
                         cur,
@@ -127,36 +110,20 @@ def test_명세서_요구사항과_같은_코드의_이슈는_일반_이슈로_�
                         """,
                         (PID, code),
                     )
-                _load(
-                    cur,
-                    conn,
-                    [
-                        (
-                            "issue:31",
-                            _gh_issue(
-                                31,
-                                f"[{code}] 이슈 제목",
-                                ["유형: 요구사항"],
-                                closed=True,
-                                body="이슈 본문",
-                            ),
-                        )
-                    ],
-                )
+                _load(cur, conn, [("issue:31", _gh_issue(
+                    31, f"[{code}] 이슈 제목", ["유형: 요구사항"], closed=True,
+                    body="이슈 본문"))])
                 _promote(cur, cid)
                 trace_service.build_project_links(cur, PID)
                 rows = fetch_all(
-                    cur,
-                    "select * from requirement where project_id = %s and code = %s",
+                    cur, "select * from requirement where project_id = %s and code = %s",
                     (PID, code),
                 )
-                issue = fetch_one(
-                    cur, "select id, issue_key from issue where tool_connection_id = %s", (cid,)
-                )
+                issue = fetch_one(cur, "select id, issue_key from issue "
+                                       "where tool_connection_id = %s", (cid,))
                 link = fetch_one(
-                    cur,
-                    "select status from trace_link where from_type = 'ISSUE' "
-                    "and from_id = %s and to_type = 'REQUIREMENT' and to_id = %s",
+                    cur, "select status from trace_link where from_type = 'ISSUE' "
+                         "and from_id = %s and to_type = 'REQUIREMENT' and to_id = %s",
                     (issue["id"], doc_req["id"]),
                 )
             assert len(rows) == 1
@@ -175,22 +142,17 @@ def test_명세서_요구사항과_같은_코드의_이슈는_일반_이슈로_�
 
 
 def _spec_table(rows: list[tuple[str, str, str]]) -> str:
-    lines = [
-        "# 요구사항 명세서 v1.0",
-        "",
-        "| 요구사항 ID | 요구사항 명칭 | 중요도 |",
-        "|---|---|---|",
-    ]
+    lines = ["# 요구사항 명세서 v1.0", "", "| 요구사항 ID | 요구사항 명칭 | 중요도 |",
+             "|---|---|---|"]
     lines += [f"| {c} | {t} | {p} |" for c, t, p in rows]
     return "\n".join(lines) + "\n"
 
 
 def _document(cur, text: str, project_id: str = PID) -> str:
     user = fetch_one(cur, "select id from app_user where username = 'r3'")["id"]
-    return str(
-        fetch_one(
-            cur,
-            """
+    return str(fetch_one(
+        cur,
+        """
         insert into document_upload (project_id, uploaded_by_user_id, original_filename,
                                      stored_path, content_type, file_ext, size_bytes, file_hash,
                                      extracted_text, status)
@@ -198,9 +160,8 @@ def _document(cur, text: str, project_id: str = PID) -> str:
                 'DOCX', 10, %s, %s, 'STRUCTURED')
         returning id
         """,
-            (project_id, user, uuid.uuid4().hex + uuid.uuid4().hex, text),
-        )["id"]
-    )
+        (project_id, user, uuid.uuid4().hex + uuid.uuid4().hex, text),
+    )["id"])
 
 
 def _base(project_id: str = PID) -> str:
@@ -208,23 +169,22 @@ def _base(project_id: str = PID) -> str:
 
 
 def _req_codes(cur, project_id: str = PID) -> dict[str, dict]:
-    rows = fetch_all(
-        cur, "select * from requirement where project_id = %s and code is not null", (project_id,)
-    )
+    rows = fetch_all(cur, "select * from requirement where project_id = %s and code is not null",
+                     (project_id,))
     return {r["code"]: r for r in rows}
 
 
 @pytest.fixture
 def clean():
     """시험이 쓴 기준선·요구사항·연결·문서를 지운다."""
-    made: dict[str, list[str]] = {"conns": [], "codes": [], "docs": [], "projects": [], "orgs": []}
+    made: dict[str, list[str]] = {"conns": [], "codes": [], "docs": [], "projects": [],
+                                  "orgs": []}
     yield made
     with tx() as cur:
         for pid in [PID, *made["projects"]]:
             _cleanup(cur, made["conns"], made["codes"], pid)
-        cur.execute(
-            "delete from code_change where tool_connection_id = any(%s::uuid[])", (made["conns"],)
-        )
+        cur.execute("delete from code_change where tool_connection_id = any(%s::uuid[])",
+                    (made["conns"],))
         cur.execute("delete from document_upload where id = any(%s::uuid[])", (made["docs"],))
         for pid in made["projects"]:
             cur.execute("delete from project where id = %s", (pid,))
@@ -241,18 +201,13 @@ def test_신규_사업은_등록_정리_제출_확정을_거쳐서만_요구사�
     codes = ["SWFR.TST.101", "SWFR.TST.102", "SWFR.TST.103", "REQ-104"]
     clean["codes"] += codes
     with tx() as cur:
-        doc = _document(
-            cur,
-            _spec_table(
-                [
-                    ("SWFR.TST.101", "로그인한다", "필수"),
-                    ("SWFR.TST.102", "목록을 본다", "필수"),
-                    ("SWFR.TST.102", "목록을 본다(중복)", "필수"),
-                    ("SWFR-TST", "코드 꼴이 아닌 행", "권장"),
-                    ("REQ-104", "다른 사업 표기", "선택"),
-                ]
-            ),
-        )
+        doc = _document(cur, _spec_table([
+            ("SWFR.TST.101", "로그인한다", "필수"),
+            ("SWFR.TST.102", "목록을 본다", "필수"),
+            ("SWFR.TST.102", "목록을 본다(중복)", "필수"),
+            ("SWFR-TST", "코드 꼴이 아닌 행", "권장"),
+            ("REQ-104", "다른 사업 표기", "선택"),
+        ]))
         clean["docs"].append(doc)
 
     assert client.get(_base(), headers=po).json()["state"] == "NONE"
@@ -293,11 +248,8 @@ def test_신규_사업은_등록_정리_제출_확정을_거쳐서만_요구사�
 
     by_loc = {i["location"]: i["id"] for i in b["items"]}
     client.delete(f"{_base()}/{bid}/items/{by_loc['표 1 · 4행']}", headers=pm)
-    fixed = client.put(
-        f"{_base()}/{bid}/items/{by_loc['표 1 · 5행']}",
-        headers=pm,
-        json={"code": "SWFR.TST.103", "title": "코드를 바로잡은 행", "priority": "SHOULD"},
-    )
+    fixed = client.put(f"{_base()}/{bid}/items/{by_loc['표 1 · 5행']}", headers=pm, json={
+        "code": "SWFR.TST.103", "title": "코드를 바로잡은 행", "priority": "SHOULD"})
     assert fixed.status_code == 200
     item = next(i for i in fixed.json()["items"] if i["code"] == "SWFR.TST.103")
     assert item["edited"] is True and item["location"] == "표 1 · 5행"
@@ -306,21 +258,16 @@ def test_신규_사업은_등록_정리_제출_확정을_거쳐서만_요구사�
     submitted = client.post(f"{_base()}/{bid}/submit", headers=pm)
     assert submitted.status_code == 200 and submitted.json()["status"] == "SUBMITTED"
     # 제출 뒤에는 고칠 수 없다
-    assert (
-        client.put(
-            f"{_base()}/{bid}/items/{by_loc['표 1 · 2행']}",
-            headers=pm,
-            json={"code": "SWFR.TST.101", "title": "x"},
-        ).status_code
-        == 409
-    )
+    assert client.put(f"{_base()}/{bid}/items/{by_loc['표 1 · 2행']}", headers=pm, json={
+        "code": "SWFR.TST.101", "title": "x"}).status_code == 409
     with tx() as cur:
         assert not set(_req_codes(cur)) & set(codes)
 
     # 발주기관이 보고 돌려보낸다. 용역사는 확정할 수 없다
     assert client.get(f"{_base()}/{bid}", headers=po).status_code == 200
     assert client.post(f"{_base()}/{bid}/confirm", json={}, headers=pm).status_code == 403
-    returned = client.post(f"{_base()}/{bid}/return", json={"reason": "중요도 다시"}, headers=po)
+    returned = client.post(f"{_base()}/{bid}/return", json={"reason": "중요도 다시"},
+                           headers=po)
     assert returned.json()["status"] == "DRAFT"
     assert returned.json()["returnedReason"] == "중요도 다시"
     assert client.post(f"{_base()}/{bid}/submit", headers=pm).status_code == 200
@@ -380,31 +327,23 @@ def test_명세서로_등록된_문서는_등록이_살아_있는_동안_지우�
 def test_요구사항_라벨이_붙은_이슈도_일반_이슈로_들어온다(client, client_token, clean):
     """예전 요구사항 라벨·제목 꼴의 이슈를 받아도 요구사항이 되지 않는다."""
     pm = _auth(client_token("r3"))
-    res = client.post(
-        f"/api/projects/{PID}/connections",
-        headers=pm,
-        json={
-            "tool": "GITHUB",
-            "name": "새 저장소",
-            "baseUrl": "https://api.github.com",
-            "targetResource": f"x/new-{uuid.uuid4().hex[:6]}",
-            "credential": {"accessToken": "ghp_x"},
-        },
-    )
+    res = client.post(f"/api/projects/{PID}/connections", headers=pm, json={
+        "tool": "GITHUB", "name": "새 저장소", "baseUrl": "https://api.github.com",
+        "targetResource": f"x/new-{uuid.uuid4().hex[:6]}",
+        "credential": {"accessToken": "ghp_x"},
+    })
     assert res.status_code == 201, res.text
     cid = res.json()["id"]
     clean["conns"].append(cid)
     clean["codes"].append("SWFR.TST.501")
     with tx() as cur:
         conn = integ_repo.find_by_id(cur, cid)
-        _load(
-            cur,
-            conn,
-            [("issue:7", _gh_issue(7, "[SWFR.TST.501] 요구사항 라벨", ["유형: 요구사항"]))],
-        )
+        _load(cur, conn, [("issue:7", _gh_issue(7, "[SWFR.TST.501] 요구사항 라벨",
+                                                 ["유형: 요구사항"]))])
         _promote(cur, cid)
         assert "SWFR.TST.501" not in _req_codes(cur)
-        issue = fetch_one(cur, "select issue_key from issue where tool_connection_id = %s", (cid,))
+        issue = fetch_one(cur, "select issue_key from issue where tool_connection_id = %s",
+                          (cid,))
     assert issue["issue_key"] == "GH-7"
 
 
@@ -416,13 +355,8 @@ def _legacy_project(cur, clean) -> dict:
     conn = _connect(cur)
     cid = str(conn["id"])
     clean["conns"].append(cid)
-    clean["codes"] += [
-        "SWFR.TST.201",
-        "SWFR.TST.202",
-        "SWFR.TST.203",
-        "SWFR.TST.204",
-        "SWFR.TST.205",
-    ]
+    clean["codes"] += ["SWFR.TST.201", "SWFR.TST.202", "SWFR.TST.203", "SWFR.TST.204",
+                       "SWFR.TST.205"]
     items = [
         ("issue:1", _gh_issue(1, "[SWFR.TST.201] 같은 제목", ["유형: 요구사항"])),
         ("issue:2", _gh_issue(2, "[SWFR.TST.202] 이슈 쪽 제목", ["유형: 요구사항"])),
@@ -436,9 +370,7 @@ def _legacy_project(cur, clean) -> dict:
     a, b = rows["SWFR.TST.201"], rows["SWFR.TST.202"]
     cur.execute(
         "update requirement set decided_status = 'VERIFIED', decided_reason = '시험 결과 확인', "
-        "decided_at = now(), status = 'VERIFIED' where id = %s",
-        (a["id"],),
-    )
+        "decided_at = now(), status = 'VERIFIED' where id = %s", (a["id"],))
     issue = fetch_one(cur, "select id from issue where tool_connection_id = %s", (cid,))
     manual = fetch_one(
         cur,
@@ -451,29 +383,15 @@ def _legacy_project(cur, clean) -> dict:
     cur.execute(
         "insert into entity_history (entity_type, entity_id, project_id, field, from_value, "
         "to_value, actor) values ('REQUIREMENT', %s, %s, 'status', 'DEFINED', 'VERIFIED', "
-        "'발주 담당')",
-        (a["id"], PID),
-    )
-    doc = _document(
-        cur,
-        _spec_table(
-            [
-                ("SWFR.TST.201", "같은 제목", "필수"),
-                ("SWFR.TST.202", "명세서 쪽 제목", "필수"),
-                ("SWFR.TST.204", "명세서에만 있는 요구사항", "권장"),
-            ]
-        ),
-    )
+        "'발주 담당')", (a["id"], PID))
+    doc = _document(cur, _spec_table([
+        ("SWFR.TST.201", "같은 제목", "필수"),
+        ("SWFR.TST.202", "명세서 쪽 제목", "필수"),
+        ("SWFR.TST.204", "명세서에만 있는 요구사항", "권장"),
+    ]))
     clean["docs"].append(doc)
-    return {
-        "conn": conn,
-        "cid": cid,
-        "a": a,
-        "b": b,
-        "c": rows["SWFR.TST.203"],
-        "manual": str(manual),
-        "doc": doc,
-    }
+    return {"conn": conn, "cid": cid, "a": a, "b": b, "c": rows["SWFR.TST.203"],
+            "manual": str(manual), "doc": doc}
 
 
 def _submitted(client, pm, doc) -> dict:
@@ -501,9 +419,8 @@ def test_기존_요구사항은_ID_링크_지정_이력을_그대로_두고_기�
     assert "SWFR.TST.203" in {m["code"] for m in sub["missing"]}
 
     # 내용이 같은 코드는 명세서로 바꿀 대상이 아니다. 거절되고 아무것도 안 바뀐다
-    bad = client.post(
-        f"{_base()}/{sub['id']}/confirm", json={"applySpecCodes": ["SWFR.TST.201"]}, headers=po
-    )
+    bad = client.post(f"{_base()}/{sub['id']}/confirm",
+                      json={"applySpecCodes": ["SWFR.TST.201"]}, headers=po)
     assert bad.status_code == 400
     assert client.get(_base(), headers=po).json()["state"] == "SUBMITTED"
 
@@ -514,16 +431,14 @@ def test_기존_요구사항은_ID_링크_지정_이력을_그대로_두고_기�
     with tx() as cur:
         rows = _req_codes(cur)
         a, b, c = rows["SWFR.TST.201"], rows["SWFR.TST.202"], rows["SWFR.TST.203"]
-        manual = fetch_one(
-            cur, "select status, origin from trace_link where id = %s", (legacy["manual"],)
-        )
+        manual = fetch_one(cur, "select status, origin from trace_link where id = %s",
+                           (legacy["manual"],))
         history = fetch_all(
-            cur,
-            "select field, to_value from entity_history where entity_id = %s order by changed_at",
-            (a["id"],),
-        )
+            cur, "select field, to_value from entity_history where entity_id = %s "
+            "order by changed_at", (a["id"],))
     # ID 그대로, 원천 연결 그대로, 지정 그대로
-    assert (a["id"], b["id"], c["id"]) == (legacy["a"]["id"], legacy["b"]["id"], legacy["c"]["id"])
+    assert (a["id"], b["id"], c["id"]) == (
+        legacy["a"]["id"], legacy["b"]["id"], legacy["c"]["id"])
     assert str(a["tool_connection_id"]) == legacy["cid"]
     assert (a["decided_status"], a["status"]) == ("VERIFIED", "VERIFIED")
     # 내용이 달라도 기본으로 기존 정의를 둔다
@@ -542,20 +457,16 @@ def test_발주기관이_고른_코드만_명세서_내용으로_바뀌고_이�
     with tx() as cur:
         legacy = _legacy_project(cur, clean)
     sub = _submitted(client, pm, legacy["doc"])
-    done = client.post(
-        f"{_base()}/{sub['id']}/confirm", json={"applySpecCodes": ["SWFR.TST.202"]}, headers=po
-    )
+    done = client.post(f"{_base()}/{sub['id']}/confirm",
+                       json={"applySpecCodes": ["SWFR.TST.202"]}, headers=po)
     assert done.status_code == 200, done.text
     item = next(i for i in done.json()["items"] if i["code"] == "SWFR.TST.202")
     assert item["specApplied"] is True and item["existing"]["title"] == "이슈 쪽 제목"
     with tx() as cur:
         b = _req_codes(cur)["SWFR.TST.202"]
         history = fetch_all(
-            cur,
-            "select field, from_value, to_value from entity_history "
-            "where entity_id = %s order by changed_at, field desc",
-            (b["id"],),
-        )
+            cur, "select field, from_value, to_value from entity_history "
+            "where entity_id = %s order by changed_at, field desc", (b["id"],))
     assert b["id"] == legacy["b"]["id"] and b["title"] == "명세서 쪽 제목"
     assert {"field": "title", "from_value": "이슈 쪽 제목", "to_value": "명세서 쪽 제목"} in history
 
@@ -569,32 +480,19 @@ def test_확정_뒤_재수집은_요구사항을_만들거나_정의_지정을_�
     assert client.post(f"{_base()}/{sub['id']}/confirm", json={}, headers=po).status_code == 200
 
     with tx() as cur:
-        _load(
-            cur,
-            legacy["conn"],
-            [
-                # 요구사항 이슈의 제목이 바뀌고 닫혔다
-                (
-                    "issue:1",
-                    _gh_issue(
-                        1, "[SWFR.TST.201] 이슈에서 바꾼 제목", ["유형: 요구사항"], closed=True
-                    ),
-                ),
-                (
-                    "issue:2",
-                    _gh_issue(2, "[SWFR.TST.202] 또 바꾼 제목", ["유형: 요구사항"], closed=True),
-                ),
-                # 확정 뒤 새로 단 요구사항 라벨. 요구사항이 되지 않는다
-                ("issue:5", _gh_issue(5, "[SWFR.TST.205] 새 요구사항 이슈", ["유형: 요구사항"])),
-            ],
-        )
+        _load(cur, legacy["conn"], [
+            # 요구사항 이슈의 제목이 바뀌고 닫혔다
+            ("issue:1", _gh_issue(1, "[SWFR.TST.201] 이슈에서 바꾼 제목", ["유형: 요구사항"],
+                                  closed=True)),
+            ("issue:2", _gh_issue(2, "[SWFR.TST.202] 또 바꾼 제목", ["유형: 요구사항"],
+                                  closed=True)),
+            # 확정 뒤 새로 단 요구사항 라벨. 요구사항이 되지 않는다
+            ("issue:5", _gh_issue(5, "[SWFR.TST.205] 새 요구사항 이슈", ["유형: 요구사항"])),
+        ])
         _promote(cur, legacy["cid"])
         rows = _req_codes(cur)
-        new_issue = fetch_one(
-            cur,
-            "select issue_key from issue where tool_connection_id = %s and external_id = 'issue:5'",
-            (legacy["cid"],),
-        )
+        new_issue = fetch_one(cur, "select issue_key from issue where tool_connection_id = %s "
+                                   "and external_id = 'issue:5'", (legacy["cid"],))
     a, b = rows["SWFR.TST.201"], rows["SWFR.TST.202"]
     assert "SWFR.TST.205" not in rows and new_issue["issue_key"] == "GH-5"
     assert a["title"] == "같은 제목" and b["title"] == "이슈 쪽 제목"
@@ -612,12 +510,8 @@ def _principal(cur, username: str):
         "join organization o on o.id = u.organization_id where u.username = %s",
         (username,),
     )
-    return AuthPrincipal(
-        user_id=str(row["id"]),
-        org_id=str(row["organization_id"]),
-        org_type=row["type"],
-        role=row["role"],
-    )
+    return AuthPrincipal(user_id=str(row["id"]), org_id=str(row["organization_id"]),
+                         org_type=row["type"], role=row["role"])
 
 
 @requires_db
@@ -639,14 +533,10 @@ def test_확정_중_실패하면_아무것도_바뀌지_않는다(client, client
 
     with tx() as cur:
         rows = _req_codes(cur)
-        status = fetch_one(
-            cur, "select status from requirement_baseline where id = %s", (sub["id"],)
-        )["status"]
-        items = fetch_all(
-            cur,
-            "select match_result from requirement_baseline_item where baseline_id = %s",
-            (sub["id"],),
-        )
+        status = fetch_one(cur, "select status from requirement_baseline where id = %s",
+                           (sub["id"],))["status"]
+        items = fetch_all(cur, "select match_result from requirement_baseline_item "
+                               "where baseline_id = %s", (sub["id"],))
     assert status == "SUBMITTED"
     assert "SWFR.TST.204" not in rows
     assert all(r["baseline_id"] is None for k, r in rows.items() if k.startswith("SWFR.TST."))
@@ -669,31 +559,18 @@ def test_없는_요구사항_ID_참조는_잇지_않고_미해결로_보인다(c
         clean["conns"].append(cid)
         clean["codes"].append("SWFR.TST.301")
         job = integ_repo.insert_sync_job(cur, cid, "BACKFILL", None, datetime.now(UTC))
-        integ_repo.upsert_raw_artifact(
-            cur,
-            cid,
-            "commit:" + "e" * 40,
-            "commit",
-            {
-                "sha": "e" * 40,
-                "commit": {
-                    "message": "feat(standard): 아직 없는 요구사항  [SWFR.TST.301]",
-                    "author": {"name": "x", "date": "2026-10-03T00:00:00Z"},
-                },
-                "html_url": "https://github.com/x/base/commit/" + "e" * 40,
-            },
-            job,
-        )
+        integ_repo.upsert_raw_artifact(cur, cid, "commit:" + "e" * 40, "commit", {
+            "sha": "e" * 40,
+            "commit": {"message": "feat(standard): 아직 없는 요구사항  [SWFR.TST.301]",
+                       "author": {"name": "x", "date": "2026-10-03T00:00:00Z"}},
+            "html_url": "https://github.com/x/base/commit/" + "e" * 40,
+        }, job)
         now = datetime.now(UTC)
         integ_repo.finish_sync_job(cur, job, "SUCCEEDED", {}, now, now)
         _promote(cur, cid)
         result = trace_service.build_project_links(cur, PID)
-        links = fetch_one(
-            cur,
-            "select count(*) as n from trace_link tl join code_change c "
-            "on c.id = tl.from_id where c.tool_connection_id = %s",
-            (cid,),
-        )
+        links = fetch_one(cur, "select count(*) as n from trace_link tl join code_change c "
+                               "on c.id = tl.from_id where c.tool_connection_id = %s", (cid,))
         doc = _document(cur, _spec_table([("SWFR.TST.301", "나중에 생긴 요구사항", "필수")]))
         clean["docs"].append(doc)
 
@@ -712,13 +589,9 @@ def test_없는_요구사항_ID_참조는_잇지_않고_미해결로_보인다(c
     refs = client.get(f"/api/projects/{PID}/requirements/unresolved-refs", headers=po).json()
     assert not [r for r in refs if r["code"] == "SWFR.TST.301"]
     with tx() as cur:
-        linked = fetch_one(
-            cur,
-            "select count(*) as n from trace_link tl join code_change c "
-            "on c.id = tl.from_id where c.tool_connection_id = %s "
-            "and tl.status = 'ACTIVE'",
-            (cid,),
-        )
+        linked = fetch_one(cur, "select count(*) as n from trace_link tl join code_change c "
+                                "on c.id = tl.from_id where c.tool_connection_id = %s "
+                                "and tl.status = 'ACTIVE'", (cid,))
     assert linked["n"] == 1
 
 
@@ -740,35 +613,16 @@ def test_명세서의_상위_요구사항을_가리킨_참조는_없는_ID로_�
         conn = _connect(cur)
         cid = str(conn["id"])
         clean["conns"].append(cid)
-        _load(
-            cur,
-            conn,
-            [
-                (
-                    "issue:41",
-                    _gh_issue(
-                        41,
-                        "커넥터 작업",
-                        [],
-                        body="**SFR.TST.001** 상위 기능 묶음 · 관련 SFR.TST.999",
-                    ),
-                )
-            ],
-        )
+        _load(cur, conn, [("issue:41", _gh_issue(
+            41, "커넥터 작업", [], body="**SFR.TST.001** 상위 기능 묶음 · 관련 SFR.TST.999"))])
         _promote(cur, cid)
         trace_service.build_project_links(cur, PID)
         doc = _document(cur, spec)
         clean["docs"].append(doc)
 
     sub = _submitted(client, pm, doc)
-    assert sub["parents"] == [
-        {
-            "code": "SFR.TST.001",
-            "title": "상위 기능 묶음",
-            "location": "3번째 줄",
-            "children": ["SWFR.TST.401"],
-        }
-    ]
+    assert sub["parents"] == [{"code": "SFR.TST.001", "title": "상위 기능 묶음",
+                               "location": "3번째 줄", "children": ["SWFR.TST.401"]}]
     assert len(sub["items"]) == 2  # 상위 코드는 요구사항 항목이 아니다
     res = client.post(f"{_base()}/{sub['id']}/confirm", json={}, headers=po)
     assert res.status_code == 200, res.text
@@ -780,9 +634,8 @@ def test_명세서의_상위_요구사항을_가리킨_참조는_없는_ID로_�
     assert client.get(_base(), headers=po).json()["unresolvedCodeCount"] == 1
     with tx() as cur:
         assert "SFR.TST.001" not in _req_codes(cur)
-        stored = fetch_one(
-            cur, "select parents_json from requirement_baseline where id = %s", (sub["id"],)
-        )["parents_json"]
+        stored = fetch_one(cur, "select parents_json from requirement_baseline where id = %s",
+                           (sub["id"],))["parents_json"]
     assert [p["code"] for p in stored] == ["SFR.TST.001"]
 
 
@@ -793,19 +646,15 @@ def test_상위_요구사항을_적기_전에_등록한_기준선은_명세서_�
     pm, po = _auth(client_token("r3")), _auth(client_token("r2"))
     clean["codes"] += ["SWFR.TST.411"]
     with tx() as cur:
-        doc = _document(
-            cur,
-            (
-                "SFR.TST.011 옛 상위\n\n| 요구사항 ID | 요구사항 명칭 | 요구사항 설명 | 중요도 |\n"
-                "|---|---|---|---|\n| SWFR.TST.411 | 항목 | 항목 (상위 SFR.TST.011) | 필수 |\n"
-            ),
-        )
+        doc = _document(cur, (
+            "SFR.TST.011 옛 상위\n\n| 요구사항 ID | 요구사항 명칭 | 요구사항 설명 | 중요도 |\n"
+            "|---|---|---|---|\n| SWFR.TST.411 | 항목 | 항목 (상위 SFR.TST.011) | 필수 |\n"
+        ))
         clean["docs"].append(doc)
     sub = _submitted(client, pm, doc)
     with tx() as cur:
-        cur.execute(
-            "update requirement_baseline set parents_json = null where id = %s", (sub["id"],)
-        )
+        cur.execute("update requirement_baseline set parents_json = null where id = %s",
+                    (sub["id"],))
     again = client.get(f"{_base()}/{sub['id']}", headers=po).json()
     assert [(p["code"], p["children"]) for p in again["parents"]] == [
         ("SFR.TST.011", ["SWFR.TST.411"])
@@ -813,9 +662,8 @@ def test_상위_요구사항을_적기_전에_등록한_기준선은_명세서_�
     # 확정하면 확정본에 적어 둔다
     assert client.post(f"{_base()}/{sub['id']}/confirm", json={}, headers=po).status_code == 200
     with tx() as cur:
-        stored = fetch_one(
-            cur, "select parents_json from requirement_baseline where id = %s", (sub["id"],)
-        )["parents_json"]
+        stored = fetch_one(cur, "select parents_json from requirement_baseline where id = %s",
+                           (sub["id"],))["parents_json"]
     assert stored and stored[0]["code"] == "SFR.TST.011"
 
 
@@ -826,39 +674,29 @@ def test_상위_요구사항을_적기_전에_등록한_기준선은_명세서_�
 def test_다른_사업의_기준선은_보거나_바꿀_수_없다(client, client_token, clean):
     pm, po = _auth(client_token("r3")), _auth(client_token("r2"))
     with tx() as cur:
-        org = str(
-            fetch_one(
-                cur,
-                "insert into organization (name, type) values (%s, 'CLIENT') returning id",
-                (f"다른 발주기관 {uuid.uuid4().hex[:6]}",),
-            )["id"]
-        )
+        org = str(fetch_one(
+            cur, "insert into organization (name, type) values (%s, 'CLIENT') returning id",
+            (f"다른 발주기관 {uuid.uuid4().hex[:6]}",))["id"])
         clean["orgs"].append(org)
-        other = str(
-            fetch_one(
-                cur,
-                """
+        other = str(fetch_one(
+            cur,
+            """
             insert into project (client_org_id, name, start_date, end_date, description)
             values (%s, '다른 사업', '2026-08-01', '2026-11-30', '기준선 권한 시험') returning id
             """,
-                (org,),
-            )["id"]
-        )
+            (org,),
+        )["id"])
         clean["projects"].append(other)
-        doc = _document(
-            cur, _spec_table([("SWFR.TST.401", "다른 사업 요구사항", "필수")]), project_id=other
-        )
+        doc = _document(cur, _spec_table([("SWFR.TST.401", "다른 사업 요구사항", "필수")]),
+                        project_id=other)
         clean["docs"].append(doc)
 
     for who in (pm, po):
         assert client.get(_base(other), headers=who).status_code == 403
-        assert client.post(_base(other), json={"documentId": doc}, headers=who).status_code == 403
-        assert (
-            client.get(
-                f"/api/projects/{other}/requirements/unresolved-refs", headers=who
-            ).status_code
-            == 403
-        )
+        assert client.post(_base(other), json={"documentId": doc},
+                           headers=who).status_code == 403
+        assert client.get(f"/api/projects/{other}/requirements/unresolved-refs",
+                          headers=who).status_code == 403
     # 다른 사업의 문서로 우리 사업 기준선을 만들 수 없다
     assert client.post(_base(), json={"documentId": doc}, headers=pm).status_code == 404
     assert client.get(_base()).status_code == 401
@@ -869,11 +707,8 @@ def test_다른_사업의_기준선은_보거나_바꿀_수_없다(client, clien
 
 def _indexed(cur, requirement_id: str) -> str:
     rows = fetch_all(
-        cur,
-        "select source_title, content from doc_chunk where source_type = 'REQUIREMENT' "
-        "and source_id = %s order by chunk_index",
-        (requirement_id,),
-    )
+        cur, "select source_title, content from doc_chunk where source_type = 'REQUIREMENT' "
+        "and source_id = %s order by chunk_index", (requirement_id,))
     return "\n".join(f"{r['source_title']}\n{r['content']}" for r in rows)
 
 
@@ -883,9 +718,8 @@ def test_요구사항_색인은_출처_이슈가_아니라_정의를_따른다(c
     with tx() as cur:
         legacy = _legacy_project(cur, clean)
     sub = _submitted(client, pm, legacy["doc"])
-    done = client.post(
-        f"{_base()}/{sub['id']}/confirm", json={"applySpecCodes": ["SWFR.TST.202"]}, headers=po
-    )
+    done = client.post(f"{_base()}/{sub['id']}/confirm",
+                       json={"applySpecCodes": ["SWFR.TST.202"]}, headers=po)
     assert done.status_code == 200, done.text
 
     with tx() as cur:
@@ -897,14 +731,10 @@ def test_요구사항_색인은_출처_이슈가_아니라_정의를_따른다(c
         assert "명세서에만 있는 요구사항" in _indexed(cur, str(new["id"]))
 
         # 확정 뒤 출처 이슈의 제목이 바뀌어도 요구사항 색인은 정의 그대로다
-        _load(
-            cur,
-            legacy["conn"],
-            [
-                ("issue:1", _gh_issue(1, "[SWFR.TST.201] 이슈에서 바꾼 제목", ["유형: 요구사항"])),
-                ("issue:2", _gh_issue(2, "[SWFR.TST.202] 또 바꾼 제목", ["유형: 요구사항"])),
-            ],
-        )
+        _load(cur, legacy["conn"], [
+            ("issue:1", _gh_issue(1, "[SWFR.TST.201] 이슈에서 바꾼 제목", ["유형: 요구사항"])),
+            ("issue:2", _gh_issue(2, "[SWFR.TST.202] 또 바꾼 제목", ["유형: 요구사항"])),
+        ])
         _promote(cur, legacy["cid"])
         assert "같은 제목" in _indexed(cur, str(a["id"]))
         assert "이슈에서 바꾼 제목" not in _indexed(cur, str(a["id"]))
@@ -926,11 +756,9 @@ def test_확정_때_색인이_실패해도_다음_수집이_채운다(client, cl
 
     def down(*_a, **_k):
         raise errors.ApiError(503, "AI_UNAVAILABLE", "임베딩 모델이 응답하지 않습니다.")
-
     monkeypatch.setattr(indexing, "reindex", down)
-    done = client.post(
-        f"{_base()}/{sub['id']}/confirm", json={"applySpecCodes": ["SWFR.TST.202"]}, headers=po
-    )
+    done = client.post(f"{_base()}/{sub['id']}/confirm",
+                       json={"applySpecCodes": ["SWFR.TST.202"]}, headers=po)
     assert done.status_code == 200, done.text  # 색인은 못 했어도 확정은 남는다
     monkeypatch.setattr(indexing, "reindex", real)
 

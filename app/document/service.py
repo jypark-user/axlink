@@ -61,7 +61,9 @@ def _to_response(row: dict[str, Any]) -> DocumentUploadResponse:
         extractedCharCount=row["extracted_chars"],
         # 초안이 사람의 판단을 기다리는 동안만 "초안 확인" 이 뜬다.
         draftAvailable=row["draft_status"] == "PROPOSED",
-        workProductId=(str(row["draft_work_product_id"]) if row["draft_work_product_id"] else None),
+        workProductId=(
+            str(row["draft_work_product_id"]) if row["draft_work_product_id"] else None
+        ),
         error=row["error"],
         processingState=row["processing_state"],
         processingError=row["processing_error"],
@@ -78,11 +80,7 @@ def _store(project_id: str, file_hash: str, ext: str, content: bytes) -> str:
 
 
 def upload(
-    cur: Any,
-    principal: AuthPrincipal,
-    project_id: str,
-    filename: str,
-    content: bytes,
+    cur: Any, principal: AuthPrincipal, project_id: str, filename: str, content: bytes,
     wbs_id: str | None = None,
 ) -> DocumentUploadResponse:
     """문서를 올린다. wbs_id 를 주면 그 WBS 항목의 산출물로 바로 붙는다(ARC-016).
@@ -127,15 +125,9 @@ def upload(
     try:
         with cur.connection.transaction():
             document_id = repository.insert(
-                cur,
-                project_id,
-                principal.user_id,
-                filename.strip(),
-                stored_path,
+                cur, project_id, principal.user_id, filename.strip(), stored_path,
                 extractor.MIME_BY_EXT.get(ext, "application/octet-stream"),
-                ext,
-                len(content),
-                file_hash,
+                ext, len(content), file_hash,
             )
     except psycopg.errors.UniqueViolation:
         # 같은 파일이 동시에 두 번 올라왔다. 먼저 들어간 행을 돌려준다. 파일은 해시 경로라 하나다
@@ -146,14 +138,10 @@ def upload(
         repository.link_wbs_item(cur, document_id, wbs_item_id)
     where = f" ({wbs_id.strip()} 항목)" if wbs_id else ""
     activity.record(
-        cur,
-        project_id=project_id,
-        kind=activity.DOCUMENT_UPLOADED,
+        cur, project_id=project_id, kind=activity.DOCUMENT_UPLOADED,
         audience=activity.other_side(principal.role),
-        summary=f"문서 올림: {filename.strip()}{where}",
-        actor=principal,
-        target_type="DOCUMENT",
-        target_key=document_id,
+        summary=f"문서 올림: {filename.strip()}{where}", actor=principal,
+        target_type="DOCUMENT", target_key=document_id,
     )
     _after_enqueue(cur, document_id)
     return _to_response(repository.find_by_id(cur, document_id))
@@ -242,12 +230,8 @@ def _run_steps(
     # 색인. 임베딩은 읽기 트랜잭션에서, 청크 교체는 문서를 잠근 쓰기 트랜잭션에서 한다
     t = time.perf_counter()
     source = indexing.IndexSource(
-        source_type="DOCUMENT_UPLOAD",
-        source_id=document_id,
-        project_id=project_id,
-        title=filename,
-        body=result.text,
-        uri=stored_path,
+        source_type="DOCUMENT_UPLOAD", source_id=document_id, project_id=project_id,
+        title=filename, body=result.text, uri=stored_path,
     )
     port = embedding_port()
     try:
@@ -439,7 +423,8 @@ def list_chunks(
     slices = slice_for_reading(row["extracted_text"])
     window = slices[page.offset : page.offset + page.size]
     content = [
-        DocumentChunkResponse(index=page.offset + i, content=text) for i, text in enumerate(window)
+        DocumentChunkResponse(index=page.offset + i, content=text)
+        for i, text in enumerate(window)
     ]
     return PageResponse.of(content, page, len(slices))
 
