@@ -53,6 +53,26 @@ def _get(client: httpx.Client, url: str, headers: dict[str, str], params: dict |
             502, "TOOL_UNREACHABLE", f"Redmine 에 닿지 못했습니다: {exc}"
         ) from exc
 
+def _raise_http(res: httpx.Response) -> None:
+    """앞에서 따로 다루지 않은 오류 응답을 사용자가 읽을 사유로 바꾼다(DEF-V040).
+
+    상태 코드만 남기면 수집 이력에 「Redmine 오류 401」처럼 남아 무엇을 고쳐야 할지 모른다.
+    """
+    code = res.status_code
+    if code == 401:
+        raise errors.ApiError(
+            401, "TOOL_AUTH", "인증에 실패했습니다. 토큰이 유효하지 않거나 만료됐습니다."
+        )
+    if code >= 500:
+        raise errors.ApiError(
+            502,
+            "TOOL_UNREACHABLE",
+            f"Redmine 서버가 응답하지 않습니다(HTTP {code}). "
+            "서버 상태와 연결 주소를 확인해 주세요.",
+        )
+    raise errors.ApiError(502, "TOOL_UNREACHABLE", f"Redmine 이 요청을 거절했습니다(HTTP {code}).")
+
+
 
 def _raise_project_error(res: httpx.Response) -> None:
     """프로젝트 자체에 닿지 못하면 하드 실패다 — 연결이 성립하지 않는다."""
@@ -65,7 +85,7 @@ def _raise_project_error(res: httpx.Response) -> None:
     if res.status_code == 429:
         raise errors.ApiError(429, "TOOL_RATE_LIMITED", "Redmine 이 요청을 제한했습니다.")
     if res.status_code >= 400:
-        raise errors.ApiError(502, "TOOL_UNREACHABLE", f"Redmine 오류 {res.status_code}")
+        _raise_http(res)
 
 
 def _kind_url(base: str, target: str, kind: str) -> tuple[str, dict[str, Any]]:
@@ -132,12 +152,14 @@ def fetch_items(
                 client, url, headers,
                 params={**params, "limit": per_page, "offset": page * per_page},
             )
-            if res.status_code in (401, 403):
+            if res.status_code == 401:
+                _raise_http(res)
+            if res.status_code == 403:
                 raise errors.ApiError(403, "TOOL_AUTH", f"{kind} 읽기 권한이 없습니다.")
             if res.status_code == 429:
                 raise errors.ApiError(429, "TOOL_RATE_LIMITED", "Redmine 이 요청을 제한했습니다.")
             if res.status_code >= 400:
-                raise errors.ApiError(502, "TOOL_UNREACHABLE", f"Redmine 오류 {res.status_code}")
+                _raise_http(res)
             batch = res.json().get(key) or []
             for item in batch:
                 last = item.get("updated_on") or last

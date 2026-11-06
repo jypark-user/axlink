@@ -56,6 +56,26 @@ def _get(client: httpx.Client, url: str, headers: dict[str, str], params: dict |
     except httpx.RequestError as exc:
         raise errors.ApiError(502, "TOOL_UNREACHABLE", f"GitHub 에 닿지 못했습니다: {exc}") from exc
 
+def _raise_http(res: httpx.Response) -> None:
+    """앞에서 따로 다루지 않은 오류 응답을 사용자가 읽을 사유로 바꾼다(DEF-V040).
+
+    상태 코드만 남기면 수집 이력에 「GitHub 오류 401」처럼 남아 무엇을 고쳐야 할지 모른다.
+    """
+    code = res.status_code
+    if code == 401:
+        raise errors.ApiError(
+            401, "TOOL_AUTH", "인증에 실패했습니다. 토큰이 유효하지 않거나 만료됐습니다."
+        )
+    if code >= 500:
+        raise errors.ApiError(
+            502,
+            "TOOL_UNREACHABLE",
+            f"GitHub 서버가 응답하지 않습니다(HTTP {code}). "
+            "서버 상태와 연결 주소를 확인해 주세요.",
+        )
+    raise errors.ApiError(502, "TOOL_UNREACHABLE", f"GitHub 이 요청을 거절했습니다(HTTP {code}).")
+
+
 
 def _raise_repo_error(res: httpx.Response) -> None:
     """저장소 자체에 닿지 못하는 건 하드 실패다 — 연결이 성립하지 않는다."""
@@ -68,7 +88,7 @@ def _raise_repo_error(res: httpx.Response) -> None:
     if res.status_code == 403 and res.headers.get("X-RateLimit-Remaining") == "0":
         raise errors.ApiError(429, "TOOL_RATE_LIMITED", "GitHub 레이트리밋에 걸렸습니다.")
     if res.status_code >= 400:
-        raise errors.ApiError(502, "TOOL_UNREACHABLE", f"GitHub 오류 {res.status_code}")
+        _raise_http(res)
 
 
 def verify(base_url: str, target_resource: str, token: str) -> ProbeResult:
@@ -166,7 +186,7 @@ def fetch_items(
             if res.status_code == 409:  # 빈 저장소
                 return None
             if res.status_code >= 400:
-                raise errors.ApiError(502, "TOOL_UNREACHABLE", f"GitHub 오류 {res.status_code}")
+                _raise_http(res)
             batch = res.json()
             if not isinstance(batch, list) or not batch:
                 return None
@@ -227,7 +247,7 @@ def _fetch_tree(
     if res.status_code in (404, 409):  # 빈 저장소
         return
     if res.status_code >= 400:
-        raise errors.ApiError(502, "TOOL_UNREACHABLE", f"GitHub 오류 {res.status_code}")
+        _raise_http(res)
     body = res.json()
     sha = str(body.get("sha") or "")
     blobs = {
@@ -323,7 +343,7 @@ def fetch_file(
             return None  # 아직 안 올렸을 수 있다. 실패가 아니라 없는 것이다.
         _raise_limit(res)
         if res.status_code >= 400:
-            raise errors.ApiError(502, "TOOL_UNREACHABLE", f"GitHub 오류 {res.status_code}")
+            _raise_http(res)
 
         meta = res.json()
         if meta.get("type") != "file":
