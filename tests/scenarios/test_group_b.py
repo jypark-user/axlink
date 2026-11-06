@@ -10,7 +10,7 @@ import pytest
 
 from app.db import fetch_all, fetch_one, tx
 from tests.fixtures.im009 import data as d
-from tests.fixtures.im009.replay import Faults, ReplaySource, install
+from tests.fixtures.im009.replay import Faults, ReplaySource, install, tool_base
 from tests.scenarios.conftest import auth
 
 pytestmark = pytest.mark.db
@@ -51,7 +51,7 @@ def _conn_body(name: str, target: str, tool: str = "GITHUB") -> dict:
     return {
         "tool": tool,
         "name": name,
-        "baseUrl": "https://api.github.com",
+        "baseUrl": tool_base(tool, "https://api.github.com"),
         "targetResource": target,
         "credential": {"accessToken": "ghp_replayTokenABCDEF123456"},
     }
@@ -66,7 +66,7 @@ def test_UC_010_S02_Redmine_REST_비활성(target, s0, replay):
     body = {
         "tool": "REDMINE",
         "name": "REST 꺼짐",
-        "baseUrl": "https://redmine.example.test",
+        "baseUrl": tool_base("REDMINE", "https://redmine.example.test"),
         # TD-CON-2 와 같은 서버·대상은 중복으로 막힌다(DEF-V013). 다른 식별자를 쓴다
         "targetResource": "rest-off-project",
         "credential": {"accessToken": "key"},

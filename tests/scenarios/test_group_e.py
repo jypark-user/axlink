@@ -11,7 +11,7 @@ from __future__ import annotations
 import pytest
 
 from tests.fixtures.im009 import data as d
-from tests.fixtures.im009.replay import Faults, ReplaySource, install
+from tests.fixtures.im009.replay import Faults, ReplaySource, install, tool_base
 from tests.scenarios.conftest import auth
 
 pytestmark = pytest.mark.db
@@ -215,7 +215,7 @@ def test_UC_041_S12_WBS_변형(target, s0, replay):
     pid = s0.ids["TD-PRJ-9"]
     replay.faults = Faults(wbs_targets={"daon/prj9"}, wbs_variant="TD-WBS-SUM", wbs_sha="5a5a5a5a" + "9" * 32)
     made = target.post(f"/api/projects/{pid}/connections", json={
-        "tool": "GITHUB", "name": "PRJ-9 저장소", "baseUrl": "https://api.github.com", "targetResource": "daon/prj9",
+        "tool": "GITHUB", "name": "PRJ-9 저장소", "baseUrl": tool_base("GITHUB", "https://api.github.com"), "targetResource": "daon/prj9",
         "credential": {"accessToken": "ghp_prj9Token000000000000"},
     }, headers=v1).json()
     cid = made["id"]

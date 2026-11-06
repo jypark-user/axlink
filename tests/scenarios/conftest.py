@@ -116,6 +116,15 @@ LOCAL_ONLY: dict[str, str] = {
 }
 
 
+# 원격 대상에서만 드러나는 실패. 프로세스 안 재생기는 어댑터를 통째로 바꿔 오류 문장까지 지어내지만,
+# 원격은 실제 어댑터가 HTTP 응답을 읽는다. 시험 프로세스 안 실행에서는 통과하므로 따로 둔다
+REMOTE_KNOWN_FAILURES: dict[str, str] = {
+    "test_UC_010_S07_외부_장애": "DEF-V040 도구 서버 장애 안내가 「GitHub 오류 502」뿐",
+    "test_UC_011_S05a_인증_실패": "DEF-V040 수집 중 401 이 인증 실패가 아니라 「GitHub 오류 401」",
+    "test_UC_011_S09_시작_전_연결_실패": "DEF-V040 도구 서버 장애 안내가 「Redmine 오류 502」뿐",
+}
+
+
 def pytest_collection_modifyitems(config, items):
     for item in items:
         if "tests/scenarios/" not in item.nodeid.replace("\\", "/"):
@@ -130,5 +139,7 @@ def pytest_collection_modifyitems(config, items):
                 item.add_marker(pytest.mark.skip(reason=f"원격 대상 제외: {why}"))
                 continue
         reason = KNOWN_FAILURES.get(item.originalname or item.name)
+        if TARGET_URL:
+            reason = reason or REMOTE_KNOWN_FAILURES.get(item.originalname or item.name)
         if reason:
             item.add_marker(pytest.mark.xfail(strict=True, reason=reason))

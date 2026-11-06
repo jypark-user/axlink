@@ -72,12 +72,12 @@ def create_app(source: ReplaySource) -> FastAPI:
     def _list(fetch, target: str, kind: str) -> list[dict]:
         return [p for _, p in fetch("", target, "", kind, 10_000, 1)]
 
+    # 프로세스 안 재생기와 같게 어느 대상이든 있다고 본다. 자료가 없는 대상은 빈 목록이다
     def _known_github(target: str) -> bool:
-        return target in {d.CONNECTIONS["TD-CON-1"].target, d.CONNECTIONS["TD-CON-3"].target,
-                          *source.faults.wbs_targets}
+        return bool(target)
 
     def _known_redmine(target: str) -> bool:
-        return target in {d.CONNECTIONS["TD-CON-2"].target, d.CONNECTIONS["TD-CON-4"].target}
+        return bool(target)
 
     def _tree(target: str) -> dict | None:
         items = _list(gh_items, target, "tree")

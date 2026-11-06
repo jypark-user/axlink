@@ -14,7 +14,7 @@ import pytest
 from app.db import fetch_all, tx
 from tests.fixtures.im009 import data as d
 from tests.fixtures.im009 import files
-from tests.fixtures.im009.replay import Faults, ReplaySource, install, restore_faults
+from tests.fixtures.im009.replay import Faults, ReplaySource, install, restore_faults, tool_base
 from tests.scenarios.conftest import auth
 
 pytestmark = pytest.mark.db
@@ -490,7 +490,7 @@ def test_UC_030_S09_산출물_열_누락(target, s0, replay):
     v1 = auth(s0.tokens["TD-ACC-V1"])
     replay.faults = Faults(wbs_targets={"daon/prj9"}, wbs_variant="TD-WBS-MISS", wbs_sha="9999aaaa" + "0" * 32)
     made = target.post(f"/api/projects/{s0.ids['TD-PRJ-9']}/connections", json={
-        "tool": "GITHUB", "name": "PRJ-9 저장소", "baseUrl": "https://api.github.com", "targetResource": "daon/prj9",
+        "tool": "GITHUB", "name": "PRJ-9 저장소", "baseUrl": tool_base("GITHUB", "https://api.github.com"), "targetResource": "daon/prj9",
         "credential": {"accessToken": "ghp_prj9Token000000000000"},
     }, headers=v1)
     assert made.status_code == 201, made.text

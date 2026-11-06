@@ -25,6 +25,11 @@ from tests.fixtures.im009 import payloads
 # 원격 대상(5174)을 시험할 때 그 서버가 부를 재생 서버(replay_server). 없으면 프로세스 안 재생
 REPLAY_URL = os.environ.get("AXLINK_REPLAY_URL")
 WBS_PATH = "docs/00-management/WBS.xlsx"
+
+
+def tool_base(tool: str, default: str) -> str:
+    """시험이 만드는 연결의 주소. 원격 대상이면 재생 서버, 아니면 원래 주소(어댑터를 바꿔 쓴다)."""
+    return f"{REPLAY_URL.rstrip('/')}/{tool.lower()}" if REPLAY_URL else default
 DESIGN_DOC_PATH = "docs/20-design/설계-민원조회.md"
 
 
