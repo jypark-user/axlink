@@ -130,6 +130,41 @@ def test_받은_사람이_비밀번호를_바꾼다(client, client_token, made):
 
 
 @requires_db
+def test_관리자가_비밀번호를_재설정하면_옛_비밀번호와_세션이_무효가_된다(
+    client, client_token, made
+):
+    """AC-001-5·AC-001-2 (GH-206). 새 비밀번호는 응답에 한 번만."""
+    admin = client_token("r1")
+    user = _user(client, admin, made, _org(client, admin, made)["id"])
+    old_pw = user["temporaryPassword"]
+    session = _login(client, user["username"], old_pw).json()
+
+    denied = client.post(
+        f"/api/admin/users/{user['id']}/password-reset", headers=_auth(client_token("r2"))
+    )
+    assert denied.status_code == 403
+
+    res = client.post(f"/api/admin/users/{user['id']}/password-reset", headers=_auth(admin))
+    assert res.status_code == 200, res.text
+    new_pw = res.json()["temporaryPassword"]
+    assert new_pw and new_pw != old_pw
+    assert _login(client, user["username"], old_pw).status_code == 401
+    assert _login(client, user["username"], new_pw).status_code == 200
+    refreshed = client.post("/api/auth/refresh", json={"refreshToken": session["refreshToken"]})
+    assert refreshed.status_code == 401
+    # 이력 어디에도 새 비밀번호가 없다
+    with tx() as cur:
+        rows = fetch_all(cur, "select * from entity_history where entity_id = %s", (user["id"],))
+    assert rows and all(new_pw not in str(r) for r in rows)
+    # 관리자 자기 자신은 거절
+    me = client.get("/api/auth/me", headers=_auth(admin)).json()["userId"]
+    assert (
+        client.post(f"/api/admin/users/{me}/password-reset", headers=_auth(admin)).status_code
+        == 409
+    )
+
+
+@requires_db
 def test_중지한_계정은_로그인도_토큰_갱신도_막힌다(client, client_token, made):
     admin = client_token("r1")
     user = _user(client, admin, made, _org(client, admin, made)["id"])
