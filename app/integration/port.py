@@ -40,7 +40,7 @@ class PageResult:
 class ToolConnector(Protocol):
     """읽기 전용 커넥터 계약 (QUR.CON.001 — 원천에 아무것도 쓰지 않는다)."""
 
-    tool: str  # tool_connection.tool 값 그대로
+    tool: str                    # tool_connection.tool 값 그대로
     item_kinds: tuple[str, ...]  # 수집 항목종류. 도구 어휘 그대로 raw_artifact 에 적힌다
 
     def verify(self, base_url: str, target: str, secret: str) -> ProbeResult:
@@ -48,15 +48,9 @@ class ToolConnector(Protocol):
         ...
 
     def fetch_items(
-        self,
-        base_url: str,
-        target: str,
-        secret: str,
-        kind: str,
-        per_page: int,
-        max_pages: int,
-        since: datetime | None = None,
-        until: datetime | None = None,
+        self, base_url: str, target: str, secret: str,
+        kind: str, per_page: int, max_pages: int,
+        since: datetime | None = None, until: datetime | None = None,
     ) -> Generator[tuple[str, dict[str, Any]], None, "PageResult | None"]:
         """(외부 ID, 원본 payload) 를 낸다. 원본은 가공하지 않고 그대로 적재한다.
 
@@ -70,12 +64,7 @@ class ToolConnector(Protocol):
         ...
 
     def fetch_file(
-        self,
-        base_url: str,
-        target: str,
-        secret: str,
-        path: str,
-        ref: str | None = None,
+        self, base_url: str, target: str, secret: str, path: str, ref: str | None = None,
     ) -> dict[str, Any] | None:
         """저장소 파일 수집(WBS 가 이 경로로 온다). 파일 개념이 없는 도구는 None."""
         ...

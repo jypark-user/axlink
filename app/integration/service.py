@@ -48,8 +48,7 @@ def _unique_target(cur: Any) -> Iterator[None]:
             yield
     except psycopg.errors.UniqueViolation as exc:
         raise errors.ApiError(
-            409,
-            "CONNECTION_DUPLICATE",
+            409, "CONNECTION_DUPLICATE",
             "이 사업에 같은 서버의 같은 대상이 이미 연결돼 있습니다. 기존 연결을 고쳐 쓰세요.",
         ) from exc
 
@@ -132,10 +131,9 @@ def create(
     cur: Any, principal: AuthPrincipal, project_id: str, req: ToolConnectionCreateRequest
 ) -> ToolConnectionResponse:
     _require_project(cur, principal, project_id)
-    if (
-        principal.role == "CONTRACTOR"
-        and participants.active_participant(cur, project_id, principal.org_id) is None
-    ):
+    if principal.role == "CONTRACTOR" and participants.active_participant(
+        cur, project_id, principal.org_id
+    ) is None:
         raise errors.ApiError(
             403, "NOT_PARTICIPANT", "이 사업의 참여 업체로 등록된 업체만 연결을 만들 수 있습니다."
         )
@@ -148,15 +146,8 @@ def create(
     rules = MappingRules.from_json(req.mappingRules) if req.mappingRules else None
     with _unique_target(cur):
         row = repository.insert(
-            cur,
-            project_id,
-            principal.org_id,
-            req.tool,
-            req.name,
-            req.baseUrl,
-            req.targetResource,
-            encrypted,
-            hint,
+            cur, project_id, principal.org_id, req.tool, req.name, req.baseUrl,
+            req.targetResource, encrypted, hint,
             rules.to_json() if rules else None,
         )
     return _to_response(cur, principal, row)
@@ -231,14 +222,9 @@ def update(
     )
     with _unique_target(cur):
         repository.update_connection(
-            cur,
-            connection_id,
-            datetime.now(UTC),
-            name=req.name,
-            base_url=req.baseUrl,
-            target_resource=req.targetResource,
-            auth_encrypted=encrypted,
-            auth_hint=hint,
+            cur, connection_id, datetime.now(UTC),
+            name=req.name, base_url=req.baseUrl, target_resource=req.targetResource,
+            auth_encrypted=encrypted, auth_hint=hint,
             reset_status=changed_target or req.credential is not None,
         )
     return _to_response(cur, principal, repository.find_by_id(cur, connection_id))
@@ -313,7 +299,9 @@ def _iso(value: Any) -> str | None:
     return value.isoformat() if value is not None else None
 
 
-def _to_response(cur: Any, principal: AuthPrincipal, row: dict[str, Any]) -> ToolConnectionResponse:
+def _to_response(
+    cur: Any, principal: AuthPrincipal, row: dict[str, Any]
+) -> ToolConnectionResponse:
     """인증정보 힌트는 바꿀 수 있는 사람에게만 준다. 공유 조회에는 넣지 않는다(SER.SEC.001)."""
     cid = str(row["id"])
     state, owner_name = participants.owner_state(cur, row)
@@ -368,12 +356,7 @@ def change_owner(
                                     to_value, actor)
         values ('TOOL_CONNECTION', %s, %s, 'owner_org', %s, %s, %s)
         """,
-        (
-            connection_id,
-            project_id,
-            before,
-            req.organizationId,
-            (actor.get("name") or actor.get("username") or "사용자")[:120],
-        ),
+        (connection_id, project_id, before, req.organizationId,
+         (actor.get("name") or actor.get("username") or "사용자")[:120]),
     )
     return _to_response(cur, principal, repository.find_by_id(cur, connection_id))

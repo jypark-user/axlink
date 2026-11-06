@@ -38,22 +38,17 @@ def insert(
         returning id
         """,
         (
-            project_id,
-            contractor_org_id,
-            tool,
-            name,
-            base_url,
-            target_resource,
-            auth_encrypted,
-            auth_hint,
-            Jsonb(mapping_rules or {}),
+            project_id, contractor_org_id, tool, name, base_url, target_resource,
+            auth_encrypted, auth_hint, Jsonb(mapping_rules or {}),
         ),
     )
     return find_by_id(cur, str(row["id"]))
 
 
 def find_by_id(cur: Any, connection_id: str) -> dict[str, Any] | None:
-    return fetch_one(cur, f"select {_COLUMNS} from tool_connection where id = %s", (connection_id,))
+    return fetch_one(
+        cur, f"select {_COLUMNS} from tool_connection where id = %s", (connection_id,)
+    )
 
 
 def find_by_project(cur: Any, project_id: str) -> list[dict[str, Any]]:
@@ -151,7 +146,6 @@ def last_sync_status(cur: Any, connection_id: str) -> str | None:
 
 
 # --- 수집(BACKFILL) ---------------------------------------------------------
-
 
 def insert_sync_job(
     cur: Any,
@@ -285,7 +279,8 @@ def upsert_raw_artifact(
     ).hexdigest()
     existing = fetch_one(
         cur,
-        "select content_hash from raw_artifact where tool_connection_id = %s and external_id = %s",
+        "select content_hash from raw_artifact "
+        "where tool_connection_id = %s and external_id = %s",
         (connection_id, external_id),
     )
     if existing is None:

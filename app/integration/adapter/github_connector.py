@@ -117,14 +117,8 @@ def _stamp(kind: str, item: dict) -> str | None:
 
 
 def fetch_items(
-    base_url: str,
-    target_resource: str,
-    token: str,
-    kind: str,
-    per_page: int,
-    max_pages: int,
-    since: datetime | None = None,
-    until: datetime | None = None,
+    base_url: str, target_resource: str, token: str, kind: str, per_page: int, max_pages: int,
+    since: datetime | None = None, until: datetime | None = None,
 ) -> Generator[tuple[str, dict], None, PageResult | None]:
     """항목종류 하나를 페이지 단위로 가져온다. (external_id, payload) 를 순서대로 낸다.
 
@@ -160,8 +154,8 @@ def fetch_items(
     if until is not None and kind == "commit":
         params["until"] = _iso_z(until)
 
-    first: str | None = None  # 이번에 처음 본 시각
-    last: str | None = None  # 이번에 마지막으로 본 시각
+    first: str | None = None   # 이번에 처음 본 시각
+    last: str | None = None    # 이번에 마지막으로 본 시각
     with httpx.Client(timeout=settings.connector_timeout) as client:
         for page in range(1, max_pages + 1):
             res = _get(client, base, headers, params={**params, "page": page})
@@ -238,20 +232,16 @@ def _fetch_tree(
     sha = str(body.get("sha") or "")
     blobs = {
         e["path"]: str(e.get("sha") or "")
-        for e in body.get("tree") or []
-        if e.get("type") == "blob" and e.get("path")
+        for e in body.get("tree") or [] if e.get("type") == "blob" and e.get("path")
     }
-    yield (
-        "tree:HEAD",
-        {
-            "sha": sha,
-            "commit": commit_sha,
-            "truncated": bool(body.get("truncated")),
-            "paths": list(blobs),
-            "blobs": blobs,
-            "html_url": f"{_html_base(base_url)}/{target_resource}/blob/{commit_sha or sha}/",
-        },
-    )
+    yield "tree:HEAD", {
+        "sha": sha,
+        "commit": commit_sha,
+        "truncated": bool(body.get("truncated")),
+        "paths": list(blobs),
+        "blobs": blobs,
+        "html_url": f"{_html_base(base_url)}/{target_resource}/blob/{commit_sha or sha}/",
+    }
 
 
 def _head_commit(client: httpx.Client, repo: str, headers: dict[str, str]) -> str | None:
@@ -293,12 +283,8 @@ def fetch_change_files(
         names: list[str] = []
         left = None
         for page in (1, 2, 3):
-            res = _get(
-                client,
-                f"{repo}/pulls/{ident}/files",
-                headers,
-                params={"per_page": 100, "page": page},
-            )
+            res = _get(client, f"{repo}/pulls/{ident}/files", headers,
+                       params={"per_page": 100, "page": page})
             left = remaining(res)
             _raise_limit(res)
             if res.status_code >= 400:
@@ -353,7 +339,9 @@ def fetch_file(
         }
 
 
-def _file_bytes(client: httpx.Client, headers: dict[str, str], repo_url: str, meta: dict) -> bytes:
+def _file_bytes(
+    client: httpx.Client, headers: dict[str, str], repo_url: str, meta: dict
+) -> bytes:
     """파일 본문. 1MB 를 넘으면 contents 응답에 본문이 없어서 Git blob API 로 받는다.
 
     응답의 download_url 은 쓰지 않는다. 다른 호스트를 가리킬 수 있고, 거기에 연결 토큰을
@@ -391,34 +379,18 @@ class GitHubConnector:
         return verify(base_url, target, secret)
 
     def fetch_items(
-        self,
-        base_url: str,
-        target: str,
-        secret: str,
-        kind: str,
-        per_page: int,
-        max_pages: int,
-        since: datetime | None = None,
-        until: datetime | None = None,
+        self, base_url: str, target: str, secret: str,
+        kind: str, per_page: int, max_pages: int,
+        since: datetime | None = None, until: datetime | None = None,
     ) -> Generator[tuple[str, dict[str, Any]], None, PageResult | None]:
         return fetch_items(base_url, target, secret, kind, per_page, max_pages, since, until)
 
     def fetch_file(
-        self,
-        base_url: str,
-        target: str,
-        secret: str,
-        path: str,
-        ref: str | None = None,
+        self, base_url: str, target: str, secret: str, path: str, ref: str | None = None,
     ) -> dict[str, Any] | None:
         return fetch_file(base_url, target, secret, path, ref)
 
     def fetch_change_files(
-        self,
-        base_url: str,
-        target: str,
-        secret: str,
-        kind: str,
-        ident: str,
+        self, base_url: str, target: str, secret: str, kind: str, ident: str,
     ) -> tuple[list[str] | None, int | None]:
         return fetch_change_files(base_url, target, secret, kind, ident)

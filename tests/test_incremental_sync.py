@@ -22,7 +22,6 @@ PID = "c0000000-0000-4000-8000-000000000001"
 
 # ── 어댑터가 since 를 필터로 옮기는가 (MockTransport)
 
-
 def _client_with(handler, monkeypatch, module):
     transport = httpx.MockTransport(handler)
     real = httpx.Client
@@ -48,17 +47,11 @@ def test_깃허브_이슈는_since_커밋도_since_PR은_내림차순_경계(mon
     def handler(request):
         calls.append((request.url.path, dict(request.url.params)))
         if request.url.path.endswith("/pulls"):
-            return httpx.Response(
-                200,
-                json=[
-                    {"number": 9, "updated_at": "2026-09-09T05:00:00Z"},
-                    {
-                        "number": 8,
-                        "updated_at": "2026-09-01T00:00:00Z",
-                    },  # 경계 이전 — 여기서 끊는다
-                    {"number": 7, "updated_at": "2026-08-01T00:00:00Z"},
-                ],
-            )
+            return httpx.Response(200, json=[
+                {"number": 9, "updated_at": "2026-09-09T05:00:00Z"},
+                {"number": 8, "updated_at": "2026-09-01T00:00:00Z"},  # 경계 이전 — 여기서 끊는다
+                {"number": 7, "updated_at": "2026-08-01T00:00:00Z"},
+            ])
         return httpx.Response(200, json=[])
 
     _client_with(handler, monkeypatch, gh)
@@ -85,24 +78,12 @@ def test_깃허브_마일스톤은_상태_불문_전량이고_since_를_안_붙�
 
     def handler(request):
         seen.update(path=request.url.path, params=dict(request.url.params))
-        return httpx.Response(
-            200,
-            json=[
-                {
-                    "number": 3,
-                    "title": "M2 연계·수집 기반 확보",
-                    "state": "open",
-                    "due_on": "2026-09-12T00:00:00Z",
-                },
-                {
-                    "number": 1,
-                    "title": "M0 착수보고",
-                    "state": "closed",
-                    "due_on": "2026-08-11T00:00:00Z",
-                    "closed_at": "2026-08-11T09:00:00Z",
-                },
-            ],
-        )
+        return httpx.Response(200, json=[
+            {"number": 3, "title": "M2 연계·수집 기반 확보", "state": "open",
+             "due_on": "2026-09-12T00:00:00Z"},
+            {"number": 1, "title": "M0 착수보고", "state": "closed",
+             "due_on": "2026-08-11T00:00:00Z", "closed_at": "2026-08-11T09:00:00Z"},
+        ])
 
     _client_with(handler, monkeypatch, gh)
     since = datetime(2026, 9, 9, 3, 0, 0, tzinfo=UTC)
@@ -118,26 +99,15 @@ def test_깃허브_마일스톤은_상태_불문_전량이고_since_를_안_붙�
 
 # ── 수집 흐름 — 커서 승계와 3회 재현 (시험 DB)
 
-
 @requires_db
 def test_첫_회는_전체_이후는_증분이고_반복해도_수렴한다(client, monkeypatch):
     source = {
-        "1": {
-            "id": 1,
-            "subject": "이슈 하나",
-            "description": "",
-            "tracker": {"name": "작업"},
-            "status": {"name": "신규", "is_closed": False},
-            "updated_on": "2026-09-09T01:00:00Z",
-        },
-        "2": {
-            "id": 2,
-            "subject": "이슈 둘",
-            "description": "",
-            "tracker": {"name": "작업"},
-            "status": {"name": "신규", "is_closed": False},
-            "updated_on": "2026-09-09T01:00:00Z",
-        },
+        "1": {"id": 1, "subject": "이슈 하나", "description": "",
+              "tracker": {"name": "작업"}, "status": {"name": "신규", "is_closed": False},
+              "updated_on": "2026-09-09T01:00:00Z"},
+        "2": {"id": 2, "subject": "이슈 둘", "description": "",
+              "tracker": {"name": "작업"}, "status": {"name": "신규", "is_closed": False},
+              "updated_on": "2026-09-09T01:00:00Z"},
     }
     received_since = []
 
@@ -157,19 +127,11 @@ def test_첫_회는_전체_이후는_증분이고_반복해도_수렴한다(clie
         cur.execute("select organization_id from app_user where username = 'r3'")
         org = str(cur.fetchone()["organization_id"])
         conn = integ_repo.insert(
-            cur,
-            PID,
-            org,
-            "REDMINE",
-            "레드마인",
-            "http://localhost:3000",
-            "axlink",
-            crypto.encrypt("k"),
-            "k***",
+            cur, PID, org, "REDMINE", "레드마인", "http://localhost:3000",
+            "axlink", crypto.encrypt("k"), "k***",
         )
         cid = str(conn["id"])
         try:
-
             def run():
                 job_id = sync.run_sync(cur, conn)
                 return integ_repo.find_sync_job(cur, job_id)
@@ -195,11 +157,8 @@ def test_첫_회는_전체_이후는_증분이고_반복해도_수렴한다(clie
             assert cur.fetchone()["c"] == 2
 
             # 원천이 바뀌면 바뀐 것만 온다
-            source["2"] = {
-                **source["2"],
-                "subject": "이슈 둘 (수정)",
-                "updated_on": "2026-12-31T00:00:00Z",
-            }
+            source["2"] = {**source["2"], "subject": "이슈 둘 (수정)",
+                           "updated_on": "2026-12-31T00:00:00Z"}
             fourth = run()
             assert fourth["kind"] == "POLL"
             assert fourth["stats_json"]["fetched"] == 1
