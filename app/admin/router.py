@@ -77,8 +77,7 @@ def clear_errors(principal: Principal) -> None:
 
 @router.get("/organizations", response_model=list[accounts.OrganizationResponse])
 def list_organizations(
-    principal: Principal,
-    type: str | None = None,  # noqa: A002 — 화면 쿼리 이름
+    principal: Principal, type: str | None = None  # noqa: A002 — 화면 쿼리 이름
 ) -> list[accounts.OrganizationResponse]:
     with tx() as cur:
         return accounts.list_organizations(cur, principal, type)
@@ -123,3 +122,4 @@ def set_user_status(
     with tx() as cur:
         accounts.set_user_status(cur, principal, user_id, req)
     return Response(status_code=204)
+

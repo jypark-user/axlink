@@ -80,24 +80,11 @@ def _actor(cur: Any, principal: AuthPrincipal) -> str:
     return (row or {}).get("name") or "플랫폼 관리자"
 
 
-def _history(
-    cur: Any,
-    principal: AuthPrincipal,
-    entity_type: str,
-    entity_id: str,
-    field: str,
-    before: str | None,
-    after: str | None,
-) -> None:
+def _history(cur: Any, principal: AuthPrincipal, entity_type: str, entity_id: str,
+             field: str, before: str | None, after: str | None) -> None:
     standard_repository.insert_entity_history(
-        cur,
-        entity_type=entity_type,
-        entity_id=entity_id,
-        project_id=None,
-        field=field,
-        from_value=before,
-        to_value=after,
-        actor=_actor(cur, principal),
+        cur, entity_type=entity_type, entity_id=entity_id, project_id=None, field=field,
+        from_value=before, to_value=after, actor=_actor(cur, principal),
     )
 
 
@@ -124,13 +111,8 @@ def list_organizations(
 
 def _org(r: dict[str, Any]) -> OrganizationResponse:
     return OrganizationResponse(
-        id=str(r["id"]),
-        name=r["name"],
-        type=r["type"],
-        status=r["status"],
-        userCount=r["users"],
-        activeUserCount=r["active_users"],
-        projectCount=r["projects"],
+        id=str(r["id"]), name=r["name"], type=r["type"], status=r["status"],
+        userCount=r["users"], activeUserCount=r["active_users"], projectCount=r["projects"],
         createdAt=r["created_at"].isoformat(),
     )
 
@@ -173,7 +155,9 @@ def rename_organization(
     require_admin(principal)
     org = _find_org(cur, org_id)
     if org["type"] != "CLIENT":
-        raise errors.ApiError(409, "NOT_CLIENT_ORG", "용역사 조직 이름은 여기서 바꾸지 않습니다.")
+        raise errors.ApiError(
+            409, "NOT_CLIENT_ORG", "용역사 조직 이름은 여기서 바꾸지 않습니다."
+        )
     name = req.name.strip()
     if not name:
         raise errors.validation_failed("기관 이름을 입력하세요.")
@@ -194,7 +178,9 @@ def create_client_user(
     require_admin(principal)
     org = _find_org(cur, req.organizationId)
     if org["type"] != "CLIENT":
-        raise errors.ApiError(409, "NOT_CLIENT_ORG", "용역사 계정은 사업 초대 링크로 가입합니다.")
+        raise errors.ApiError(
+            409, "NOT_CLIENT_ORG", "용역사 계정은 사업 초대 링크로 가입합니다."
+        )
     if org["status"] != "ACTIVE":
         raise errors.ApiError(
             409, "ORGANIZATION_DISABLED", "중지된 조직에는 계정을 만들 수 없습니다."
@@ -213,13 +199,8 @@ def create_client_user(
         raise errors.ApiError(409, "USERNAME_EXISTS", "이미 쓰고 있는 아이디입니다.") from exc
     _history(cur, principal, "APP_USER", user_id, "created", None, f"{username} ({org['name']})")
     return ClientUserCreatedResponse(
-        id=user_id,
-        organizationId=str(org["id"]),
-        username=username,
-        name=name,
-        role="CLIENT",
-        status="ACTIVE",
-        temporaryPassword=temporary,
+        id=user_id, organizationId=str(org["id"]), username=username, name=name,
+        role="CLIENT", status="ACTIVE", temporaryPassword=temporary,
     )
 
 
@@ -231,7 +212,9 @@ def set_user_status(
         raise errors.validation_failed("상태는 ACTIVE 또는 DISABLED 입니다.")
     if user_id == principal.user_id:
         raise errors.ApiError(409, "SELF_STATUS", "자기 계정은 중지할 수 없습니다.")
-    user = fetch_one(cur, "select id, role, status from app_user where id::text = %s", (user_id,))
+    user = fetch_one(
+        cur, "select id, role, status from app_user where id::text = %s", (user_id,)
+    )
     if user is None:
         raise errors.not_found("계정", user_id)
     if user["role"] == "SUPER_ADMIN":
