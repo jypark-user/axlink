@@ -34,6 +34,14 @@ from app.project.models import (
 from app.review import repository as review_repository
 from app.standard import repository as standard_repository
 
+# 사업 상태 전이. 종료 뒤에는 되돌리지 않는다 — 종료는 보관이고 삭제가 아니다(IM-007 UC-002 3).
+_STATUS_TRANSITIONS: dict[str, tuple[str, ...]] = {
+    "PLANNING": ("ACTIVE", "CLOSING", "CLOSED"),
+    "ACTIVE": ("CLOSING", "CLOSED"),
+    "CLOSING": ("ACTIVE", "CLOSED"),
+    "CLOSED": (),
+}
+
 _SI_PHASES = ("SI_1", "SI_2", "SI_3", "SI_4", "SI_5", "SI_6")
 _INVITE_TTL = timedelta(days=7)
 
@@ -114,6 +122,24 @@ def update(
         if req.currentSiPhase not in _SI_PHASES:
             raise errors.validation_failed(f"허용되지 않는 단계입니다: {req.currentSiPhase}")
         fields["current_si_phase"] = req.currentSiPhase
+    if req.status is not None and req.status != row["status"]:
+        allowed = _STATUS_TRANSITIONS.get(row["status"], ())
+        if req.status not in allowed:
+            raise errors.ApiError(
+                409, "PROJECT_STATUS_TRANSITION",
+                f"{row['status']} 상태에서 {req.status} 로 바꿀 수 없습니다.",
+            )
+        fields["status"] = req.status
+        # 종료 시각은 상태와 함께 간다(ck_project__closed_at). 종료가 아니면 비운다
+        fields["closed_at"] = datetime.now(UTC) if req.status == "CLOSED" else None
+        cur.execute(
+            """
+            insert into entity_history (entity_type, entity_id, project_id, field, from_value,
+                                        to_value, actor)
+            values ('PROJECT', %s, %s, 'status', %s, %s, %s)
+            """,
+            (project_id, project_id, row["status"], req.status, principal.user_id),
+        )
 
     start = _parse_date(req.startDate, "startDate") if req.startDate else row["start_date"]
     end = _parse_date(req.endDate, "endDate") if req.endDate else row["end_date"]
