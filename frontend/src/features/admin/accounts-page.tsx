@@ -184,6 +184,25 @@ function OrgUsers({
     }
   };
 
+  const reset = async (u: UserResponse) => {
+    const ok = window.confirm(
+      `${u.name}(${u.username})의 비밀번호를 다시 발급할까요? 지금 비밀번호와 로그인은 모두 무효가 됩니다.`,
+    );
+    if (!ok) return;
+    try {
+      const issued = await api.post<ClientUserCreatedResponse>(
+        `/admin/users/${u.id}/password-reset`,
+      );
+      onIssued(issued);
+    } catch (err) {
+      toast({
+        title: '비밀번호를 다시 발급하지 못했습니다.',
+        description: isApiError(err) ? err.message : undefined,
+        variant: 'error',
+      });
+    }
+  };
+
   const toggle = async (u: UserResponse) => {
     const next = u.status === 'ACTIVE' ? 'DISABLED' : 'ACTIVE';
     if (next === 'DISABLED' && !window.confirm(`${u.name}(${u.username}) 계정을 중지할까요?`)) {
@@ -261,6 +280,9 @@ function OrgUsers({
                         {u.lastLoginAt ? formatDateTime(u.lastLoginAt) : '-'}
                       </td>
                       <td className="py-2 text-right">
+                        <Button size="sm" variant="ghost" onClick={() => void reset(u)}>
+                          비밀번호 재발급
+                        </Button>
                         <Button size="sm" variant="ghost" onClick={() => void toggle(u)}>
                           {u.status === 'ACTIVE' ? '중지' : '다시 사용'}
                         </Button>
@@ -299,9 +321,9 @@ function IssuedDialog({
     <Dialog open={user !== null} onOpenChange={(o) => !o && onClose()}>
       <DialogContent>
         <DialogHeader>
-          <DialogTitle>계정을 발급했습니다</DialogTitle>
+          <DialogTitle>임시 비밀번호를 발급했습니다</DialogTitle>
           <DialogDescription>
-            첫 비밀번호는 이 창에서 한 번만 보입니다. 담당자에게 따로 전하고, 로그인한 뒤 바로
+            이 비밀번호는 이 창에서 한 번만 보입니다. 담당자에게 따로 전하고, 로그인한 뒤 바로
             바꾸도록 안내하세요.
           </DialogDescription>
         </DialogHeader>
