@@ -47,14 +47,8 @@ def update_requirement_evidence(
          where id = %s
         """,
         (
-            connection_id,
-            external_id,
-            rec["external_url"],
-            rec["status"],
-            rec["status"],
-            rec["source_created_at"],
-            rec["source_updated_at"],
-            requirement_id,
+            connection_id, external_id, rec["external_url"], rec["status"], rec["status"],
+            rec["source_created_at"], rec["source_updated_at"], requirement_id,
         ),
     )
 
@@ -83,20 +77,10 @@ def upsert_issue(
         returning id
         """,
         (
-            project_id,
-            rec["issue_key"],
-            rec["title"],
-            rec["body"],
-            rec["status"],
-            rec["severity"],
-            rec["assignee"],
-            rec["source_created_at"],
-            rec["source_updated_at"],
-            rec["resolved_at"],
-            connection_id,
-            external_id,
-            rec["external_url"],
-            rec.get("source_priority"),
+            project_id, rec["issue_key"], rec["title"], rec["body"], rec["status"],
+            rec["severity"], rec["assignee"], rec["source_created_at"],
+            rec["source_updated_at"], rec["resolved_at"],
+            connection_id, external_id, rec["external_url"], rec.get("source_priority"),
         ),
     )
     return str(row["id"])
@@ -122,16 +106,8 @@ def upsert_milestone(
         returning id
         """,
         (
-            project_id,
-            connection_id,
-            external_id,
-            rec["number"],
-            rec["title"],
-            rec["due_on"],
-            rec["state"],
-            rec["closed_at"],
-            rec["source_url"],
-            rec["source_updated_at"],
+            project_id, connection_id, external_id, rec["number"], rec["title"], rec["due_on"],
+            rec["state"], rec["closed_at"], rec["source_url"], rec["source_updated_at"],
         ),
     )
     return str(row["id"])
@@ -177,20 +153,10 @@ def upsert_risk(
         returning id
         """,
         (
-            project_id,
-            rec["title"],
-            rec["body"],
-            rec["probability"],
-            rec["impact"],
-            rec["severity"],
-            rec["mitigation"],
-            rec["owner"],
-            rec["status"],
-            rec["identified_at"],
-            rec["closed_at"],
-            connection_id,
-            external_id,
-            rec["external_url"],
+            project_id, rec["title"], rec["body"], rec["probability"], rec["impact"],
+            rec["severity"], rec["mitigation"], rec["owner"], rec["status"],
+            rec["identified_at"], rec["closed_at"],
+            connection_id, external_id, rec["external_url"],
         ),
     )
     return str(row["id"])
@@ -214,16 +180,9 @@ def upsert_code_change(
         returning id
         """,
         (
-            project_id,
-            rec["kind"],
-            rec["title"],
-            rec["ref_name"],
-            rec["state"],
-            rec["author"],
-            rec["occurred_at"],
-            connection_id,
-            external_id,
-            rec["external_url"],
+            project_id, rec["kind"], rec["title"], rec["ref_name"], rec["state"],
+            rec["author"], rec["occurred_at"],
+            connection_id, external_id, rec["external_url"],
         ),
     )
     return str(row["id"])
@@ -265,11 +224,8 @@ def upsert_work_product(
             returning id
             """,
             (
-                rec["title"],
-                rec["file_uri"],
-                rec["external_url"],
-                rec.get("source_revision"),
-                current["id"],
+                rec["title"], rec["file_uri"], rec["external_url"],
+                rec.get("source_revision"), current["id"],
             ),
         )
         return str(current["id"])
@@ -294,18 +250,11 @@ def upsert_work_product(
         returning id
         """,
         (
-            project_id,
-            rec["type"],
-            rec["version"],
-            rec["title"],
+            project_id, rec["type"], rec["version"], rec["title"],
             current["applicable"] if current else True,
             current["due_date"] if current else None,
-            pm_activity,
-            si_activity,
-            rec["file_uri"],
-            rec["external_url"],
-            connection_id,
-            external_id,
+            pm_activity, si_activity,
+            rec["file_uri"], rec["external_url"], connection_id, external_id,
             rec.get("source_revision"),
         ),
     )
@@ -342,8 +291,7 @@ def place_document_work_product(
     if same_version is not None and same_version["status"] == "APPROVED":
         # 승인된 버전을 같은 버전 표기로 고쳐 쓰면 승인이 바뀐 파일에 붙은 것처럼 보인다
         raise errors.ApiError(
-            409,
-            "APPROVED_VERSION_LOCKED",
+            409, "APPROVED_VERSION_LOCKED",
             f"버전 {rec['version']} 은 승인된 버전이라 고쳐 쓸 수 없습니다. 새 버전으로 올리세요.",
         )
 
@@ -373,16 +321,9 @@ def place_document_work_product(
             returning id
             """,
             (
-                rec["title"],
-                rec["status"],
-                pm_activity,
-                si_activity,
-                document_id,
-                rec["file_uri"],
-                rec["authored_at"],
-                user_id if approved else None,
-                approved,
-                same_version["id"],
+                rec["title"], rec["status"], pm_activity, si_activity,
+                document_id, rec["file_uri"], rec["authored_at"],
+                user_id if approved else None, approved, same_version["id"],
             ),
         )
         return str(row["id"])
@@ -399,18 +340,9 @@ def place_document_work_product(
         returning id
         """,
         (
-            project_id,
-            rec["type"],
-            rec["version"],
-            rec["title"],
-            rec["status"],
-            pm_activity,
-            si_activity,
-            document_id,
-            rec["file_uri"],
-            rec["authored_at"],
-            user_id if approved else None,
-            approved,
+            project_id, rec["type"], rec["version"], rec["title"], rec["status"],
+            pm_activity, si_activity, document_id, rec["file_uri"], rec["authored_at"],
+            user_id if approved else None, approved,
         ),
     )
     return str(row["id"])
@@ -468,7 +400,9 @@ def list_work_product_versions(
     )
 
 
-def current_work_product(cur: Any, project_id: str, product_type: str) -> dict[str, Any] | None:
+def current_work_product(
+    cur: Any, project_id: str, product_type: str
+) -> dict[str, Any] | None:
     """현행 산출물 한 건. 진척 산정이 WBS 파일을 찾을 때 쓴다."""
     return fetch_one(
         cur,
@@ -688,10 +622,7 @@ def _issue_filter(
 
 
 def count_issues(
-    cur: Any,
-    project_id: str,
-    q: str | None,
-    status: str | None,
+    cur: Any, project_id: str, q: str | None, status: str | None,
     connection_id: str | None = None,
 ) -> int:
     where, params = _issue_filter(q, status, connection_id)
@@ -707,7 +638,9 @@ def count_issues(
 HEAVY_SEVERITIES = ("BLOCKER", "CRITICAL", "MAJOR")
 
 
-def issue_summary(cur: Any, project_id: str, connection_id: str | None = None) -> dict[str, int]:
+def issue_summary(
+    cur: Any, project_id: str, connection_id: str | None = None
+) -> dict[str, int]:
     """이슈 화면 카드 숫자. 목록과 같은 테이블·같은 사업 조건이고 페이지와 무관하다."""
     row = fetch_one(
         cur,
@@ -758,11 +691,7 @@ def issue_sources(cur: Any, project_id: str) -> list[dict[str, Any]]:
 
 
 def search_issues(
-    cur: Any,
-    project_id: str,
-    q: str | None,
-    status: str | None,
-    page: PageQuery,
+    cur: Any, project_id: str, q: str | None, status: str | None, page: PageQuery,
     connection_id: str | None = None,
 ) -> list[dict[str, Any]]:
     """열린 것이 위로, 그 안에서는 원천에서 최근 움직인 순서다. 감독이 볼 순서가 그렇다.
@@ -898,16 +827,8 @@ def raw_artifacts_with_entities(cur: Any, connection_id: str) -> list[dict[str, 
 
 
 def upsert_auto_trace_link(
-    cur: Any,
-    project_id: str,
-    from_type: str,
-    from_id: str,
-    to_type: str,
-    to_id: str,
-    link_kind: str,
-    evidence_kind: str,
-    evidence_text: str,
-    evidence_url: str | None,
+    cur: Any, project_id: str, from_type: str, from_id: str, to_type: str, to_id: str,
+    link_kind: str, evidence_kind: str, evidence_text: str, evidence_url: str | None,
     evidence_meta: dict[str, Any] | None = None,
 ) -> str | None:
     """같은 변이 있으면 근거만 갱신하고 살린다. 사람이 만든 링크는 건드리지 않는다."""
@@ -934,15 +855,8 @@ def upsert_auto_trace_link(
         returning id
         """,
         (
-            project_id,
-            from_type,
-            from_id,
-            to_type,
-            to_id,
-            link_kind,
-            evidence_kind,
-            evidence_text,
-            evidence_url,
+            project_id, from_type, from_id, to_type, to_id, link_kind,
+            evidence_kind, evidence_text, evidence_url,
             Jsonb(evidence_meta) if evidence_meta is not None else None,
         ),
     )
@@ -950,8 +864,7 @@ def upsert_auto_trace_link(
 
 
 def replace_unresolved_refs(
-    cur: Any,
-    project_id: str,
+    cur: Any, project_id: str,
     refs: dict[tuple[str, str, str], tuple[str, str | None]],
 ) -> None:
     """사업에 없는 요구사항 코드를 가리킨 근거. 링크 생성 때마다 사업 단위로 다시 쓴다."""
@@ -981,9 +894,7 @@ def list_unresolved_refs(cur: Any, project_id: str) -> list[dict[str, Any]]:
 
 
 def close_stale_auto_links(
-    cur: Any,
-    project_id: str,
-    keep_ids: list[str],
+    cur: Any, project_id: str, keep_ids: list[str],
     replaced: dict[tuple[str, str, str, str], list[tuple[str, str]]],
     excluded: dict[tuple[str, str, str, str], str],
     deleted_docs: set[str],
@@ -1199,15 +1110,8 @@ def clear_requirement_decision(cur: Any, requirement_id: str) -> None:
 
 
 def insert_entity_history(
-    cur: Any,
-    *,
-    entity_type: str,
-    entity_id: str,
-    project_id: str,
-    field: str,
-    from_value: str | None,
-    to_value: str | None,
-    actor: str,
+    cur: Any, *, entity_type: str, entity_id: str, project_id: str, field: str,
+    from_value: str | None, to_value: str | None, actor: str,
 ) -> None:
     cur.execute(
         """

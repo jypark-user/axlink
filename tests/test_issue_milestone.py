@@ -25,9 +25,7 @@ def _auth(token: str) -> dict[str, str]:
 
 def _milestone(repo: str, number: int, title: str, due: str | None, closed: bool = False) -> dict:
     return {
-        "number": number,
-        "title": title,
-        "state": "closed" if closed else "open",
+        "number": number, "title": title, "state": "closed" if closed else "open",
         "due_on": f"{due}T07:00:00Z" if due else None,
         "closed_at": "2026-09-30T09:00:00Z" if closed else None,
         "updated_at": "2026-10-01T00:00:00Z",
@@ -37,13 +35,8 @@ def _milestone(repo: str, number: int, title: str, due: str | None, closed: bool
 
 def _issue(repo: str, number: int, title: str, milestone: dict | None) -> dict:
     return {
-        "number": number,
-        "title": title,
-        "body": "",
-        "labels": [],
-        "state": "open",
-        "created_at": "2026-10-01T00:00:00Z",
-        "updated_at": "2026-10-02T00:00:00Z",
+        "number": number, "title": title, "body": "", "labels": [], "state": "open",
+        "created_at": "2026-10-01T00:00:00Z", "updated_at": "2026-10-02T00:00:00Z",
         "html_url": f"https://github.com/{repo}/issues/{number}",
         "milestone": milestone,
     }
@@ -63,7 +56,9 @@ def _promote(cur, cid: str) -> None:
 
 
 def _by_key(client, token: str, cid: str) -> dict[str, dict]:
-    res = client.get(f"/api/projects/{PID}/issues?connectionId={cid}&size=50", headers=_auth(token))
+    res = client.get(
+        f"/api/projects/{PID}/issues?connectionId={cid}&size=50", headers=_auth(token)
+    )
     assert res.status_code == 200, res.text
     return {i["key"]: i for i in res.json()["content"]}
 
@@ -86,40 +81,24 @@ def test_이슈에_원천_마일스톤의_이름_기한_상태가_보인다(clie
     with tx() as cur:
         cur.execute("select organization_id from app_user where username = 'r3'")
         org = str(cur.fetchone()["organization_id"])
-        cid = str(
-            integ_repo.insert(
-                cur,
-                PID,
-                org,
-                "GITHUB",
-                "마일스톤 시험",
-                "https://api.github.com",
-                repo,
-                crypto.encrypt("k"),
-                "k***",
-                {},
-            )["id"]
-        )
+        cid = str(integ_repo.insert(
+            cur, PID, org, "GITHUB", "마일스톤 시험", "https://api.github.com", repo,
+            crypto.encrypt("k"), "k***", {},
+        )["id"])
     try:
         with tx() as cur:
-            _load(
-                cur,
-                cid,
-                [
-                    ("milestone:4", "milestone", m4),
-                    ("milestone:3", "milestone", m3),
-                    ("issue:1", "issue", _issue(repo, 1, "열린 마일스톤", {"number": 4})),
-                    ("issue:2", "issue", _issue(repo, 2, "닫힌 마일스톤", {"number": 3})),
-                    ("issue:3", "issue", _issue(repo, 3, "미지정", None)),
-                ],
-            )
+            _load(cur, cid, [
+                ("milestone:4", "milestone", m4),
+                ("milestone:3", "milestone", m3),
+                ("issue:1", "issue", _issue(repo, 1, "열린 마일스톤", {"number": 4})),
+                ("issue:2", "issue", _issue(repo, 2, "닫힌 마일스톤", {"number": 3})),
+                ("issue:3", "issue", _issue(repo, 3, "미지정", None)),
+            ])
             _promote(cur, cid)
 
         got = _by_key(client, token, cid)
         assert got["GH-1"]["milestone"] == {
-            "title": "M4 통합 PoC 완성",
-            "dueOn": "2026-10-23",
-            "state": "OPEN",
+            "title": "M4 통합 PoC 완성", "dueOn": "2026-10-23", "state": "OPEN",
             "url": f"https://github.com/{repo}/milestone/4",
         }
         assert got["GH-2"]["milestone"]["state"] == "CLOSED"
@@ -127,15 +106,11 @@ def test_이슈에_원천_마일스톤의_이름_기한_상태가_보인다(clie
 
         # 다음 수집: 원천에서 M4 기한을 미루고, 1번 이슈의 마일스톤을 뺐다
         with tx() as cur:
-            _load(
-                cur,
-                cid,
-                [
-                    ("milestone:4", "milestone", {**m4, "due_on": "2026-10-30T07:00:00Z"}),
-                    ("issue:1", "issue", _issue(repo, 1, "열린 마일스톤", None)),
-                    ("issue:3", "issue", _issue(repo, 3, "미지정", {"number": 4})),
-                ],
-            )
+            _load(cur, cid, [
+                ("milestone:4", "milestone", {**m4, "due_on": "2026-10-30T07:00:00Z"}),
+                ("issue:1", "issue", _issue(repo, 1, "열린 마일스톤", None)),
+                ("issue:3", "issue", _issue(repo, 3, "미지정", {"number": 4})),
+            ])
             _promote(cur, cid)
         got = _by_key(client, token, cid)
         assert got["GH-1"]["milestone"] is None

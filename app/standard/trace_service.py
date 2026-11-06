@@ -38,8 +38,8 @@ _TOOL_PREFIX = {"GITHUB": "GH", "REDMINE": "RM"}
 
 @dataclass
 class BuildResult:
-    active: int = 0  # 이번에 근거가 확인된 링크(신규 + 유지)
-    broken: int = 0  # 원천 근거가 사라져 끊긴 것으로 표시한 링크
+    active: int = 0     # 이번에 근거가 확인된 링크(신규 + 유지)
+    broken: int = 0     # 원천 근거가 사라져 끊긴 것으로 표시한 링크
     superseded: int = 0  # 분류 정정으로 다른 링크에 대체됐거나 제외된 링크(ARC-024 2-5)
     unresolved: int = 0  # 근거는 있으나 가리킨 대상이 표준 모델에 없어 만들지 않은 것
     ambiguous: int = 0  # 다른 도구 GH-n·RM-n 중 그 도구 연결이 여럿이라 고르지 않은 참조
@@ -118,12 +118,7 @@ def build_project_links(cur: Any, project_id: str) -> BuildResult:
             if raw["object_kind"] == "design_doc" and (raw["payload_jsonb"] or {}).get("deleted"):
                 deleted_docs.add(str(raw["raw_id"]))
             found, dropped = _evidence_of(
-                connection["tool"],
-                raw,
-                rules,
-                candidate_codes,
-                known_paths,
-                pr_refs,
+                connection["tool"], raw, rules, candidate_codes, known_paths, pr_refs,
                 design_codes=known_codes,
             )
             for source, ex in dropped:
@@ -152,17 +147,8 @@ def build_project_links(cur: Any, project_id: str) -> BuildResult:
     replaced: dict[tuple[str, str, str, str], list[tuple[str, str]]] = {}
     for edge, (evidence, url) in planned.items():
         link_id = repository.upsert_auto_trace_link(
-            cur,
-            project_id,
-            edge.from_type,
-            edge.from_id,
-            edge.to_type,
-            edge.to_id,
-            edge.link_kind,
-            evidence.kind,
-            evidence.text,
-            url,
-            evidence.meta,
+            cur, project_id, edge.from_type, edge.from_id, edge.to_type, edge.to_id,
+            edge.link_kind, evidence.kind, evidence.text, url, evidence.meta,
         )
         if link_id is None:
             continue  # 같은 변을 사람이 만들어 두었다. 자동 근거로 덮지 않는다.
@@ -171,9 +157,9 @@ def build_project_links(cur: Any, project_id: str) -> BuildResult:
             key = (edge.from_type, edge.from_id, *evidence.target)
             if rerouted.get(key) is None:
                 rerouted[key] = link_id
-        replaced.setdefault((edge.from_type, edge.from_id, edge.to_type, edge.to_id), []).append(
-            (link_id, edge.link_kind)
-        )
+        replaced.setdefault(
+            (edge.from_type, edge.from_id, edge.to_type, edge.to_id), []
+        ).append((link_id, edge.link_kind))
         result.active += 1
         result.by_evidence[evidence.kind] = result.by_evidence.get(evidence.kind, 0) + 1
 
@@ -203,11 +189,8 @@ def _pull_request_refs(
 
 
 def _evidence_of(
-    tool: str,
-    raw: dict[str, Any],
-    rules: MappingRules,
-    known_codes: set[str],
-    known_paths: set[str],
+    tool: str, raw: dict[str, Any], rules: MappingRules,
+    known_codes: set[str], known_paths: set[str],
     pr_refs: dict[str, set[tuple[tuple[str, str], str]]] | None = None,
     design_codes: set[str] | None = None,
 ) -> tuple[list[tuple[tuple[str, str], Evidence]], list[tuple[tuple[str, str], Exclusion]]]:
@@ -236,8 +219,7 @@ def _evidence_of(
                 same = pr_refs[pr]
                 dropped += [
                     Exclusion(e.target, e.link_kind, f"병합 커밋: PR #{pr} 와 같은 근거")
-                    for e in found
-                    if (e.target, e.link_kind) in same
+                    for e in found if (e.target, e.link_kind) in same
                 ]
                 found = [e for e in found if (e.target, e.link_kind) not in same]
         elif kind == "pull_request" and raw["code_change_id"]:
@@ -267,9 +249,7 @@ def _evidence_of(
 
 
 def _edge(
-    source: tuple[str, str],
-    target: tuple[str, str],
-    evidence: Evidence,
+    source: tuple[str, str], target: tuple[str, str], evidence: Evidence,
     products: dict[str, tuple[str, str]],
 ) -> _Edge | None:
     """출발점·도착점·근거로 변 하나를 정한다. 요구사항은 언제나 도착점이다."""
@@ -279,13 +259,8 @@ def _edge(
     if source[0] == "REQUIREMENT" and target[0] == "WORK_PRODUCT":
         # 요구사항 이슈 본문이 산출물을 가리켰다. 산출물이 요구사항에 이어진 것으로 뒤집는다.
         product_type = next(t for i, t in products.values() if i == target[1])
-        return _Edge(
-            "WORK_PRODUCT",
-            target[1],
-            "REQUIREMENT",
-            source[1],
-            trace_rules.product_link_kind(product_type),
-        )
+        return _Edge("WORK_PRODUCT", target[1], "REQUIREMENT", source[1],
+                     trace_rules.product_link_kind(product_type))
     if source[0] == "REQUIREMENT":
         return None  # 요구사항이 출발점인 다른 변은 없다. 요구사항끼리도 잇지 않는다
     return _Edge(source[0], source[1], target[0], target[1], evidence.link_kind)
@@ -358,7 +333,9 @@ def traceability_rows(
     total = repository.count_requirements(cur, project_id, f)
     reqs = repository.search_requirements(cur, project_id, f, page)
     links = repository.links_to_requirements(cur, [str(r["id"]) for r in reqs])
-    labels = repository.entity_labels(cur, {(lk["from_type"], str(lk["from_id"])) for lk in links})
+    labels = repository.entity_labels(
+        cur, {(lk["from_type"], str(lk["from_id"])) for lk in links}
+    )
 
     cells: dict[str, dict[str, list[TraceCell]]] = {}
     broken: dict[str, list[str]] = {}
@@ -374,13 +351,9 @@ def traceability_rows(
             url = lk["evidence_url"] or url  # 그 커밋의 그 줄
         cells.setdefault(rid, {}).setdefault(lk["link_kind"], []).append(
             TraceCell(
-                targetId=str(lk["from_id"]),
-                label=label,
-                externalUrl=url,
-                sourceType=lk["from_type"],
-                docStatus=meta.get("docStatus"),
-                section=meta.get("section"),
-                qualifier=meta.get("qualifier"),
+                targetId=str(lk["from_id"]), label=label, externalUrl=url,
+                sourceType=lk["from_type"], docStatus=meta.get("docStatus"),
+                section=meta.get("section"), qualifier=meta.get("qualifier"),
             )
         )
         if lk["status"] == "BROKEN" and lk["link_kind"] not in broken.setdefault(rid, []):

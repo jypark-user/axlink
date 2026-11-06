@@ -30,7 +30,9 @@ def state(project_id: str, principal: Principal) -> BaselineStateResponse:
 
 
 @router.post(_BASE, response_model=BaselineResponse, status_code=201)
-def create(project_id: str, body: BaselineCreateRequest, principal: Principal) -> BaselineResponse:
+def create(
+    project_id: str, body: BaselineCreateRequest, principal: Principal
+) -> BaselineResponse:
     """올려 둔 명세서 문서에서 항목을 뽑아 작성 중 기준선을 만든다."""
     with tx() as cur:
         return baseline.create(cur, principal, project_id, body.documentId)
@@ -59,10 +61,7 @@ def add_item(
 
 @router.put(_BASE + "/{baseline_id}/items/{item_id}", response_model=BaselineResponse)
 def update_item(
-    project_id: str,
-    baseline_id: str,
-    item_id: str,
-    body: BaselineItemRequest,
+    project_id: str, baseline_id: str, item_id: str, body: BaselineItemRequest,
     principal: Principal,
 ) -> BaselineResponse:
     with tx() as cur:
@@ -100,9 +99,8 @@ def confirm(
         return baseline.confirm(cur, principal, project_id, baseline_id, body.applySpecCodes)
 
 
-@router.get(
-    "/{project_id}/requirements/unresolved-refs", response_model=list[UnresolvedRefResponse]
-)
+@router.get("/{project_id}/requirements/unresolved-refs",
+            response_model=list[UnresolvedRefResponse])
 def unresolved_refs(project_id: str, principal: Principal) -> list[UnresolvedRefResponse]:
     """사업에 없는 요구사항 코드를 가리킨 커밋·이슈. 잇지 않고 보이기만 한다."""
     with tx() as cur:

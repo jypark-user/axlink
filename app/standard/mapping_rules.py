@@ -20,8 +20,8 @@ _RETIRED = {"requirementLabel"}
 
 @dataclass(frozen=True)
 class MappingRules:
-    risk_tracker: str = "리스크"  # Redmine — 이 트래커가 risk 로 승격
-    req_id_field: str = "REQ ID"  # Redmine — 도구 횡단 접착 커스텀 필드
+    risk_tracker: str = "리스크"               # Redmine — 이 트래커가 risk 로 승격
+    req_id_field: str = "REQ ID"               # Redmine — 도구 횡단 접착 커스텀 필드
     # 저장소 설계 문서 경로 패턴(쉼표로 나눔, ARC-024). 기본은 비어 있다. 다른 업체 저장소가
     # 우리와 같은 경로를 쓴다고 가정하지 않는다. 비어 있으면 설계 문서를 수집하지 않는다
     design_doc_paths: str = ""

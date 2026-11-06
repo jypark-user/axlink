@@ -86,45 +86,24 @@ def replace_plan(cur: Any, project_id: str, work_product_id: str | None, plan: w
             prev.get(group.wbs_id), name=group.name, weight=None, restructured=False
         )
         _upsert(
-            cur,
-            project_id,
-            work_product_id,
-            line,
-            wbs_id=group.wbs_id,
-            name=group.name,
-            deliverable=None,
-            start=group.start,
-            end=group.end,
-            weight=None,
-            declared_planned=None,
-            actual=None,
-            task_key=key,
-            key_reason=reason,
+            cur, project_id, work_product_id, line,
+            wbs_id=group.wbs_id, name=group.name, deliverable=None,
+            start=group.start, end=group.end, weight=None, declared_planned=None, actual=None,
+            task_key=key, key_reason=reason,
         )
         seen.append(group.wbs_id)
     for row in plan.rows:
         line += 1
         key, reason = _decide_key(
-            prev.get(row.wbs_id),
-            name=row.name,
-            weight=row.weight,
+            prev.get(row.wbs_id), name=row.name, weight=row.weight,
             restructured=_parent_of(row.wbs_id) in restructured,
         )
         _upsert(
-            cur,
-            project_id,
-            work_product_id,
-            line,
-            wbs_id=row.wbs_id,
-            name=row.name,
-            deliverable=row.deliverable,
-            start=row.start,
-            end=row.end,
-            weight=row.weight,
-            declared_planned=row.declared_planned,
-            actual=row.actual,
-            task_key=key,
-            key_reason=reason,
+            cur, project_id, work_product_id, line,
+            wbs_id=row.wbs_id, name=row.name, deliverable=row.deliverable,
+            start=row.start, end=row.end, weight=row.weight,
+            declared_planned=row.declared_planned, actual=row.actual,
+            task_key=key, key_reason=reason,
         )
         seen.append(row.wbs_id)
     cur.execute(
@@ -142,21 +121,9 @@ def _parent_of(wbs_id: str) -> str | None:
 
 
 def _upsert(
-    cur: Any,
-    project_id: str,
-    work_product_id: str | None,
-    line: int,
-    *,
-    wbs_id: str,
-    name: str,
-    deliverable: str | None,
-    start,
-    end,
-    weight,
-    declared_planned,
-    actual,
-    task_key: str | None,
-    key_reason: str,
+    cur: Any, project_id: str, work_product_id: str | None, line: int, *, wbs_id: str,
+    name: str, deliverable: str | None, start, end, weight, declared_planned, actual,
+    task_key: str | None, key_reason: str,
 ) -> None:
     key = task_key or str(uuid.uuid4())
     cur.execute(
@@ -175,20 +142,8 @@ def _upsert(
           updated_at = now()
         """,
         (
-            project_id,
-            wbs_id,
-            _parent_of(wbs_id),
-            name[:500],
-            deliverable,
-            start,
-            end,
-            weight,
-            declared_planned,
-            actual,
-            line,
-            work_product_id,
-            key,
-            key_reason,
+            project_id, wbs_id, _parent_of(wbs_id), name[:500], deliverable, start, end,
+            weight, declared_planned, actual, line, work_product_id, key, key_reason,
         ),
     )
 
@@ -252,8 +207,7 @@ def save_judgements(cur: Any, project_id: str, judgements: list) -> list[tuple[s
     }
     changed = [
         (j.wbs_id, before[j.wbs_id], j.status)
-        for j in judgements
-        if j.wbs_id in before and before[j.wbs_id] != j.status
+        for j in judgements if j.wbs_id in before and before[j.wbs_id] != j.status
     ]
     cur.executemany(
         """
