@@ -1,0 +1,80 @@
+uc,test,acs,partial,note
+UC-001,tests/test_admin_accounts.py::test_최고관리자가_아니면_조직도_계정도_못_만든다,AC-001-1,False,자동 시험 tests/test_admin_accounts.py::test_최고관리자가_아니면_조직도_계정도_못_만든다(AC-001-1)
+UC-002,tests/test_project_setup.py::test_contractor_cannot_create_project,(대응표 본문 참조),False,자동 시험 tests/test_project_setup.py::test_contractor_cannot_create_project
+UC-002,tests/test_projects.py::test_client_sees_own_org_projects,AC-002-2,False,tests/test_projects.py::test_client_sees_own_org_projects·test_project_detail_denies_foreign_project(AC-002-2)
+UC-002,tests/test_write_authorization.py::test_용역사는_사업_정보를_바꾸거나_지우지_못한다,AC-002-1·AC-002-3·AC-002-4,False,"tests/test_write_authorization.py::test_용역사는_사업_정보를_바꾸거나_지우지_못한다. **미검증**: AC-002-1(등록 직후 지표 표시 단언 없음), AC-002-3(미구현), AC-002-4"
+UC-003,tests/test_project_setup.py::test_invite_accept_assign_revoke_delete,(대응표 본문 참조),False,자동 시험 tests/test_project_setup.py::test_invite_accept_assign_revoke_delete(가입·범위·재할당 같은 id)
+UC-003,tests/test_joint_contractors.py,AC-003-1·AC-003-2·AC-003-3·AC-003-5·AC-003-4,False,"tests/test_joint_contractors.py 7건(업체 지정 초대로 B 조직 가입, 타사 연결 403 CONNECTION_OWNER_ONLY, 대표사 권한 확대 403, 옛 초대로 기존 업체 끼어들기 409, 참여 종료 뒤 403·UNCLEAR·소유 이전, 종료 업체"
+UC-004,tests/test_auth.py,AC-004-4,False,"자동 시험 tests/test_auth.py(세션·프로필, 틀린 비번 401, 아이디 형식 미검증, refresh 회전 AC-004-4, bcrypt 흔들림 재시도)"
+UC-004,tests/test_admin_accounts.py::test_받은_사람이_비밀번호를_바꾼다,AC-004-3,False,tests/test_admin_accounts.py::test_받은_사람이_비밀번호를_바꾼다(AC-004-3)
+UC-004,tests/test_write_authorization.py,AC-004-2,False,"tests/test_write_authorization.py(범위 밖 대시보드·연결 403, AC-004-2). **미검증**: 브라우저 역할별 첫 화면, 문안(차이)"
+UC-010,tests/test_connections.py,AC-010-2·AC-010-5·AC-010-7,False,"자동 시험 tests/test_connections.py(DRAFT→ACTIVE 직접 400, test 뒤 VERIFIED, TOOL_AUTH 401, denied 보고, 자격증명·대상 변경 시 DRAFT, 서버 다른 같은 식별자 허용·같은 서버 409) → AC-010-2·5·7"
+UC-010,tests/test_credential_storage.py::test_저장_칸과_응답과_로그에_원문이_없다,AC-010-1,False,tests/test_credential_storage.py::test_저장_칸과_응답과_로그에_원문이_없다(DB·응답·DEBUG 로그에 원문 없음) → AC-010-1
+UC-010,tests/test_readonly_guard.py,AC-010-3,False,tests/test_readonly_guard.py(어댑터 소스에 post/put/patch/delete/request 호출 0건) → AC-010-3 정적
+UC-010,tests/test_connection_url_policy.py,(대응표 본문 참조),False,tests/test_connection_url_policy.py
+UC-011,tests/test_incremental_sync.py,AC-011-1·AC-011-5,False,"자동 시험 tests/test_incremental_sync.py(Redmine updated_on 필터, GitHub since, 첫 회 전체·이후 증분, 반복 수렴 stats 동일) → AC-011-1·5"
+UC-011,tests/test_sync_page_limit.py,AC-011-10,True,"tests/test_sync_page_limit.py(1,001건 이어 읽기, 중간 FAILED 뒤 다음 회차가 이어 읽음) → AC-011-10 부분"
+UC-011,tests/test_connections.py::test_backfill_tolerates_missing_permission,AC-011-6c,True,tests/test_connections.py::test_backfill_tolerates_missing_permission(선택 대상 결손 시 SUCCEEDED + 안내) → AC-011-6c 의 「받은 대상 적재」 부분만
+UC-011,tests/test_requirement_baseline.py::test_확정_뒤_재수집은_요구사항을_만들거나_정의_지정을_덮지_않는다,AC-011-4,False,tests/test_requirement_baseline.py::test_확정_뒤_재수집은_요구사항을_만들거나_정의_지정을_덮지_않는다 → AC-011-4
+UC-011,tests/test_issue_source.py,AC-011-3,False,tests/test_issue_source.py(원천 표시) → AC-011-3
+UC-011,tests/test_scheduler.py,AC-011-2·AC-011-6a·AC-011-6b·AC-011-6c·AC-011-7·AC-011-8·AC-011-9·AC-011-11·AC-011-12,True,"tests/test_scheduler.py. **미검증**: AC-011-2(차이), AC-011-6a(인증 실패 시 적재·기준 시각 불변 단언 없음), AC-011-6b(GitHub 쪽), AC-011-6c(부분 성공 표시), AC-011-7, AC-011-8(미구현), AC-01"
+UC-012,tests/test_mapping_rules.py,AC-012-1·AC-012-2·AC-012-3,True,"자동 시험 tests/test_mapping_rules.py(기본값, 모르는 키 400, 리스크 트래커·REQ ID 변경, 승격이 설정을 따름) → AC-012-1·2·3(리스크·REQ ID 한정)"
+UC-012,tests/test_scheduler.py::test_설정_API_는_선택지만_받고_발주기관만_바꾼다,AC-012-4·AC-012-5,False,"tests/test_scheduler.py::test_설정_API_는_선택지만_받고_발주기관만_바꾼다 → AC-012-4. **미검증**: AC-012-5(차이), 결함 매핑"
+UC-020,tests/test_requirement_baseline.py::test_신규_사업은_등록_정리_제출_확정을_거쳐서만_요구사항이_생긴다,AC-020-1,False,"자동 시험 tests/test_requirement_baseline.py::test_신규_사업은_등록_정리_제출_확정을_거쳐서만_요구사항이_생긴다(CLIENT 403, 위치·문제 표시, 작성 중 코드가 목록에 없음, 둘째 등록 409, 제출 400 「3건」, 수정 뒤 제출, 제출 뒤"
+UC-020,tests/test_structuring_rules.py,(대응표 본문 참조),False,tests/test_structuring_rules.py(41건·머리행·줄 규칙·상위 코드)
+UC-020,tests/test_structuring_draft.py::test_im001_명세서로_기준선을_만들면_41건이_위치와_함께_문제없이_나온다,AC-020-6·AC-020-8·AC-020-9,False,"tests/test_structuring_draft.py::test_im001_명세서로_기준선을_만들면_41건이_위치와_함께_문제없이_나온다. **미검증**: AC-020-6(취소 시험 없음), AC-020-8·9(미구현), 브라우저, 실행 확인은 IM-005 v0.1 첫 묶음 참조"
+UC-022,tests/test_design_trace_links.py,AC-022-1·AC-022-2·AC-022-3·AC-022-4,False,"자동 시험 tests/test_design_trace_links.py 8건(명시적 참조만·위치·상태, 멱등, 끊김/삭제 사유, 분류 정정 대체·전후 보존, 수동 링크 불변, 추적표 칸·권한) → AC-022-1·2·3·4"
+UC-022,tests/test_design_refs.py,(대응표 본문 참조),False,tests/test_design_refs.py 8건
+UC-022,tests/test_issue_source.py,AC-022-5,False,tests/test_issue_source.py(같은 번호 다른 연결 ambiguous) → AC-022-5
+UC-022,tests/test_requirement_status_basis.py::test_요구사항_목록_추적표_상세가_같은_출처를_말한다,AC-022-6,False,"tests/test_requirement_status_basis.py::test_요구사항_목록_추적표_상세가_같은_출처를_말한다 → AC-022-6. **미검증**: 브라우저, 커밋 메시지 정정 뒤 BROKEN(실연동)"
+UC-023,tests/test_requirement_decision.py,AC-023-1·AC-023-2·AC-023-3·AC-023-4·AC-023-5,False,"자동 시험 tests/test_requirement_decision.py 6건(지정·근거 분리·이력·활동, 재수집 뒤 지정 보존, 되돌림·재되돌림 409, 용역사 403·빈 사유 400·모르는 상태 400, 다른 사업 404, 요약·추적표·AI 표 일치) → AC-023-1·2·3·"
+UC-023,tests/test_requirement_status_basis.py,AC-023-6,False,"tests/test_requirement_status_basis.py. **미검증**: AC-023-6(지표 독립 시험은 test_wbs_completion AT5/AT8 가 승인 쪽만. 지정 → 진척률·승인률 불변 단언 없음), 브라우저"
+UC-030,tests/test_wbs.py,AC-030-2·AC-030-3,False,"자동 시험 tests/test_wbs.py(말단·합·열 이름 흔들림·30/30%/0.3, 계획선 재계산, 클램프, 합≠1 경고·정규화, 실적 미해석 0, 머리글 없음·말단 없음 예외) → AC-030-2·3(경고)·6"
+UC-030,tests/test_wbs_items.py,AC-030-5,True,"tests/test_wbs_items.py(버전마다 1회 파싱, 재업로드 갱신·비활성) → AC-030-5 부분"
+UC-030,tests/test_wbs_schedule_api.py,AC-030-1·AC-030-3·AC-030-4·AC-030-7,False,"tests/test_wbs_schedule_api.py(NONE/WBS_FILE/REDMINE, 종료 지난 작업 planned 100). **미검증**: AC-030-1(업로드 경로, 차이), AC-030-3 이전 유지(차이), AC-030-4(미구현), AC-030-7(편집 API"
+UC-031,tests/test_deliverable.py,AC-031-3,False,자동 시험 tests/test_deliverable.py(규칙 4종·대소문자·폴더 접두·종료일 전/후/당일) → AC-031-3
+UC-031,tests/test_wbs_deliverables_api.py,(대응표 본문 참조),False,tests/test_wbs_deliverables_api.py(업로드 뒤 LINKED_DOC)
+UC-031,tests/test_structuring_draft.py,AC-031-1,True,"tests/test_structuring_draft.py(확정이 work_product 만, 재확정 409, APPROVED 400, 같은 버전 제자리·새 버전 쌓임) → AC-031-1 부분·8"
+UC-031,tests/test_work_product_approval.py,AC-031-4·AC-031-8,False,"tests/test_work_product_approval.py(용역사 403, 승인자·시각, 재승인 409, 반려 사유·승인 소거, 비현행 409, 승인 버전 재확정 409) → AC-031-4·8"
+UC-031,tests/test_work_products.py,AC-031-2,True,tests/test_work_products.py(수집 파일 SUBMITTED·버전 sha) → AC-031-2 부분
+UC-031,tests/test_wbs_completion.py,AC-031-6·AC-031-2·AC-031-5·AC-031-7·AC-031-9,True,"tests/test_wbs_completion.py AT5/AT8(승인이 완료 확인율 불변) → AC-031-6 부분. **미검증**: AC-031-2 「설정 경로 아닌 파일은 제출본 아님」 단언, AC-031-5(미구현), AC-031-6 진척률 쪽, AC-031-7 문구, AC-"
+UC-032,tests/test_wbs_completion.py,AC-032-1,False,"자동 시험 tests/test_wbs_completion.py AT1~AT14(일반 요청 미포함, 가중치 반영, 50% 확인 가능·실적 불변, 승인·새 버전 뒤 불변·evidenceRevised, 철회·재철회 409·재확인, 범위 변경 RECONFIRM, 식별 승계 실패 NONE"
+UC-040,tests/test_projects.py,AC-040-1·AC-040-4·AC-040-2·AC-040-3·AC-040-5,True,"자동 시험 tests/test_projects.py(자기 조직만, 관리자 전부, 상세 metrics 키·22, 외부 사업 거절, 검색) → AC-040-1·4 부분. **미검증**: AC-040-2·3·5(미구현), 브라우저"
+UC-041,tests/test_wbs.py,AC-041-3,False,자동 시험 tests/test_wbs.py(계획선 재계산·편차·클램프·behind) → AC-041-3
+UC-041,tests/test_snapshot.py,(대응표 본문 참조),False,"tests/test_snapshot.py(그날 집계 그대로, 같은 날 덮어쓰기, 추이 점, 지표 10조합)"
+UC-041,tests/test_snapshot_policy.py,AC-041-7·AC-041-8,False,"tests/test_snapshot_policy.py(용역사 403, 오늘만, 한국 자정) → AC-041-7·8"
+UC-041,tests/test_wbs_schedule_api.py,AC-041-5,True,"tests/test_wbs_schedule_api.py(NONE 고지, 작업 줄 값, REDMINE 경고) → AC-041-5 부분"
+UC-041,tests/test_dashboard_api.py::위젯_값은_DB_집계와_같다,(대응표 본문 참조),False,tests/test_dashboard_api.py::위젯_값은_DB_집계와_같다·::추천_구성의_모든_위젯이_돈다
+UC-041,tests/test_semantic_catalog_exhaustive.py,(대응표 본문 참조),False,tests/test_semantic_catalog_exhaustive.py
+UC-041,tests/test_project_clock.py,(대응표 본문 참조),False,tests/test_project_clock.py → CC-11
+UC-041,tests/test_overview.py,AC-041-1·AC-041-2·AC-041-4·AC-041-6·AC-041-9·AC-041-10·AC-041-11,False,"tests/test_overview.py(값 없으면 NO_DATA). **미검증**: AC-041-1(IM-009 값 대조 시험 없음), AC-041-2(AI 와 같은 문장 — 구조적 일치, 실모델 미실행), AC-041-4(차이), AC-041-6 문안, AC-041-9·10(미구"
+UC-042,tests/test_dashboard_api.py,AC-042-1·AC-042-2·AC-042-4,False,"자동 시험 tests/test_dashboard_api.py(기본 대시보드·editable, 용역사 403, 위젯 생명주기·레이아웃, 카탈로그 없는 지표 400, 값 = DB 집계, 추천 구성 34조합 preview) → AC-042-1·2·4(위험 처리율 제외)·5"
+UC-042,tests/test_semantic_builder.py,AC-042-3,False,"tests/test_semantic_builder.py 14건. **미검증**: AC-042-3(generate 경로 시험 미확인), 다른 브라우저 동일성(브라우저)"
+UC-043,tests/test_issues.py,AC-043-4·AC-043-7,False,"자동 시험 tests/test_issues.py(카드 전체 100건 초과, 쪽 무관, 권한) → AC-043-4·7"
+UC-043,tests/test_issue_severity.py,AC-043-5,False,"tests/test_issue_severity.py(심각도 지어내지 않음, 미지정 분리) → AC-043-5"
+UC-043,tests/test_issue_milestone.py,(대응표 본문 참조),False,tests/test_issue_milestone.py(GitHub 마일스톤)
+UC-043,tests/test_issue_source.py,AC-043-1·AC-043-3·AC-043-7·AC-043-2·AC-043-6,False,"tests/test_issue_source.py(두 연결 같은 번호 분리, 필터 권한) → AC-043-1·3·7. **미검증**: AC-043-2(차이), AC-043-6(미구현), 브라우저"
+UC-050,tests/test_review_requests.py::test_full_cycle_with_state_diff,AC-050-3·AC-050-5,False,"자동 시험 tests/test_review_requests.py::test_full_cycle_with_state_diff(용역사 403, 201·REQUESTED, 미처리 1) → AC-050-3·5"
+UC-050,tests/test_review_wbs_snapshot.py,AC-050-1,True,tests/test_review_wbs_snapshot.py(WBS 스냅샷 키·판정 저장 안 함) → AC-050-1 WBS 부분
+UC-050,tests/test_review_no_source_write.py,AC-050-4·AC-050-1·AC-050-2,False,"tests/test_review_no_source_write.py → AC-050-4 정적. **미검증**: AC-050-1 ISSUE·RISK·WORK_PRODUCT 값, AC-050-2(미구현), 브라우저"
+UC-051,tests/test_review_no_source_write.py,AC-051-5,False,tests/test_review_no_source_write.py → AC-051-5 정적
+UC-051,tests/test_activity_api.py::test_확인_요청은_용역사에게_조치_보고는_발주기관에게_알린다,AC-051-2·AC-051-4,False,"tests/test_activity_api.py::test_확인_요청은_용역사에게_조치_보고는_발주기관에게_알린다. **미검증**: AC-051-2·4(차이), 공백 보고, 브라우저"
+UC-052,tests/test_wbs_completion.py,AC-052-4,False,tests/test_wbs_completion.py AT7·AT11(409 규칙) → AC-052-4 유사. **미검증**: 브라우저
+UC-053,tests/test_activity_api.py,AC-053-2·AC-053-3,False,자동 시험 tests/test_activity_api.py(수신자·읽음·LOG 제외·문서 업로드 알림) → AC-053-2·3
+UC-060,tests/test_ask_api.py,AC-060-1·AC-060-3·AC-060-4·AC-060-6·AC-060-5,False,"자동 시험(가짜 모델+시험 DB) tests/test_ask_api.py: 문서 질문 근거·각주·location·documentUrl·stream_calls==1(AC-060-1), 근거 부족 stream_calls==0·문안(AC-060-3), 색인 없음 NO_DOCUMEN"
+UC-060,tests/test_ask_units.py,(대응표 본문 참조),False,tests/test_ask_units.py(RRF·게이트·숫자 추출·위치 문장·라우팅·JSON)
+UC-060,tests/test_number_guard.py,(대응표 본문 참조),False,"tests/test_number_guard.py·tests/test_number_metric_binding.py(지표 불일치 차단, 한계 「늦은 작업은 10건」 통과 명시)"
+UC-060,tests/test_number_metric_binding.py,(대응표 본문 참조),False,"tests/test_number_guard.py·tests/test_number_metric_binding.py(지표 불일치 차단, 한계 「늦은 작업은 10건」 통과 명시)"
+UC-060,tests/test_chunking.py,(대응표 본문 참조),False,tests/test_chunking.py(쪽·행 메타)
+UC-060,tests/test_indexing.py,AC-060-9,False,"tests/test_indexing.py·tests/test_answer_intents.py(SEARCH_DISABLED, 집계는 값으로 답 — AC-060-9)"
+UC-060,tests/test_answer_intents.py,AC-060-9,False,"tests/test_indexing.py·tests/test_answer_intents.py(SEARCH_DISABLED, 집계는 값으로 답 — AC-060-9)"
+UC-060,tests/test_route_cache.py,(대응표 본문 참조),False,tests/test_route_cache.py. 실모델 tests/test_rag_live.py(문서 1순위·무관·이슈 건수 — AXLINK_LIVE=1 때만)
+UC-060,tests/test_rag_live.py,(대응표 본문 참조),False,tests/test_route_cache.py. 실모델 tests/test_rag_live.py(문서 1순위·무관·이슈 건수 — AXLINK_LIVE=1 때만)
+UC-060,tests/test_embedding_live.py,AC-060-2·AC-060-7·AC-060-8·AC-060-10,False,"tests/test_embedding_live.py. **미검증**: AC-060-2(IM-009 값 대조), AC-060-7 문안 전부, AC-060-8(폐쇄망 모델 실측 없음, 공개 환경은 클라우드 모델 gemma4:31b-cloud), AC-060-10(실모델 유도 시험 없"
+UC-061,tests/test_llm_settings.py,AC-061-1·AC-061-2·AC-061-3,True,"자동 시험 tests/test_llm_settings.py(비관리자 403, 용도 판별, 임베딩 전용 400, 생성 실패 400, 저장 뒤 DB·verifiedAt, 임베딩 현황·PUT 409·관리자만) → AC-061-1·2·3 부분"
+UC-061,tests/test_llm.py,AC-061-4·AC-061-5,False,"tests/test_llm.py·tests/test_embedding.py. **미검증**: AC-061-4(미구현), AC-061-5 브라우저"
+UC-061,tests/test_embedding.py,AC-061-4·AC-061-5,False,"tests/test_llm.py·tests/test_embedding.py. **미검증**: AC-061-4(미구현), AC-061-5 브라우저"
+UC-070,tests/test_documents.py,AC-070-1·AC-070-2·AC-070-4·AC-070-5·AC-070-6,True,"자동 시험 tests/test_documents.py(xlsx·hwpx 표 보존, 같은 내용 같은 문서, zip 400, 빈 파일 400, 손상 FAILED, 타 사업 403, 색인, 원본 내려받기, 삭제·청크 삭제·재업로드, FAILED 재처리, pptx 쪽 수) → AC-070-"
+UC-070,tests/test_document_worker.py,AC-070-3·AC-070-7,False,"tests/test_document_worker.py(접수→DONE 단계, 읽기 실패 사유, 색인 실패·재업로드, 두 작업자 중복 없음, 재시작 복구·한도 FAILED, 신호 없는 작업 정리, 처리 중 삭제) → AC-070-3·7"
+UC-070,tests/test_document_worker_recover.py,(대응표 본문 참조),False,tests/test_document_worker_recover.py
+UC-070,tests/test_extractor_limits.py,AC-070-6,False,"tests/test_extractor_limits.py. **미검증**: AC-070-6 「산출물 기록 유지」 단언(삭제 시험은 청크만 확인), 브라우저"
