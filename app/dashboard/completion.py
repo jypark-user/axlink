@@ -87,7 +87,12 @@ def item_facts(cur: Any, project_id: str, at: date) -> dict[str, dict[str, Any]]
 
 def current_item(cur: Any, project_id: str, *, wbs_id: str | None = None,
                  task_key: str | None = None) -> dict[str, Any] | None:
-    """지금 계획의 활성 말단 작업 하나. 번호 또는 작업 식별자로 찾는다."""
+    """지금 계획의 활성 말단 작업 하나. 번호 또는 작업 식별자로 찾는다.
+
+    행은 일정·진척 화면이 계획서를 읽을 때 바뀐다. 수집 뒤 그 화면을 열기 전에 확인
+    요청·확인이 먼저 오면 예전 계획서의 작업으로 판정하므로 현행 계획서를 먼저 싣는다.
+    """
+    dashboard_service.ensure_wbs_loaded(cur, project_id)
     where, arg = ("w.wbs_id = %s", wbs_id) if wbs_id else ("w.task_key = %s", task_key)
     return fetch_one(
         cur,
@@ -109,6 +114,7 @@ def _f(value: Any) -> float | None:
 
 def summary(cur: Any, project_id: str, at: date) -> dict[str, Any]:
     """완료 확인 화면의 숫자와 작업 행. 분모가 없으면 비율은 None(산출 불가)."""
+    dashboard_service.ensure_wbs_loaded(cur, project_id)  # current_item 과 같은 이유
     rows = fetch_all(
         cur,
         """

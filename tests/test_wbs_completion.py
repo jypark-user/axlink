@@ -46,8 +46,11 @@ class Env:
     def __init__(self):
         self.plans: list[str] = []
 
-    def load(self, rows, groups=("1", "2")) -> str:
-        """계획서 새 버전을 현행으로 두고 행을 싣는다."""
+    def load(self, rows, groups=("1", "2"), *, rows_now: bool = True) -> str:
+        """계획서 새 버전을 현행으로 두고 행을 싣는다.
+
+        rows_now=False 면 수집 직후처럼 산출물만 현행으로 바꾸고 행은 그대로 둔다.
+        """
         wp_id = str(uuid.uuid4())
         with tx() as cur:
             cur.execute(
@@ -63,7 +66,8 @@ class Env:
                 """,
                 (wp_id, PID, f"v{len(self.plans) + 1}"),
             )
-            wbs_repository.replace_plan(cur, PID, wp_id, _plan(rows, groups))
+            if rows_now:
+                wbs_repository.replace_plan(cur, PID, wp_id, _plan(rows, groups))
         self.plans.append(wp_id)
         return wp_id
 
@@ -419,6 +423,40 @@ def test_AT13_요청_뒤_작업이_바뀌면_확인을_막는다(client, client_
     with tx() as cur:
         assert review_repo.find_by_id(cur, rid)["status"] == "REPORTED"
     assert _records(rid) == []
+
+
+@pytest.fixture
+def plan_file(monkeypatch, tmp_path):
+    """수집한 계획서 파일 대역. 파일을 열면 정해 둔 계획을 돌려준다."""
+    from app.dashboard import service as dashboard_service
+
+    holder: dict[str, wbs.WbsPlan] = {}
+    path = tmp_path / "WBS.xlsx"
+    path.write_bytes(b"x")
+    monkeypatch.setattr(dashboard_service, "_plan_path", lambda project_id, row: path)
+    monkeypatch.setattr(wbs, "parse", lambda data: holder["plan"])
+    return holder
+
+
+@requires_db
+def test_AT15_수집_뒤_화면을_열기_전에도_새_계획서로_판정한다(client, client_token, env, plan_file):
+    """일정·진척 화면을 거치지 않고 완료 확인부터 봐도 현행 계획서 기준이다."""
+    env.load(BASE)
+    r2, r3 = client_token("r2"), client_token("r3")
+    _confirmed(client, client_token, "1.1")
+    rid = _request(client, r2, "1.2").json()["id"]
+    assert _report(client, r3, rid).status_code == 200
+
+    changed = [("1.1", "착수보고", "착수보고서_v2.pptx", 0.2, 1.0),
+               ("1.2", "중간보고", "중간보고서_v2.pptx", 0.3, 0.5), BASE[2]]
+    plan_file["plan"] = _plan(changed)
+    env.load(changed, rows_now=False)
+
+    res = _confirm(client, r2, rid)
+    assert res.status_code == 409 and res.json()["code"] == "SCOPE_CHANGED", res.text
+    s = _summary(client, r2)
+    assert _item(s, "1.1")["completionStatus"] == "RECONFIRM"
+    assert s["completionRate"] == 0.0
 
 
 # ---------------------------------------------------------------- 중복·일관성·권한
