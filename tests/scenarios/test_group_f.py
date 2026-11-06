@@ -16,7 +16,7 @@ import pytest
 from app.db import fetch_one, tx
 from tests.fixtures.im009 import data as d
 from tests.fixtures.im009 import files
-from tests.fixtures.im009.replay import Faults, ReplaySource, install
+from tests.fixtures.im009.replay import Faults, ReplaySource, install, restore_faults
 from tests.scenarios.conftest import auth
 
 pytestmark = pytest.mark.db
@@ -305,8 +305,8 @@ def test_UC_051_S02_보고_뒤_추가_변경(target, s0, replay):
     reported = next(e for e in det["events"] if e["kind"] == "REPORTED")
     assert _ratio(reported["snapshot"].get("actual")) == 0.85, reported["snapshot"]
     assert _ratio(det["currentState"].get("actual")) == 0.95, det["currentState"]
-    # S1 파일로 되돌린다
-    replay.faults = Faults()
+    # S1 내용으로 되돌린다(새 커밋 해시, DEF-V033 회피)
+    replay.faults = restore_faults("S1")
     target.post(f"/api/connections/{s0.ids['TD-CON-1']}/sync", json={"kind": "BACKFILL"}, headers=auth(s0.tokens["TD-ACC-V1"]))
 
 

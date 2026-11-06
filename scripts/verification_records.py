@@ -587,8 +587,14 @@ def next_run_number(cycle: str) -> int:
 def _verdict_of(tc) -> tuple[str, str]:
     skipped = tc.find("skipped")
     if skipped is not None:
+        if (skipped.get("type") or "") == "pytest.xfail":
+            # 알려진 실패(KNOWN_FAILURES). 판정은 실패, 사유는 결함·결정 ID
+            return "fail", "xfail: " + (skipped.get("message") or "")[:300]
         return "not-run", (skipped.get("message") or "skipped")[:300]
     failure, error = tc.find("failure"), tc.find("error")
+    if failure is not None and (failure.get("message") or "").startswith("[XPASS(strict)]"):
+        # 알려진 실패로 표시했는데 통과했다. 판정은 통과, KNOWN_FAILURES 를 갱신해야 한다
+        return "pass", "XPASS: " + (failure.get("message") or "")[:300]
     if error is not None:
         return "blocked", (error.get("message") or error.text or "")[:600]
     if failure is not None:

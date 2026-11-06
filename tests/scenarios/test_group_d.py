@@ -14,7 +14,7 @@ import pytest
 from app.db import fetch_all, tx
 from tests.fixtures.im009 import data as d
 from tests.fixtures.im009 import files
-from tests.fixtures.im009.replay import Faults, ReplaySource, install
+from tests.fixtures.im009.replay import Faults, ReplaySource, install, restore_faults
 from tests.scenarios.conftest import auth
 
 pytestmark = pytest.mark.db
@@ -104,8 +104,8 @@ def _completion_cycle(target, s0, wbs_id: str, scope: str, wp_id: str) -> str:
 
 
 def _restore_wbs(target, s0, replay) -> None:
-    """변형 뒤 원래 S0 WBS 로 되돌린다(같은 버전 해시의 파일을 다시 수집)."""
-    replay.faults = Faults()
+    """변형 뒤 S0 내용으로 되돌린다. 새 커밋 해시로 내 DEF-V033 을 밟지 않는다."""
+    replay.faults = restore_faults("S0")
     _sync(target, s0)
 
 
@@ -280,9 +280,7 @@ def test_UC_032_S02_철회_재확인(target, s0):
     rid2 = _completion_cycle(target, s0, "3.2", "설계서 v2 제출", s0.ids["TD-DOC-3:wp"])
     assert round(_completion(target, s0)["completionRate"], 4) == 0.35
     detail = target.get(f"/api/review-requests/{rid2}", headers=auth(s0.tokens["TD-ACC-C1"])).json()
-    with tx() as cur:
-        rows = fetch_all(cur, "select kind from completion_record where task_key like %s order by decided_at", ("%3.2%",))
-    kinds = [r["kind"] for r in rows] if rows else [r["kind"] for r in detail["completionRecords"]]
+    kinds = [r["kind"] for r in detail["completionRecords"]]
     assert kinds[-3:] == ["CONFIRMED", "WITHDRAWN", "CONFIRMED"], kinds
 
 
@@ -370,7 +368,7 @@ def test_UC_031_S02_설정_경로_커밋(target, s0, replay, monkeypatch):
         rows = fetch_all(cur, "select version, status, source_kind, is_current from work_product where project_id = %s and type = 'SOFTWARE_DESIGN' order by created_at", (s0.ids["TD-PRJ-1"],))
     tool_rows = [r for r in rows if r["source_kind"] == "TOOL"]
     assert tool_rows and tool_rows[-1]["status"] == "SUBMITTED" and tool_rows[-1]["version"].startswith("d3d3d3d3"), rows
-    replay.faults = Faults()
+    replay.faults = restore_faults("S0")
     _sync(target, s0)
 
 

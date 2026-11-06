@@ -42,6 +42,21 @@ class Faults:
     calls: list[tuple[str, str, str]] = field(default_factory=list)  # (tool, kind, since)
 
 
+_RESTORE_SEQ = [0]
+
+
+def restore_faults(state: str = "S0") -> Faults:
+    """원천 WBS 를 그 상태의 내용으로 되돌리되 새 커밋 해시로 낸다.
+
+    같은 해시(같은 blob)로 되돌리면 제품 결함 DEF-V033(예전 버전 행에 다시 insert → 500)을
+    밟는다. 그 결함은 따로 기록했고, 상태 복원은 그것과 무관하게 돼야 뒤 시험이 연쇄로 깨지지
+    않는다. 실제로는 「되돌림 커밋」이 같은 blob 을 만들므로 결함은 그대로 남는다.
+    """
+    _RESTORE_SEQ[0] += 1
+    key = "TD-DOC-6-S1" if state == "S1" else "TD-DOC-6"
+    return Faults(wbs_variant=key, wbs_sha=f"{_RESTORE_SEQ[0]:08x}" + "e" * 32)
+
+
 @dataclass
 class ReplaySource:
     state: str = "S0"

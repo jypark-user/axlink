@@ -21,7 +21,9 @@ pytestmark = pytest.mark.db
 
 @pytest.fixture
 def replay(monkeypatch, s0) -> ReplaySource:
-    return install(monkeypatch, ReplaySource(state="S0", files=s0.files))
+    # UC-021-S07 이 원천을 S1 로 바꾼 뒤에는 그 상태를 이어 쓴다. S0 로 되돌리면 같은 blob
+    # 으로 예전 버전에 다시 insert 하는 제품 결함(DEF-V033)을 밟아 뒤 시험이 연쇄로 깨진다
+    return install(monkeypatch, ReplaySource(state=s0.ids.get("SOURCE-STATE", "S0"), files=s0.files))
 
 
 def _base(s0, prj: str = "TD-PRJ-1") -> str:
@@ -267,6 +269,7 @@ def test_UC_021_S01_기존_없는_사업의_첫_확정(target, s0):
 def test_UC_021_S07_확정_뒤_재수집(target, s0, replay):
     """S1 자료로 재수집 → 요구사항 4행 유지, B 명칭·A 지정 유지, G2 는 일반 이슈 (AC-021-6)."""
     replay.state = "S1"
+    s0.ids["SOURCE-STATE"] = "S1"
     for con in ("TD-CON-1", "TD-CON-2"):
         job = target.post(f"/api/connections/{s0.ids[con]}/sync", json={"kind": "BACKFILL"}, headers=auth(s0.tokens["TD-ACC-V1"])).json()
         assert job["status"] == "SUCCEEDED", job
@@ -475,7 +478,7 @@ def test_UC_022_S02_근거_사라짐(target, s0, replay):
     assert commit["status"] == "BROKEN", commit
     assert commit["statusReason"] and commit["statusChangedAt"], commit
     # 복원: 원래 메시지로 재수집
-    replay.faults = Faults()
+    replay.faults = Faults()  # 상태는 fixture 가 이어 쓴다(S1)
     target.post(f"/api/connections/{s0.ids['TD-CON-1']}/sync", json={"kind": "BACKFILL"}, headers=auth(s0.tokens["TD-ACC-V1"]))
 
 
