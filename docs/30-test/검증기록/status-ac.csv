@@ -7,7 +7,7 @@ AC-001-5,UC-001,fail,,api,,UC-001-S06
 AC-002-1,UC-002,fail,,api·browser,,UC-002-S01
 AC-002-2,UC-002,pass-mock-only,,api,,UC-002-S02
 AC-002-3,UC-002,fail,,api,,UC-002-S04
-AC-002-4,UC-002,fail,,api,,UC-002-S03
+AC-002-4,UC-002,pass-mock-only,,api,,UC-002-S03
 AC-003-1,UC-003,pass-mock-only,,api·browser,SER.SEC.003-o3,UC-003-S01
 AC-003-2,UC-003,pass-mock-only,,api·browser,SER.SEC.003-o2,UC-003-S01
 AC-003-3,UC-003,fail,DEC-10,api,,UC-003-S03
@@ -29,7 +29,7 @@ AC-011-2,UC-011,fail,,live-tool,SWFR.CON.005-o3·SWFR.DEM.001-o2,UC-011-S01·UC-
 AC-011-3,UC-011,auto-only,,live-tool,SWFR.CON.003-o2·SWFR.CON.003-o4·SWFR.CON.004-o2·SWFR.PIP.002-o1·SWFR.PIP.002-o2,UC-011-S01
 AC-011-4,UC-011,pass-ci-only,,,SWFR.CON.005-o2·SWFR.PIP.002-o4,UC-011-S04
 AC-011-5,UC-011,partial,,,SWFR.CON.005-o2,UC-011-S04·UC-011-S08
-AC-011-6a,UC-011,pass-ci-only,,,,UC-011-S05a·UC-011-S09
+AC-011-6a,UC-011,fail,,,,UC-011-S05a·UC-011-S09
 AC-011-6b,UC-011,fail,DEC-16,,,UC-011-S05b·UC-011-S07b
 AC-011-6c,UC-011,pass-ci-only,,,,UC-011-S05c
 AC-011-7,UC-011,partial,DEC-18,,SWFR.PIP.002-o5,UC-011-S07a·UC-011-S07b·UC-011-S07c·UC-011-S07d

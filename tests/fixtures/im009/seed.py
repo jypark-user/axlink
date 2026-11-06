@@ -281,6 +281,12 @@ class Seeder:
             )
             if job.get("status") != "SUCCEEDED":
                 raise SeedError(f"{tid} 수집 실패: {job}")
+        # 수집한 WBS 파일은 대상 서버의 문서 폴더에 있다. 시험 프로세스가 스냅샷을 찍을 때
+        # 그 파일을 읽지 못하므로, 서버가 일정 화면을 열어 계획서 행을 먼저 적재하게 한다
+        for prj in dict.fromkeys(d.CONNECTIONS[tid].project for tid in tids):
+            con = next(c for c in d.CONNECTIONS.values() if c.project == prj)
+            self._ok(self.c.get(f"/api/projects/{self.ids[prj]}/wbs",
+                                headers=self._h(self.OWNER_ACCOUNT[con.owner])))
 
     def _connections(self, cur: Any) -> None:
         now = datetime.now(UTC)

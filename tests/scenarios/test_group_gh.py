@@ -311,7 +311,11 @@ def test_UC_061_S04_클라우드_표시(target, s0):
 
 
 def _upload(target, s0, prj: str, content: bytes, name: str, mime: str, acc="TD-ACC-V1"):
-    return target.post(f"/api/projects/{s0.ids[prj]}/documents", files={"file": (name, content, mime)}, headers=auth(s0.tokens[acc]))
+    """올리고 처리가 끝날 때까지 기다린다. 원격 서버는 처리를 뒤에서 한다."""
+    res = target.post(f"/api/projects/{s0.ids[prj]}/documents", files={"file": (name, content, mime)}, headers=auth(s0.tokens[acc]))
+    if res.status_code in (200, 201, 202):
+        s0.await_document(acc, res.json()["id"])
+    return res
 
 
 def test_UC_070_S03_형식_크기_거절(target, s0):
