@@ -109,10 +109,26 @@ KNOWN_FAILURES: dict[str, str] = {
 }
 
 
+# 원격 대상(AXLINK_TARGET_URL)에서는 돌 수 없는 시험. 시험 프로세스 안의 설정을 바꾸는데 그 값이
+# 대상 서버에 닿지 않는다. 가짜 모델(llm 픽스처)을 쓰는 시험도 같은 이유로 건너뛴다(실모델은 따로)
+LOCAL_ONLY: dict[str, str] = {
+    "test_UC_031_S02_설정_경로_커밋": "수집 파일 경로(서버 설정)를 시험 안에서 바꾼다. DEF-V012",
+}
+
+
 def pytest_collection_modifyitems(config, items):
     for item in items:
         if "tests/scenarios/" not in item.nodeid.replace("\\", "/"):
             continue
+        if TARGET_URL:
+            name = item.originalname or item.name
+            why = LOCAL_ONLY.get(name) or (
+                "가짜(대본) 모델은 대상 서버에 닿지 않는다. 실모델 실행으로 본다"
+                if "llm" in getattr(item, "fixturenames", ()) else None
+            )
+            if why:
+                item.add_marker(pytest.mark.skip(reason=f"원격 대상 제외: {why}"))
+                continue
         reason = KNOWN_FAILURES.get(item.originalname or item.name)
         if reason:
             item.add_marker(pytest.mark.xfail(strict=True, reason=reason))

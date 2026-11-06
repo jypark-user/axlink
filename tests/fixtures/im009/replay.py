@@ -7,10 +7,13 @@ IM-009 자료를 「원천」처럼 돌려준다. 실연동이 없을 때 수집
 
 from __future__ import annotations
 
+import os
 from collections.abc import Generator
-from dataclasses import dataclass, field
+from dataclasses import asdict, dataclass, field
 from datetime import datetime
 from pathlib import Path
+
+import httpx
 
 from app.common import errors
 from app.integration.adapter import github_connector as gh
@@ -19,6 +22,8 @@ from app.integration.port import ProbeResult
 from tests.fixtures.im009 import data as d
 from tests.fixtures.im009 import payloads
 
+# 원격 대상(5174)을 시험할 때 그 서버가 부를 재생 서버(replay_server). 없으면 프로세스 안 재생
+REPLAY_URL = os.environ.get("AXLINK_REPLAY_URL")
 WBS_PATH = "docs/00-management/WBS.xlsx"
 DESIGN_DOC_PATH = "docs/20-design/설계-민원조회.md"
 
@@ -64,6 +69,10 @@ class ReplaySource:
     faults: Faults = field(default_factory=Faults)
     # 마지막으로 복원한 WBS(자료 키, 커밋 해시). 변형이 없을 때 이것을 낸다
     wbs_current: tuple[str, str] | None = None
+
+    def calls(self) -> list[tuple[str, str, str]]:
+        """수집 호출(도구, 종류, since). 원격이면 서버가 받은 것이다."""
+        return list(self.faults.calls)
 
     # ------------------------------------------------------------ 자료
     def _github_items(self, target: str, kind: str) -> list[tuple[str, dict]]:
@@ -232,8 +241,56 @@ class ReplaySource:
         return _fetch_file
 
 
+class RemoteReplay(ReplaySource):
+    """재생 서버의 상태를 바꾸는 대역. 시험이 faults·state·wbs_current 를 바꾸면 서버에 보낸다.
+
+    시험 쪽에서 만든 변형 파일(WBS 변형 등)은 서버에 없으니, 참조되는 자료 키를 먼저 올린다.
+    """
+
+    def __init__(self, url: str, source: ReplaySource) -> None:
+        object.__setattr__(self, "_url", url.rstrip("/"))
+        object.__setattr__(self, "_sent", set())
+        object.__setattr__(self, "_ready", False)
+        super().__init__(source.state, source.files, source.faults, source.wbs_current)
+        object.__setattr__(self, "_ready", True)
+        self._push()
+
+    def __setattr__(self, name, value) -> None:
+        object.__setattr__(self, name, value)
+        if name in ("faults", "state", "wbs_current") and self._ready:
+            self._push()
+
+    def _upload(self, key: str | None) -> None:
+        if not key or key in self._sent or key not in self.files:
+            return
+        res = httpx.put(f"{self._url}/_replay/files/{key}", content=self.files[key].read_bytes())
+        res.raise_for_status()
+        self._sent.add(key)
+
+    def _push(self) -> None:
+        f = self.faults
+        self._upload(f.wbs_variant)
+        self._upload(self.wbs_current[0] if self.wbs_current else None)
+        body = asdict(f)
+        body.pop("calls")
+        for name in ("denied_kinds", "drop_issue_numbers", "wbs_targets"):
+            body[name] = sorted(body[name]) if isinstance(body[name], set) else body[name]
+        httpx.put(f"{self._url}/_replay/faults", json=body).raise_for_status()
+        state = {"state": self.state, "wbs_current": list(self.wbs_current or []) or None}
+        httpx.put(f"{self._url}/_replay/state", json=state).raise_for_status()
+
+    def calls(self) -> list[tuple[str, str, str]]:
+        """서버가 받은 수집 호출(도구, 종류, since)."""
+        return [tuple(c) for c in httpx.get(f"{self._url}/_replay/calls").json()]
+
+
 def install(monkeypatch, source: ReplaySource) -> ReplaySource:
-    """두 어댑터의 모듈 함수를 재생기로 바꾼다. 클래스 메서드가 모듈 함수를 부르므로 이것으로 충분하다."""  # noqa: E501
+    """두 어댑터의 모듈 함수를 재생기로 바꾼다. 클래스 메서드가 모듈 함수를 부르므로 이것으로 충분하다.
+
+    AXLINK_REPLAY_URL 이 있으면 원격 대상이다. 어댑터를 바꾸지 않고 재생 서버의 상태를 맞춘다.
+    """  # noqa: E501
+    if REPLAY_URL:
+        return RemoteReplay(REPLAY_URL, source)
     monkeypatch.setattr(gh, "verify", source.verify("GITHUB", tuple(gh.ITEM_PATHS)))
     monkeypatch.setattr(gh, "fetch_items", source.fetch_items("GITHUB"))
     monkeypatch.setattr(gh, "fetch_file", source.fetch_file("GITHUB"))

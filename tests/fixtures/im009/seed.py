@@ -16,6 +16,7 @@ from __future__ import annotations
 
 import hashlib
 import os
+import time
 import uuid
 from datetime import UTC, date, datetime, timedelta
 from pathlib import Path
@@ -31,6 +32,7 @@ from app.standard import trace_service
 from tests.conftest import seed_issue_requirements
 from tests.fixtures.im009 import data as d
 from tests.fixtures.im009 import files, payloads
+from tests.fixtures.im009.replay import REPLAY_URL, RemoteReplay, ReplaySource
 
 PASSWORD = os.environ.get("IM009_PASSWORD", "im009-Test-Pass!")
 ADMIN_USER = os.environ.get("IM009_ADMIN_USER", "r1")
@@ -58,6 +60,9 @@ class Seeder:
         self.tokens: dict[str, str] = {}  # TD-ACC-… → access token
         self.notes: list[str] = []  # 자료 없음·대체 기록
         self.state = "none"
+        # 원격 모드: 대상 서버의 수집이 재생 서버를 원천으로 쓴다(REPLAY_URL)
+        self.remote = bool(REPLAY_URL)
+        self.replay: RemoteReplay | None = None
         self.files = files.make_all(files_dir)
         for tid, why in files.MISSING.items():
             self.notes.append(f"{tid} 자료 없음: {why}")
@@ -225,6 +230,58 @@ class Seeder:
 
     # ------------------------------------------------------------ 3 연결 · 5 원천 재생
 
+    # 연결을 만든 업체 계정. 원격 모드는 그 계정으로 API 를 부른다
+    OWNER_ACCOUNT = {"TD-ORG-V1": "TD-ACC-V1", "TD-ORG-V2": "TD-ACC-V2", "TD-ORG-V3": "TD-ACC-V3"}
+
+    def _remote_connections(self) -> None:
+        """원격 모드. 대상 서버가 재생 서버를 원천으로 부르도록 API 로 연결을 만든다."""
+        base = REPLAY_URL.rstrip("/")
+        for tid, con in d.CONNECTIONS.items():
+            mapping = {k: v for k, v in con.mapping.items() if k in ("riskTracker", "reqIdField")}
+            if "designDocPaths" in con.mapping:
+                mapping["designDocPaths"] = ",".join(con.mapping["designDocPaths"])
+            body = {
+                "tool": con.tool,
+                "name": tid,
+                "baseUrl": f"{base}/{con.tool.lower()}",
+                "targetResource": con.target,
+                "credential": {"accessToken": "replay-token"},
+                "mappingRules": mapping or None,
+            }
+            made = self._ok(
+                self.c.post(
+                    f"/api/projects/{self.ids[con.project]}/connections",
+                    json=body,
+                    headers=self._h(self.OWNER_ACCOUNT[con.owner]),
+                ),
+                200,
+                201,
+            )
+            self.ids[tid] = str(made["id"])
+            # 화면 흐름과 같다. 연결 테스트로 검증해야 수집할 수 있다
+            self._ok(
+                self.c.post(
+                    f"/api/connections/{self.ids[tid]}/test",
+                    headers=self._h(self.OWNER_ACCOUNT[con.owner]),
+                )
+            )
+        self.notes.append(f"원격 모드: 연결 원천은 재생 서버 {base}")
+
+    def _remote_sync(self, *tids: str) -> None:
+        """대상 서버가 수집·승격하게 한다. 승격 코드는 그 서버의 것이다."""
+        for tid in tids:
+            con = d.CONNECTIONS[tid]
+            job = self._ok(
+                self.c.post(
+                    f"/api/connections/{self.ids[tid]}/sync",
+                    json={"kind": "BACKFILL"},
+                    headers=self._h(self.OWNER_ACCOUNT[con.owner]),
+                ),
+                202,
+            )
+            if job.get("status") != "SUCCEEDED":
+                raise SeedError(f"{tid} 수집 실패: {job}")
+
     def _connections(self, cur: Any) -> None:
         now = datetime.now(UTC)
         for tid, con in d.CONNECTIONS.items():
@@ -353,7 +410,21 @@ class Seeder:
             )
         body = self._ok(res, 200, 201, 202)
         self.ids[tid] = body["id"]
+        self.await_document(acc, body["id"])
         return body["id"]
+
+    def await_document(self, acc: str, doc_id: str, timeout: float = 180.0) -> dict:
+        """처리(추출·색인·초안)가 끝날 때까지 기다린다. 시험 프로세스 안 실행은 요청 안에서
+        끝나 바로 돌아오고, 원격 서버는 뒤에서 처리해 상태가 QUEUED → RUNNING → DONE 이다."""
+        deadline = time.monotonic() + timeout
+        while True:
+            doc = self._ok(self.c.get(f"/api/documents/{doc_id}", headers=self._h(acc)))
+            state = doc.get("processingState", "DONE")
+            if state in ("DONE", "FAILED"):
+                return doc
+            if time.monotonic() > deadline:
+                raise SeedError(f"문서 처리가 {timeout:.0f}초 안에 끝나지 않았다: {doc_id} {state}")
+            time.sleep(0.5)
 
     def _confirm_work_product(
         self,
@@ -461,12 +532,19 @@ class Seeder:
         self._projects()
         self._contractors()
         items = self._raw_items("S0")
-        with tx() as cur:
-            self._connections(cur)
-            for tid, rows in items.items():
-                self._load(cur, tid, rows)
-            self._legacy_requirements(cur, items["TD-CON-1"])
-            self._promote_all(cur)
+        if self.remote:
+            self.replay = RemoteReplay(REPLAY_URL, ReplaySource(state="S0", files=self.files))
+            self._remote_connections()
+            with tx() as cur:
+                self._legacy_requirements(cur, items["TD-CON-1"])
+            self._remote_sync(*d.CONNECTIONS)
+        else:
+            with tx() as cur:
+                self._connections(cur)
+                for tid, rows in items.items():
+                    self._load(cur, tid, rows)
+                self._legacy_requirements(cur, items["TD-CON-1"])
+                self._promote_all(cur)
         # A 발주기관 지정 「검증」(T0 전, 사유 「1차 시험 통과 확인」)
         self._ok(
             self.c.put(
@@ -534,9 +612,13 @@ class Seeder:
             # 09-15~09-25 스냅샷은 원천이 바뀌기 전 값(30.0/…)이어야 한다. 조치가 09-26 수집에
             # 반영되므로 그날 행만 바뀐 뒤에 찍는다(IM-009 6절 S1, 7.1 「전일 대비」).
             self._snapshots(cur, "TD-PRJ-1", d.T0, d.T1 - timedelta(days=1))
-            for tid in ("TD-CON-1", "TD-CON-2"):
-                self._load(cur, tid, items[tid])
-            self._promote_all(cur)
+            if self.remote:
+                self.replay.state = "S1"
+                self._remote_sync("TD-CON-1", "TD-CON-2")
+            else:
+                for tid in ("TD-CON-1", "TD-CON-2"):
+                    self._load(cur, tid, items[tid])
+                self._promote_all(cur)
             self._snapshots(cur, "TD-PRJ-1", d.T1, d.T1)
         self.state = "S1"
         return self

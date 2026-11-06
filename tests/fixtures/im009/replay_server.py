@@ -53,7 +53,7 @@ def _faults_from(body: dict[str, Any]) -> Faults:
     if unknown:
         raise ValueError(f"모르는 장애 항목: {sorted(unknown)}")
     args = dict(body)
-    for name in ("denied_kinds", "drop_issue_numbers"):
+    for name in ("denied_kinds", "drop_issue_numbers", "wbs_targets"):
         if name in args:
             args[name] = set(args[name])
     if "extra_commits" in args:
@@ -99,6 +99,16 @@ def create_app(source: ReplaySource) -> FastAPI:
         except (TypeError, ValueError) as exc:
             return JSONResponse({"message": str(exc)}, status_code=400)
         return JSONResponse({"ok": True})
+
+    @app.put("/_replay/files/{key}")
+    async def put_file(key: str, request: Request) -> dict:
+        """시험 쪽에서 만든 변형 자료(WBS 변형 등)를 같은 키로 둔다."""
+        folder = Path(tempfile.gettempdir()) / "im009-replay-upload"
+        folder.mkdir(exist_ok=True)
+        path = folder / f"{key}.bin"
+        path.write_bytes(await request.body())
+        source.files[key] = path
+        return {"key": key, "size": path.stat().st_size}
 
     @app.get("/_replay/calls")
     def get_calls() -> list:

@@ -130,3 +130,27 @@ def test_상태_S1_로_바꾸면_S1_자료를_낸다(server, made):
     httpx.put(f"{base}/_replay/state", json={"state": "S1"})
     got = gh.fetch_file(f"{base}/github", GH_REPO, "t", WBS_PATH)
     assert got is not None and got["sha"] == d.WBS_FILE_COMMIT_S1
+
+
+def test_원격_재생기가_장애와_변형_파일을_서버에_보낸다(server, made, tmp_path):
+    from tests.fixtures.im009.replay import Faults, RemoteReplay
+
+    base, _ = server
+    files = dict(made)
+    variant = tmp_path / "WBS-변형.xlsx"
+    variant.write_bytes(b"variant-bytes")
+    files["TD-WBS-TEST"] = variant
+    remote = RemoteReplay(base, ReplaySource(state="S0", files=files))
+
+    remote.faults = Faults(denied_kinds={"milestone"})
+    assert gh.verify(f"{base}/github", GH_REPO, "t").denied == ["milestone"]
+
+    remote.faults = Faults(wbs_variant="TD-WBS-TEST", wbs_sha="ab" * 20)
+    got = gh.fetch_file(f"{base}/github", GH_REPO, "t", WBS_PATH)
+    import base64
+
+    assert got["sha"] == "ab" * 20 and base64.b64decode(got["content"]) == b"variant-bytes"
+
+    remote.faults = Faults()
+    list(gh.fetch_items(f"{base}/github", GH_REPO, "t", "issue", 100, 5))
+    assert any(c[0] == "GITHUB" and c[1] == "issue" for c in remote.calls())

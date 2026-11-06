@@ -69,6 +69,7 @@ def _upload(target, s0, prj: str, path, name: str, mime: str, acc="TD-ACC-V1", w
             data={"wbsId": wbs_id} if wbs_id else {}, headers=auth(s0.tokens[acc]),
         )
     assert res.status_code in (200, 201, 202), res.text
+    s0.await_document(acc, res.json()["id"])  # 원격 서버는 뒤에서 처리한다
     return res.json()["id"]
 
 

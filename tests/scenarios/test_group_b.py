@@ -191,7 +191,7 @@ def test_UC_011_S02_변경_없는_증분(target, s0, replay):
     """원천이 그대로일 때 지금 수집 → 요청 범위는 마지막 시각 이후, 이력 신규·갱신 0 (AC-011-1·2)."""  # noqa: E501
     job = _sync(target, s0, "TD-CON-1")
     assert job["status"] == "SUCCEEDED", job
-    kinds = [c for c in replay.faults.calls if c[0] == "GITHUB" and c[1] == "issue"]
+    kinds = [c for c in replay.calls() if c[0] == "GITHUB" and c[1] == "issue"]
     assert kinds and kinds[-1][2], "증분 요청에 since 가 없다(전체를 다시 읽는다)"
     assert job["stats"]["skippedUnchanged"] == job["stats"]["fetched"], job["stats"]
     assert job["stats"]["upserted"] == 0, (

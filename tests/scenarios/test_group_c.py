@@ -72,6 +72,7 @@ def test_UC_020_S10_다른_사업_문서(target, s0):
         )
     assert up.status_code in (200, 201, 202), up.text
     other_doc = up.json()["id"]
+    s0.await_document("TD-ACC-V3", other_doc)
     res = target.post(_base(s0), json={"documentId": other_doc}, headers=auth(s0.tokens["TD-ACC-V1"]))
     assert res.status_code in (400, 403, 404), res.text
 
@@ -249,6 +250,7 @@ def test_UC_021_S01_기존_없는_사업의_첫_확정(target, s0):
     with path.open("rb") as f:
         up = target.post(f"/api/projects/{pid}/documents", files={"file": ("요구사항명세서_v1.0.docx", f, "application/vnd.openxmlformats-officedocument.wordprocessingml.document")}, headers=v1)
     assert up.status_code in (200, 201, 202), up.text
+    s0.await_document("TD-ACC-V1", up.json()["id"])
     made = target.post(_base(s0, "TD-PRJ-9"), json={"documentId": up.json()["id"]}, headers=v1)
     assert made.status_code == 201, made.text
     bid = made.json()["id"]
