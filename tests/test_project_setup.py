@@ -71,6 +71,27 @@ def test_create_project_seeds_dashboard_and_checklist(client, client_token, clea
 
 
 @requires_db
+def test_same_name_in_same_org_is_rejected_not_500(client, client_token, cleanup):
+    """같은 발주기관에 같은 이름은 409 와 사유다(AC-002-4, GH-204)."""
+    token = client_token("r2")
+    first = client.post(
+        "/api/projects", json=_project_body(name="시험 사업-중복"), headers=_auth(token)
+    )
+    assert first.status_code == 201, first.text
+    again = client.post(
+        "/api/projects", json=_project_body(name="시험 사업-중복"), headers=_auth(token)
+    )
+    assert again.status_code == 409, again.text
+    assert again.json()["code"] == "PROJECT_NAME_EXISTS"
+    assert "이미" in again.json()["message"]
+    # 거절 뒤에도 같은 세션으로 다른 이름은 바로 등록된다(트랜잭션이 깨지지 않았다)
+    other = client.post(
+        "/api/projects", json=_project_body(name="시험 사업-중복-2"), headers=_auth(token)
+    )
+    assert other.status_code == 201, other.text
+
+
+@requires_db
 def test_update_validates_dates_and_phase(client, client_token, cleanup):
     token = client_token("r2")
     pid = client.post("/api/projects", json=_project_body(), headers=_auth(token)).json()["id"]
