@@ -13,12 +13,14 @@
 """
 
 import secrets
+from datetime import UTC, datetime
 from typing import Any
 
 import bcrypt
 import psycopg
 from pydantic import BaseModel, Field
 
+from app.auth import repository as auth_repository
 from app.auth.models import AuthPrincipal
 from app.common import errors
 from app.db import fetch_all, fetch_one
@@ -223,3 +225,46 @@ def set_user_status(
         "update app_user set status = %s, updated_at = now() where id = %s", (req.status, user_id)
     )
     _history(cur, principal, "APP_USER", user_id, "status", user["status"], req.status)
+
+
+def reset_password(cur: Any, principal: AuthPrincipal, user_id: str) -> ClientUserCreatedResponse:
+    """임시 비밀번호를 다시 발급한다(IM-007 AC-001-5, GH-206).
+
+    새 비밀번호는 이 응답에만 담는다. 옛 비밀번호와 살아 있는 갱신 토큰은 전부 무효가 된다.
+    발급 사실은 이력에 남기되 비밀번호 자체는 어디에도 적지 않는다.
+    """
+    require_admin(principal)
+    if user_id == principal.user_id:
+        raise errors.ApiError(409, "SELF_RESET", "자기 비밀번호는 비밀번호 바꾸기에서 바꿉니다.")
+    user = fetch_one(
+        cur,
+        """
+        select u.id, u.organization_id, u.username, u.name, u.role, u.status
+          from app_user u
+         where u.id::text = %s
+        """,
+        (user_id,),
+    )
+    if user is None:
+        raise errors.not_found("계정", user_id)
+    if user["role"] == "SUPER_ADMIN":
+        raise errors.ApiError(
+            409, "ADMIN_RESET", "플랫폼 관리자 계정은 여기서 재설정하지 않습니다."
+        )
+    temporary = secrets.token_urlsafe(12)
+    password_hash = bcrypt.hashpw(temporary.encode("utf-8"), bcrypt.gensalt()).decode()
+    cur.execute(
+        "update app_user set password_hash = %s, updated_at = now() where id = %s",
+        (password_hash, user_id),
+    )
+    auth_repository.revoke_all_for_user(cur, user_id, datetime.now(UTC))
+    _history(cur, principal, "APP_USER", user_id, "password_reset", None, "임시 비밀번호 재발급")
+    return ClientUserCreatedResponse(
+        id=str(user["id"]),
+        organizationId=str(user["organization_id"]),
+        username=user["username"],
+        name=user["name"],
+        role=user["role"],
+        status=user["status"],
+        temporaryPassword=temporary,
+    )
