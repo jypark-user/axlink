@@ -9,7 +9,7 @@ export const EVIDENCE_KIND_TEXT: Record<string, string> = {
   TEXT_ISSUE_REF: '커밋·이슈 본문의 이슈 참조',
   TEXT_FILE_PATH: '커밋이 바꾼 파일 경로',
   CUSTOM_FIELD: '이슈 도구의 REQ ID 필드',
-  ISSUE_RELATION: '이슈 도구의 이슈 관계',
+  ISSUE_RELATION: '도구가 만든 이슈 관계(이슈 연결·PR 닫기 키워드)',
   DOC_REQ_REF: '저장소 설계 문서의 요구사항 참조',
 };
 
