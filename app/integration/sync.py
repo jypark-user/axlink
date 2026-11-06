@@ -182,8 +182,8 @@ def run_sync(
         )
         return job_id
 
-    denied += _collect_files(cur, cid, connector, base, target, token, job_id, stats)
     rules = MappingRules.from_json(connection.get("mapping_rules_json"))
+    denied += _collect_files(cur, cid, connector, base, target, token, job_id, stats, rules)
     _collect_details(cur, cid, connector, base, target, token, job_id, stats, rules)
 
     promoted = standard.promote_connection(cur, connection, embedding_port())
@@ -223,14 +223,15 @@ def _collect_files(
     token: str,
     job_id: str,
     stats: dict[str, int],
+    rules: MappingRules,
 ) -> list[str]:
-    """설정에 적힌 저장소 파일을 함께 가져온다.
+    """연결 설정(없으면 서버 기본값)에 적힌 저장소 파일을 함께 가져온다.
 
     WBS 는 이 경로로 들어온다. 없으면 조용히 넘어간다 — 아직 안 올렸을 수 있고,
     그건 수집 실패가 아니다. 파일이 없다는 사실 자체는 산출물 현황이 말해 준다.
     """
     skipped: list[str] = []
-    for path in settings.collect_file_map:
+    for path in rules.file_map:
         try:
             payload = connector.fetch_file(
                 base, target, token, path, settings.collect_ref or None

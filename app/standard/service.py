@@ -105,7 +105,7 @@ def promote_connection(cur: Any, connection: dict[str, Any], port: EmbeddingPort
             result.raw_only += 1
             continue
         elif kind == "file":
-            product_type = settings.collect_file_map.get(payload.get("path", ""))
+            product_type = rules.file_map.get(payload.get("path", ""))
             rec = mapping.to_work_product(payload, product_type) if product_type else None
             if rec is None:
                 result.unmapped += 1
