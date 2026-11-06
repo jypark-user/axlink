@@ -1,0 +1,142 @@
+{
+  "baseline_id": "baseline-2026-11-05",
+  "ts": "2026-11-05T16:50:00+09:00",
+  "goal": "var/notes/Goal-지시문-2026-11-05.md (저장소 밖 사본)",
+  "code": {
+    "head": "645de1d3acf134d281667aeba96542d54748e346",
+    "origin_main": "645de1d3acf134d281667aeba96542d54748e346",
+    "branch": "docs/usecase-spec-glossary",
+    "note": "문서·기록·도구만 바뀐 브랜치. 제품 코드는 main 645de1d 와 같다"
+  },
+  "documents": {
+    "IM-001-요구사항정의서.md": {
+      "path": "docs/10-requirements/IM-001-요구사항정의서.md",
+      "version": "v0.4",
+      "sha256": "deb83121a42d0c00068c90ddd92fefc133a95cb3c8303a29b7b4b505ae7c7364",
+      "committed": true,
+      "git_state": "committed",
+      "sha256_workcopy": "deb83121a42d0c00068c90ddd92fefc133a95cb3c8303a29b7b4b505ae7c7364",
+      "sha256_note": "sha256 는 LF 정규화 내용(깃 저장 내용과 같음). sha256_workcopy 는 Windows 작업 사본(CRLF)"
+    },
+    "IM-007-유스케이스명세서.md": {
+      "path": "docs/10-requirements/IM-007-유스케이스명세서.md",
+      "version": "v0.2.4",
+      "sha256": "13604ffb764108af677c8c6836a6d8953d797a9219dd884acfb2f382d7facc5e",
+      "committed": false,
+      "git_state": "untracked",
+      "sha256_workcopy": "27bbfa73283125fc1915430bf2c03b72a3bbc7e4fedf9546c8e0a47abfb1bed5",
+      "sha256_note": "sha256 는 LF 정규화 내용(깃 저장 내용과 같음). sha256_workcopy 는 Windows 작업 사본(CRLF)"
+    },
+    "IM-007A-요구사항-세부의무-대응표.md": {
+      "path": "docs/10-requirements/IM-007A-요구사항-세부의무-대응표.md",
+      "version": "v0.1.1",
+      "sha256": "b37116ddc81921dfd39e6d3ec4129169618c93fc4c92932ef651da410b8f134f",
+      "committed": false,
+      "git_state": "untracked",
+      "sha256_workcopy": "752ce40945e7475f1152f52842e67b2a32465be0c1173d28fba4db4f36bd915f",
+      "sha256_note": "sha256 는 LF 정규화 내용(깃 저장 내용과 같음). sha256_workcopy 는 Windows 작업 사본(CRLF)"
+    },
+    "IM-008-용어사전.md": {
+      "path": "docs/10-requirements/IM-008-용어사전.md",
+      "version": "v0.2.3",
+      "sha256": "a884352ef63cd96bb5a1f857b3fc386e5ca07bfa9cc7b3003fb7b7bf1b9a868c",
+      "committed": false,
+      "git_state": "untracked",
+      "sha256_workcopy": "0012268423aafe63b4506ab8af78f2c5de0e8598552a206629413c02c41ee970",
+      "sha256_note": "sha256 는 LF 정규화 내용(깃 저장 내용과 같음). sha256_workcopy 는 Windows 작업 사본(CRLF)"
+    },
+    "IM-009-공통시험자료.md": {
+      "path": "docs/30-test/IM-009-공통시험자료.md",
+      "version": "v0.2.1",
+      "sha256": "95f957f47866d1ee4c419538e04f2c00902751da46a489c9716352ff18968fb6",
+      "committed": false,
+      "git_state": "untracked",
+      "sha256_workcopy": "1615b20043997a7c6127bed25bb6badf9ff304c3c4ce49ca4eaac4b5861a70a3",
+      "sha256_note": "sha256 는 LF 정규화 내용(깃 저장 내용과 같음). sha256_workcopy 는 Windows 작업 사본(CRLF)"
+    },
+    "IM-005-시험계획및결과서.md": {
+      "path": "docs/30-test/IM-005-시험계획및결과서.md",
+      "version": "v0.2",
+      "sha256": "2d3916012b8687be4c0d3d0a00d649d64a642ce264648307e10bfc4b96f5fa85",
+      "committed": false,
+      "git_state": "modified",
+      "sha256_workcopy": "f44ae99d56af8b20180b2d302d5c8126dd8eb57474214169bdee671158eabaf9",
+      "sha256_note": "sha256 는 LF 정규화 내용(깃 저장 내용과 같음). sha256_workcopy 는 Windows 작업 사본(CRLF)"
+    },
+    "구현-검증-대응표.md": {
+      "path": "docs/30-test/구현-검증-대응표.md",
+      "version": "v0.1.2",
+      "sha256": "1e4b7b17b57095f3ff6c59c55edade7edd1baba91eed1035fc5017077e2e263a",
+      "committed": false,
+      "git_state": "untracked",
+      "sha256_workcopy": "3e5bd24ff85609f455f3c0ab0fa2accb8118d75a2ba30d70ca01eb450bc68a14",
+      "sha256_note": "sha256 는 LF 정규화 내용(깃 저장 내용과 같음). sha256_workcopy 는 Windows 작업 사본(CRLF)"
+    },
+    "협의결과-2026-10-14.md": {
+      "path": "docs/00-management/협의결과-2026-10-14.md",
+      "version": null,
+      "sha256": "e31fb0842bf506ed56d745d95ff605228bc854895b6ad5f7de3661c8c962d75b",
+      "committed": true,
+      "git_state": "committed",
+      "sha256_workcopy": "e31fb0842bf506ed56d745d95ff605228bc854895b6ad5f7de3661c8c962d75b",
+      "sha256_note": "sha256 는 LF 정규화 내용(깃 저장 내용과 같음). sha256_workcopy 는 Windows 작업 사본(CRLF)"
+    }
+  },
+  "catalog_counts": {
+    "ucs": 26,
+    "acs": 179,
+    "scenarios": 208,
+    "commons": 9,
+    "ccs": 12,
+    "decs": 18,
+    "obligations": 147
+  },
+  "environments": [
+    {
+      "name": "5173",
+      "role": "공개",
+      "last_known": {
+        "code": "main-c9ecc04",
+        "db": "V55",
+        "api_digest": "sha256:feaf7b3258c8847baf062b3b8bfbe000a7ca5a4da7b319ef1fe0f711f52907a8",
+        "web_digest": "sha256:7cf7a71c23b1a9aa2f2e753b7875cc1ad7106534ebd905fc29e1de56862cd245",
+        "since": "2026-10-23T15:35+09:00"
+      },
+      "observed": "2026-11-05T15:50+09:00 응답 없음(Docker Desktop 정지)"
+    },
+    {
+      "name": "5174",
+      "role": "내부 검증",
+      "last_known": {
+        "code": "main-7f27085",
+        "db": "V58",
+        "api_digest": "sha256:0a6333f52f645d1c0e6d8eb630610c6adc4154f6aa7962016fe200ffff123cf6",
+        "web_digest": "sha256:4e80d42dee3ca33e3e8240f8a1c7adac572bd44a02a54792251d1c98d074261c",
+        "since": "2026-11-02T18:10+09:00"
+      },
+      "observed": "2026-11-05T15:50+09:00 응답 없음(Docker Desktop 정지)"
+    },
+    {
+      "name": "docker-desktop",
+      "observed": "2026-11-05T15:50+09:00 정지. backend 로그 마지막 2026-11-04T16:33:21+09:00 State:stopping, 손상 메시지 없음. wsl docker-desktop Stopped"
+    },
+    {
+      "name": "axlink-ollama",
+      "last_known": {
+        "answer_model": "gemma4:31b-cloud (클라우드 위임)",
+        "embedding": "bge-m3"
+      },
+      "note": "실모델 검증은 온프레미스 모델 선정 뒤"
+    },
+    {
+      "name": "axlink-redmine",
+      "last_known": "멈춤(선택 프로필)",
+      "note": "Redmine 실연동은 기동·시험 프로젝트 투입 뒤"
+    }
+  ],
+  "open_items": {
+    "open_prs": 0,
+    "open_issues_sample": "GH-188 사업 이관 도구, GH-157 Jackson HIGH, GH-141·138·139 협의 항목, GH-124 root 실행"
+  },
+  "note": "커밋 전 사본은 D:\u0007xlink\u000bar\u000berify\baseline-2026-11-05\\ (v0.2.3·v0.2.2 판, CRLF). 커밋된 판은 IM-007 v0.2.4·IM-008 v0.2.3 (예시 코드 표현만 다름)"
+}
