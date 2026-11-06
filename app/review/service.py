@@ -77,13 +77,8 @@ def _conflict(code: str, message: str) -> errors.ApiError:
 
 # 완료 확인 기록에 고정하는 근거 사실. 스냅샷(review/snapshot.py WBS_ITEM)의 키와 같다
 _FACT_KEYS = (
-    "file_check",
-    "file_rule",
-    "file_ref",
-    "repo_revision",
-    "submission",
-    "approval",
-    "product_version",
+    "file_check", "file_rule", "file_ref", "repo_revision",
+    "submission", "approval", "product_version",
 )
 
 
@@ -110,12 +105,8 @@ def _evidence_item(cur: Any, project_id: str, e: Any) -> dict[str, Any]:
 def _products_now(cur: Any, evidence: list[dict[str, Any]]) -> list[dict[str, Any]]:
     ids = [e["workProductId"] for e in evidence if e.get("workProductId")]
     return [
-        {
-            "workProductId": str(p["id"]),
-            "version": p["version"],
-            "status": p["status"],
-            "approvedAt": p["approved_at"].isoformat() if p["approved_at"] else None,
-        }
+        {"workProductId": str(p["id"]), "version": p["version"], "status": p["status"],
+         "approvedAt": p["approved_at"].isoformat() if p["approved_at"] else None}
         for p in repository.work_products_by_id(cur, ids)
     ]
 
@@ -207,33 +198,17 @@ def create(
     label, state = _capture(cur, principal, project_id, req.targetType, req.targetKey)
     now = datetime.now(UTC)
     request_id = repository.insert(
-        cur,
-        project_id,
-        req.targetType,
-        req.targetKey,
-        label,
-        req.title.strip(),
-        req.body.strip(),
-        principal.user_id,
-        state,
-        now,
-        purpose=req.purpose,
-        completion_scope=scope,
-        task_key=task_key,
+        cur, project_id, req.targetType, req.targetKey, label, req.title.strip(),
+        req.body.strip(), principal.user_id, state, now,
+        purpose=req.purpose, completion_scope=scope, task_key=task_key,
     )
     repository.insert_event(
         cur, request_id, "REQUESTED", req.body.strip() or None, principal.user_id, state, now
     )
     activity.record(
-        cur,
-        project_id=project_id,
-        kind=activity.REVIEW_REQUESTED,
-        audience=activity.CONTRACTOR,
-        summary=f"확인 요청: {req.title.strip()} ({label})",
-        actor=principal,
-        target_type="REVIEW_REQUEST",
-        target_key=request_id,
-        occurred_at=now,
+        cur, project_id=project_id, kind=activity.REVIEW_REQUESTED, audience=activity.CONTRACTOR,
+        summary=f"확인 요청: {req.title.strip()} ({label})", actor=principal,
+        target_type="REVIEW_REQUEST", target_key=request_id, occurred_at=now,
     )
     return _to_response(repository.find_by_id(cur, request_id))
 
@@ -264,7 +239,9 @@ def _check_completion_request(
     return task_key, scope
 
 
-def get_detail(cur: Any, principal: AuthPrincipal, request_id: str) -> ReviewRequestDetailResponse:
+def get_detail(
+    cur: Any, principal: AuthPrincipal, request_id: str
+) -> ReviewRequestDetailResponse:
     row = _load(cur, principal, request_id)
     before = row["snapshot_json"] or {}
     # 대상이 그 사이 사라졌을 수도 있다(이슈 삭제 등). 그러면 지금 상태는 비운다.
@@ -332,32 +309,22 @@ def report(
         bad = [e.kind for e in req.evidence if e.kind not in EVIDENCE_KINDS]
         if bad:
             raise errors.validation_failed(f"근거 종류가 아닙니다: {', '.join(bad)}")
-        evidence = [_evidence_item(cur, str(row["project_id"]), e) for e in req.evidence]
+        evidence = [
+            _evidence_item(cur, str(row["project_id"]), e) for e in req.evidence
+        ]
     _, state = _capture(
         cur, principal, str(row["project_id"]), row["target_type"], row["target_key"]
     )
     now = datetime.now(UTC)
     repository.mark_reported(cur, request_id, req.body.strip(), principal.user_id, state, now)
     repository.insert_event(
-        cur,
-        request_id,
-        "REPORTED",
-        req.body.strip(),
-        principal.user_id,
-        state,
-        now,
+        cur, request_id, "REPORTED", req.body.strip(), principal.user_id, state, now,
         evidence=evidence,
     )
     activity.record(
-        cur,
-        project_id=str(row["project_id"]),
-        kind=activity.REVIEW_REPORTED,
-        audience=activity.CLIENT,
-        summary=f"조치 보고: {row['title']}",
-        actor=principal,
-        target_type="REVIEW_REQUEST",
-        target_key=request_id,
-        occurred_at=now,
+        cur, project_id=str(row["project_id"]), kind=activity.REVIEW_REPORTED,
+        audience=activity.CLIENT, summary=f"조치 보고: {row['title']}", actor=principal,
+        target_type="REVIEW_REQUEST", target_key=request_id, occurred_at=now,
     )
     return get_detail(cur, principal, request_id)
 
@@ -408,51 +375,40 @@ def confirm(
     )
     if completion_mode:
         assert item is not None
-        saved = repository.insert_completion_record(
-            cur,
-            {
-                "project_id": project_id,
-                "task_key": str(item["task_key"]),
-                "wbs_id": item["wbs_id"],
-                "review_request_id": request_id,
-                "kind": "CONFIRMED",
-                "decided_by": principal.user_id,
-                "decided_at": now,
-                "scope_hash": item["scope_hash"],
-                "weight_at": item["weight"],
-                "plan_work_product_id": item["work_product_id"],
-                "plan_version": item["plan_version"],
-                "reported_actual": item["actual"],
-                "completion_scope": row["completion_scope"],
-                "item_json": {
-                    "name": item["name"],
-                    "deliverable": item["deliverable"],
-                    "start": _iso(item["start_on"]),
-                    "end": _iso(item["end_on"]),
-                },
-                "evidence_json": {
-                    "facts": {k: state.get(k) for k in _FACT_KEYS},
-                    "reported": repository.last_reported_evidence(cur, request_id),
-                    # 근거로 든 산출물 버전의 확인 시점 상태. 뒤에 승인돼도 이 값은 그대로다
-                    "work_products_at_confirm": _products_now(
-                        cur, repository.last_reported_evidence(cur, request_id)
-                    ),
-                },
-                "note": req.note.strip() or None,
+        saved = repository.insert_completion_record(cur, {
+            "project_id": project_id,
+            "task_key": str(item["task_key"]),
+            "wbs_id": item["wbs_id"],
+            "review_request_id": request_id,
+            "kind": "CONFIRMED",
+            "decided_by": principal.user_id,
+            "decided_at": now,
+            "scope_hash": item["scope_hash"],
+            "weight_at": item["weight"],
+            "plan_work_product_id": item["work_product_id"],
+            "plan_version": item["plan_version"],
+            "reported_actual": item["actual"],
+            "completion_scope": row["completion_scope"],
+            "item_json": {
+                "name": item["name"], "deliverable": item["deliverable"],
+                "start": _iso(item["start_on"]), "end": _iso(item["end_on"]),
             },
-        )
+            "evidence_json": {
+                "facts": {k: state.get(k) for k in _FACT_KEYS},
+                "reported": repository.last_reported_evidence(cur, request_id),
+                # 근거로 든 산출물 버전의 확인 시점 상태. 뒤에 승인돼도 이 값은 그대로다
+                "work_products_at_confirm": _products_now(
+                    cur, repository.last_reported_evidence(cur, request_id)
+                ),
+            },
+            "note": req.note.strip() or None,
+        })
         if not saved:
             raise _conflict("ALREADY_DECIDED", "이 요청의 완료 확인은 이미 기록됐습니다.")
     activity.record(
-        cur,
-        project_id=str(row["project_id"]),
-        kind=activity.REVIEW_CONFIRMED,
-        audience=activity.CONTRACTOR,
-        summary=f"확인완료: {row['title']}",
-        actor=principal,
-        target_type="REVIEW_REQUEST",
-        target_key=request_id,
-        occurred_at=now,
+        cur, project_id=str(row["project_id"]), kind=activity.REVIEW_CONFIRMED,
+        audience=activity.CONTRACTOR, summary=f"확인완료: {row['title']}", actor=principal,
+        target_type="REVIEW_REQUEST", target_key=request_id, occurred_at=now,
     )
     return get_detail(cur, principal, request_id)
 
@@ -473,48 +429,34 @@ def withdraw_completion(
         )
     now = datetime.now(UTC)
     reason = req.reason.strip()
-    saved = repository.insert_completion_record(
-        cur,
-        {
-            "project_id": str(row["project_id"]),
-            "task_key": str(last["task_key"]),
-            "wbs_id": last["wbs_id"],
-            "review_request_id": request_id,
-            "kind": "WITHDRAWN",
-            "decided_by": principal.user_id,
-            "decided_at": now,
-            "scope_hash": last["scope_hash"],
-            "weight_at": last["weight_at"],
-            "plan_work_product_id": last["plan_work_product_id"],
-            "plan_version": last["plan_version"],
-            "reported_actual": last["reported_actual"],
-            "completion_scope": last["completion_scope"],
-            "item_json": last["item_json"],
-            "evidence_json": last["evidence_json"],
-            "note": reason,
-        },
-    )
+    saved = repository.insert_completion_record(cur, {
+        "project_id": str(row["project_id"]),
+        "task_key": str(last["task_key"]),
+        "wbs_id": last["wbs_id"],
+        "review_request_id": request_id,
+        "kind": "WITHDRAWN",
+        "decided_by": principal.user_id,
+        "decided_at": now,
+        "scope_hash": last["scope_hash"],
+        "weight_at": last["weight_at"],
+        "plan_work_product_id": last["plan_work_product_id"],
+        "plan_version": last["plan_version"],
+        "reported_actual": last["reported_actual"],
+        "completion_scope": last["completion_scope"],
+        "item_json": last["item_json"],
+        "evidence_json": last["evidence_json"],
+        "note": reason,
+    })
     if not saved:
         raise _conflict("ALREADY_DECIDED", "이 요청의 확인은 이미 철회됐습니다.")
     repository.insert_event(
-        cur,
-        request_id,
-        "COMPLETION_WITHDRAWN",
-        reason,
-        principal.user_id,
-        row["snapshot_json"] or {},
-        now,
+        cur, request_id, "COMPLETION_WITHDRAWN", reason, principal.user_id,
+        row["snapshot_json"] or {}, now,
     )
     activity.record(
-        cur,
-        project_id=str(row["project_id"]),
-        kind=activity.COMPLETION_WITHDRAWN,
-        audience=activity.ALL,
-        summary=f"완료 확인 철회: {row['target_label']}",
-        actor=principal,
-        target_type="REVIEW_REQUEST",
-        target_key=request_id,
-        occurred_at=now,
+        cur, project_id=str(row["project_id"]), kind=activity.COMPLETION_WITHDRAWN,
+        audience=activity.ALL, summary=f"완료 확인 철회: {row['target_label']}", actor=principal,
+        target_type="REVIEW_REQUEST", target_key=request_id, occurred_at=now,
     )
     return get_detail(cur, principal, request_id)
 
@@ -536,14 +478,8 @@ def rerequest(
         cur, request_id, "REREQUESTED", req.body.strip(), principal.user_id, state, now
     )
     activity.record(
-        cur,
-        project_id=str(row["project_id"]),
-        kind=activity.REVIEW_REREQUESTED,
-        audience=activity.CONTRACTOR,
-        summary=f"다시 요청: {row['title']}",
-        actor=principal,
-        target_type="REVIEW_REQUEST",
-        target_key=request_id,
-        occurred_at=now,
+        cur, project_id=str(row["project_id"]), kind=activity.REVIEW_REREQUESTED,
+        audience=activity.CONTRACTOR, summary=f"다시 요청: {row['title']}", actor=principal,
+        target_type="REVIEW_REQUEST", target_key=request_id, occurred_at=now,
     )
     return get_detail(cur, principal, request_id)
