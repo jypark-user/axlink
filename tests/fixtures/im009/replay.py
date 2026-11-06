@@ -62,6 +62,8 @@ class ReplaySource:
     state: str = "S0"
     files: dict[str, Path] = field(default_factory=dict)
     faults: Faults = field(default_factory=Faults)
+    # 마지막으로 복원한 WBS(자료 키, 커밋 해시). 변형이 없을 때 이것을 낸다
+    wbs_current: tuple[str, str] | None = None
 
     # ------------------------------------------------------------ 자료
     def _github_items(self, target: str, kind: str) -> list[tuple[str, dict]]:
@@ -219,6 +221,8 @@ class ReplaySource:
                 sha = d.WBS_FILE_COMMIT_S1 if self.state == "S1" else d.WBS_FILE_COMMIT_S0
                 if self.faults.wbs_variant:
                     key, sha = self.faults.wbs_variant, self.faults.wbs_sha
+                elif self.wbs_current:
+                    key, sha = self.wbs_current
                 return payloads.github_file(path, self.files[key].read_bytes(), sha, target)[1]
             if path == DESIGN_DOC_PATH:
                 text = self.files["TD-DOC-R1"].read_bytes()

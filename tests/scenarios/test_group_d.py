@@ -26,7 +26,11 @@ T0 = d.T0.isoformat()
 
 @pytest.fixture
 def replay(monkeypatch, s0) -> ReplaySource:
-    return install(monkeypatch, ReplaySource(state="S0", files=s0.files))
+    # 앞 시험이 복원한 WBS 를 이어 쓴다. 옛 파일을 다시 내면 DEF-V033 을 밟는다
+    return install(
+        monkeypatch,
+        ReplaySource(state="S0", files=s0.files, wbs_current=s0.ids.get("WBS-CURRENT")),
+    )
 
 
 def _wbs(target, s0, prj="TD-PRJ-1", acc="TD-ACC-C1", at=T0) -> dict:
@@ -105,7 +109,10 @@ def _completion_cycle(target, s0, wbs_id: str, scope: str, wp_id: str) -> str:
 
 def _restore_wbs(target, s0, replay) -> None:
     """변형 뒤 S0 내용으로 되돌린다. 새 커밋 해시로 내 DEF-V033 을 밟지 않는다."""
-    replay.faults = restore_faults("S0")
+    f = restore_faults("S0")
+    s0.ids["WBS-CURRENT"] = (f.wbs_variant, f.wbs_sha)
+    replay.wbs_current = s0.ids["WBS-CURRENT"]
+    replay.faults = Faults()
     _sync(target, s0)
 
 
@@ -280,7 +287,10 @@ def test_UC_032_S02_철회_재확인(target, s0):
     rid2 = _completion_cycle(target, s0, "3.2", "설계서 v2 제출", s0.ids["TD-DOC-3:wp"])
     assert round(_completion(target, s0)["completionRate"], 4) == 0.35
     detail = target.get(f"/api/review-requests/{rid2}", headers=auth(s0.tokens["TD-ACC-C1"])).json()
-    kinds = [r["kind"] for r in detail["completionRecords"]]
+    # 철회 기록은 첫 요청에, 재확인은 새 요청에 붙는다. 작업 기준으로 이어 본다
+    first = target.get(f"/api/review-requests/{s0.ids['TD-RR-32']}", headers=auth(s0.tokens["TD-ACC-C1"])).json()
+    recs = {r["id"]: r for r in first["completionRecords"] + detail["completionRecords"]}.values()
+    kinds = [r["kind"] for r in sorted(recs, key=lambda r: r["decidedAt"])]
     assert kinds[-3:] == ["CONFIRMED", "WITHDRAWN", "CONFIRMED"], kinds
 
 
@@ -368,8 +378,7 @@ def test_UC_031_S02_설정_경로_커밋(target, s0, replay, monkeypatch):
         rows = fetch_all(cur, "select version, status, source_kind, is_current from work_product where project_id = %s and type = 'SOFTWARE_DESIGN' order by created_at", (s0.ids["TD-PRJ-1"],))
     tool_rows = [r for r in rows if r["source_kind"] == "TOOL"]
     assert tool_rows and tool_rows[-1]["status"] == "SUBMITTED" and tool_rows[-1]["version"].startswith("d3d3d3d3"), rows
-    replay.faults = restore_faults("S0")
-    _sync(target, s0)
+    _restore_wbs(target, s0, replay)
 
 
 def test_UC_030_S03_합이_1이_아님(target, s0, replay):
