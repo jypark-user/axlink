@@ -8,6 +8,7 @@ from datetime import UTC, date, datetime, timedelta
 from typing import Any
 
 import bcrypt
+import psycopg
 
 from app.auth import repository as auth_repository
 from app.auth.models import AuthPrincipal
@@ -72,10 +73,18 @@ def create(
     if not req.description.strip():
         raise errors.validation_failed("설명을 입력하세요.")
     delete_hash = bcrypt.hashpw(req.deletePassword.encode("utf-8"), bcrypt.gensalt()).decode()
-    project_id = repository.insert_project(
-        cur, principal.org_id, req.name.strip(), start, end, req.description.strip(),
-        req.contractorName.strip() or None, delete_hash,
-    )
+    try:
+        # 같은 발주기관 안에서 사업명은 하나다(uq_project__client_name). 위반은 거절이지 서버 오류가
+        # 아니다(IM-007 AC-002-4, GH-204). 저장점으로 감싸 트랜잭션은 살려 둔다.
+        with cur.connection.transaction():
+            project_id = repository.insert_project(
+                cur, principal.org_id, req.name.strip(), start, end, req.description.strip(),
+                req.contractorName.strip() or None, delete_hash,
+            )
+    except psycopg.errors.UniqueViolation as exc:
+        raise errors.ApiError(
+            409, "PROJECT_NAME_EXISTS", "같은 이름의 사업이 이미 있습니다. 다른 이름을 쓰세요."
+        ) from exc
     repository.insert_default_dashboard(cur, project_id, principal.user_id)
     standard_repository.create_checklist(cur, project_id)
     return get_detail(cur, principal, project_id)
