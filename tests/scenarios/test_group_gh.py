@@ -14,6 +14,7 @@ from collections.abc import Iterator
 import pytest
 
 from app.ai.port import LlmResult
+from app.common import errors
 from app.config import settings
 from app.db import fetch_one, tx
 from app.rag import number_guard
@@ -24,6 +25,10 @@ pytestmark = pytest.mark.db
 
 DOCX = "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
 XLSX = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+
+
+# 실제 어댑터(app/ai/llm.py)가 연결 실패 때 내는 오류와 같은 꼴
+_DOWN = errors.ApiError(503, "AI_UNAVAILABLE", "LLM 에 닿지 못했습니다: [Errno 111] Connection refused")
 
 
 class ScriptedLlm:
@@ -37,14 +42,14 @@ class ScriptedLlm:
     def complete(self, system: str, user: str, *, json_schema=None) -> LlmResult:
         self.complete_calls += 1
         if self.fail:
-            raise ConnectionError("모델 서버에 연결할 수 없습니다")
+            raise _DOWN
         text = json.dumps(self.route, ensure_ascii=False) if self.route else "모르겠다"
         return LlmResult(text=text, model="scripted")
 
     def stream(self, system: str, user: str, *, json_schema=None) -> Iterator[str]:
         self.stream_calls += 1
         if self.fail:
-            raise ConnectionError("모델 서버에 연결할 수 없습니다")
+            raise _DOWN
         raw = json.dumps({"answer": self.text}, ensure_ascii=False) if json_schema else self.text
         for i in range(0, len(raw), 7):
             yield raw[i : i + 7]
@@ -184,9 +189,10 @@ def test_UC_060_S10_모델_장애(target, s0, llm):
     with target.stream("POST", f"/api/conversations/{conv.json()['id']}/messages", json={"question": "일반 이슈가 몇 건이야", "projectScope": []}, headers={**auth(s0.tokens["TD-ACC-C1"]), "Accept": "text/event-stream"}) as res:
         assert res.status_code in (200, 502, 503), res.read()
         events = _events(res) if res.status_code == 200 else []
-    if events:
-        text = _text(events)
-        assert ("건" in text) or ("쓸 수 없" in text) or ("모델" in text), text
+    # 안내는 delta(집계 값 답) 또는 error 사건의 문장으로 온다. 화면은 error 문장을 그대로 보인다
+    text = _text(events) + "".join(dd.get("message", "") for e, dd in events if e == "error")
+    assert ("건" in text) or ("쓸 수 없" in text), text
+    assert "Errno" not in text, "연결 오류 원문이 화면에 나간다"
     assert scripted.stream_calls == 0
 
 
