@@ -99,8 +99,7 @@ def get(cur: Any, principal: AuthPrincipal, project_id: str) -> ProjectScheduleR
         every = row["snapshot_interval_hours"]
         sync_at = time(row["sync_hour"], row["sync_minute"])
     last = fetch_one(
-        cur,
-        "select max(snapshot_date) as d from progress_snapshot where project_id = %s",
+        cur, "select max(snapshot_date) as d from progress_snapshot where project_id = %s",
         (project_id,),
     )
     now = datetime.now(UTC)
@@ -162,14 +161,8 @@ def update(
           updated_by_user_id = excluded.updated_by_user_id, updated_at = now()
         """,
         (
-            project_id,
-            req.syncIntervalMinutes,
-            sync_at.hour,
-            sync_at.minute,
-            at.hour,
-            at.minute,
-            req.snapshotIntervalHours,
-            principal.user_id,
+            project_id, req.syncIntervalMinutes, sync_at.hour, sync_at.minute,
+            at.hour, at.minute, req.snapshotIntervalHours, principal.user_id,
         ),
     )
     return get(cur, principal, project_id)

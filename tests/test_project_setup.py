@@ -178,11 +178,8 @@ def test_invite_accept_assign_revoke_delete(client, client_token, cleanup):
     dup = client.post(
         "/api/auth/invitations/accept",
         json={
-            "token": token,
-            "contractorOrgName": "시험용역사-A",
-            "username": "test-pm-a",
-            "name": "중복",
-            "password": "passw0rd1",
+            "token": token, "contractorOrgName": "시험용역사-A", "username": "test-pm-a",
+            "name": "중복", "password": "passw0rd1",
         },
     )
     assert dup.status_code == 400
@@ -203,10 +200,8 @@ def test_invite_accept_assign_revoke_delete(client, client_token, cleanup):
     users = client.get(
         "/api/users?role=CONTRACTOR&status=ACTIVE&size=100", headers=_auth(client_tok)
     ).json()
-    assert any(
-        u["username"] == "test-pm-a" and u["organizationName"] == "시험용역사-A"
-        for u in users["content"]
-    )
+    assert any(u["username"] == "test-pm-a" and u["organizationName"] == "시험용역사-A"
+               for u in users["content"])
     assert client.get("/api/users", headers=_auth(contractor_tok)).status_code == 403
 
     # 해제하면 접근이 끊기고, 다시 할당하면 살아난다 (같은 줄을 되살린다)
@@ -231,9 +226,7 @@ def test_invite_accept_assign_revoke_delete(client, client_token, cleanup):
     )
     assert wrong.status_code == 403
     right = client.request(
-        "DELETE",
-        f"/api/projects/{pid}",
-        json={"password": "delete-me-1234"},
+        "DELETE", f"/api/projects/{pid}", json={"password": "delete-me-1234"},
         headers=_auth(client_tok),
     )
     assert right.status_code == 204

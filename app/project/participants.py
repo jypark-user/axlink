@@ -24,7 +24,6 @@ ROLES = ("REPRESENTATIVE", "PARTICIPANT")
 
 # --- 조회 SQL ----------------------------------------------------------------
 
-
 def find_project(cur: Any, project_id: str) -> dict[str, Any] | None:
     return fetch_one(
         cur, "select id, client_org_id, contractor_name from project where id = %s", (project_id,)
@@ -74,7 +73,6 @@ def find_row(cur: Any, project_id: str, participant_id: str) -> dict[str, Any] |
 
 
 # --- 쓰기 SQL ----------------------------------------------------------------
-
 
 def insert(
     cur: Any, project_id: str, org_id: str, role: str, note: str | None, user_id: str | None
@@ -128,7 +126,6 @@ def ensure(cur: Any, project_id: str, org_id: str, user_id: str | None) -> None:
 
 # --- 권한 -------------------------------------------------------------------
 
-
 def require_access(cur: Any, principal: AuthPrincipal, project_id: str) -> None:
     allowed = auth_repository.allowed_project_ids(
         cur, principal.role, principal.org_id, principal.user_id
@@ -179,24 +176,20 @@ def can_manage_connection(cur: Any, principal: AuthPrincipal, conn: dict[str, An
     return active_participant(cur, project_id, principal.org_id) is not None
 
 
-def require_connection_manager(cur: Any, principal: AuthPrincipal, conn: dict[str, Any]) -> None:
+def require_connection_manager(
+    cur: Any, principal: AuthPrincipal, conn: dict[str, Any]
+) -> None:
     require_access(cur, principal, str(conn["project_id"]))
     if not can_manage_connection(cur, principal, conn):
         raise errors.ApiError(
-            403,
-            "CONNECTION_OWNER_ONLY",
+            403, "CONNECTION_OWNER_ONLY",
             "이 연결은 소유 업체와 발주기관만 바꾸거나 지울 수 있습니다.",
         )
 
 
 def history(
-    cur: Any,
-    project_id: str,
-    participant_id: str,
-    field: str,
-    before: str | None,
-    after: str | None,
-    actor: str,
+    cur: Any, project_id: str, participant_id: str, field: str,
+    before: str | None, after: str | None, actor: str,
 ) -> None:
     cur.execute(
         """

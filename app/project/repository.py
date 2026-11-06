@@ -88,15 +88,8 @@ def insert_project(
         values (%s, %s, %s, %s, %s, %s, %s, 'PLANNING', 'SI_1')
         returning id
         """,
-        (
-            client_org_id,
-            name,
-            start_date,
-            end_date,
-            description,
-            contractor_name,
-            delete_password_hash,
-        ),
+        (client_org_id, name, start_date, end_date, description, contractor_name,
+         delete_password_hash),
     )
     return str(row["id"])
 
@@ -118,7 +111,9 @@ def update_project(cur: Any, project_id: str, fields: dict[str, Any]) -> None:
         column = _UPDATABLE[key]
         sets.append(f"{column} = %s")
         params.append(value)
-    cur.execute(f"update project set {', '.join(sets)} where id = %s", (*params, project_id))
+    cur.execute(
+        f"update project set {', '.join(sets)} where id = %s", (*params, project_id)
+    )
 
 
 def find_delete_hash(cur: Any, project_id: str) -> str | None:
@@ -255,13 +250,8 @@ def insert_user(
 
 # --- 초대 -----------------------------------------------------------------
 
-
 def insert_invite(
-    cur: Any,
-    project_id: str,
-    token_hash: str,
-    expires_at: datetime,
-    created_by: str,
+    cur: Any, project_id: str, token_hash: str, expires_at: datetime, created_by: str,
     organization_id: str | None = None,
 ) -> dict[str, Any]:
     return fetch_one(
