@@ -101,6 +101,8 @@ _UPDATABLE = {
     "description": "description",
     "contractor_name": "contractor_name",
     "current_si_phase": "current_si_phase",
+    "status": "status",
+    "closed_at": "closed_at",
 }
 
 

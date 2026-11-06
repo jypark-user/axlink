@@ -101,9 +101,12 @@ function projectColumns(role: Role | undefined): ColumnDef<ProjectSummaryRespons
       accessorKey: 'name',
       header: ({ column }) => <SortableHeader column={column}>사업명</SortableHeader>,
       cell: ({ row }) => (
-        <Link to={`/p/${row.original.id}`} className="font-medium hover:underline">
-          {row.original.name}
-        </Link>
+        <span className="flex items-center gap-2">
+          <Link to={`/p/${row.original.id}`} className="font-medium hover:underline">
+            {row.original.name}
+          </Link>
+          {row.original.status === 'CLOSED' && <Badge variant="muted">종료</Badge>}
+        </span>
       ),
     },
     {
