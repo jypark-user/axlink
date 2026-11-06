@@ -98,3 +98,33 @@ def test_pdf_표_찾기가_죽어도_쪽의_글은_남는다(tmp_path: Path, mon
 
     assert result.page_count == 1 and result.table_count == 0
     assert "Kickoff report" in result.text and result.warning == ""
+
+
+def test_docx_는_표제를_절로_남기고_표를_제자리에_둔다(tmp_path: Path):
+    """회의록 「논의 사항」 절의 문단이 출처 위치로 그 절을 가리켜야 한다(AC-060-11)."""
+    from docx import Document
+
+    from app.rag import chunking
+
+    doc = Document()
+    doc.add_heading("회의록 2026-08-25", level=1)
+    doc.add_paragraph("참석: 발주기관 담당자, 수행사 PM")
+    doc.add_heading("논의 사항", level=2)
+    doc.add_paragraph("외부 연계 규격 협의가 지연돼 설계 완료가 늦어졌다.")
+    table = doc.add_table(rows=2, cols=2)
+    table.cell(0, 0).text, table.cell(0, 1).text = "항목", "기한"
+    table.cell(1, 0).text, table.cell(1, 1).text = "설계서 초안", "9월"
+    doc.add_heading("결정 사항", level=2)
+    doc.add_paragraph("설계서 초안을 9월 중 제출한다.")
+    path = tmp_path / "회의록.docx"
+    doc.save(path)
+
+    result = extractor.extract(path, "DOCX")
+
+    assert result.table_count == 1
+    text = result.text
+    assert "## 논의 사항" in text
+    assert text.index("## 논의 사항") < text.index("| 설계서 초안 |") < text.index("## 결정 사항")
+    drafts = chunking.chunk("DOCUMENT_UPLOAD", "회의록.docx", text)
+    hit = next(d for d in drafts if "지연" in d.content)
+    assert hit.meta["headingPath"][-1] == "논의 사항", hit.meta

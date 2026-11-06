@@ -9,6 +9,7 @@ HWPX)은 풀린 크기가 수십 배가 될 수 있다. 그래서 열기 전에 
 (점검 RES-02). 파서를 별도 프로세스로 떼거나 처리 시간에 상한을 두는 일은 하지 않았다.
 """
 
+import re
 import zipfile
 from dataclasses import dataclass
 from pathlib import Path
@@ -114,15 +115,44 @@ def _hwpx(path: Path) -> ExtractResult:
     return ExtractResult(text, len(HWPXReader(path).get_tables()), warning=err or "")
 
 
+# DOCX 표제 스타일 이름. 영문 기본 이름(Heading 1)과 한글판에서 바꿔 단 이름(제목 1)을 함께 본다
+_DOCX_HEADING = re.compile(r"^(?:heading|제목)\s*(\d)$", re.IGNORECASE)
+
+
+def _docx_heading_level(paragraph) -> int | None:
+    name = ((paragraph.style.name if paragraph.style is not None else "") or "").strip()
+    if name.lower() == "title":
+        return 1
+    m = _DOCX_HEADING.match(name)
+    return min(int(m.group(1)), 6) if m else None
+
+
 def _docx(path: Path) -> ExtractResult:
+    """본문 순서대로 문단과 표를 낸다. 표제 스타일 문단은 마크다운 표제로 남긴다.
+
+    청킹은 표제로 절 경로를 만든다. 스타일을 버리면 출처 위치(「논의 사항」 같은 절)가
+    비고, 표를 끝으로 몰면 표가 어느 절에 있었는지 잃는다(AC-060-11).
+    """
     from docx import Document
+    from docx.table import Table
+    from docx.text.paragraph import Paragraph
 
     doc = Document(path)
-    parts = [p.text for p in doc.paragraphs if p.text.strip()]
-    for table in doc.tables:
-        rows = [[c.text.strip() for c in r.cells] for r in table.rows]
-        parts.append(markdown_table(rows))
-    return ExtractResult("\n\n".join(parts), len(doc.tables))
+    parts: list[str] = []
+    tables = 0
+    for child in doc.element.body.iterchildren():
+        tag = child.tag.rsplit("}", 1)[-1]
+        if tag == "p":
+            para = Paragraph(child, doc)
+            if not para.text.strip():
+                continue
+            level = _docx_heading_level(para)
+            parts.append(f"{'#' * level} {para.text.strip()}" if level else para.text)
+        elif tag == "tbl":
+            rows = [[c.text.strip() for c in r.cells] for r in Table(child, doc).rows]
+            parts.append(markdown_table(rows))
+            tables += 1
+    return ExtractResult("\n\n".join(parts), tables)
 
 
 # XLSX 표의 첫 열 이름. 엑셀 행 번호가 들어가고, 청킹이 이 이름으로 그 열을 알아본다
