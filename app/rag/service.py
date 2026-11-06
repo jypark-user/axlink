@@ -372,12 +372,25 @@ def stream(p: Prepared) -> Iterator[bytes]:
         raise
     except errors.ApiError as exc:
         _abort(assistant_id, pieces, p)
-        yield _sse_raw("error", {"code": exc.code, "message": exc.message})
+        message = exc.message
+        if exc.code == "AI_UNAVAILABLE":
+            # 연결 오류 원문은 운영 기록에만 둔다. 화면에는 쓸 수 없다는 것과 대신 볼 곳을 말한다
+            log.warning(
+                "질의 중 모델 서버 장애 conversation=%s: %s", p.conversation_id, exc.message
+            )
+            message = MODEL_UNAVAILABLE
+        yield _sse_raw("error", {"code": exc.code, "message": message})
     except Exception:
         log.exception("질의 처리 실패 conversation=%s", p.conversation_id)
         _abort(assistant_id, pieces, p)
         yield _sse_raw("error", {"code": "INTERNAL", "message": "답변 생성 중 오류가 났습니다."})
 
+
+# 모델·임베딩 서버에 닿지 못했을 때의 안내(AC-060-9). 값은 현황 화면이 같은 집계로 보여 준다
+MODEL_UNAVAILABLE = (
+    "AI 모델 서버를 지금 쓸 수 없어 답변을 만들지 못했습니다. "
+    "진척·이슈 수치는 현황 화면에서 확인할 수 있습니다. 잠시 뒤 다시 질문해 주세요."
+)
 
 # 답의 종류(done.finishReason). 모델이 쓴 답은 STOP·PARTIAL·NUMBER_GUARD, 나머지는 서버 문안이다.
 STOP = "STOP"
