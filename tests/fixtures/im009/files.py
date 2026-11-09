@@ -140,11 +140,11 @@ def _docx_table(doc: Document, header: list[str], rows: list[tuple]) -> None:
 
 
 def spec_v1(path: Path) -> Path:
-    """TD-DOC-1 요구사항명세서_v1.0.docx: 상위 절 제목 「SR.PORT.01 포털 기능」 + 표 1(3행). 1쪽."""
+    """TD-DOC-1 요구사항명세서_v1.0.docx: 상위 절 「SR.PORT.001 포털 기능」 + 표 1(3행). 1쪽."""
     doc = Document()
     doc.add_heading("요구사항 명세서 v1.0", level=1)
     doc.add_paragraph("시민포털 고도화 사업의 소프트웨어 요구사항 명세서다.")
-    doc.add_heading("SR.PORT.01 포털 기능", level=2)
+    doc.add_heading("SR.PORT.001 포털 기능", level=2)
     _docx_table(doc, SPEC_HEADER, SPEC_ROWS_V1)
     path.parent.mkdir(parents=True, exist_ok=True)
     doc.save(path)

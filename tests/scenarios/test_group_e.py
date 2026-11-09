@@ -378,7 +378,7 @@ def test_UC_043_S02_트래커_버전(target, s0):
 
 
 def test_UC_043_S03_번호_겹침(target, s0):
-    """G3·W3 두 행, TD-CON-1 필터 2건(G4·G5)·TD-CON-3 필터 1건 (AC-043-3)."""
+    """G4·W4 두 행, TD-CON-1 필터 2건(G4·G5)·TD-CON-3 필터 1건 (AC-043-3)."""
     pid = s0.ids["TD-PRJ-1"]
     con1 = _get(target, s0, f"/api/projects/{pid}/issues?size=100&connectionId={s0.ids['TD-CON-1']}")
     con3 = _get(target, s0, f"/api/projects/{pid}/issues?size=100&connectionId={s0.ids['TD-CON-3']}")
@@ -386,15 +386,15 @@ def test_UC_043_S03_번호_겹침(target, s0):
     problems: list[str] = []
     if {r["key"] for r in con1["content"]} != {"GH-4", "GH-5"}:
         problems.append(f"TD-CON-1 필터 {[r['key'] for r in con1['content']]}")
-    if [r["key"] for r in con3["content"]] != ["GH-3"]:
+    if [r["key"] for r in con3["content"]] != ["GH-4"]:
         problems.append(f"TD-CON-3 필터 {[r['key'] for r in con3['content']]}")
     by_con = {s["connectionId"]: s["count"] for s in summary["sources"]} if summary.get("sources") else {}
     if by_con and (by_con.get(s0.ids["TD-CON-1"]) != 2 or by_con.get(s0.ids["TD-CON-3"]) != 1):
         problems.append(f"요약 카드 연결별 건수 {by_con}")
-    # 같은 번호 #3 이 두 행으로 보여야 한다(G3 는 출처 이슈라 S0 에서 이슈 행이 아니다: DEF-V017)
+    # 같은 번호 #4 가 연결마다 한 행씩, 두 행으로 보여야 한다
     all_rows = _get(target, s0, f"/api/projects/{pid}/issues?size=100")["content"]
-    if sum(1 for r in all_rows if r["key"] == "GH-3") != 2:
-        problems.append(f"#3 행 수 {sum(1 for r in all_rows if r['key'] == 'GH-3')} (기대 2, DEF-V017)")
+    if sum(1 for r in all_rows if r["key"] == "GH-4") != 2:
+        problems.append(f"#4 행 수 {sum(1 for r in all_rows if r['key'] == 'GH-4')} (기대 2)")
     assert not problems, problems
 
 
@@ -437,7 +437,7 @@ def test_UC_041_S06_스냅샷_추이(target, s0):
     rows = {r["snapshotDate"]: r for r in _get(target, s0, f"/api/projects/{s0.ids['TD-PRJ-1']}/snapshots?limit=366")}
     assert "2026-09-25" in rows and "2026-09-26" in rows, sorted(rows)[-5:]
     a, b = rows["2026-09-25"], rows["2026-09-26"]
-    # 스냅샷은 백분율(%)로 저장된다. 문서 표시값과 비교한다(계획선 표시값 정정은 DEF-V001)
+    # 스냅샷은 백분율(%)로 저장된다. 문서 표시값과 비교한다
     assert round(a["representativePct"], 1) == 30.0 and round(a["wbsPlannedPct"], 2) == 72.85, a
     assert round(b["representativePct"], 1) == 39.0 and round(b["wbsPlannedPct"], 2) == 73.44, b
     assert round(b["representativePct"] - a["representativePct"], 1) == 9.0

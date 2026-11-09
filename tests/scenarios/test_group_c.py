@@ -90,7 +90,7 @@ def test_UC_020_S07_등록_취소(target, s0):
 
 
 def test_UC_020_S01_표_형식_명세서_등록_제출(target, s0):
-    """3건 추출(A 같음·B 다름·D 새), 상위 SR.PORT.01, 제출 뒤 확정 대기. 목록·이행률 불변 (AC-020-1·4).
+    """3건 추출(A 같음·B 다름·D 새), 상위 SR.PORT.001, 제출 뒤 확정 대기. 목록·이행률 불변 (AC-020-1·4).
 
     뒤 시나리오가 이 제출에 기대므로 판정은 모아서 끝에 한다(제출은 항목 판정과 무관하게 시도)."""
     v1, c1 = auth(s0.tokens["TD-ACC-V1"]), auth(s0.tokens["TD-ACC-C1"])
@@ -113,8 +113,8 @@ def test_UC_020_S01_표_형식_명세서_등록_제출(target, s0):
             )
     if not all(i["location"].startswith("표 1") for i in items.values()):
         problems.append(f"위치 {[i['location'] for i in items.values()]}")
-    if [p["code"] for p in b["parents"]] != ["SR.PORT.01"]:
-        problems.append(f"상위 요구사항 {[p['code'] for p in b['parents']]} (기대 ['SR.PORT.01'])")
+    if [p["code"] for p in b["parents"]] != ["SR.PORT.001"]:
+        problems.append(f"상위 요구사항 {[p['code'] for p in b['parents']]} (기대 ['SR.PORT.001'])")
     if b["blockingCount"] != 0:
         problems.append(f"막는 문제 {b['blockingCount']}")
     sub = target.post(f"{_base(s0)}/{b['id']}/submit", headers=v1)
@@ -269,7 +269,7 @@ def test_UC_021_S01_기존_없는_사업의_첫_확정(target, s0):
 
 
 def test_UC_021_S07_확정_뒤_재수집(target, s0, replay):
-    """S1 자료로 재수집 → 요구사항 4행 유지, B 명칭·A 지정 유지, G2 는 일반 이슈 (AC-021-6)."""
+    """S1 자료로 재수집 → 요구사항 4행 유지, B 명칭·A 지정 유지, G2 는 B 의 출처로 남음 (AC-021-6)."""
     replay.state = "S1"
     s0.ids["SOURCE-STATE"] = "S1"
     for con in ("TD-CON-1", "TD-CON-2"):
@@ -281,23 +281,27 @@ def test_UC_021_S07_확정_뒤_재수집(target, s0, replay):
     assert reqs["UR.PORT.001"]["status"] == "VERIFIED"
     issues = target.get(f"/api/projects/{s0.ids['TD-PRJ-1']}/issues?size=100", headers=auth(s0.tokens["TD-ACC-C1"])).json()
     keys = {i["key"] for i in issues["content"]}
-    assert "GH-2" in keys, "확정 뒤에도 출처 이슈 G2 가 일반 이슈로 조회되지 않는다"
+    # 확정 뒤에도 출처 연결을 끊지 않는다(DEF-V018 결정 b). G2 는 일반 이슈로 세지 않는다
+    assert "GH-2" not in keys, "기준선 안 요구사항 B 의 출처 이슈 G2 가 일반 이슈로 바뀌었다"
 
 
 def test_UC_021_S08_없는_코드_참조_상위_코드(target, s0, replay):
-    """커밋 [UR.PORT.009] 변형 → 「요구사항에 없는 코드」 1건, SR.PORT.01 은 없음 (AC-021-7)."""
+    """커밋 [UR.PORT.009] 변형 → 「요구사항에 없는 코드」 1건, SR.PORT.001 은 없음 (AC-021-7)."""
     replay.faults = Faults(extra_commits=[d.Commit(
         "TD-CMT-X", "TD-CON-1", "f0f0f0f00009f0f0f0f00009f0f0f0f00009f0f0",
-        "fix: 없는 요구사항 참조 [UR.PORT.009] 와 상위 SR.PORT.01 언급", ("src/x.py",),
+        "fix: 없는 요구사항 참조 [UR.PORT.009] 와 상위 SR.PORT.001 언급", ("src/x.py",),
         "2026-09-01T09:00:00Z", "S0",
     )])
     job = target.post(f"/api/connections/{s0.ids['TD-CON-1']}/sync", json={"kind": "BACKFILL"}, headers=auth(s0.tokens["TD-ACC-V1"])).json()
     assert job["status"] == "SUCCEEDED", job
     refs = target.get(f"/api/projects/{s0.ids['TD-PRJ-1']}/requirements/unresolved-refs", headers=auth(s0.tokens["TD-ACC-C1"]))
     assert refs.status_code == 200, refs.text
-    codes = [r["code"] for r in refs.json()]
-    assert "UR.PORT.009" in codes, codes
-    assert "SR.PORT.01" not in codes, codes
+    # 화면은 parentTitle 이 붙은 줄을 「상위 요구사항 ID」로 따로 접고, 나머지만 「요구사항에 없는 ID」로 보인다
+    unknown = [r["code"] for r in refs.json() if not r.get("parentTitle")]
+    parents = [r["code"] for r in refs.json() if r.get("parentTitle")]
+    assert "UR.PORT.009" in unknown, refs.json()
+    assert "SR.PORT.001" not in unknown, refs.json()
+    assert "SR.PORT.001" in parents, refs.json()
 
 
 @pytest.mark.skip(reason="DEC-11(이행률 분모) 결정 전. 결정 뒤 7.7 → 7.x 로 옮긴 값으로 단언한다")
@@ -336,7 +340,7 @@ def test_UC_022_S03_멱등_재생성(target, s0):
 
 
 def test_UC_022_S04_같은_번호_다른_연결(target, s0):
-    """TD-CMT-4(GH-3, TD-CON-1) → G3, TD-CMT-W1(GH-3, TD-CON-3) → W3. 서로 바뀌지 않음 (AC-022-5)."""
+    """TD-CMT-4(GH-4, TD-CON-1) → G4, TD-CMT-W1(GH-4, TD-CON-3) → W4. 서로 바뀌지 않음 (AC-022-5)."""
     pid = s0.ids["TD-PRJ-1"]
     with tx() as cur:
         rows = fetch_all(
@@ -353,9 +357,9 @@ def test_UC_022_S04_같은_번호_다른_연결(target, s0):
         )
     pairs = {(r["from_con"], r["to_ext"], r["to_con"]) for r in rows}
     con1, con3 = s0.ids["TD-CON-1"], s0.ids["TD-CON-3"]
-    assert (con1, "issue:3", con1) in pairs, pairs
-    assert (con3, "issue:3", con3) in pairs, pairs
-    assert (con1, "issue:3", con3) not in pairs and (con3, "issue:3", con1) not in pairs
+    assert (con1, "issue:4", con1) in pairs, pairs
+    assert (con3, "issue:4", con3) in pairs, pairs
+    assert (con1, "issue:4", con3) not in pairs and (con3, "issue:4", con1) not in pairs
 
 
 def test_UC_022_S12_이슈_본문_참조는_해석하지_않음(target, s0):
