@@ -109,7 +109,7 @@ def _completion_cycle(target, s0, wbs_id: str, scope: str, wp_id: str) -> str:
 
 
 def _restore_wbs(target, s0, replay) -> None:
-    """변형 뒤 S0 내용으로 되돌린다. 새 커밋 해시로 내 DEF-V033 을 밟지 않는다."""
+    """변형 뒤 S0 내용으로 되돌린다. 같은 blob 이라 그 판이 현행으로 되살아나야 한다(DEF-V033)."""
     f = restore_faults("S0")
     s0.ids["WBS-CURRENT"] = (f.wbs_variant, f.wbs_sha)
     replay.wbs_current = s0.ids["WBS-CURRENT"]

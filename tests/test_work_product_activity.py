@@ -80,3 +80,49 @@ def test_문서로_올린_새_버전은_앞_버전의_활동을_물려받지_않
         wp_id = standard_repo.place_document_work_product(cur, PID, None, None, rec)
         assert _activity(cur, wp_id) == (None, "SI_3")
         raise _Rollback
+
+
+@requires_db
+def test_파일을_예전_내용으로_되돌리면_그_판을_현행으로_되살린다():
+    """DEF-V033. 되돌림 커밋은 같은 blob(같은 버전)을 다시 만든다. 새 행을 넣으면 버전 유일
+    제약에 걸려 수집 전체가 500 이었다. 그 판의 행을 현행으로 되살리고 승인 이력은 그대로 둔다."""
+    with pytest.raises(_Rollback), tx() as cur:
+        org = fetch_one(cur, "select id from organization where type = 'CONTRACTOR' limit 1")
+        conn_id = str(uuid.uuid4())
+        cur.execute(
+            """
+            insert into tool_connection (id, project_id, contractor_org_id, tool, name, base_url,
+                                         target_resource, auth_encrypted, auth_hint, status)
+            values (%s, %s, %s, 'GITHUB', 'TST', 'https://api.github.invalid/',
+                    'revert/test', 'x', 'x', 'ACTIVE')
+            """,
+            (conn_id, PID, org["id"]),
+        )
+        cur.execute(
+            "delete from work_product where project_id = %s and type = 'MAINTENANCE_DOC'", (PID,)
+        )
+
+        def put(version: str, sha: str) -> str:
+            rec = {
+                "type": "MAINTENANCE_DOC", "version": version, "title": f"유지보수 안내 {version}",
+                "file_uri": "docs/maint.md", "external_url": None, "source_revision": sha,
+            }
+            return standard_repo.upsert_work_product(cur, PID, conn_id, "docs/maint.md", rec)
+
+        first = put("A1", "c1")
+        cur.execute(
+            "update work_product set status = 'APPROVED', approved_at = now() where id = %s",
+            (first,),
+        )
+        second = put("B2", "c2")
+        assert second != first
+        again = put("A1", "c3")  # c3 은 c1 의 내용으로 되돌린 커밋
+        assert again == first
+        rows = cur.execute(
+            "select id::text, version, is_current, status, source_revision from work_product "
+            "where project_id = %s and type = 'MAINTENANCE_DOC' order by version",
+            (PID,),
+        ).fetchall()
+        assert [(r["version"], r["is_current"]) for r in rows] == [("A1", True), ("B2", False)]
+        assert rows[0]["status"] == "APPROVED" and rows[0]["source_revision"] == "c3"
+        raise _Rollback

@@ -52,19 +52,17 @@ class Faults:
     calls: list[tuple[str, str, str]] = field(default_factory=list)  # (tool, kind, since)
 
 
-_RESTORE_SEQ = [0]
 
 
 def restore_faults(state: str = "S0") -> Faults:
-    """원천 WBS 를 그 상태의 내용으로 되돌리되 새 커밋 해시로 낸다.
+    """원천 WBS 를 그 상태의 내용으로 되돌린다. 실제 되돌림 커밋처럼 같은 blob(같은 sha)으로 낸다.
 
-    같은 해시(같은 blob)로 되돌리면 제품 결함 DEF-V033(예전 버전 행에 다시 insert → 500)을
-    밟는다. 그 결함은 따로 기록했고, 상태 복원은 그것과 무관하게 돼야 뒤 시험이 연쇄로 깨지지
-    않는다. 실제로는 「되돌림 커밋」이 같은 blob 을 만들므로 결함은 그대로 남는다.
+    예전에는 제품 결함 DEF-V033(예전 버전 행에 다시 insert → 500)을 피하려고 새 해시로 냈다.
+    고친 뒤로는 되돌림이 그 판을 현행으로 되살리는지 시나리오의 상태 복원이 같이 확인한다.
     """
-    _RESTORE_SEQ[0] += 1
-    key = "TD-DOC-6-S1" if state == "S1" else "TD-DOC-6"
-    return Faults(wbs_variant=key, wbs_sha=f"{_RESTORE_SEQ[0]:08x}" + "e" * 32)
+    if state == "S1":
+        return Faults(wbs_variant="TD-DOC-6-S1", wbs_sha=d.WBS_FILE_COMMIT_S1)
+    return Faults(wbs_variant="TD-DOC-6", wbs_sha=d.WBS_FILE_COMMIT_S0)
 
 
 @dataclass
@@ -177,10 +175,9 @@ class ReplaySource:
         if f.auth_fail:
             raise errors.ApiError(401, "TOOL_AUTH", "토큰이 유효하지 않습니다.")
         if f.rest_disabled and tool == "REDMINE":
-            # 실제 Redmine 은 REST 가 꺼져 있으면 403 을 준다. 어댑터는 이를 TOOL_NOT_FOUND 로 읽는다  # noqa: E501
-            raise errors.ApiError(
-                404, "TOOL_NOT_FOUND", "프로젝트를 찾을 수 없거나 API 키에 접근 권한이 없습니다."
-            )
+            # 실제 Redmine 은 REST 가 꺼져 있으면 어느 API 든 403 이다. 어댑터는 자기 정보 조회까지
+            # 403 이면 REST 비활성으로 읽는다(DEF-V014). 프로세스 안 재생기는 그 결과를 낸다
+            raise errors.ApiError(403, "TOOL_REST_DISABLED", rm.REST_DISABLED)
         if kind and kind in f.denied_kinds:
             raise errors.ApiError(403, "TOOL_AUTH", f"{kind} 읽기 권한이 없습니다.")
 

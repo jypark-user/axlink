@@ -237,6 +237,28 @@ def upsert_work_product(
             (current["id"],),
         )
 
+    # 파일을 예전 내용으로 되돌리면 같은 버전(같은 blob)이 다시 온다. 그 판의 행이 이미 있으므로
+    # 새로 넣지 않고 되살린다(uq_work_product__version, DEF-V033). 그 판의 제출·승인 이력은 그대로
+    # 두고, 항목 속성(적용 여부·기한)은 지금 현행에서 물려받는다.
+    revived = fetch_one(
+        cur,
+        """
+        update work_product
+           set is_current = true, title = %s, file_uri = %s, external_url = %s,
+               source_revision = %s, applicable = %s, due_date = %s, updated_at = now()
+         where project_id = %s and type = %s and version = %s and not is_current
+        returning id
+        """,
+        (
+            rec["title"], rec["file_uri"], rec["external_url"], rec.get("source_revision"),
+            current["applicable"] if current else True,
+            current["due_date"] if current else None,
+            project_id, rec["type"], rec["version"],
+        ),
+    )
+    if revived is not None:
+        return str(revived["id"])
+
     created = fetch_one(
         cur,
         """

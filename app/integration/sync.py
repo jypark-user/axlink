@@ -36,6 +36,7 @@ _MAX_PAGES = 20  # PoC 상한. 우리 저장소 규모엔 충분하고 폭주를
 # 내부 오류코드 → sync_job.error_code CHECK 허용값
 _ERROR_CODE = {
     "TOOL_AUTH": "TOOL_AUTH_FAILED",
+    "TOOL_REST_DISABLED": "TOOL_AUTH_FAILED",  # 도구 설정 문제. 사유 문장이 따로 말한다
     "TOOL_NOT_FOUND": "TOOL_RESOURCE_NOT_FOUND",
     "TOOL_RATE_LIMITED": "TOOL_RATE_LIMITED",
     "TOOL_UNREACHABLE": "TOOL_UNAVAILABLE",

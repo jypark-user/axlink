@@ -80,6 +80,42 @@ NEEDS_WORDS = {
 }
 # 실제 환경이 아닌 실행 방식. needs 가 있는 AC 는 이것만으로 통과하지 않는다.
 NON_LIVE_MODES = {"mock", "replay", "auto"}
+
+# 증거 종류(카탈로그 needs 와 같은 낱말). 시나리오의 needs 는 5174 최신 통과 실행이 전부 증명해야
+# 통과다. 실행 기록에 `proves` 가 있으면 그것을 쓰고, 없으면 방식·환경에서 보수적으로 읽는다.
+# 5174 API 실행은 api 만 증명한다. 브라우저·실연동·실모델·폐쇄망은 `proves` 로 적어야 인정한다.
+EVIDENCE_KINDS = ("api", "browser", "live-tool", "live-model", "airgap")
+
+
+def is_target(run: dict) -> bool:
+    return str((run.get("env") or {}).get("name", "")).startswith(TARGET_ENV_PREFIXES)
+
+
+def proves(run: dict) -> set[str]:
+    """이 실행이 증명하는 증거 종류. 재생 도구·가짜 모델이 적힌 실행은 그 종류를 증명하지 않는다."""
+    if not is_target(run):
+        return set()
+    env = run.get("env") or {}
+    tools = " ".join(env.get("tools") or [])
+    model = str(env.get("model") or "")
+    if "proves" in run:
+        got = set(run["proves"])
+    else:
+        got = {"api"} if run.get("mode") in ("api", "live") else set()
+    if "replay" in tools:
+        got.discard("live-tool")
+    if "가짜" in model or "fake" in model.lower():
+        got.discard("live-model")
+    return got
+
+
+def latest_defects() -> dict[str, dict]:
+    """defects.jsonl 을 결함별로 합친 마지막 상태. 상태 변경 줄은 비어 있지 않은 필드만 덮는다."""
+    out: dict[str, dict] = {}
+    for d in read_jsonl(RECORDS / "defects.jsonl"):
+        cur = out.setdefault(d["defect_id"], {})
+        cur.update({k: v for k, v in d.items() if v not in (None, "", [])})
+    return out
 # Goal 조건: 통과 근거는 5174(내부 검증 환경)에서 실행한 것이어야 한다. CI 실행은 보조 근거다.
 TARGET_ENV_PREFIXES = ("5174",)
 
@@ -391,25 +427,47 @@ def compute_status(cat: dict) -> dict:
         rs = by_sc.get(sid)
         return rs[-1] if rs else None
 
+    def latest_target(sid: str) -> dict | None:
+        """5174 에서 돈 가장 최근 실행. 뒤에 돈 로컬 실행이 이 근거를 지우지 않는다."""
+        rs = [r for r in by_sc.get(sid, []) if is_target(r)]
+        return rs[-1] if rs else None
+
     excluded_acs = {e["ac"] for e in exclusions if e.get("approved_by")}
+    # 열린 결함과 고쳤지만 다시 확인하지 않은 결함이 걸린 AC 는 통과로 세지 않는다
+    open_defect_acs: dict[str, list[str]] = defaultdict(list)
+    for did, d in latest_defects().items():
+        if d.get("status") in ("open", "fixed"):
+            for aid in d.get("acs") or []:
+                open_defect_acs[aid].append(did)
 
     sc_status: dict[str, dict] = {}
     for sid, sc in cat["scenarios"].items():
         r = latest(sid)
+        t = latest_target(sid)
+        missing: list[str] = []
         if r is None:
             st = "not-run"
         elif r["_invalidated"]:
             st = "revalidate"
-        else:
+        elif r["_verdict"] != "pass":
+            # 실패·차단은 어느 환경에서 났든 최신 결과로 본다
             st = r["_verdict"]
+        elif t is None or t["_invalidated"] or t["_verdict"] != "pass":
+            # 통과했지만 5174 통과 근거가 없거나, 5174 의 마지막 결과가 통과가 아니다
+            st = "pass-ci-only"
+        else:
+            missing = [n for n in sc["needs"] if n not in proves(t)]
+            st = "pass-needs-evidence" if missing else "pass"
         sc_status[sid] = {
             "scenario": sid,
             "uc": sc["uc"],
             "status": st,
             "run_id": r["run_id"] if r else "",
+            "target_run_id": t["run_id"] if t else "",
             "mode": r.get("mode", "") if r else "",
             "decs": "·".join(sc["decs"]),
             "needs": "·".join(sc["needs"]),
+            "missing_evidence": "·".join(missing),
             "runs": len(by_sc.get(sid, [])),
         }
 
@@ -432,39 +490,35 @@ def compute_status(cat: dict) -> dict:
             if direct_latest is not None:
                 direct.append(direct_latest["_ac_verdicts"].get(aid, direct_latest["_verdict"]))
             every = sc_sts + direct
-            modes = {latest(s).get("mode") for s in scs if latest(s)}
-            if direct_latest is not None:
-                modes.add(direct_latest.get("mode"))
+            # 시나리오가 있으면 시나리오 판정이 기준이다. 직접 근거(자동 시험)는 실패만 반영한다
             if "fail" in every:
                 st = "fail"
             elif "revalidate" in every:
                 st = "revalidate"
-            elif all(x == "pass" for x in every):
-                # 시나리오 전부 + 직접 근거 전부 통과
+            elif "blocked" in every:
+                st = "blocked"
+            elif scs and all(x == "pass" for x in sc_sts) and all(x == "pass" for x in direct):
+                # 시나리오 전부 + 직접 근거 전부 통과(5174 근거와 필요한 증거 종류까지)
                 st = "pass"
+            elif scs and all(x.startswith("pass") for x in sc_sts):
+                # 전부 통과했지만 일부는 5174 근거가 없거나 필요한 증거 종류가 빠졌다
+                st = (
+                    "pass-needs-evidence"
+                    if any(x == "pass-needs-evidence" for x in sc_sts)
+                    else "pass-ci-only"
+                )
             elif (
                 direct and all(x == "not-run" for x in sc_sts) and all(x == "pass" for x in direct)
             ):
                 # 자동 시험 등 직접 근거만 통과, 명세의 시나리오는 아직 안 돌림 → 완료 아님
                 st = "auto-only"
-            elif "blocked" in every:
-                st = "blocked"
             elif all(x == "not-run" for x in every):
                 st = "decision-wait" if ac["decs"] else "not-run"
             else:
                 st = "partial"
-            if st == "pass" and ac["needs"] and modes and modes <= NON_LIVE_MODES:
-                # 실연동·실모델·브라우저·폐쇄망이 필요한데 전부 모의·재생·자동
-                st = "pass-mock-only"
-            if st == "pass":
-                envs = {
-                    str((latest(s) or {}).get("env", {}).get("name", "")) for s in scs if latest(s)
-                }
-                if direct_latest is not None:
-                    envs.add(str(direct_latest.get("env", {}).get("name", "")))
-                if not any(e.startswith(TARGET_ENV_PREFIXES) for e in envs):
-                    # 통과했지만 5174 실행 근거가 없다(CI 만). Goal 완료로 세지 않는다
-                    st = "pass-ci-only"
+            if st == "pass" and open_defect_acs.get(aid):
+                # 통과 근거가 있어도 이 AC 에 걸린 결함이 열려 있거나 재확인 전이다
+                st = "pass-defect-open"
             if st == "pass" and ac["decs"]:
                 # 결정 전에는 통과 판정을 내리지 않는다(IM-007 0.6)
                 st = "pass-decision-wait"
@@ -476,6 +530,7 @@ def compute_status(cat: dict) -> dict:
             "needs": "·".join(ac["needs"]),
             "obligations": "·".join(ac["obligations"]),
             "scenarios": "·".join(scs),
+            "open_defects": "·".join(sorted(open_defect_acs.get(aid, []))),
         }
 
     total = len(cat["acs"])
@@ -491,6 +546,44 @@ def compute_status(cat: dict) -> dict:
     for a in ac_status.values():
         counts[a["status"]] += 1
     denom = total - excluded
+
+    # AC 밖 의무는 따로 센다. AC 완료율에 섞지 않는다
+    obl_total = len(cat["obligations"])
+    obl_ac = [o for o in cat["obligations"].values() if o.get("acs")]
+    obl_pass = sum(
+        1 for o in obl_ac if all(ac_status.get(a, {}).get("status") == "pass" for a in o["acs"])
+    )
+    obl_direct_pass = {
+        ob
+        for r in runs
+        if not r.get("scenarios") and (corrected.get(r["run_id"], {}).get("verdict") or r.get(
+            "verdict"
+        )) == "pass" and is_target(r)
+        for ob in r.get("obligations") or []
+    }
+    obl_non_ac = [o["id"] for o in cat["obligations"].values() if not o.get("acs")]
+    common_pass = sum(
+        1 for cid in cat["commons"]
+        if (lambda t: t is not None and t["_verdict"] == "pass" and not t["_invalidated"])(
+            latest_target(cid)
+        )
+    )
+    cc_runs = {
+        a for r in runs if is_target(r) and r.get("verdict") == "pass"
+        for a in (r.get("acs") or []) if a.startswith("CC-")
+    }
+    extra = {
+        "obligations_total": obl_total,
+        "obligations_with_ac": len(obl_ac),
+        "obligations_with_ac_pass": obl_pass,
+        "obligations_without_ac": len(obl_non_ac),
+        "obligations_without_ac_pass": sum(1 for o in obl_non_ac if o in obl_direct_pass),
+        "commons_total": len(cat["commons"]),
+        "commons_pass": common_pass,
+        "ccs_total": len(cat["ccs"]),
+        "ccs_pass": sum(1 for c in cat["ccs"] if c in cc_runs),
+        "open_defects": sorted({d for ds in open_defect_acs.values() for d in ds}),
+    }
     metrics = {
         "ac_total": total,
         "ac_excluded_approved": excluded,
@@ -503,6 +596,7 @@ def compute_status(cat: dict) -> dict:
         "ac_by_status": dict(sorted(counts.items())),
         "runs_total": len(runs),
         "runs_invalidated": len(invalidated),
+        **extra,
     }
     return {
         "generated": date.today().isoformat(),
@@ -518,7 +612,9 @@ STATUS_LEGEND = (
     "decision-wait 결정 대기(미실행) · pass-decision-wait 근거는 통과했으나 결정 전(미완료) · "
     "auto-only 자동 시험만 통과, 명세 시나리오 미실행(미완료) · "
     "pass-ci-only 통과했으나 5174 실행 근거 없음(미완료) · revalidate 재검증 필요 · "
-    "partial 일부만 · pass-mock-only 모의·자동만 통과(미완료) · excluded 공식 범위 제외 · "
+    "partial 일부만 · pass-needs-evidence 5174 통과했으나 필요한 증거 종류 없음(미완료) · "
+    "pass-defect-open 통과했으나 걸린 결함이 열림·재확인 전(미완료) · "
+    "excluded 공식 범위 제외 · "
     "no-scenario 시나리오 없음"
 )
 
@@ -533,12 +629,15 @@ def write_csv(path: Path, fields: list[str], rows) -> None:
 def write_status(st: dict, md: bool) -> None:
     write_csv(
         RECORDS / "status-ac.csv",
-        ["ac", "uc", "status", "decs", "needs", "obligations", "scenarios"],
+        ["ac", "uc", "status", "decs", "needs", "obligations", "scenarios", "open_defects"],
         st["acs"].values(),
     )
     write_csv(
         RECORDS / "status-scenario.csv",
-        ["scenario", "uc", "status", "run_id", "mode", "decs", "needs", "runs"],
+        [
+            "scenario", "uc", "status", "run_id", "target_run_id", "mode", "decs", "needs",
+            "missing_evidence", "runs",
+        ],
         st["scenarios"].values(),
     )
     (RECORDS / "status.json").write_text(
@@ -658,6 +757,7 @@ def record_junit(a: argparse.Namespace) -> int:
                     "model": a.model,
                 },
                 "mode": a.mode,
+                **({"proves": a.proves.split(",")} if a.proves else {}),
                 "start_state": {"state": sc["state"][:200], "actor": "", "project": ""},
                 "procedure": f"pytest {tc.get('classname')}::{tc.get('name')}",
                 "expected": sc["expected"],
@@ -689,6 +789,10 @@ def main() -> int:
     ap.add_argument("--md", action="store_true", help="status.md 도 만든다")
     ap.add_argument("--cycle", default="C01")
     ap.add_argument("--mode", default="auto", choices=["auto", "api", "replay", "mock", "live"])
+    ap.add_argument(
+        "--proves", default="",
+        help="이 실행이 증명하는 증거 종류(쉼표): api·browser·live-tool·live-model·airgap",
+    )
     ap.add_argument("--code", default="")
     ap.add_argument("--db", default="")
     ap.add_argument("--env", default="github-actions ubuntu-latest")

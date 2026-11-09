@@ -15,7 +15,8 @@ IM-005 시험계획·결과서의 **원천 데이터**다. 문서 요약(IM-005 
 | `impacts.jsonl` | 변경 영향 분석. 어떤 실행을 「재검증 필요」로 돌리는지 | 수정 반영마다 추가 |
 | `corrections.jsonl` | 기록 정정. 원 실행은 그대로 두고 정정 사유와 새 판정만 | 필요할 때 추가 |
 | `exclusions.jsonl` | 공식 범위 제외. 사용자 승인 기록이 있어야 분모에서 빠진다 | 사용자 결정 뒤 추가 |
-| `deployments.jsonl` | 5174·5173 반영 기록(이미지 digest·DB 버전·백업·확인) | 반영마다 추가 |
+| `deployments.jsonl` | 5174·5173 반영 기록(이미지 digest·DB 버전·백업·확인). `ts` 는 반영 시각, `recorded_ts` 는 기록 시각 | 반영마다 추가 |
+| `evidence-audit.jsonl` | 증거 파일 경로·해시 점검 결과. 과거 실행은 고치지 않는다 | 점검 때 추가 |
 | `environments.jsonl` | 환경 관측(어느 환경이 어느 버전·DB 로 떠 있는지, 도구 연결·모델) | 관측마다 추가 |
 | `status*.{csv,json,md}` | 위 이력에서 **다시 계산**한 현재 상태. 손으로 고치지 않는다 | `scripts/verification_records.py status --md` |
 | `cycles/C##-*.md` | 사이클별 계획·결과 서술(사람이 읽는 판) | 사이클마다 |
@@ -35,8 +36,15 @@ IM-005 시험계획·결과서의 **원천 데이터**다. 문서 요약(IM-005 
 - 판정 값: `pass` 통과 · `fail` 실패 · `blocked` 실행 차단(환경 손상·선행 실패로 판정 불가) ·
   `not-run` 미실행. 업무상 거절이 기대 결과인 시험은 올바르게 거절하면 `pass`.
 - `mode`: `live` 실제(실연동·실모델·실브라우저) · `api` 5174 API 직접 호출 · `auto` 자동 시험 ·
-  `replay` 기록 재생 · `mock` 가짜 모델·가짜 도구. `needs` 가 있는 AC 는 `auto`·`replay`·`mock` 만으로
-  통과하지 않는다(`pass-mock-only`).
+  `replay` 기록 재생 · `mock` 가짜 모델·가짜 도구.
+- **판정 규칙 v2 (2026-11-09).** 시나리오는 두 실행을 본다. 가장 최근 실행이 실패·차단이면 그것이 판정이다(어느
+  환경이든). 통과면 5174 에서 돈 가장 최근 실행이 통과여야 하고(아니면 `pass-ci-only`), 시나리오 `needs` 의 증거
+  종류를 그 실행이 전부 증명해야 한다(아니면 `pass-needs-evidence`). 뒤에 돈 로컬 통과가 5174 근거를 지우지 않는다.
+- 증거 종류: `api` · `browser` · `live-tool` · `live-model` · `airgap`. 실행 기록의 `proves` 에 적는다(`record-junit
+  --proves`). 없으면 5174 의 `api`·`live` 실행은 `api` 만 증명한다. `env.tools` 에 replay 가 있으면 `live-tool`,
+  `env.model` 이 가짜면 `live-model` 은 증명하지 않는다. 모델이 설정돼 있다는 사실은 증거가 아니다.
+- 결함(`defects.jsonl` 마지막 상태)이 `open`·`fixed` 이면 그 결함의 `acs` 는 통과여도 `pass-defect-open` 이다.
+- AC 밖 집계(status.json): 세부 의무(AC 가 있는 것 / 없는 것), 공통 시나리오(COMMON), 공통 제약(CC).
 - 한 실행이 여러 AC 를 다루면 `ac_verdicts` 에 AC 별 판정을 적는다. 한 AC 에 필수 시나리오가
   여럿이면 전부 통과해야 그 AC 가 통과다(`status` 가 계산).
 
@@ -108,7 +116,7 @@ scenarios}`), `rerun`(다시 돌릴 시나리오), `skip`(다시 돌리지 않�
 
 - **전체 완료율** = 통과 AC ÷ (합의된 전체 AC − 승인된 공식 범위 제외). 결정 대기·환경 대기·미실행은 분모에 남는다.
 - **실행 시험 통과율** = 통과 실행 ÷ 실제 실행(통과·실패)한 실행. 차단·미실행은 분모에 넣지 않는다.
-- **별도 건수** = AC 상태별 건수(fail · blocked · not-run · decision-wait · pass-decision-wait · auto-only · revalidate · partial · pass-mock-only · excluded).
+- **별도 건수** = AC 상태별 건수(fail · blocked · not-run · decision-wait · pass-decision-wait · auto-only · revalidate · partial · pass-ci-only · pass-needs-evidence · pass-defect-open · excluded).
 
 AC 가 `pass` 가 되는 조건은 넷이 모두 맞을 때다. ① 명세의 시나리오가 전부 실행되어 통과 ② 직접 근거(자동 시험)가 있으면 그것도 통과 ③ DEC 에 걸리지 않음 ④ 통과 근거 가운데 하나는 5174(내부 검증 환경, `env.name` 이 5174 로 시작)에서 실행한 것. CI 실행만 있으면 `pass-ci-only` 로 두고 완료로 세지 않는다(Goal 2절). 자동 시험만 통과하고 시나리오를 안 돌린 AC 는 `auto-only`, 근거는 통과했으나 DEC 결정 전이면 `pass-decision-wait` 로 둔다. 둘 다 완료가 아니다.
 
