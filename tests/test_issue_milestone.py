@@ -121,3 +121,122 @@ def test_이슈에_원천_마일스톤의_이름_기한_상태가_보인다(clie
             cur.execute("delete from issue where tool_connection_id = %s", (cid,))
             cur.execute("delete from milestone where tool_connection_id = %s", (cid,))
             cur.execute("delete from tool_connection where id = %s", (cid,))
+
+
+def test_레드마인_버전_원본을_마일스톤_행으로_옮긴다():
+    from app.standard import mapping_redmine
+
+    rec = mapping_redmine.to_milestone(
+        {
+            "id": 11,
+            "name": " 1차 ",
+            "status": "closed",
+            "due_date": "2026-04-30",
+            "updated_on": "2026-04-28T09:00:00Z",
+        },
+        "https://redmine.example.test/",
+    )
+    assert rec["title"] == "1차" and rec["due_on"] == "2026-04-30" and rec["number"] == 11
+    assert rec["state"] == "CLOSED" and rec["closed_at"] == "2026-04-28T09:00:00Z"
+    assert rec["source_url"] == "https://redmine.example.test/versions/11"
+    open_rec = mapping_redmine.to_milestone(
+        {"id": 12, "name": "2차", "status": "open", "due_date": None, "updated_on": "x"}, "h"
+    )
+    assert open_rec["state"] == "OPEN" and open_rec["closed_at"] is None
+
+
+@requires_db
+def test_레드마인_이슈에_버전이_마일스톤으로_보인다(client, client_token):
+    """Redmine 버전은 마일스톤 행이 되고 이슈의 fixed_version 이 그 행을 가리킨다(GH-214)."""
+    token = client_token("r2")
+    items = [
+        (
+            "version:11",
+            "version",
+            {
+                "id": 11,
+                "name": "1차",
+                "status": "closed",
+                "due_date": "2026-04-30",
+                "updated_on": "2026-04-28T09:00:00Z",
+            },
+        ),
+        (
+            "version:14",
+            "version",
+            {
+                "id": 14,
+                "name": "상시",
+                "status": "open",
+                "due_date": None,
+                "updated_on": "2026-09-01T00:00:00Z",
+            },
+        ),
+        (
+            "201",
+            "issue",
+            {
+                "id": 201,
+                "subject": "로그인 API 구현",
+                "status": {"name": "종료", "is_closed": True},
+                "priority": {"name": "보통"},
+                "tracker": {"name": "일감"},
+                "fixed_version": {"id": 11, "name": "1차"},
+                "created_on": "2026-03-05T00:00:00Z",
+                "updated_on": "2026-04-10T00:00:00Z",
+            },
+        ),
+        (
+            "206",
+            "issue",
+            {
+                "id": 206,
+                "subject": "코드 정리",
+                "status": {"name": "신규", "is_closed": False},
+                "priority": {"name": "낮음"},
+                "tracker": {"name": "일감"},
+                "created_on": "2026-03-05T00:00:00Z",
+                "updated_on": "2026-04-10T00:00:00Z",
+            },
+        ),
+    ]
+    with tx() as cur:
+        cur.execute("select organization_id from app_user where username = 'r3'")
+        org = str(cur.fetchone()["organization_id"])
+        conn = integ_repo.insert(
+            cur,
+            PID,
+            org,
+            "REDMINE",
+            "레드마인 버전",
+            "https://redmine.example.test",
+            f"ver-{uuid.uuid4().hex[:6]}",
+            crypto.encrypt("k"),
+            "k***",
+        )
+        cid = str(conn["id"])
+    try:
+        with tx() as cur:
+            _load(cur, cid, items)
+            _promote(cur, cid)
+            rows = cur.execute(
+                "select title, due_on, state, closed_at from milestone "
+                "where tool_connection_id = %s order by number",
+                (cid,),
+            ).fetchall()
+        assert [(r["title"], str(r["due_on"]), r["state"]) for r in rows] == [
+            ("1차", "2026-04-30", "CLOSED"),
+            ("상시", "None", "OPEN"),
+        ]
+        assert rows[0]["closed_at"] is not None
+        by_key = _by_key(client, token, cid)
+        assert by_key["RM-201"]["milestone"]["title"] == "1차"
+        assert by_key["RM-201"]["milestone"]["dueOn"] == "2026-04-30"
+        assert by_key["RM-206"]["milestone"] is None
+    finally:
+        with tx() as cur:
+            cur.execute("delete from issue where tool_connection_id = %s", (cid,))
+            cur.execute("delete from milestone where tool_connection_id = %s", (cid,))
+            cur.execute("delete from raw_artifact where tool_connection_id = %s", (cid,))
+            cur.execute("delete from sync_job where tool_connection_id = %s", (cid,))
+            cur.execute("delete from tool_connection where id = %s", (cid,))

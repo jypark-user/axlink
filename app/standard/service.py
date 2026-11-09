@@ -138,16 +138,24 @@ def _promote_redmine(
 ) -> PromoteResult:
     """Redmine 원본을 표준 모델로 올린다.
 
-    이슈만 승격한다 — 리스크 트래커는 risk 로, 나머지는 issue 로. 버전·트래커는 원본
-    보존이 목적이라(마일스톤 지표는 SWFR.PIP.007 에서 쓴다) raw_only 로 센다.
+    이슈는 리스크 트래커면 risk 로, 나머지는 issue 로. 버전은 마일스톤으로 올리고 이슈의
+    fixed_version 으로 잇는다(일정 준수율 자료, GH-214). 트래커는 원본 보존만 한다.
     """
     project_id = str(connection["project_id"])
     connection_id = str(connection["id"])
     base_url = connection["base_url"]
+    # 원본은 종류 이름 순서로 읽혀 issue 가 version 보다 먼저 온다. 잇기는 다 읽은 뒤에 한다
+    milestone_links: list[tuple[str, int | None]] = []
 
     for raw in _raw_artifacts(cur, connection_id):
         payload, kind, external_id = raw["payload_jsonb"], raw["object_kind"], raw["external_id"]
 
+        if kind == "version":
+            rec = mapping_redmine.to_milestone(payload, base_url)
+            repository.upsert_milestone(cur, project_id, connection_id, external_id, rec)
+            result.upserted += 1
+            result.by_type["MILESTONE"] = result.by_type.get("MILESTONE", 0) + 1
+            continue
         if kind != "issue":
             result.raw_only += 1
             continue
@@ -160,6 +168,7 @@ def _promote_redmine(
         else:
             rec = mapping_redmine.to_issue(payload, base_url)
             row_id = repository.upsert_issue(cur, project_id, connection_id, external_id, rec)
+            milestone_links.append((row_id, mapping_redmine.version_number(payload)))
             target = "ISSUE"
             sources.append(
                 indexing.IndexSource(
@@ -175,6 +184,7 @@ def _promote_redmine(
         result.upserted += 1
         result.by_type[target] = result.by_type.get(target, 0) + 1
 
+    repository.link_issue_milestones(cur, connection_id, milestone_links)
     return _finish_indexing(cur, port, result, sources, project_id)
 
 

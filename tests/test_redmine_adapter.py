@@ -135,8 +135,9 @@ def test_레드마인_원본이_표준_모델로_오른다(client):
 
             result = standard.promote_connection(cur, conn, embedding_port())
 
-            assert result.by_type == {"ISSUE": 1, "RISK": 1}
-            assert result.raw_only == 1  # 버전은 원본 보존만 — 실패가 아니다
+            # 버전은 마일스톤으로 올라간다(GH-214). 원본 보존만 하는 것은 트래커뿐이다
+            assert result.by_type == {"ISSUE": 1, "RISK": 1, "MILESTONE": 1}
+            assert result.raw_only == 0
             assert result.unmapped == 0
 
             cur.execute("select issue_key, status from issue where tool_connection_id = %s", (cid,))
