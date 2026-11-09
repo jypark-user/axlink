@@ -24,6 +24,7 @@ from __future__ import annotations
 import argparse
 import tempfile
 from dataclasses import fields
+from datetime import datetime
 from pathlib import Path
 from typing import Any
 
@@ -37,6 +38,16 @@ from tests.fixtures.im009.replay import Faults, ReplaySource
 
 GITHUB_KINDS = {"issues": "issue", "pulls": "pull_request", "commits": "commit",
                 "milestones": "milestone"}
+
+
+def _since(value: str | None) -> datetime | None:
+    """요청의 since(ISO 8601, Z 포함)를 시각으로. 없거나 못 읽으면 None."""
+    if not value:
+        return None
+    try:
+        return datetime.fromisoformat(value.replace("Z", "+00:00"))
+    except ValueError:
+        return None
 
 
 def _error(exc: errors.ApiError) -> Response:
@@ -185,11 +196,12 @@ def create_app(source: ReplaySource) -> FastAPI:
         })
 
     @app.get("/github/repos/{owner}/{repo}/{kind}")
-    def gh_list(owner: str, repo: str, kind: str, page: int = 1, per_page: int = 30) -> Response:
+    def gh_list(owner: str, repo: str, kind: str, page: int = 1, per_page: int = 30,
+                since: str | None = None) -> Response:
         if kind not in GITHUB_KINDS:
             return JSONResponse({"message": "Not Found"}, status_code=404)
         return _paged(gh_items, f"{owner}/{repo}", GITHUB_KINDS[kind], page - 1, per_page,
-                      lambda batch: batch)
+                      lambda batch: batch, _since(since))
 
     # ------------------------------------------------------------ Redmine
     @app.get("/redmine/projects/{target}.json")
@@ -202,14 +214,17 @@ def create_app(source: ReplaySource) -> FastAPI:
             return JSONResponse({}, status_code=404)
         return JSONResponse({"project": {"identifier": target, "name": target}})
 
-    def _rm_list(target: str, kind: str, offset: int, limit: int) -> Response:
+    def _rm_list(target: str, kind: str, offset: int, limit: int,
+                 since: datetime | None = None) -> Response:
         return _paged(rm_items, target, kind, offset // max(limit, 1), limit,
                       lambda batch: {f"{kind}s": batch, "total_count": len(batch),
-                                     "offset": offset, "limit": limit})
+                                     "offset": offset, "limit": limit}, since)
 
     @app.get("/redmine/issues.json")
-    def rm_issues(project_id: str, offset: int = 0, limit: int = 25) -> Response:
-        return _rm_list(project_id, "issue", offset, limit)
+    def rm_issues(project_id: str, offset: int = 0, limit: int = 25,
+                  updated_on: str | None = None) -> Response:
+        # 증분은 updated_on=>=<시각> 으로 온다
+        return _rm_list(project_id, "issue", offset, limit, _since((updated_on or "").lstrip(">=")))
 
     @app.get("/redmine/projects/{target}/versions.json")
     def rm_versions(target: str, offset: int = 0, limit: int = 25) -> Response:
@@ -220,11 +235,14 @@ def create_app(source: ReplaySource) -> FastAPI:
         # 트래커는 전역이다. 재생 자료는 대상과 무관하게 같은 목록을 낸다
         return _rm_list(d.CONNECTIONS["TD-CON-2"].target, "tracker", offset, limit)
 
-    def _paged(fetch, target: str, kind: str, page: int, size: int, wrap) -> Response:
-        """재생기가 낸 순서대로 page 번째 쪽을 준다. 재생기의 장애는 그 쪽에서 난다."""
+    def _paged(fetch, target: str, kind: str, page: int, size: int, wrap,
+               since: datetime | None = None) -> Response:
+        """재생기가 낸 순서대로 page 번째 쪽을 준다. 재생기의 장애는 그 쪽에서 난다.
+
+        받은 since 는 호출 기록에만 남긴다. 프로세스 안 재생기처럼 목록을 거르지는 않는다."""
         out: list[dict] = []
         try:
-            for n, (_, payload) in enumerate(fetch("", target, "", kind, size, 1)):
+            for n, (_, payload) in enumerate(fetch("", target, "", kind, size, 1, since)):
                 if n >= (page + 1) * size:
                     break
                 if n >= page * size:

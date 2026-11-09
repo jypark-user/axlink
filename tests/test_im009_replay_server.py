@@ -9,6 +9,7 @@ from __future__ import annotations
 import socket
 import threading
 import time
+from datetime import UTC, datetime
 from pathlib import Path
 
 import httpx
@@ -154,3 +155,15 @@ def test_원격_재생기가_장애와_변형_파일을_서버에_보낸다(serv
     remote.faults = Faults()
     list(gh.fetch_items(f"{base}/github", GH_REPO, "t", "issue", 100, 5))
     assert any(c[0] == "GITHUB" and c[1] == "issue" for c in remote.calls())
+
+
+def test_증분_요청의_기준_시각을_호출_기록에_남긴다(server):
+    """원격 시나리오(UC-011-S02)는 서버가 받은 since 로 증분 여부를 본다. 기록에 빠지면 오판한다."""
+    base, source = server
+    source.faults.calls.clear()
+    since = datetime(2026, 9, 1, 0, 0, tzinfo=UTC)
+    list(gh.fetch_items(f"{base}/github", GH_REPO, "t", "issue", 100, 5, since))
+    list(rm.fetch_items(f"{base}/redmine", RM_PRJ, "k", "issue", 2, 50, since))
+    got = {(tool, kind): s for tool, kind, s in source.faults.calls if kind == "issue"}
+    assert got[("GITHUB", "issue")].startswith("2026-09-01T00:00:00")
+    assert got[("REDMINE", "issue")].startswith("2026-09-01T00:00:00")

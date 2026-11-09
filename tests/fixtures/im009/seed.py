@@ -235,7 +235,8 @@ class Seeder:
 
     def _remote_connections(self) -> None:
         """원격 모드. 대상 서버가 재생 서버를 원천으로 부르도록 API 로 연결을 만든다."""
-        base = REPLAY_URL.rstrip("/")
+        # 대상 서버가 컨테이너면 재생 서버를 시험 프로세스와 다른 주소로 본다
+        base = (os.environ.get("AXLINK_REPLAY_TARGET_URL") or REPLAY_URL).rstrip("/")
         for tid, con in d.CONNECTIONS.items():
             mapping = {k: v for k, v in con.mapping.items() if k in ("riskTracker", "reqIdField")}
             if "designDocPaths" in con.mapping:
