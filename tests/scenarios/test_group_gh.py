@@ -184,6 +184,10 @@ def test_UC_060_S08_값_없음_구분(target, s0, llm):
 def test_UC_060_S10_모델_장애(target, s0, llm):
     """모델 서버 중단 → 집계 값으로 답(생성 없음) 또는 「쓸 수 없음」, 생성 호출 없음 (AC-060-9)."""
     scripted = llm(None, "", fail=True)
+    # 시작 상태는 S0 다. 앞 시나리오가 같은 질문의 판정을 캐시에 남기면 판정 단계를 건너뛰어
+    # 생성 호출부터 시도한다. 그 경우(캐시가 있는 운영 상태)는 DEF-V041 로 따로 본다
+    with tx() as cur:
+        cur.execute("delete from route_cache where question = %s", ("일반 이슈가 몇 건이야",))
     conv = _conversation(target, s0, "TD-ACC-C1", [s0.ids["TD-PRJ-1"]])
     assert conv.status_code == 201
     with target.stream("POST", f"/api/conversations/{conv.json()['id']}/messages", json={"question": "일반 이슈가 몇 건이야", "projectScope": []}, headers={**auth(s0.tokens["TD-ACC-C1"]), "Accept": "text/event-stream"}) as res:
@@ -208,6 +212,10 @@ def test_UC_060_S12_되묻기(target, s0, llm):
 
 def test_UC_060_S14_DOCX_문단_위치(target, s0, llm):
     """「설계 완료가 왜 늦어졌어」 → 출처 「회의록 · 논의 사항 · 1쪽」(절·문단), 연결 TD-DOC-5 (AC-060-11)."""
+    if settings.embedding_provider == "fake":
+        # 가짜 임베딩은 해시 벡터라 검색 순위가 의미 없다. 「논의 사항」 조각이 출처에 오르는지는
+        # 실임베딩(bge-m3)으로 본다. 절 경로가 위치로 남는지는 tests/test_extractor_office.py 가 본다
+        pytest.skip("실임베딩 필요: 가짜 임베딩에서는 검색 순위가 무작위다")
     scripted = llm({"route": "DOCUMENT", "query": "설계 완료 지연 사유"}, "외부 연계 규격 협의가 지연돼 설계 완료가 늦어졌다[1].")
     events = _ask(target, s0, "TD-ACC-C1", "설계 완료가 왜 늦어졌어", [s0.ids["TD-PRJ-1"]])
     sources = _sources(events)

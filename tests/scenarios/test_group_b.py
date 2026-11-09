@@ -194,8 +194,9 @@ def test_UC_011_S02_변경_없는_증분(target, s0, replay):
     kinds = [c for c in replay.calls() if c[0] == "GITHUB" and c[1] == "issue"]
     assert kinds and kinds[-1][2], "증분 요청에 since 가 없다(전체를 다시 읽는다)"
     assert job["stats"]["skippedUnchanged"] == job["stats"]["fetched"], job["stats"]
-    assert job["stats"]["upserted"] == 0, (
-        f"변경이 없는데 신규·갱신이 {job['stats']['upserted']} 로 기록된다"
+    # 화면의 「신규·갱신」은 changed 다. upserted 는 재승격을 포함한 「반영」 건수다
+    assert job["stats"]["changed"] == 0, (
+        f"변경이 없는데 신규·갱신이 {job['stats']['changed']} 로 기록된다"
     )
 
 
