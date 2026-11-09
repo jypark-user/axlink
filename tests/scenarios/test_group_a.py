@@ -145,7 +145,7 @@ def test_UC_002_S01_등록_직후_상태(target, s0):
     pid = s0.ids["TD-PRJ-3"]
     prog = target.get(f"/api/projects/{pid}/progress", headers=h).json()
     assert prog["representative"] is None, prog
-    assert prog["level"] == "L4", prog
+    assert prog["level"] == "NONE", prog  # 제출본이 없으면 L4 도 세우지 않는다(DEF-V003)
     reqs = target.get(f"/api/projects/{pid}/requirements", headers=h).json()
     assert reqs["totalElements"] == 0
     wps = target.get(f"/api/projects/{pid}/work-products", headers=h).json()
