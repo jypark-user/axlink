@@ -61,7 +61,6 @@ KNOWN_FAILURES: dict[str, str] = {
     # C
     "test_UC_021_S03_돌려보내기": "DEF-V034 기준선 돌려보냄이 활동 기록에 없음",
     # D
-    "test_UC_030_S02_업로드_계획서": "DEF-V019 업로드 계획서 WBS 미인식",
     "test_UC_030_S06_가중치_없는_WBS_L2": "DEF-V023 L2 추정 없음",
     "test_UC_031_S04_반려_뒤_재제출_이력": "DEF-V020 점검표 버전 이력·반려 사유 없음",
     # E
