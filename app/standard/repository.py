@@ -416,6 +416,20 @@ def current_work_product(
     )
 
 
+def work_product_row(cur: Any, work_product_id: str) -> dict[str, Any] | None:
+    """산출물 한 건(현행 여부 무관). 이전 기준선을 보일 때 그 판을 찾는다."""
+    return fetch_one(
+        cur,
+        """
+        select id, type, version, title, status, file_uri, source_revision, external_url,
+               updated_at
+          from work_product
+         where id = %s
+        """,
+        (work_product_id,),
+    )
+
+
 # --- 조회 ---------------------------------------------------------------
 
 _REQUIREMENT_COLUMNS = """

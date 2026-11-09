@@ -119,6 +119,7 @@ def compute(cur: Any, project_id: str, at: date) -> ProgressResponse:
     level, basis, representative = _representative(
         wbs_progress, issue_measure, product_measure
     )
+    shown_row = _shown_plan_row(cur, project_id, plan_row) if wbs_progress else plan_row
     warnings.extend(_gap_warnings(wbs_progress, issue_measure, product_measure))
 
     return ProgressResponse(
@@ -135,8 +136,8 @@ def compute(cur: Any, project_id: str, at: date) -> ProgressResponse:
         workProduct=product_measure,
         behind=[] if wbs_progress is None else wbs_progress.behind,
         warnings=warnings,
-        planVersion=None if plan_row is None else plan_row["version"],
-        planUpdatedAt=None if plan_row is None else plan_row["updated_at"].isoformat(),
+        planVersion=None if shown_row is None else shown_row["version"],
+        planUpdatedAt=None if shown_row is None else shown_row["updated_at"].isoformat(),
     )
 
 
@@ -170,6 +171,7 @@ def schedule(cur: Any, project_id: str, at: date) -> WbsScheduleResponse:
         warnings.append(plan_warning)
     if plan is not None:
         assert plan_row is not None
+        plan_row = _shown_plan_row(cur, project_id, plan_row) or plan_row
         judged = refresh_deliverables(cur, project_id, at)
         counts = deliverable.summarize(list(judged.values()))
         return WbsScheduleResponse(
@@ -228,8 +230,9 @@ def _load_plan(
     """현행 계획서의 WBS. 행이 그 버전에서 왔으면 행을 읽고, 아니면 파일을 한 번 읽어 남긴다.
 
     파일은 계획서 버전마다 한 번만 연다(ARC-016). 그 뒤로 진척·일정·확인 요청·항목 화면이
-    같은 행을 본다. 파일을 못 읽으면 예전 행이 있어도 쓰지 않는다. 틀린 버전의 값을 현행
-    이라고 보이는 것보다 "못 읽었다" 가 낫다.
+    같은 행을 본다. 새 판을 못 읽으면 직전 판에서 읽어 둔 행을 「이전 기준선」으로 쓰고 그렇다고
+    경고한다(IM-007 AC-030-3, DEF-V038). 화면이 갑자기 비는 것보다 어느 판인지 밝히고 직전 값을
+    보이는 편이 낫다. 읽어 둔 행이 없으면 못 읽었다고만 한다.
     """
     if plan_row is None:
         return None, None
@@ -239,15 +242,43 @@ def _load_plan(
 
     path = _plan_path(project_id, plan_row)
     if path is None:
-        return None, "WBS 항목은 있지만 보관된 원본 파일을 찾지 못했습니다. 다시 수집해 주세요."
+        return _previous_baseline(
+            cur, project_id,
+            "WBS 항목은 있지만 보관된 원본 파일을 찾지 못했습니다. 다시 수집해 주세요.",
+        )
     try:
         plan = wbs.parse(path.read_bytes())
     except wbs.WbsParseError as exc:
-        return None, f"WBS 를 읽지 못했습니다. {exc}"
+        return _previous_baseline(cur, project_id, f"WBS 를 읽지 못했습니다. {exc}")
     except OSError as exc:
-        return None, f"WBS 원본 파일을 열지 못했습니다. {exc}"
+        return _previous_baseline(cur, project_id, f"WBS 원본 파일을 열지 못했습니다. {exc}")
     wbs_repository.replace_plan(cur, project_id, plan_id, plan)
     return plan, None
+
+
+def _previous_baseline(
+    cur: Any, project_id: str, reason: str
+) -> tuple[wbs.WbsPlan | None, str]:
+    """현행 판을 못 읽었을 때. 직전 판에서 읽어 둔 행이 있으면 그것과 경고를 낸다."""
+    loaded = wbs_repository.loaded_version(cur, project_id)
+    plan = wbs_repository.load_plan(cur, project_id) if loaded else None
+    if plan is None:
+        return None, reason
+    previous = standard_repo.work_product_row(cur, loaded)
+    label = f"버전 {previous['version']}" if previous else "직전 판"
+    return plan, f"{reason} 직전에 읽은 계획서({label})의 작업을 이전 기준선으로 보입니다."
+
+
+def _shown_plan_row(
+    cur: Any, project_id: str, plan_row: dict[str, Any] | None
+) -> dict[str, Any] | None:
+    """화면에 판 정보로 보일 계획서 행. 이전 기준선을 쓰고 있으면 그 직전 판이다."""
+    if plan_row is None:
+        return None
+    loaded = wbs_repository.loaded_version(cur, project_id)
+    if loaded is None or loaded == str(plan_row["id"]):
+        return plan_row
+    return standard_repo.work_product_row(cur, loaded) or plan_row
 
 
 def _level_of(wbs_id: str) -> int:
@@ -545,7 +576,8 @@ def _read_plan(
     plan, warning = _load_plan(cur, project_id, plan_row)
     if plan is None:
         return None, warning
-    return wbs.progress(plan, at or clock.today()), None
+    # 이전 기준선으로 산정했으면 그 경고도 같이 낸다
+    return wbs.progress(plan, at or clock.today()), warning
 
 
 def _plan_path(project_id: str, plan_row: dict[str, Any]) -> Path | None:
