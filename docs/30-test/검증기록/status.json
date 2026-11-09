@@ -2,11 +2,11 @@
   "ac_total": 179,
   "ac_excluded_approved": 0,
   "ac_denominator": 179,
-  "ac_pass": 0,
-  "overall_completion": 0.0,
-  "runs_executed": 668,
-  "runs_pass": 508,
-  "executed_pass_rate": 76.0,
+  "ac_pass": 81,
+  "overall_completion": 45.3,
+  "runs_executed": 831,
+  "runs_pass": 646,
+  "executed_pass_rate": 77.7,
   "ac_by_status": {
     "auto-only": 4,
     "decision-wait": 4,
@@ -14,9 +14,10 @@
     "no-scenario": 2,
     "not-run": 9,
     "partial": 29,
-    "pass-ci-only": 27,
-    "pass-mock-only": 71
+    "pass": 81,
+    "pass-ci-only": 6,
+    "pass-decision-wait": 11
   },
-  "runs_total": 748,
+  "runs_total": 911,
   "runs_invalidated": 0
 }
