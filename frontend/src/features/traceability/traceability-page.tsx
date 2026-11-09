@@ -242,22 +242,22 @@ function Summary({
         </CardContent>
       </Card>
 
-      <Card className="gap-0 py-3">
-        <CardContent className="flex flex-col gap-2 px-4">
-          <p className="win-label">출처 이슈 상태</p>
-          <p className="text-muted-foreground text-xs">
-            명세서 등록 전에 이슈로 만든 요구사항은 그 이슈가 열렸는지 닫혔는지 따로 보여 줍니다.
-            이슈가 닫혔다고 구현이 끝났다는 뜻은 아닙니다.
-            {linked.length > 1 && ' 저장소마다 따로 셉니다.'}
-          </p>
-          {n.sources.length === 0 && (
-            <p className="text-muted-foreground text-sm">요구사항이 없습니다.</p>
-          )}
-          {n.sources.map((s) => (
-            <SourceRow key={s.connectionId ?? 'none'} s={s} is={is} onPick={onPick} />
-          ))}
-        </CardContent>
-      </Card>
+      {/* 이슈로 요구사항을 만들지 않게 된 뒤(ARC-030)에는 예전 사업에만 의미가 있다 */}
+      {linked.length > 0 && (
+        <Card className="gap-0 py-3">
+          <CardContent className="flex flex-col gap-2 px-4">
+            <p className="win-label">출처 이슈 상태</p>
+            <p className="text-muted-foreground text-xs">
+              명세서 등록 전에 이슈로 만든 요구사항은 그 이슈가 열렸는지 닫혔는지 따로 보여 줍니다.
+              이슈가 닫혔다고 구현이 끝났다는 뜻은 아닙니다.
+              {linked.length > 1 && ' 저장소마다 따로 셉니다.'}
+            </p>
+            {n.sources.map((s) => (
+              <SourceRow key={s.connectionId ?? 'none'} s={s} is={is} onPick={onPick} />
+            ))}
+          </CardContent>
+        </Card>
+      )}
     </div>
   );
 }
@@ -399,24 +399,9 @@ function buildColumns(
       cell: ({ row }) => <StatusCell row={row.original} onDecide={onDecide} />,
     },
     {
-      // 출처 이슈의 열림·닫힘. 위 상태 칸과 따로 읽는다
-      accessorKey: 'sourceState',
-      header: '출처 이슈',
-      cell: ({ row }) => (
-        <span
-          className={cn(
-            'text-xs',
-            (row.original.sourceState === 'NONE' || row.original.sourceState === 'UNKNOWN') &&
-              'text-muted-foreground',
-          )}
-        >
-          {SOURCE_CELL[row.original.sourceState]}
-        </span>
-      ),
-    },
-    {
+      // 요구사항 코드를 적은 설계 문서다. 설계가 끝났다는 판정이 아니다(ARC-024)
       id: 'designs',
-      header: '설계 근거',
+      header: '관련 설계 문서',
       cell: ({ row }) => (
         <Cells cells={row.original.designs} kind="DESIGNS" broken={row.original.brokenAt} />
       ),
@@ -476,13 +461,6 @@ function StatusCell({
   );
 }
 
-const SOURCE_CELL: Record<SourceState, string> = {
-  OPEN: '열림',
-  CLOSED: '닫힘',
-  UNKNOWN: '기록 없음',
-  NONE: '없음',
-};
-
 /** 요구사항 제목. 두 줄까지 보이고, 누르면 전체를 펼친다. 마우스를 올려도 전체가 보인다. */
 function TitleCell({ text }: { text: string }): ReactNode {
   const [open, setOpen] = useState(false);
@@ -510,7 +488,7 @@ const CELL_PREVIEW = 3;
  * 없다는 사실뿐이다(ARC-024). 구현 칸은 구현 완료가 아니라 관련 변경, 시험 칸은 통과가 아니라 연결이다.
  */
 const EMPTY_TEXT: Partial<Record<TraceLinkKind, string>> = {
-  DESIGNS: '연결된 설계 근거 없음',
+  DESIGNS: '연결된 설계 문서 없음',
   IMPLEMENTS: '연결된 구현 관련 변경 없음',
   TESTS: '연결된 시험 없음',
 };
