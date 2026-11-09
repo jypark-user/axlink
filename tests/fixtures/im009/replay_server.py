@@ -13,7 +13,7 @@
 
 흉내가 실제와 다를 수 있는 곳:
 - unreachable 은 연결 끊김이 아니라 502 응답이다. 어댑터는 둘 다 TOOL_UNREACHABLE 로 읽는다.
-- rest_disabled 는 Redmine 이 REST 를 껐을 때 403 을 준다고 가정한다(DEF-V014, 실연동 확인 전).
+- rest_disabled 는 REST 를 끈 Redmine 의 모든 API 가 403 이라고 가정한다(DEF-V014, 실연동 확인 전).
 - cut_after 는 쪽 크기(per_page·limit)가 n 이하일 때만 「n 건 뒤 끊김」이 된다.
 
 실행: python -m tests.fixtures.im009.replay_server --port 18099 [--files <자료 폴더>]
@@ -52,7 +52,10 @@ def _since(value: str | None) -> datetime | None:
 
 def _error(exc: errors.ApiError) -> Response:
     """재생기의 장애를 실제 도구가 줄 HTTP 상태로 옮긴다."""
-    status = {"TOOL_AUTH": 401, "TOOL_NOT_FOUND": 403, "TOOL_UNREACHABLE": 502}.get(exc.code, 500)
+    status = {
+        "TOOL_AUTH": 401, "TOOL_NOT_FOUND": 403, "TOOL_REST_DISABLED": 403,
+        "TOOL_UNREACHABLE": 502,
+    }.get(exc.code, 500)
     if exc.code == "TOOL_AUTH" and exc.status == 403:
         status = 403  # 종류별 권한 결손
     return JSONResponse({"message": exc.message}, status_code=status)
@@ -204,6 +207,15 @@ def create_app(source: ReplaySource) -> FastAPI:
                       lambda batch: batch, _since(since))
 
     # ------------------------------------------------------------ Redmine
+    @app.get("/redmine/users/current.json")
+    def rm_current_user() -> Response:
+        """키 주인 조회. REST 가 꺼져 있으면 실제 Redmine 처럼 403 이다(DEF-V014)."""
+        try:
+            source._check("REDMINE", None)
+        except errors.ApiError as exc:
+            return _error(exc)
+        return JSONResponse({"user": {"id": 1, "login": "replay"}})
+
     @app.get("/redmine/projects/{target}.json")
     def rm_project(target: str) -> Response:
         try:

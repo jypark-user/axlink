@@ -109,3 +109,46 @@ def test_Redmine_서버_장애는_서버_연결_사유로_남는다(http):
         _drain(redmine_connector.fetch_items("https://rm.test", "p", "k", "issue", 50, 1))
     assert exc.value.code == "TOOL_UNREACHABLE"
     assert "Redmine 서버" in exc.value.message and "연결" in exc.value.message
+
+
+def _redmine_verify(project_status: int, current_status: int) -> Handler:
+    def handle(req: httpx.Request) -> httpx.Response:
+        if req.url.path.endswith("/users/current.json"):
+            return httpx.Response(current_status, json={"user": {"id": 1}})
+        if req.url.path.endswith("/projects/p.json"):
+            return httpx.Response(project_status, json={"project": {"name": "P"}})
+        return httpx.Response(200, json={})
+
+    return handle
+
+
+def test_Redmine_REST_가_꺼져_있으면_따로_안내한다(http):
+    """DEF-V014. REST 가 꺼지면 프로젝트도 자기 정보도 403 이다."""
+    http(redmine_connector, _redmine_verify(403, 403))
+    with pytest.raises(errors.ApiError) as exc:
+        redmine_connector.verify("https://rm.test", "p", "k")
+    assert exc.value.code == "TOOL_REST_DISABLED"
+    assert "REST" in exc.value.message and "관리" in exc.value.message
+
+
+def test_Redmine_키는_유효한데_프로젝트가_403_이면_권한_문제다(http):
+    http(redmine_connector, _redmine_verify(403, 200))
+    with pytest.raises(errors.ApiError) as exc:
+        redmine_connector.verify("https://rm.test", "p", "k")
+    assert exc.value.code == "TOOL_NOT_FOUND"
+    assert "REST" not in exc.value.message
+
+
+def test_Redmine_프로젝트가_없으면_자기_정보를_묻지_않는다(http):
+    seen: list[str] = []
+    base = _redmine_verify(404, 403)
+
+    def handle(req: httpx.Request) -> httpx.Response:
+        seen.append(req.url.path)
+        return base(req)
+
+    http(redmine_connector, handle)
+    with pytest.raises(errors.ApiError) as exc:
+        redmine_connector.verify("https://rm.test", "p", "k")
+    assert exc.value.code == "TOOL_NOT_FOUND"
+    assert not any(p.endswith("/users/current.json") for p in seen)

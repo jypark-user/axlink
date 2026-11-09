@@ -74,10 +74,26 @@ def _raise_http(res: httpx.Response) -> None:
 
 
 
-def _raise_project_error(res: httpx.Response) -> None:
+REST_DISABLED = (
+    "Redmine 의 REST 웹 서비스가 꺼져 있습니다. Redmine 관리자가 관리 → 설정 → API 에서 "
+    "「REST 웹 서비스 사용」을 켜야 연결할 수 있습니다."
+)
+
+
+def _rest_disabled(client: httpx.Client, base: str, headers: dict[str, str]) -> bool:
+    """프로젝트 조회가 403 일 때 원인을 가른다. Redmine 은 REST 가 꺼져 있어도, 키에 프로젝트
+    권한이 없어도 403 이다. 같은 키로 자기 정보(/users/current.json)를 물어 이것도 403 이면 REST
+    비활성이다. 200 이면 키는 유효하니 프로젝트 권한 문제다(DEF-V014)."""
+    probe = _get(client, f"{base}/users/current.json", headers)
+    return probe.status_code == 403
+
+
+def _raise_project_error(res: httpx.Response, rest_disabled: bool = False) -> None:
     """프로젝트 자체에 닿지 못하면 하드 실패다 — 연결이 성립하지 않는다."""
     if res.status_code == 401:
         raise errors.ApiError(401, "TOOL_AUTH", "API 키가 유효하지 않습니다.")
+    if res.status_code == 403 and rest_disabled:
+        raise errors.ApiError(403, "TOOL_REST_DISABLED", REST_DISABLED)
     if res.status_code in (403, 404):
         raise errors.ApiError(
             404, "TOOL_NOT_FOUND", "프로젝트를 찾을 수 없거나 API 키에 접근 권한이 없습니다."
@@ -109,7 +125,10 @@ def verify(base_url: str, target: str, secret: str) -> ProbeResult:
     base = _base(base_url)
     with httpx.Client(timeout=settings.connector_timeout) as client:
         res = _get(client, f"{base}/projects/{target}.json", headers)
-        _raise_project_error(res)
+        if res.status_code >= 400:
+            _raise_project_error(
+                res, res.status_code == 403 and _rest_disabled(client, base, headers)
+            )
         name = (res.json().get("project") or {}).get("name") or target
 
         result = ProbeResult(name=name)

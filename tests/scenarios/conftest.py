@@ -58,7 +58,6 @@ def auth(token: str) -> dict[str, str]:
 KNOWN_FAILURES: dict[str, str] = {
     # A
     # B
-    "test_UC_010_S02_Redmine_REST_비활성": "DEF-V014 REST 비활성 안내 구분 없음",
     # C
     "test_UC_021_S03_돌려보내기": "DEF-V034 기준선 돌려보냄이 활동 기록에 없음",
     # D
