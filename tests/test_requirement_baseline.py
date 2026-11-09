@@ -308,6 +308,22 @@ def test_신규_사업은_등록_정리_제출_확정을_거쳐서만_요구사�
 
 
 @requires_db
+def test_명세서로_등록된_문서는_등록이_살아_있는_동안_지우지_못한다(client, client_token, clean):
+    """AC-020-8 (GH-218). 등록을 취소하면 지울 수 있다."""
+    pm = _auth(client_token("r3"))
+    with tx() as cur:
+        doc = _document(cur, _spec_table([("SWFR.TST.301", "삭제 보호", "필수")]))
+        clean["docs"].append(doc)
+        clean["codes"].append("SWFR.TST.301")
+    bid = client.post(_base(), json={"documentId": doc}, headers=pm).json()["id"]
+    blocked = client.delete(f"/api/documents/{doc}", headers=pm)
+    assert blocked.status_code == 409 and blocked.json()["code"] == "DOCUMENT_IN_BASELINE"
+    assert client.get(f"/api/documents/{doc}", headers=pm).status_code == 200
+    assert client.delete(f"{_base()}/{bid}", headers=pm).status_code == 204
+    assert client.delete(f"/api/documents/{doc}", headers=pm).status_code == 204
+
+
+@requires_db
 def test_요구사항_라벨이_붙은_이슈도_일반_이슈로_들어온다(client, client_token, clean):
     """예전 요구사항 라벨·제목 꼴의 이슈를 받아도 요구사항이 되지 않는다."""
     pm = _auth(client_token("r3"))

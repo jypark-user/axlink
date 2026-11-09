@@ -457,6 +457,21 @@ def delete(cur: Any, principal: AuthPrincipal, document_id: str) -> None:
     if row is None:
         raise errors.not_found("문서", document_id)
     _require_project(cur, principal, str(row["project_id"]))
+    # 요구사항 명세서로 등록된 문서는 등록(정리 중·확정 대기·확정본)이 살아 있는 동안 지우지 않는다.
+    # 확정본은 요구사항의 원문 위치(표·행)가 이 문서를 가리킨다(IM-007 AC-020-8, GH-218).
+    cur.execute(
+        "select status from requirement_baseline where document_upload_id = %s limit 1",
+        (document_id,),
+    )
+    used = cur.fetchone()
+    if used is not None:
+        raise errors.ApiError(
+            409,
+            "DOCUMENT_IN_BASELINE",
+            "요구사항 명세서로 등록된 문서는 지울 수 없습니다. 등록을 먼저 취소하세요."
+            if used["status"] != "CONFIRMED"
+            else "확정된 요구사항 명세서 원본은 지울 수 없습니다.",
+        )
 
     rag_repo.delete_by_source(cur, "DOCUMENT_UPLOAD", document_id)
     repository.delete(cur, document_id)
