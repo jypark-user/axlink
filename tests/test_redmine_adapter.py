@@ -147,3 +147,50 @@ def test_레드마인_원본이_표준_모델로_오른다(client):
             assert cur.fetchone()["severity"] == "HIGH"
         finally:
             cur.execute("delete from tool_connection where id = %s", (cid,))
+
+
+@requires_db
+def test_이슈_응답에_트래커_요구사항_ID_이슈관계가_보인다(client, client_token):
+    """원시본의 트래커·커스텀 필드·이슈관계가 API 응답에 보인다(AC-043-2, GH-224)."""
+    from app.ai.embedding import embedding_port
+
+    token = client_token("r2")
+    with tx() as cur:
+        cur.execute("select organization_id from app_user where username = 'r3'")
+        org = str(cur.fetchone()["organization_id"])
+        conn = integ_repo.insert(
+            cur, PID, org, "REDMINE", "레드마인 필드", "http://localhost:3000",
+            f"fields-{datetime.now(UTC).timestamp()}", crypto.encrypt("k"), "k***",
+        )
+        cid = str(conn["id"])
+    relation = {"id": 9, "issue_id": 204, "issue_to_id": 203, "relation_type": "precedes"}
+    try:
+        with tx() as cur:
+            job = integ_repo.insert_sync_job(cur, cid, "BACKFILL", None, datetime.now(UTC))
+            integ_repo.upsert_raw_artifact(cur, cid, "203", "issue", _issue(
+                id=203, tracker="일감", status="종료", closed=True, priority="높음",
+                custom_fields=[{"id": 1, "name": "REQ ID", "value": "UR.PORT.002"}],
+                relations=[relation],
+            ), job)
+            integ_repo.upsert_raw_artifact(cur, cid, "204", "issue", _issue(
+                id=204, tracker="일감", status="진행", priority="높음", relations=[relation],
+            ), job)
+            now = datetime.now(UTC)
+            integ_repo.finish_sync_job(cur, job, "SUCCEEDED", {}, now, now)
+            standard.promote_connection(cur, conn, embedding_port())
+        res = client.get(
+            f"/api/projects/{PID}/issues?connectionId={cid}&size=50",
+            headers={"Authorization": f"Bearer {token}"},
+        )
+        assert res.status_code == 200, res.text
+        by_key = {i["key"]: i for i in res.json()["content"]}
+        assert by_key["RM-203"]["tracker"] == "일감"
+        assert by_key["RM-203"]["requirementRefs"] == ["UR.PORT.002"]
+        assert by_key["RM-203"]["relations"] == []  # 관계는 출발점(204) 쪽에만 싣는다
+        assert by_key["RM-204"]["relations"] == [{"type": "precedes", "issueKey": "RM-203"}]
+    finally:
+        with tx() as cur:
+            cur.execute("delete from issue where tool_connection_id = %s", (cid,))
+            cur.execute("delete from raw_artifact where tool_connection_id = %s", (cid,))
+            cur.execute("delete from sync_job where tool_connection_id = %s", (cid,))
+            cur.execute("delete from tool_connection where id = %s", (cid,))

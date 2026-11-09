@@ -594,12 +594,15 @@ _ISSUE_COLUMNS = """
     i.tool_connection_id, i.external_id, i.external_url, i.source_kind,
     c.tool as tool_name, c.name as connection_name, c.target_resource,
     m.title as milestone_title, m.due_on as milestone_due_on, m.state as milestone_state,
-    m.source_url as milestone_url
+    m.source_url as milestone_url,
+    r.payload_jsonb as raw_payload
 """
 _ISSUE_FROM = """
     from issue i
     left join tool_connection c on c.id = i.tool_connection_id
     left join milestone m on m.id = i.milestone_id
+    left join raw_artifact r
+           on r.tool_connection_id = i.tool_connection_id and r.external_id = i.external_id
 """
 
 
