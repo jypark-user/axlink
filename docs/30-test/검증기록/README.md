@@ -45,6 +45,13 @@ IM-005 시험계획·결과서의 **원천 데이터**다. 문서 요약(IM-005 
   `env.model` 이 가짜면 `live-model` 은 증명하지 않는다. 모델이 설정돼 있다는 사실은 증거가 아니다.
 - 결함(`defects.jsonl` 마지막 상태)이 `open`·`fixed` 이면 그 결함의 `acs` 는 통과여도 `pass-defect-open` 이다.
 - AC 밖 집계(status.json): 세부 의무(AC 가 있는 것 / 없는 것), 공통 시나리오(COMMON), 공통 제약(CC).
+- 5174 통과 근거는 영향 분석(`impacts.jsonl`)이 무효로 돌리면 `revalidate` 다. 로컬 통과로 메우지 않는다. 뒤에 난 유효한
+  실패는 어디서 났든 실패다.
+- 증거 점검(`evidence-audit.jsonl`)에서 미확보·불일치로 나온 파일을 단 실행은 아무것도 증명하지 않는다. status.json 의
+  `evidence_incomplete_runs`(과거 증거 미완비)와 `evidence_incomplete_target_runs`(그 가운데 5174 실행, 현재 완료율에
+  영향이 있는 것)를 따로 낸다. IM-005 결과서의 확정 근거로 쓰지 않는다.
+- 실행 시각은 시간대까지 읽어 줄 세운다(UTC `Z` 와 `+09:00` 이 섞여 있다).
+- 판정을 막은 원인 미확정 실패(예: 시드 로그인 401)는 지우지 않고 `blocked` 로 남기고, 원인 미확정 결함(`kind: unknown`)에 잇는다.
 - 한 실행이 여러 AC 를 다루면 `ac_verdicts` 에 AC 별 판정을 적는다. 한 AC 에 필수 시나리오가
   여럿이면 전부 통과해야 그 AC 가 통과다(`status` 가 계산).
 
