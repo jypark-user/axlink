@@ -61,6 +61,27 @@ def test_PR_은_제목과_본문을_같이_본다():
     assert [e.target for e in found] == [("REQ", "SWFR.CON.004"), ("GH", "9")]
 
 
+def test_PR_본문의_닫기_키워드는_같은_저장소_이슈와_구조적으로_잇는다():
+    """IM-009 TD-PR-1: 「버튼 정렬 수정」 본문 Closes #4 → 이슈 G4, 근거 유형 구조적 (DEF-V010)."""
+    found = tr.pull_request_evidence({"title": "버튼 정렬 수정", "body": "Closes #4"}, KNOWN, PATHS)
+    assert [(e.kind, e.target, e.link_kind) for e in found] == [
+        ("ISSUE_RELATION", ("GH", "4"), "IMPLEMENTS")
+    ]
+    assert found[0].text == "Closes #4"
+
+
+def test_닫기_키워드는_변형을_읽고_다른_저장소와_맨_번호는_읽지_않는다():
+    body = "fixes: #5\nResolved #6\nclose #5\ncloses other/repo#7\n관련 #8\nsee #9"
+    found = tr.pull_request_evidence({"title": "docs: 정리", "body": body}, KNOWN, PATHS)
+    assert [e.target for e in found] == [("GH", "5"), ("GH", "6")]
+
+
+def test_커밋_메시지의_닫기_키워드는_근거가_아니다():
+    """규약 3절: 커밋의 맨 #n 은 Redmine 이 자기 이슈로 읽을 수 있다. PR 본문만 예외다."""
+    found = tr.commit_evidence(_commit("fix(x): 고친다  [SWFR.CON.004]\n\nCloses #4"), KNOWN, PATHS)
+    assert [e.target for e in found] == [("REQ", "SWFR.CON.004")]
+
+
 def test_작업_이슈는_본문의_코드를_보고_라벨이_성격을_정한다():
     payload = {
         "title": "D3 조사",

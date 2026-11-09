@@ -227,3 +227,54 @@ def test_same_version_does_not_pile_up(
     collected = [r for r in _versions() if r["version"] == "eeee5555ffff"]
     assert len(collected) == 1
 
+
+
+@requires_db
+def test_연결별_수집_경로로_WBS_를_채운다(client, client_token, monkeypatch, restore_project_plan):
+    """업체 저장소의 WBS 가 다른 자리에 있어도 연결 설정만으로 들어온다(UC-012-S04, DEF-V012).
+
+    서버 기본 경로는 요청하지 않는다. 연결이 정한 경로가 기본값을 대신한다.
+    """
+    token = client_token("r3")
+    asked: list[str] = []
+    monkeypatch.setattr(
+        github,
+        "verify",
+        lambda base, target, tok: github.ProbeResult("o/r", ["issue", "commit"], []),
+    )
+    monkeypatch.setattr(github, "fetch_items", lambda *a, **k: iter(()))
+
+    def fetch_file(base, target, tok, path, ref=None):
+        asked.append(path)
+        return {
+            "path": path,
+            "sha": "5e5e5e5e6f6f6f6f",
+            "size": 12,
+            "htmlUrl": f"https://github.com/o/r/blob/main/{path}",
+            "content": base64.b64encode(b"not a real xlsx").decode("ascii"),
+        }
+
+    monkeypatch.setattr(github, "fetch_file", fetch_file)
+    created = client.post(
+        f"/api/projects/{PID}/connections",
+        json={
+            "tool": "GITHUB",
+            "name": "다른 자리 WBS",
+            "baseUrl": "https://api.github.com",
+            "targetResource": "o/r",
+            "credential": {"accessToken": "ghp_fake"},
+            "mappingRules": {"collectFiles": "docs/plan/WBS.xlsx=PROJECT_PLAN"},
+        },
+        headers=_auth(token),
+    ).json()
+    try:
+        client.post(f"/api/connections/{created['id']}/test", headers=_auth(token))
+        job = client.post(f"/api/connections/{created['id']}/sync", headers=_auth(token)).json()
+        assert job["status"] == "SUCCEEDED", job
+        assert asked == ["docs/plan/WBS.xlsx"]
+
+        item = next(i for i in _checklist(client, token)["items"] if i["type"] == "PROJECT_PLAN")
+        assert item["status"] == "SUBMITTED"
+        assert item["fileUri"] == "docs/plan/WBS.xlsx"
+    finally:
+        client.delete(f"/api/connections/{created['id']}", headers=_auth(token))

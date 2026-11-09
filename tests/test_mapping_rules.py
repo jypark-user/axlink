@@ -50,6 +50,24 @@ def test_예전_요구사항_라벨_키는_받기만_하고_쓰지_않는다():
     assert "requirementLabel" not in rules.to_json()
 
 
+def test_수집_파일은_연결마다_정하고_없으면_서버_기본값이다(monkeypatch):
+    """WBS 위치는 업체마다 다르다(UC-012-S04, AC-012-1·5, DEF-V012)."""
+    from app.config import settings
+
+    monkeypatch.setattr(settings, "collect_files", "docs/00-management/WBS.xlsx=PROJECT_PLAN")
+    assert MappingRules().file_map == {"docs/00-management/WBS.xlsx": "PROJECT_PLAN"}
+    rules = MappingRules.from_json({"collectFiles": " docs/plan/WBS.xlsx = PROJECT_PLAN ,"})
+    assert rules.file_map == {"docs/plan/WBS.xlsx": "PROJECT_PLAN"}
+    assert rules.to_json()["collectFiles"] == " docs/plan/WBS.xlsx = PROJECT_PLAN ,"
+    assert "collectFiles" not in MappingRules().to_json()
+
+
+@pytest.mark.parametrize("raw", ["docs/plan/WBS.xlsx", "=PROJECT_PLAN", "a.xlsx=모르는유형", ","])
+def test_수집_파일_형식이_틀리면_저장_전에_거절한다(raw):
+    with pytest.raises(errors.ApiError):
+        MappingRules.from_json({"collectFiles": raw})
+
+
 # ── 판별이 규칙을 따른다
 
 
@@ -92,6 +110,14 @@ def test_등록과_변경이_설정으로_된다(client, client_token, monkeypat
             headers=_auth(token),
         )
         assert res.status_code == 200
+
+        # 수집 파일 경로도 연결별이다 (UC-012-S04)
+        res = client.patch(
+            f"/api/connections/{cid}/mapping",
+            json={"mappingRules": {"collectFiles": "docs/plan/WBS.xlsx=PROJECT_PLAN"}},
+            headers=_auth(token),
+        )
+        assert res.status_code == 200, res.text
 
         # 오타는 저장 전에 거절
         bad = client.patch(

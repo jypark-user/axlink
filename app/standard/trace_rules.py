@@ -20,6 +20,12 @@ from app.standard.mapping_rules import MappingRules
 _REQ_CODE = re.compile(r"\b([A-Z]{2,5}(?:\.[A-Z]{2,5})+\.\d{3})\b")
 # 도구별 접두가 붙은 이슈 참조만 읽는다. 맨 #17 은 어느 도구인지 몰라 근거로 쓰지 않는다.
 _ISSUE_REF = re.compile(r"\b(GH|RM)-(\d+)\b")
+# 예외: PR 본문의 닫기 키워드(Closes #4 등)는 GitHub 이 같은 저장소 이슈와 잇는 연결이다.
+# 사람이 적은 맨 참조가 아니라 도구가 만든 관계라 구조적 근거로 읽는다(IM-009 7.4, DEF-V010).
+# 다른 저장소(owner/repo#n)는 이 사업의 이슈가 아니라 읽지 않는다.
+_CLOSING_REF = re.compile(
+    r"(?<![\w/])(?:close[sd]?|fix(?:e[sd])?|resolve[sd]?)\s*:?\s+#(\d+)\b", re.IGNORECASE
+)
 # 커밋 제목의 유형. test 유형이면 시험으로 이어진 것으로 본다.
 _COMMIT_TYPE = re.compile(r"^\s*([a-z]+)(?:\([^)]*\))?!?:")
 _TYPE_LABEL = re.compile(r"^유형:\s*(.+)$")
@@ -275,9 +281,26 @@ def pull_request_evidence_with_exclusions(
     design_globs: list[str] | None = None,
 ) -> tuple[list[Evidence], list[Exclusion]]:
     title = payload.get("title") or ""
-    text = f"{title}\n{payload.get('body') or ''}"
-    return _change_evidence(text, title, _files_of(payload), design_globs or [],
-                            known_codes, known_paths)
+    body = payload.get("body") or ""
+    found, excluded = _change_evidence(f"{title}\n{body}", title, _files_of(payload),
+                                       design_globs or [], known_codes, known_paths)
+    found.extend(closing_issue_evidence(body))
+    return found, excluded
+
+
+def closing_issue_evidence(body: str) -> list[Evidence]:
+    """PR 본문의 닫기 키워드 → 같은 저장소 이슈. 변경 분류(문서 전용 등)와 무관하게 잇는다.
+
+    GitHub 이 PR 과 이슈를 잇는 관계라 사람이 고른 분류로 지우지 않는다. 링크 종류는 구현이다.
+    """
+    out: list[Evidence] = []
+    seen: set[str] = set()
+    for matched, line in _lines_with(body, _CLOSING_REF):
+        number = matched.group(1)
+        if number not in seen:
+            seen.add(number)
+            out.append(Evidence(ISSUE_RELATION, _clip(line), ("GH", number), IMPLEMENTS))
+    return out
 
 
 def design_doc_evidence(payload: dict[str, Any], known_codes: set[str]) -> list[Evidence]:
