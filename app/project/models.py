@@ -20,6 +20,8 @@ class ProjectUpdateRequest(BaseModel):
     description: str | None = None
     contractorName: str | None = None  # noqa: N815
     currentSiPhase: str | None = None  # noqa: N815
+    # 사업 상태. 종료(CLOSED)로 바꾸면 예약 수집·스냅샷이 멈추고 데이터는 그대로 남는다(AC-002-3)
+    status: str | None = None
 
 
 class ProjectDeleteRequest(BaseModel):
