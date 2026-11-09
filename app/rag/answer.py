@@ -279,6 +279,15 @@ def no_overview_data() -> str:
     )
 
 
+def model_down_values(title: str, lines: list[str]) -> str:
+    """모델 서버를 쓸 수 없을 때 집계 값만으로 내는 답(AC-060-9, DEF-V041). 문장은 서버가 쓴다."""
+    body = "\n".join(lines)
+    return (
+        "AI 모델 서버를 지금 쓸 수 없어 문장 답 대신 집계 값을 그대로 보여 드립니다.\n\n"
+        f"**{title}**\n{body}"
+    )
+
+
 def unsupported() -> str:
     return "이 질문에 맞는 조회 항목이 아직 없어 답하지 못했습니다."
 

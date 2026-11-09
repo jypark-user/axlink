@@ -336,6 +336,44 @@ def test_모델_서버가_없으면_쓸_수_없다고_안내하고_원문은_감
     assert scripted.stream_calls == 0
 
 
+@requires_db
+def test_판정_캐시가_있는_집계_질문은_모델_장애_때_집계_값으로_답한다(
+    client, conversation, monkeypatch
+):
+    """DEF-V041. 판정이 캐시에 있으면 판정 단계에서 모델을 부르지 않아 장애를 모른 채 생성을
+    시도한다. 생성이 실패하면 집계 값으로 서버 문안을 낸다. 모델 문장은 하나도 나가지 않는다."""
+    question = "이슈가 모두 몇 건인지 알려줘"
+    with tx() as cur:
+        cur.execute("delete from route_cache where question = %s", (question,))
+        expected = cur.execute(
+            "select count(*) as n from issue where project_id = %s", (PID,)
+        ).fetchone()["n"]
+    monkeypatch.setattr(settings, "rag_min_similarity", 0.99)  # 문서 근거는 없는 셈 친다
+    # 1) 모델이 살아 있을 때 한 번 답해 판정을 캐시에 남긴다
+    alive = ScriptedLlm(
+        {"route": "AGGREGATE", "measure": "issue_count", "dimensions": [],
+         "template": "STAT_CARD", "title": "이슈 건수", "query": "이슈 건수"},
+        f"현재 이슈는 모두 {expected}건입니다.",
+    )
+    monkeypatch.setattr(ask_service, "llm_port", lambda: alive)
+    conversation_id, token = conversation()
+    first = _ask(client, token, conversation_id, question)
+    assert first[-1][1]["finishReason"] == "STOP", first
+
+    # 2) 모델 서버가 내려간 뒤 같은 질문
+    down = DownLlm(None, "")
+    monkeypatch.setattr(ask_service, "llm_port", lambda: down)
+    events = _ask(client, token, conversation_id, question)
+    assert events[0][1]["routing"]["routeCached"] is True
+    assert down.stream_calls == 1  # 생성은 한 번 시도한다(AC-060-9 v0.2.5)
+    names = [e for e, _ in events]
+    assert "error" not in names, events
+    assert names[-1] == "done" and events[-1][1]["finishReason"] == "MODEL_DOWN"
+    text = "".join(d["text"] for e, d in events if e == "delta")
+    assert "쓸 수 없" in text and f"이슈 건수: {expected}" in text, text
+    assert "Errno" not in text
+
+
 # ---------------------------------------------------------------- 질문 (집계 경로)
 
 
