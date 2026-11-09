@@ -316,13 +316,30 @@ def stream(p: Prepared) -> Iterator[bytes]:
                     subjects=_subjects(turn.aggregate, turn.block_list, intent),
                 )
             )
-            raw = llm.stream(answer.SYSTEM_PROMPT, prompt, json_schema=answer.ANSWER_SCHEMA)
-            for piece in answer.decode_answer(answer.strip_think(raw)):
-                text = gate.feed(piece)
-                if text:
-                    pieces.append(text)
-                    yield _sse("delta", SseDeltaEvent(text=text))
-            text = gate.finish()
+            model_down = False
+            try:
+                raw = llm.stream(
+                    answer.SYSTEM_PROMPT, prompt, json_schema=answer.ANSWER_SCHEMA
+                )
+                for piece in answer.decode_answer(answer.strip_think(raw)):
+                    text = gate.feed(piece)
+                    if text:
+                        pieces.append(text)
+                        yield _sse("delta", SseDeltaEvent(text=text))
+            except errors.ApiError as exc:
+                # 판정 캐시를 타면 판정 단계에서 장애를 모른 채 여기까지 온다(DEF-V041).
+                # 집계 값이 이미 있으면 서버 문안으로 답한다. 모델 문장은 하나도 내보내지 않았다
+                fallback = _model_down_answer(turn) if not pieces else None
+                if exc.code != "AI_UNAVAILABLE" or fallback is None:
+                    raise
+                log.warning(
+                    "답 생성 중 모델 서버 장애, 집계 값으로 답함 conversation=%s: %s",
+                    p.conversation_id, exc.message,
+                )
+                model_down = True
+                pieces.append(fallback)
+                yield _sse("delta", SseDeltaEvent(text=fallback))
+            text = "" if model_down else gate.finish()
             if text:
                 pieces.append(text)
                 yield _sse("delta", SseDeltaEvent(text=text))
@@ -338,7 +355,9 @@ def stream(p: Prepared) -> Iterator[bytes]:
                 pieces.append(tail)
                 yield _sse("delta", SseDeltaEvent(text=tail))
             finish_reason = PARTIAL if turn.notice else STOP
-            if gate.blocked:
+            if model_down:
+                finish_reason = MODEL_DOWN
+            elif gate.blocked:
                 # 막힌 문장은 화면에도 저장 본문에도 없다. 무엇이 왜 막혔는지만 남긴다
                 finish_reason = NUMBER_GUARD
                 log.info(
@@ -405,7 +424,19 @@ UNSUPPORTED = "UNSUPPORTED"
 QUERY_ERROR = "QUERY_ERROR"
 # 검색 모델과 색인이 달라 문서 검색을 멈춘 상태(ARC-022). 조회 오류와 다르게 알린다
 SEARCH_DISABLED = "SEARCH_DISABLED"
+# 모델 장애로 집계 값만 서버 문안으로 낸 답(AC-060-9). 판정은 다시 캐시에 남기지 않는다
+MODEL_DOWN = "MODEL_DOWN"
 _ANSWERED = (STOP, PARTIAL, NUMBER_GUARD)
+
+
+def _model_down_answer(turn: "_Turn") -> str | None:
+    """모델 없이 낼 수 있는 집계 값 답. 집계·일정 값이 없으면 None(쓸 수 없음 안내로 간다)."""
+    if turn.aggregate is not None and turn.aggregate.lines:
+        return answer.model_down_values(turn.aggregate.title, turn.aggregate.lines)
+    intent = turn.intent
+    if intent is not None and intent.lines:
+        return answer.model_down_values(intent.title, intent.lines)
+    return None
 
 
 class _QueryFailed(Exception):

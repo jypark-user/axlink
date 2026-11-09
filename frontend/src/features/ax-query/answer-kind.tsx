@@ -16,6 +16,7 @@ const KIND_LABEL: Record<string, string> = {
   QUERY_ERROR: '조회 오류',
   SEARCH_DISABLED: '문서 검색 멈춤',
   OFF_TOPIC: '사업 밖 질문',
+  MODEL_DOWN: '모델 장애, 집계 값만',
 };
 
 export function answerKindLabel(reason: string | null | undefined): string | null {
