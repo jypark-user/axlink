@@ -149,6 +149,13 @@ def test_첫_회는_전체_이후는_증분이고_반복해도_수렴한다(clie
             # 「신규·갱신」은 바뀐 원본 수다. 첫 회 2, 변경 없는 회차 0 (AC-011-2, GH-213)
             assert first["stats_json"]["changed"] == 2
             assert second["stats_json"]["changed"] == 0
+            # 바뀐 원본이 있던 첫 회만 활동 기록에 남고, 변경 없는 회차는 남지 않는다(GH-221)
+            acts = cur.execute(
+                "select summary from activity_event where project_id = %s and kind = 'SYNC_CHANGED'"
+                " and target_key = any(%s::text[])",
+                (PID, [str(first["id"]), str(second["id"])]),
+            ).fetchall()
+            assert len(acts) == 1 and "바뀐 원본 2건" in acts[0]["summary"], acts
             # 3회 재현 — 통계가 같고 원본이 늘지 않는다
             assert second["stats_json"] == third["stats_json"]
             cur.execute(

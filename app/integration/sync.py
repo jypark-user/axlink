@@ -221,6 +221,32 @@ def run_sync(
         cur, job_id, "SUCCEEDED", stats, now, finished, error=note, error_code=None
     )
     repository.mark_synced(cur, cid, finished, note)
+    changed = stats["fetched"] - stats["skippedUnchanged"]
+    if changed > 0:
+        # 수집도 사업의 사건이다(IM-007 AC-053-4, GH-221). 바뀐 원본이 있을 때만 남긴다 —
+        # 변경 없는 회차까지 적으면 기록이 수집 주기로 메워진다
+        from app.activity import service as activity
+
+        activity.record(
+            cur,
+            project_id=str(connection["project_id"]),
+            kind=activity.SYNC_CHANGED,
+            audience=activity.ALL,
+            actor_label="동기화",
+            summary=(
+                f"수집 완료: {connection.get('name') or connection['tool']} · "
+                f"바뀐 원본 {changed}건 · 반영 {stats['upserted']}건"
+            ),
+            target_type="SYNC_JOB",
+            target_key=str(job_id),
+            occurred_at=finished,
+            detail={
+                "fetched": stats["fetched"],
+                "changed": changed,
+                "upserted": stats["upserted"],
+                "denied": denied,
+            },
+        )
     return job_id
 
 
