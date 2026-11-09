@@ -38,7 +38,7 @@ import json
 import re
 import sys
 from collections import defaultdict
-from datetime import date
+from datetime import UTC, date, datetime
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
@@ -91,9 +91,30 @@ def is_target(run: dict) -> bool:
     return str((run.get("env") or {}).get("name", "")).startswith(TARGET_ENV_PREFIXES)
 
 
+def unusable_evidence() -> set[str]:
+    """증거 점검(evidence-audit.jsonl)에서 미확보·불일치로 나온 파일. 확정 근거로 쓰지 않는다."""
+    bad: set[str] = set()
+    for a in read_jsonl(RECORDS / "evidence-audit.jsonl"):
+        for key in ("missing", "mismatch"):
+            item = a.get(key)
+            for it in item if isinstance(item, list) else [item] if item else []:
+                if it.get("path"):
+                    bad.add(it["path"])
+    return bad
+
+
+def evidence_paths(run: dict) -> list[str]:
+    ev = run.get("evidence")
+    items = ev if isinstance(ev, list) else [ev] if ev else []
+    return [i.get("path") if isinstance(i, dict) else i for i in items if i]
+
+
 def proves(run: dict) -> set[str]:
-    """이 실행이 증명하는 증거 종류. 재생 도구·가짜 모델이 적힌 실행은 그 종류를 증명하지 않는다."""
+    """이 실행이 증명하는 증거 종류. 재생 도구·가짜 모델이 적힌 실행은 그 종류를 증명하지 않는다.
+    증거 파일이 미확보·불일치로 점검된 실행은 아무것도 증명하지 않는다."""
     if not is_target(run):
+        return set()
+    if any(p in _BAD_EVIDENCE for p in evidence_paths(run)):
         return set()
     env = run.get("env") or {}
     tools = " ".join(env.get("tools") or [])
@@ -107,6 +128,15 @@ def proves(run: dict) -> set[str]:
     if "가짜" in model or "fake" in model.lower():
         got.discard("live-model")
     return got
+
+
+def run_time(run: dict) -> datetime:
+    """실행 시각을 시간대까지 읽는다. 없거나 못 읽으면 가장 이른 시각으로 둔다."""
+    try:
+        t = datetime.fromisoformat(str(run.get("ts", "")).replace("Z", "+00:00"))
+    except ValueError:
+        return datetime.min.replace(tzinfo=UTC)
+    return t if t.tzinfo else t.replace(tzinfo=UTC)
 
 
 def latest_defects() -> dict[str, dict]:
@@ -388,7 +418,12 @@ def read_jsonl(path: Path) -> list[dict]:
     return rows
 
 
+_BAD_EVIDENCE: set[str] = set()
+
+
 def compute_status(cat: dict) -> dict:
+    _BAD_EVIDENCE.clear()
+    _BAD_EVIDENCE.update(unusable_evidence())
     runs = read_jsonl(RECORDS / "runs.jsonl")
     corrections = read_jsonl(RECORDS / "corrections.jsonl")
     impacts = read_jsonl(RECORDS / "impacts.jsonl")
@@ -404,7 +439,8 @@ def compute_status(cat: dict) -> dict:
     by_sc: dict[str, list[dict]] = defaultdict(list)
     # 시나리오 없이 AC 에 바로 붙는 실행(자동 시험 등)은 AC 별로 따로 모은다
     by_ac_direct: dict[str, list[dict]] = defaultdict(list)
-    for r in sorted(runs, key=lambda r: (r.get("ts", ""), r.get("run_id", ""))):
+    # 시각은 UTC(Z)와 +09:00 이 섞여 있다. 글자 순으로 줄 세우면 순서가 틀린다
+    for r in sorted(runs, key=lambda r: (run_time(r), r.get("run_id", ""))):
         rid = r["run_id"]
         verdicts = dict(r.get("ac_verdicts") or {})
         overall = r.get("verdict")
@@ -452,7 +488,10 @@ def compute_status(cat: dict) -> dict:
         elif r["_verdict"] != "pass":
             # 실패·차단은 어느 환경에서 났든 최신 결과로 본다
             st = r["_verdict"]
-        elif t is None or t["_invalidated"] or t["_verdict"] != "pass":
+        elif t is not None and t["_invalidated"]:
+            # 5174 통과가 뒤 변경으로 무효가 됐다. 로컬 통과로 메우지 않는다
+            st = "revalidate"
+        elif t is None or t["_verdict"] != "pass":
             # 통과했지만 5174 통과 근거가 없거나, 5174 의 마지막 결과가 통과가 아니다
             st = "pass-ci-only"
         else:
@@ -583,6 +622,13 @@ def compute_status(cat: dict) -> dict:
         "ccs_total": len(cat["ccs"]),
         "ccs_pass": sum(1 for c in cat["ccs"] if c in cc_runs),
         "open_defects": sorted({d for ds in open_defect_acs.values() for d in ds}),
+        # 과거 증거 미완비: 증거 파일이 미확보·불일치인 실행. 확정 근거로 쓰지 않는다
+        "evidence_incomplete_runs": sum(
+            1 for r in runs if any(p in _BAD_EVIDENCE for p in evidence_paths(r))
+        ),
+        "evidence_incomplete_target_runs": sum(
+            1 for r in runs if is_target(r) and any(p in _BAD_EVIDENCE for p in evidence_paths(r))
+        ),
     }
     metrics = {
         "ac_total": total,
