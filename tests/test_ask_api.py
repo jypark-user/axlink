@@ -318,6 +318,10 @@ class DownLlm(ScriptedLlm):
 def test_모델_서버가_없으면_쓸_수_없다고_안내하고_원문은_감춘다(client, conversation, monkeypatch):
     scripted = DownLlm(None, "")
     monkeypatch.setattr(ask_service, "llm_port", lambda: scripted)
+    # 같은 질문의 판정이 캐시에 있으면 판정 단계를 건너뛰어 생성부터 시도한다(DEF-V041).
+    # 시나리오 시험이 먼저 돌며 남길 수 있어 지우고 시작한다
+    with tx() as cur:
+        cur.execute("delete from route_cache where question = %s", ("일반 이슈가 몇 건이야",))
     conversation_id, token = conversation()
     events = _ask(client, token, conversation_id, "일반 이슈가 몇 건이야")
     name, data = events[-1]
