@@ -120,7 +120,16 @@ def run_sync(
     token = crypto.decrypt(connection["auth_encrypted"])
     base, target = connection["base_url"], connection["target_resource"]
 
-    stats = {"fetched": 0, "upserted": 0, "unmapped": 0, "indexed": 0, "skippedUnchanged": 0}
+    # changed = 새로 생기거나 바뀐 원본 건수(fetched − skippedUnchanged). 화면의 「신규·갱신」.
+    # upserted 는 표준 모델로 올린(재승격 포함) 건수라 「반영」으로만 쓴다(IM-007 AC-011-2, GH-213).
+    stats = {
+        "fetched": 0,
+        "changed": 0,
+        "upserted": 0,
+        "unmapped": 0,
+        "indexed": 0,
+        "skippedUnchanged": 0,
+    }
     denied: list[str] = []
     connector = port.get_connector(connection["tool"])
     # 전체 수집은 처음부터 읽으므로 앞 회차의 이어 읽을 자리를 쓰지 않는다
@@ -186,6 +195,7 @@ def run_sync(
     rules = MappingRules.from_json(connection.get("mapping_rules_json"))
     _collect_details(cur, cid, connector, base, target, token, job_id, stats, rules)
 
+    stats["changed"] = stats["fetched"] - stats["skippedUnchanged"]
     promoted = standard.promote_connection(cur, connection, embedding_port())
     stats["upserted"] = promoted.upserted
     stats["unmapped"] = promoted.unmapped

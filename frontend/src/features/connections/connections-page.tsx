@@ -59,7 +59,7 @@ export function ConnectionsPage(): ReactNode {
         kind: 'BACKFILL',
       });
       const s = job.stats;
-      const summary = `가져옴 ${s.fetched.toLocaleString('ko-KR')}건 · 신규·갱신 ${s.upserted} · 변경없음 ${s.skippedUnchanged}`;
+      const summary = `가져옴 ${s.fetched.toLocaleString('ko-KR')}건 · 신규·갱신 ${s.changed ?? 0} · 변경없음 ${s.skippedUnchanged}`;
       if (job.status === 'FAILED') {
         toast({ title: '수집 실패', description: job.error ?? summary, variant: 'error' });
       } else {

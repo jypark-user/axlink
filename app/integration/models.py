@@ -53,7 +53,8 @@ class ToolConnectionStatusUpdateRequest(BaseModel):
 
 class SyncJobStats(BaseModel):
     fetched: int = 0
-    upserted: int = 0
+    changed: int = 0  # 새로 생기거나 바뀐 원본 건수. 변경이 없으면 0 (「신규·갱신」)
+    upserted: int = 0  # 표준 모델로 올린 건수(재승격 포함). 「반영」
     unmapped: int = 0
     indexed: int = 0
     skippedUnchanged: int = 0  # noqa: N815

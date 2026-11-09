@@ -146,6 +146,9 @@ def test_첫_회는_전체_이후는_증분이고_반복해도_수렴한다(clie
             assert received_since[0][1] is None
             assert received_since[3][1] is not None  # 2회차 issue 호출
             assert second["stats_json"]["fetched"] == 0
+            # 「신규·갱신」은 바뀐 원본 수다. 첫 회 2, 변경 없는 회차 0 (AC-011-2, GH-213)
+            assert first["stats_json"]["changed"] == 2
+            assert second["stats_json"]["changed"] == 0
             # 3회 재현 — 통계가 같고 원본이 늘지 않는다
             assert second["stats_json"] == third["stats_json"]
             cur.execute(
