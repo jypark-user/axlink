@@ -485,7 +485,7 @@ GITHUB_ISSUES_CON1 = [
     GithubIssue("TD-ISS-G5", 5, "빌드 스크립트 정리", (), True, "M-a"),
 ]
 GITHUB_ISSUES_CON3 = [
-    GithubIssue("TD-ISS-W3", 3, "웹 번들 축소", (), False, None),
+    GithubIssue("TD-ISS-W4", 4, "웹 번들 축소", (), False, None),
 ]
 
 
@@ -532,7 +532,7 @@ COMMITS = [
         "TD-CMT-4",
         "TD-CON-1",
         "d4c3b2a40004d4c3b2a40004d4c3b2a40004d4c3",
-        "fix: 통계 배치 GH-3",
+        "fix: 통계 배치 GH-4",
         ("src/stats/batch.py",),
         "2026-08-10T09:00:00Z",
         "S0",
@@ -541,7 +541,7 @@ COMMITS = [
         "TD-CMT-W1",
         "TD-CON-3",
         "e5d4c3b50005e5d4c3b50005e5d4c3b50005e5d4",
-        "chore: 번들 축소 GH-3",
+        "chore: 번들 축소 GH-4",
         ("web/bundle.js",),
         "2026-08-12T09:00:00Z",
         "S0",

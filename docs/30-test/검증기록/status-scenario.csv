@@ -50,7 +50,7 @@ UC-012-S02,UC-012,pass,C01-R0908,api,,api,6
 UC-012-S03,UC-012,pass,C01-R0909,api,,api,6
 UC-012-S04,UC-012,pass,C01-R0910,api,,,6
 UC-012-S05,UC-012,pass,C01-R0911,api,,api,6
-UC-020-S01,UC-020,fail,C01-R0792,api,,api·browser,5
+UC-020-S01,UC-020,pass,C01-R0912,auto,,api·browser,6
 UC-020-S02,UC-020,not-run,,,,browser,0
 UC-020-S03,UC-020,not-run,,,,api,0
 UC-020-S04,UC-020,not-run,,,,api,0
@@ -67,14 +67,14 @@ UC-021-S03,UC-021,fail,C01-R0797,api,,api·browser,5
 UC-021-S04,UC-021,pass,C01-R0795,api,,api,5
 UC-021-S05,UC-021,pass,C01-R0796,api,,api,5
 UC-021-S06,UC-021,not-run,C01-R0312,mock,,,2
-UC-021-S07,UC-021,fail,C01-R0801,api,,,5
-UC-021-S08,UC-021,pass,C01-R0802,api,,,5
+UC-021-S07,UC-021,pass,C01-R0913,auto,,,6
+UC-021-S08,UC-021,pass,C01-R0914,auto,,,6
 UC-021-S09,UC-021,not-run,C01-R0310,mock,,,2
 UC-021-S10,UC-021,not-run,C01-R0316,mock,DEC-11,api·live-model,2
 UC-022-S01,UC-022,pass,C01-R0803,api,,api·browser,5
 UC-022-S02,UC-022,pass,C01-R0812,api,,,5
 UC-022-S03,UC-022,pass,C01-R0804,api,,,5
-UC-022-S04,UC-022,fail,C01-R0805,api,,,5
+UC-022-S04,UC-022,pass,C01-R0915,auto,,,6
 UC-022-S12,UC-022,pass,C01-R0806,api,,,5
 UC-022-S05,UC-022,pass,C01-R0807,api,,,5
 UC-022-S06,UC-022,not-run,C01-R0326,mock,,browser,2
@@ -146,7 +146,7 @@ UC-042-S03,UC-042,not-run,C01-R0388,mock,,,2
 UC-042-S04,UC-042,pass,C01-R0859,api,,api,5
 UC-043-S01,UC-043,fail,C01-R0860,api,,api·browser,5
 UC-043-S02,UC-043,pass,C01-R0861,api,,api,5
-UC-043-S03,UC-043,fail,C01-R0862,api,,api,5
+UC-043-S03,UC-043,pass,C01-R0916,auto,,api,6
 UC-043-S04,UC-043,pass,C01-R0863,api,,api,5
 UC-043-S05,UC-043,not-run,C01-R0394,mock,DEC-02,api,2
 UC-043-S06,UC-043,pass,C01-R0864,api,,api,5
