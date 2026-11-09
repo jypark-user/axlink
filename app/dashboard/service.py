@@ -577,7 +577,9 @@ def _representative(
         return "L1", "WBS", wbs_progress.actual
     if issue.denominator:
         return "L3", "ISSUE", issue.value
-    if product.denominator:
+    # 점검표만 있고 제출본이 하나도 없으면 L4 를 세우지 않는다. 0% 는 「진척이 없다」는 주장이라
+    # 재료가 없는 것과 다르다(DEF-V003, IM-007 AC-002-1 「데이터 없음·산출 불가」)
+    if product.denominator and product.numerator:
         return "L4", "WORK_PRODUCT", product.value
     return _NONE, _NONE, None
 

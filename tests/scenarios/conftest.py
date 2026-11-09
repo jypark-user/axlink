@@ -57,7 +57,6 @@ def auth(token: str) -> dict[str, str]:
 # 키는 시험 함수 이름, 값은 검증 기록의 결함(DEF-V###)·결정(DEC-##) ID 와 사유다.
 KNOWN_FAILURES: dict[str, str] = {
     # A
-    "test_UC_002_S01_등록_직후_상태": "DEF-V003 재료 없는 사업 진척 0.0% (정책 확인 DEC 후보 19)",
     # B
     "test_UC_010_S02_Redmine_REST_비활성": "DEF-V014 REST 비활성 안내 구분 없음",
     # C
@@ -73,7 +72,6 @@ KNOWN_FAILURES: dict[str, str] = {
     "test_UC_041_S01_다섯_축_한_화면": "DEF-V022 위험 처리율 지표 없음 + DEC-02 결함 분리",
     "test_UC_041_S02_진척률에서_작업까지": "DEF-V036 일정 줄 작업 단위 격차 경고·연결 이슈 없음",
     "test_UC_041_S03_L3_추정": "DEF-V037 L3 추정 표시 없음",
-    "test_UC_041_S04_재료_없음": "DEF-V003 재료 없는 사업 진척 0.0% (정책 확인)",
     "test_UC_041_S12_WBS_변형": "DEF-V023 L2 추정 없음",
     "test_UC_042_S01_추천_구성": "DEC-02 결함이 일반 이슈 처리율에 섞임(7/11)",
     "test_UC_043_S01_목록_원천": "DEC-02 결함이 일반 이슈에 섞임(11건)",

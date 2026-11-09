@@ -23,6 +23,16 @@ from tests.conftest import requires_db
 
 PID = "c0000000-0000-4000-8000-000000000001"  # 시드 사업
 
+
+@pytest.fixture(autouse=True)
+def _no_route_cache(request):
+    """판정 캐시는 시험 사이에 남는다. 같은 DB 에서 먼저 돈 시나리오가 같은 질문의 판정을 남기면
+    대본 모델의 판정을 건너뛰어 다른 경로로 답한다. 이 파일의 시험은 판정부터 본다"""
+    if request.node.get_closest_marker("db") is None:
+        return
+    with tx() as cur:
+        cur.execute("delete from route_cache")
+
 _BODY = """# 과업지시서
 
 ## 1. 사업 개요
@@ -318,10 +328,6 @@ class DownLlm(ScriptedLlm):
 def test_모델_서버가_없으면_쓸_수_없다고_안내하고_원문은_감춘다(client, conversation, monkeypatch):
     scripted = DownLlm(None, "")
     monkeypatch.setattr(ask_service, "llm_port", lambda: scripted)
-    # 같은 질문의 판정이 캐시에 있으면 판정 단계를 건너뛰어 생성부터 시도한다(DEF-V041).
-    # 시나리오 시험이 먼저 돌며 남길 수 있어 지우고 시작한다
-    with tx() as cur:
-        cur.execute("delete from route_cache where question = %s", ("일반 이슈가 몇 건이야",))
     conversation_id, token = conversation()
     events = _ask(client, token, conversation_id, "일반 이슈가 몇 건이야")
     name, data = events[-1]

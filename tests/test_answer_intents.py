@@ -236,10 +236,26 @@ def test_근거에_없는_수치는_일정_답에서도_막힌다(ask):
     assert "37.5" not in _text(ev)
 
 
+@pytest.fixture
+def one_submission(no_plan):  # noqa: F811 (픽스처 이름)
+    """계획서 말고 제출본을 하나 둔다. 제출본이 하나도 없으면 산출물 갈래(L4)가 서지 않는다
+    (DEF-V003). no_plan 이 걷어 내는 계획서가 빈 시험 DB 의 유일한 제출본이다."""
+    with tx() as cur:
+        row = cur.execute(
+            "select id, status from work_product where project_id = %s and is_current "
+            "and applicable and type <> 'PROJECT_PLAN' order by type limit 1",
+            (PID,),
+        ).fetchone()
+        cur.execute("update work_product set status = 'SUBMITTED' where id = %s", (row["id"],))
+    yield
+    with tx() as cur:
+        cur.execute("update work_product set status = %s where id = %s", (row["status"], row["id"]))
+
+
 @requires_db
-@pytest.mark.usefixtures("no_plan")
+@pytest.mark.usefixtures("one_submission")
 def test_WBS_가_없으면_대표_진척률을_기준과_함께_일부만_답한다(ask, no_snapshots):
-    """시드 사업은 WBS 없이도 대표 진척률이 이슈·산출물 갈래로 선다. 계획 비교는 못 한다."""
+    """WBS 없이도 대표 진척률이 이슈·산출물 갈래로 선다(제출본 하나). 계획 비교는 못 한다."""
     ev, scripted = ask({"route": "INTENT", "intent": "PLAN_VS_ACTUAL"}, "안 불려야 한다")
     assert _finish(ev) == "PARTIAL"
     # 비교한 사업이 없으면 모델을 부르지 않고 서버가 있는 값과 기준만 말한다(되풀이 없음)
