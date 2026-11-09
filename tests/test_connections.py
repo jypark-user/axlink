@@ -260,26 +260,33 @@ def test_backfill_ingests_raw_artifacts(client, as_pm, monkeypatch):
     assert again["stats"]["indexed"] == 0
 
 
-@requires_db
-def test_backfill_tolerates_missing_permission(client, as_pm, monkeypatch):
-    """한 항목종류의 권한이 빠져도 통째로 실패하지 않고 그 종류만 건너뛴다."""
-    token, created = as_pm
+def _denied_github(monkeypatch, denied_kind: str) -> None:
+    """한 항목종류만 권한이 빠진 GitHub 을 흉내 낸다. 나머지는 커밋 하나를 돌려준다."""
     monkeypatch.setattr(
         github,
         "verify",
-        lambda base, target, tok: github.ProbeResult("jypark-user/axlink", ["commit"], ["issue"]),
+        lambda base, target, tok: github.ProbeResult(
+            "jypark-user/axlink", ["commit"], [denied_kind]
+        ),
     )
 
     def fetch_with_denied(base, target, tok, kind, per_page, max_pages, since=None, until=None):
         from app.common import errors
 
-        if kind == "issue":
-            raise errors.ApiError(403, "TOOL_AUTH", "issue 읽기 권한이 없습니다.")
+        if kind == denied_kind:
+            raise errors.ApiError(403, "TOOL_AUTH", f"{kind} 읽기 권한이 없습니다.")
         if kind == "commit":
             yield "commit:abc", {"sha": "abc", "commit": {"message": "커밋"}}
 
     monkeypatch.setattr(github, "fetch_items", fetch_with_denied)
     monkeypatch.setattr(github, "fetch_file", lambda *a, **k: None)
+
+
+@requires_db
+def test_backfill_tolerates_missing_permission(client, as_pm, monkeypatch):
+    """선택 대상(PR)의 권한이 빠져도 통째로 실패하지 않고 그 종류만 건너뛴다(AC-011-6c)."""
+    token, created = as_pm
+    _denied_github(monkeypatch, "pull_request")
 
     cid = client.post(
         f"/api/projects/{PID}/connections", json=_create_body(), headers=_auth(token)
@@ -290,7 +297,24 @@ def test_backfill_tolerates_missing_permission(client, as_pm, monkeypatch):
     job = client.post(f"/api/connections/{cid}/sync", headers=_auth(token)).json()
     assert job["status"] == "SUCCEEDED"  # 부분 성공
     assert job["stats"]["fetched"] == 1  # 커밋만
-    assert "issue" in (job["error"] or "")  # 건너뛴 항목을 정직하게 남긴다
+    assert "pull_request" in (job["error"] or "")  # 건너뛴 항목을 정직하게 남긴다
+
+
+@requires_db
+def test_backfill_fails_when_issue_permission_missing(client, as_pm, monkeypatch):
+    """필수 대상(이슈)의 권한이 빠지면 성공·부분 성공이 아니라 실패다(AC-011-6b, GH-212)."""
+    token, created = as_pm
+    _denied_github(monkeypatch, "issue")
+
+    cid = client.post(
+        f"/api/projects/{PID}/connections", json=_create_body(), headers=_auth(token)
+    ).json()["id"]
+    created.append(cid)
+    client.post(f"/api/connections/{cid}/test", headers=_auth(token))
+
+    job = client.post(f"/api/connections/{cid}/sync", headers=_auth(token)).json()
+    assert job["status"] == "FAILED", job
+    assert "issue" in (job["error"] or "")  # 사유에 빠진 대상이 보인다
 
 
 @requires_db
