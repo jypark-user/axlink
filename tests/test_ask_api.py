@@ -14,6 +14,7 @@ import pytest
 
 from app.ai.embedding import FakeEmbedding
 from app.ai.port import LlmResult
+from app.common import errors
 from app.config import settings
 from app.db import tx
 from app.rag import indexing, number_guard
@@ -300,6 +301,29 @@ def test_색인이_비어_있으면_그렇다고_답한다(client, conversation,
     text = "".join(d["text"] for e, d in events if e == "delta")
     assert "올라온 문서·이슈가 아직 없어" in text and scripted.stream_calls == 0
     assert events[-1][1]["finishReason"] == "NO_DOCUMENTS"
+
+
+class DownLlm(ScriptedLlm):
+    """모델 서버가 내려간 상태. 실제 어댑터처럼 AI_UNAVAILABLE 을 낸다."""
+
+    def complete(self, system: str, user: str, *, json_schema=None) -> LlmResult:
+        raise errors.ApiError(503, "AI_UNAVAILABLE", "LLM 에 닿지 못했습니다: [Errno 111] refused")
+
+    def stream(self, system: str, user: str, *, json_schema=None) -> Iterator[str]:
+        self.stream_calls += 1
+        raise errors.ApiError(503, "AI_UNAVAILABLE", "LLM 에 닿지 못했습니다: [Errno 111] refused")
+
+
+@requires_db
+def test_모델_서버가_없으면_쓸_수_없다고_안내하고_원문은_감춘다(client, conversation, monkeypatch):
+    scripted = DownLlm(None, "")
+    monkeypatch.setattr(ask_service, "llm_port", lambda: scripted)
+    conversation_id, token = conversation()
+    events = _ask(client, token, conversation_id, "일반 이슈가 몇 건이야")
+    name, data = events[-1]
+    assert name == "error" and data["code"] == "AI_UNAVAILABLE", events
+    assert "쓸 수 없" in data["message"] and "Errno" not in data["message"]
+    assert scripted.stream_calls == 0
 
 
 # ---------------------------------------------------------------- 질문 (집계 경로)
