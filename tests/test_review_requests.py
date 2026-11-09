@@ -54,6 +54,30 @@ def test_targets_come_from_standard_model(client, client_token):
 
 
 @requires_db
+def test_blank_report_is_rejected(client, client_token, issue_target):
+    """공백 보고문은 거절되고 상태는 요청 그대로다(AC-051-3, GH-220)."""
+    client_tok, contractor_tok = client_token("r2"), client_token("r3")
+    created = client.post(
+        f"/api/projects/{PID}/review-requests",
+        json={
+            "targetType": "ISSUE",
+            "targetKey": issue_target,
+            "title": "공백 보고 시험",
+            "body": "",
+        },
+        headers=_auth(client_tok),
+    ).json()
+    res = client.post(
+        f"/api/review-requests/{created['id']}/report",
+        json={"body": "   ", "evidence": []},
+        headers=_auth(contractor_tok),
+    )
+    assert res.status_code == 400, res.text
+    detail = client.get(f"/api/review-requests/{created['id']}", headers=_auth(client_tok)).json()
+    assert detail["status"] == "REQUESTED" and detail["reportBody"] is None
+
+
+@requires_db
 def test_full_cycle_with_state_diff(client, client_token, issue_target):
     client_tok, contractor_tok = client_token("r2"), client_token("r3")
     body = {
