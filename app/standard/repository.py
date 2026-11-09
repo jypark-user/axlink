@@ -430,7 +430,7 @@ def current_work_product(
         cur,
         """
         select id, type, version, title, status, file_uri, source_revision, external_url,
-               updated_at
+               updated_at, document_upload_id, source_kind
           from work_product
          where project_id = %s and type = %s and is_current
         """,
@@ -450,6 +450,14 @@ def work_product_row(cur: Any, work_product_id: str) -> dict[str, Any] | None:
         """,
         (work_product_id,),
     )
+
+
+def document_stored_path(cur: Any, document_id: str) -> str | None:
+    """업로드 문서가 보관된 경로(문서 루트 기준 상대 경로)."""
+    row = fetch_one(
+        cur, "select stored_path from document_upload where id = %s", (document_id,)
+    )
+    return row["stored_path"] if row else None
 
 
 # --- 조회 ---------------------------------------------------------------

@@ -240,7 +240,7 @@ def _load_plan(
     if wbs_repository.loaded_version(cur, project_id) == plan_id:
         return wbs_repository.load_plan(cur, project_id), None
 
-    path = _plan_path(project_id, plan_row)
+    path = _plan_path(project_id, plan_row, cur)
     if path is None:
         return _previous_baseline(
             cur, project_id,
@@ -580,12 +580,19 @@ def _read_plan(
     return wbs.progress(plan, at or clock.today()), warning
 
 
-def _plan_path(project_id: str, plan_row: dict[str, Any]) -> Path | None:
-    """수집한 파일은 내용 주소로 보관된다 — <root>/<project>/repo/<sha><ext>.
+def _plan_path(project_id: str, plan_row: dict[str, Any], cur: Any = None) -> Path | None:
+    """계획서 원본 파일. 자료로 올려 확정한 계획서는 업로드 보관 위치에 있다(DEF-V019).
+
+    수집한 파일은 내용 주소로 보관된다 — <root>/<project>/repo/<sha><ext>.
 
     source_revision 이 없는 행은 이 컬럼이 생기기 전에 수집된 것이다. 버전이 sha 앞
     12자리이므로 접두로 찾으면 다시 수집하지 않아도 도달한다. 12자리면 사실상 유일하다.
     """
+    if plan_row.get("document_upload_id") and cur is not None:
+        stored = standard_repo.document_stored_path(cur, str(plan_row["document_upload_id"]))
+        if stored:
+            path = Path(settings.document_root) / stored
+            return path if path.is_file() else None
     folder = Path(settings.document_root) / project_id / "repo"
     if not folder.is_dir():
         return None
