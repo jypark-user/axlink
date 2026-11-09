@@ -101,6 +101,21 @@ def create_invite(
         return service.create_invite(cur, principal, project_id, req)
 
 
+@router.get("/{project_id}/invites", response_model=list[ProjectInviteResponse])
+def list_invites(project_id: str, principal: Principal) -> list[ProjectInviteResponse]:
+    """쓸 수 있는 초대 링크. 토큰 원문은 없다."""
+    with tx() as cur:
+        return service.list_invites(cur, principal, project_id)
+
+
+@router.delete("/{project_id}/invites/{invite_id}", status_code=204, response_class=Response)
+def revoke_invite(project_id: str, invite_id: str, principal: Principal) -> Response:
+    """초대 링크 취소. 취소한 링크로는 가입할 수 없다."""
+    with tx() as cur:
+        service.revoke_invite(cur, principal, project_id, invite_id)
+    return Response(status_code=204)
+
+
 @router.get("/{project_id}/participants", response_model=list[ParticipantResponse])
 def list_participants(project_id: str, principal: Principal) -> list[ParticipantResponse]:
     """참여 업체. 사업에 접근할 수 있으면 누구나 본다."""

@@ -269,6 +269,38 @@ def create_invite(
     )
 
 
+def _to_invite(row: dict[str, Any]) -> ProjectInviteResponse:
+    return ProjectInviteResponse(
+        id=str(row["id"]),
+        projectId=str(row["project_id"]),
+        expiresAt=row["expires_at"].isoformat(),
+        revokedAt=_iso(row["revoked_at"]),
+        createdAt=row["created_at"].isoformat(),
+        token=None,
+        organizationId=str(row["organization_id"]) if row["organization_id"] else None,
+        organizationName=row["contractor_org_name"],
+    )
+
+
+def list_invites(
+    cur: Any, principal: AuthPrincipal, project_id: str
+) -> list[ProjectInviteResponse]:
+    """쓸 수 있는 초대 링크 목록. 토큰은 다시 보여 주지 않는다."""
+    _require_client(principal)
+    _require_allowed(cur, principal, project_id)
+    participants.require_manager(cur, principal, project_id)
+    return [_to_invite(r) for r in repository.list_open_invites(cur, project_id, datetime.now(UTC))]
+
+
+def revoke_invite(cur: Any, principal: AuthPrincipal, project_id: str, invite_id: str) -> None:
+    """초대 링크 취소(IM-007 AC-003-4, GH-209). 취소한 링크로는 더 가입할 수 없다."""
+    _require_client(principal)
+    _require_allowed(cur, principal, project_id)
+    participants.require_manager(cur, principal, project_id)
+    if not repository.revoke_invite(cur, project_id, invite_id, datetime.now(UTC)):
+        raise errors.not_found("invite", invite_id)
+
+
 # --- 참여 업체 (GH-138) ------------------------------------------------------
 
 def _to_participant(row: dict[str, Any]) -> ParticipantResponse:
