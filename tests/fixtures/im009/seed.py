@@ -407,6 +407,7 @@ class Seeder:
             "docx": "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
             "xlsx": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
             "md": "text/markdown",
+            "pdf": "application/pdf",
         }[path.suffix.lstrip(".")]
         with path.open("rb") as f:
             res = self.c.post(
@@ -575,6 +576,8 @@ class Seeder:
             )
         )
         self._upload("TD-ACC-V1", "TD-PRJ-1", "TD-DOC-5")
+        # 과업지시서(가상 시험자료 PDF, IM-009 4.2: 관련자료 S0). 문서 질의의 쪽 번호 판정 재료
+        self._upload("TD-ACC-V1", "TD-PRJ-1", "TD-DOC-4")
         # 시험 사업 자료
         for tid in ("TD-DOC-8", "TD-DOC-9", "TD-DOC-14"):
             self._upload("TD-ACC-V1", "TD-PRJ-9", tid)
