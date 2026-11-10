@@ -431,6 +431,8 @@ def compute_status(cat: dict) -> dict:
 
     # 정정: 원 기록은 남기고, 정정 기록이 가리키는 run 의 판정만 덮어 읽는다.
     corrected: dict[str, dict] = {c["run_id"]: c for c in corrections}
+    # 적지 말았어야 할 실행(건너뛴 시험 등)은 정정 줄의 void 로 판정에서 뺀다
+    runs = [r for r in runs if not corrected.get(r["run_id"], {}).get("void")]
     # 영향 분석: 재검증 필요로 표시된 run 은 통과 근거로 쓰지 않는다.
     invalidated: set[str] = set()
     for imp in impacts:
@@ -758,6 +760,7 @@ def record_junit(a: argparse.Namespace) -> int:
     junit_sha = sha256(Path(a.junit))
     n = next_run_number(a.cycle)
     written = 0
+    skipped = 0
     src = cat["sources"]
     with (RECORDS / "runs.jsonl").open("a", encoding="utf-8") as out:
         only = set(a.only.split(",")) if a.only else None
@@ -773,6 +776,10 @@ def record_junit(a: argparse.Namespace) -> int:
                 print(f"카탈로그에 없는 시나리오 {sid}: {tc.get('name')}")
                 continue
             verdict, reason = _verdict_of(tc)
+            if verdict == "not-run":
+                # 그 환경에서 못 돌아 건너뛴 시험은 적지 않는다. 최신 판정이 앞선 결과를 가린다
+                skipped += 1
+                continue
             acs = sc["acs"]
             obligations = sorted(
                 {o for x in acs for o in cat["acs"].get(x, {}).get("obligations", [])}
@@ -818,7 +825,7 @@ def record_junit(a: argparse.Namespace) -> int:
             out.write(json.dumps(row, ensure_ascii=False) + "\n")
             n += 1
             written += 1
-    print(f"runs.jsonl 에 {written}줄 추가")
+    print(f"runs.jsonl 에 {written}줄 추가 (건너뜀 {skipped}건은 적지 않음)")
     return 0
 
 
