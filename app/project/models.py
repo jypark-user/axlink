@@ -140,4 +140,6 @@ class ProjectSummaryResponse(BaseModel):
     representative: float | None = None
     progressLevel: str | None = None  # noqa: N815 — L1~L4
     progressDeviation: float | None = None  # noqa: N815 — WBS 실적 − 계획선. WBS 가 없으면 None
+    # 진척 집계 자체가 실패했다. 산출 불가(None)와 다르다. 목록은 그대로 내고 이 칸만 실패로 보인다
+    progressError: bool = False  # noqa: N815
     updatedAt: str  # noqa: N815

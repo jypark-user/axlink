@@ -325,6 +325,8 @@ export interface ProjectSummaryResponse {
   progressLevel: string | null;
   /** WBS 실적 − 계획선(0~1 차이). WBS 가 없으면 null. */
   progressDeviation: number | null;
+  /** 진척 집계 자체가 실패했다. 산출 불가(null)와 다르다 */
+  progressError?: boolean;
   updatedAt: string;
 }
 

@@ -148,6 +148,17 @@ function projectColumns(role: Role | undefined): ColumnDef<ProjectSummaryRespons
     header: '진척률·계획 대비',
     cell: ({ row }) => {
       const { representative: rep, progressLevel: level, progressDeviation: dev } = row.original;
+      // 집계 실패는 산출 불가(「-」)와 다르게 보인다. 목록의 나머지 칸은 그대로 쓴다
+      if (row.original.progressError) {
+        return (
+          <span
+            className="text-xs text-destructive"
+            title="진척을 집계하지 못했습니다. 잠시 뒤 새로 고침하세요."
+          >
+            조회 실패
+          </span>
+        );
+      }
       if (rep == null) return <span className="text-muted-foreground">-</span>;
       return (
         <span className="flex flex-col tnum">
@@ -156,7 +167,9 @@ function projectColumns(role: Role | undefined): ColumnDef<ProjectSummaryRespons
             {level !== 'L1' && <span className="ml-1 text-xs text-muted-foreground">추정</span>}
           </span>
           {dev != null && (
-            <span className={dev < 0 ? 'text-xs text-destructive' : 'text-xs text-muted-foreground'}>
+            <span
+              className={dev < 0 ? 'text-xs text-destructive' : 'text-xs text-muted-foreground'}
+            >
               {dev < 0 ? '−' : '+'}
               {Math.abs(dev * 100).toFixed(1)}%p
             </span>

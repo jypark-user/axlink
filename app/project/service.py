@@ -4,6 +4,7 @@
 초대 링크로 들어와 자기 사업만 본다.
 """
 
+import logging
 from datetime import UTC, date, datetime, timedelta
 from typing import Any
 
@@ -33,6 +34,8 @@ from app.project.models import (
 )
 from app.review import repository as review_repository
 from app.standard import repository as standard_repository
+
+log = logging.getLogger(__name__)
 
 # 사업 상태 전이. 종료 뒤에는 되돌리지 않는다 — 종료는 보관이고 삭제가 아니다(IM-007 UC-002 3).
 _STATUS_TRANSITIONS: dict[str, tuple[str, ...]] = {
@@ -496,9 +499,10 @@ def list_projects(
             openCorrectionActionCount=corrections.get(str(r["id"]), 0),
             openRiskCount=risks.get(str(r["id"]), 0),
             openReviewRequestCount=reviews.get(str(r["id"]), 0),
-            representative=progress[str(r["id"])].representative,
-            progressLevel=progress[str(r["id"])].level,
-            progressDeviation=progress[str(r["id"])].wbsDeviation,
+            representative=_attr(progress[str(r["id"])], "representative"),
+            progressLevel=_attr(progress[str(r["id"])], "level"),
+            progressDeviation=_attr(progress[str(r["id"])], "wbsDeviation"),
+            progressError=progress[str(r["id"])] is None,
             updatedAt=r["updated_at"].isoformat(),
         )
         for r in rows
@@ -514,4 +518,18 @@ def _list_progress(cur: Any, ids: list[str]) -> dict[str, Any]:
     from app.dashboard import service as dashboard_service  # 순환 import 회피
 
     today = clock.today()
-    return {pid: dashboard_service.compute(cur, pid, today) for pid in ids}
+    out: dict[str, Any] = {}
+    for pid in ids:
+        # 한 사업의 집계가 실패해도 목록은 낸다. 그 사업 칸만 실패로 보인다(UC-040 E2).
+        # 저장점으로 감싸 실패한 질의가 트랜잭션 전체를 망가뜨리지 않게 한다
+        try:
+            with cur.connection.transaction():
+                out[pid] = dashboard_service.compute(cur, pid, today)
+        except Exception:
+            log.exception("사업 목록 진척 집계 실패 project=%s", pid)
+            out[pid] = None
+    return out
+
+
+def _attr(progress: Any, name: str) -> Any:
+    return getattr(progress, name) if progress is not None else None
