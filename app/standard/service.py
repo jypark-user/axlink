@@ -448,7 +448,7 @@ def work_product_checklist(
             approvedBy=r["approved_by"],
             approvedAt=_iso(r["approved_at"]),
             updatedAt=r["updated_at"].isoformat(),
-            history=history.get(r["type"], []),
+            previousVersions=history.get(r["type"], []),
         )
         for r in rows
     ]

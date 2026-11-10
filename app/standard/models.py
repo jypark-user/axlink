@@ -139,7 +139,7 @@ class WorkProductResponse(BaseModel):
     approvedBy: str | None  # noqa: N815
     approvedAt: str | None  # noqa: N815
     updatedAt: str  # noqa: N815
-    history: list[WorkProductVersionResponse] = []  # 지난 버전. 최신이 먼저
+    previousVersions: list[WorkProductVersionResponse] = []  # noqa: N815 — 지난 버전. 최신이 먼저
 
 
 class WorkProductChecklistResponse(BaseModel):

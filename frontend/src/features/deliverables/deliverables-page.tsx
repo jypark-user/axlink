@@ -438,11 +438,13 @@ function Checklist({ projectId }: { projectId: string }): ReactNode {
           return (
             <div className="flex flex-col gap-0.5 text-sm">
               <span className="tnum">{wp.version ?? '-'}</span>
-              {wp.history.length > 0 && (
+              {wp.previousVersions.length > 0 && (
                 <details className="text-muted-foreground text-xs">
-                  <summary className="cursor-pointer">지난 버전 {wp.history.length}건</summary>
+                  <summary className="cursor-pointer">
+                    지난 버전 {wp.previousVersions.length}건
+                  </summary>
                   <ul className="mt-1 flex flex-col gap-1">
-                    {wp.history.map((h) => (
+                    {wp.previousVersions.map((h) => (
                       <li key={h.id}>
                         <span className="tnum">{h.version ?? '-'}</span> · {label(h.status)}
                         {h.decidedAt && (

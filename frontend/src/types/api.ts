@@ -798,10 +798,11 @@ export interface WorkProductResponse {
   approvedAt: string | null;
   updatedAt: string;
   /** 지난 버전. 최신이 먼저(AC-031-5). */
-  history: WorkProductVersionResponse[];
+  previousVersions: WorkProductPastVersion[];
 }
 
-export interface WorkProductVersionResponse {
+/** 점검표 항목의 지난 버전. 판정자·일자는 마지막 승인·반려 기록. */
+export interface WorkProductPastVersion {
   id: string;
   version: string | null;
   title: string | null;
