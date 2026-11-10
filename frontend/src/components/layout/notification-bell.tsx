@@ -30,6 +30,11 @@ const KIND_LABEL: Record<string, string> = {
   SNAPSHOT_TAKEN: '스냅샷 기록',
   REQUIREMENT_STATUS_DECIDED: '요구사항 상태 지정',
   REQUIREMENT_STATUS_REVERTED: '요구사항 지정 해제',
+  BASELINE_REGISTERED: '요구사항 명세서 등록',
+  BASELINE_SUBMITTED: '요구사항 목록 제출',
+  BASELINE_DISCARDED: '명세서 등록 취소',
+  BASELINE_RETURNED: '요구사항 목록 돌려보냄',
+  BASELINE_CONFIRMED: '요구사항 목록 확정',
 };
 
 const POLL_MS = 60_000;
@@ -48,6 +53,8 @@ export function pathFor(e: ActivityEventResponse): string {
       return `${base}/collection`;
     case 'REQUIREMENT':
       return `${base}/traceability`;
+    case 'REQUIREMENT_BASELINE':
+      return `${base}/requirement-baseline`;
     default:
       return base;
   }
