@@ -320,6 +320,11 @@ export interface ProjectSummaryResponse {
   openRiskCount: number;
   /** 미처리 확인 요청. 확인완료가 아닌 것 (SWFR.WEB.006). */
   openReviewRequestCount: number;
+  /** 대표 진척률(0~1). 현황 화면과 같은 산정. 산출 불가면 null. */
+  representative: number | null;
+  progressLevel: string | null;
+  /** WBS 실적 − 계획선(0~1 차이). WBS 가 없으면 null. */
+  progressDeviation: number | null;
   updatedAt: string;
 }
 
