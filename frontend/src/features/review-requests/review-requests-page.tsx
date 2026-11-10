@@ -91,7 +91,15 @@ const EVENT_LABEL: Record<string, string> = {
   COMPLETION_WITHDRAWN: '완료 확인 철회',
 };
 
-const RATIO_FIELDS = new Set(['actual', 'declared_planned', 'value', 'weight']);
+const RATIO_FIELDS = new Set([
+  'actual',
+  'declared_planned',
+  'value',
+  'weight',
+  'progress_representative',
+]);
+/** 시맨틱 레이어가 0~100 으로 주는 비율 지표. */
+const PCT_FIELDS = new Set(['issue_resolution_rate', 'risk_resolution_rate']);
 const HIDDEN_FIELDS = new Set(['task_key', 'scope_hash']);
 /** 코드로 저장된 값의 읽는 말. 산출물 대조는 파일·문서가 있는지만 본 것이라 '제출'이라 부르지 않는다. */
 const VALUE_WORDS: Record<string, Record<string, string>> = {
@@ -114,6 +122,8 @@ function showValue(field: string, value: unknown): string {
   if (field === 'repo_revision' && typeof value === 'string') return value.slice(0, 12);
   if (field === 'task_key' && typeof value === 'string') return value.slice(0, 8);
   if (field === 'scope_hash' && typeof value === 'string') return value.slice(0, 8);
+  if (Array.isArray(value)) return value.length ? value.join(', ') : '없음';
+  if (typeof value === 'number' && PCT_FIELDS.has(field)) return `${value.toFixed(1)}%`;
   if (typeof value === 'number')
     return RATIO_FIELDS.has(field) ? formatPercent(value, 1) : String(value);
   if (typeof value === 'string' && /^\d{4}-\d{2}-\d{2}T/.test(value)) return formatDateTime(value);
@@ -487,6 +497,13 @@ const SNAPSHOT_FIELD_LABEL: Record<string, string> = {
   denominator: '분모',
   level: '산정 수준',
   basis: '근거',
+  source_priority: '우선순위',
+  linked_issues: '연결 이슈',
+  progress_representative: '보고 진척률',
+  progress_level: '진척률 산정 수준',
+  issue_resolution_rate: '일반 이슈 처리율',
+  risk_resolution_rate: '위험 처리율',
+  open_risk_count: '열린 리스크',
 };
 
 function DetailSheet({

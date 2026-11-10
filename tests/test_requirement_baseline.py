@@ -290,6 +290,23 @@ def test_신규_사업은_등록_정리_제출_확정을_거쳐서만_요구사�
     state = client.get(_base(), headers=po).json()
     assert state["state"] == "CONFIRMED" and state["confirmed"]["version"] == 1
 
+    # 등록·제출·돌려보냄(사유)·확정이 활동 기록에 남는다(AC-020-9·AC-021-8, DEF-V034).
+    # 상대 역할 알림은 DEC-08 이라 활동 탭에만(LOG) 둔다
+    with tx() as cur:
+        acts = fetch_all(cur, """
+            select kind, audience, summary from activity_event
+             where target_type = 'REQUIREMENT_BASELINE' and target_key = %s
+             order by occurred_at, id""", (bid,))
+        cur.execute("delete from activity_event where target_key = %s", (bid,))
+    assert [a["kind"] for a in acts] == [
+        "BASELINE_REGISTERED", "BASELINE_SUBMITTED", "BASELINE_RETURNED",
+        "BASELINE_SUBMITTED", "BASELINE_CONFIRMED",
+    ]
+    assert {a["audience"] for a in acts} == {"LOG"}
+    assert "사유: 중요도 다시" in acts[2]["summary"]
+    shown = client.get(f"/api/projects/{PID}/activity?size=50", headers=pm)
+    assert shown.status_code == 200
+
     # 요구사항 상세에서 명세서 판본과 원문 위치로 바로 간다(GH-158)
     detail = client.get(
         f"/api/projects/{PID}/requirements/{mine['SWFR.TST.103']['id']}", headers=po

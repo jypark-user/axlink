@@ -14,6 +14,7 @@ requirement 에 쓰지 않으므로 요구사항 목록·이행률·추적표 �
 
 from typing import Any
 
+from app.activity import service as activity
 from app.ai.embedding import embedding_port
 from app.auth import repository as auth_repo
 from app.auth.models import AuthPrincipal
@@ -54,6 +55,18 @@ def _require_role(principal: AuthPrincipal, roles: tuple[str, ...], message: str
 def _actor(cur: Any, principal: AuthPrincipal) -> str:
     row = auth_repo.find_user_by_id(cur, principal.user_id) or {}
     return row.get("name") or row.get("username") or "사용자"
+
+
+def _log(
+    cur: Any, principal: AuthPrincipal, project_id: str, baseline_id: str, kind: str,
+    summary: str, detail: dict[str, Any] | None = None,
+) -> None:
+    """기준선 활동 한 줄(AC-020-9·AC-021-8). 알림 대상은 DEC-08 전까지 정하지 않는다."""
+    activity.record(
+        cur, project_id=project_id, kind=kind, audience=activity.LOG, actor=principal,
+        target_type="REQUIREMENT_BASELINE", target_key=baseline_id, summary=summary,
+        detail=detail,
+    )
 
 
 def _load(
@@ -295,7 +308,13 @@ def create(
     repo.set_parents(
         cur, baseline_id, structuring.spec_parents(text, {i.code for i in extracted if i.code})
     )
-    return _to_response(cur, repo.find(cur, project_id, baseline_id))
+    row = repo.find(cur, project_id, baseline_id)
+    _log(
+        cur, principal, project_id, baseline_id, activity.BASELINE_REGISTERED,
+        f"요구사항 명세서 등록 v{row['version']} · 추출 {len(extracted)}건",
+        {"version": row["version"], "items": len(extracted)},
+    )
+    return _to_response(cur, row)
 
 
 def _editable(cur: Any, principal: AuthPrincipal, project_id: str, baseline_id: str) -> None:
@@ -346,7 +365,12 @@ def delete_item(
 def discard(cur: Any, principal: AuthPrincipal, project_id: str, baseline_id: str) -> None:
     """잘못 올린 명세서를 버린다. 작성 중일 때만. 요구사항에는 아무것도 쓰지 않았다."""
     _editable(cur, principal, project_id, baseline_id)
+    row = repo.find(cur, project_id, baseline_id)
     repo.delete(cur, baseline_id)
+    _log(
+        cur, principal, project_id, baseline_id, activity.BASELINE_DISCARDED,
+        f"요구사항 명세서 등록 취소 v{row['version']}", {"version": row["version"]},
+    )
 
 
 def submit(
@@ -368,7 +392,13 @@ def submit(
             f"고쳐야 할 항목이 {len(blocking)}건 있습니다. " + "; ".join(blocking[:5])
         )
     repo.set_submitted(cur, baseline_id, principal.user_id)
-    return _to_response(cur, repo.find(cur, project_id, baseline_id))
+    row = repo.find(cur, project_id, baseline_id)
+    _log(
+        cur, principal, project_id, baseline_id, activity.BASELINE_SUBMITTED,
+        f"요구사항 목록 제출 v{row['version']} · {len(items)}건",
+        {"version": row["version"], "items": len(items)},
+    )
+    return _to_response(cur, row)
 
 
 # --- 발주기관: 돌려보내기·확정 -------------------------------------------------
@@ -384,6 +414,11 @@ def return_to_author(
     if not text:
         raise errors.validation_failed("사유를 적어 주세요.")
     repo.set_returned(cur, baseline_id, text)
+    _log(
+        cur, principal, project_id, baseline_id, activity.BASELINE_RETURNED,
+        f"요구사항 목록 돌려보냄 v{row['version']} · 사유: {text}",
+        {"version": row["version"], "reason": text},
+    )
     return _to_response(cur, repo.find(cur, project_id, baseline_id))
 
 
@@ -473,4 +508,9 @@ def confirm(
             if not exc.code.startswith("AI_"):
                 raise
             # 색인은 검색용이다. 실패해도 확정은 남긴다. 다음 수집 회차가 채운다
+    _log(
+        cur, principal, project_id, baseline_id, activity.BASELINE_CONFIRMED,
+        f"요구사항 목록 확정 {label} · {len(items)}건",
+        {"version": row["version"], "items": len(items), "applied": sorted(apply_spec_codes)},
+    )
     return _to_response(cur, repo.find(cur, project_id, baseline_id))
