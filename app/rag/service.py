@@ -612,7 +612,9 @@ def _search(
             turn.stop(QUERY_ERROR, answer.query_error())
         return
     turn.gate_ok = found.passes_gate()
-    turn.chunks = found.chunks if turn.gate_ok else []
+    turn.chunks = (
+        [answer.focus_rows(c, query_text) for c in found.chunks] if turn.gate_ok else []
+    )
     turn.found_count = found.candidate_count
     turn.max_similarity = found.max_similarity
     # 무관하다고 했는데 문서 근거가 실제로 있으면 문서 질문이다. 모델이 "인수 조건이
