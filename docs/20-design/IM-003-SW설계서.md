@@ -2,7 +2,7 @@
 
 **2026년 AX 프로젝트 관리 운영 프레임워크 개발 용역**
 발주 (재)전주정보문화산업진흥원 · 수행 유저인사이트(주)
-**v0.1 초안** · 2026-09-30 · M3 시연 기준 (10-13 보강: 2.6 · 4.7 · 9.5 · 9.6 · 13.3 절, 12절 대응표 정리)
+**v0.1.1 초안** · 2026-11-10 · M3 시연 기준 (10-13 보강: 2.6 · 4.7 · 9.5 · 9.6 · 13.3 절, 12절 대응표 정리. 11-10: 5절 지표 목록에 위험 처리율)
 
 > 설계 결정은 개별 설계 문서 `ARC-001`~`ARC-025` 에 결정 시점의 근거와 함께 남겨 왔다.
 > 이 문서는 그 결정들을 한 체계로 묶어 "지금 시스템이 어떻게 생겼는가"를 한 번에 읽게
@@ -444,7 +444,7 @@ WidgetQuery {measure, dimensions ≤ 2, filters, projectScope, limit}  ──▶
 |---|---|---|
 | 진척 | `progress_representative_pct` `progress_wbs_pct` `progress_planned_pct` `progress_variance_pct` `progress_behind_task_count` | 스냅샷 |
 | 일정 | `schedule_variance_pct` | 스냅샷 (V48, ARC-020) |
-| 품질 | `requirement_fulfillment_rate` `requirement_test_trace_rate` `issue_resolution_rate` `issue_count` `open_issue_count` `issue_avg_resolution_days` `issue_resolution_days_p50/p90` `open_risk_count` `test_pass_rate` `correction_overdue_count` `change_request_count` | 표준 엔터티 |
+| 품질 | `requirement_fulfillment_rate` `requirement_test_trace_rate` `issue_resolution_rate` `issue_count` `open_issue_count` `issue_avg_resolution_days` `issue_resolution_days_p50/p90` `open_risk_count` `risk_resolution_rate` `test_pass_rate` `correction_overdue_count` `change_request_count` | 표준 엔터티 |
 | 산출물 | `work_product_approval_rate` `work_product_missing_count` `wbs_deliverable_submitted_rate` `wbs_deliverable_missing_count` `wbs_deliverable_overdue_count` | `work_product` · `wbs_item` |
 | 추이 | `snapshot_requirement_fulfillment_pct` `snapshot_risk_closed_pct` `snapshot_work_product_approval_pct` `progress_issue_pct` `progress_work_product_pct` | 스냅샷 |
 | 활동 | `code_activity_count` | `code_change` |

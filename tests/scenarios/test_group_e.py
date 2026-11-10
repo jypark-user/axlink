@@ -133,7 +133,7 @@ def test_UC_041_S01_다섯_축_한_화면(target, s0):
         problems.append(f"열린 리스크 높음 {sev}")
     try:
         rate = _preview(target, s0, "risk_resolution_rate", [])
-        if round(_total(rate) or 0, 4) != 0.5:
+        if round(_total(rate) or 0, 4) not in (0.5, 50.0):  # 다른 비율 지표처럼 % 값도 받는다
             problems.append(f"위험 처리율 {_total(rate)}")
     except AssertionError as exc:
         problems.append(f"위험 처리율 지표 없음: {str(exc)[:120]}")

@@ -39,5 +39,8 @@ def test_본문이나_비슷한_글자는_근거가_아니다():
     # 본문 참조, 번호가 섞인 문장, 요구사항 코드는 추측해서 잇지 않는다
     assert wbs_issue.assign(IDS, "버전 3.2.1 배포", None) is None
     assert wbs_issue.assign(IDS, "설계 3.2 참고", None) is None
-    payload = {"labels": [{"name": "v3.2"}], "custom_fields": [{"name": "요구사항 ID", "value": "3.2"}]}
+    payload = {
+        "labels": [{"name": "v3.2"}],
+        "custom_fields": [{"name": "요구사항 ID", "value": "3.2"}],
+    }
     assert wbs_issue.assign(IDS, "정리", payload) is None
