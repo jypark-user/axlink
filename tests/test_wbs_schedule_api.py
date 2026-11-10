@@ -3,10 +3,12 @@
 """
 
 import hashlib
+import io
 import uuid
 from pathlib import Path
 
 import pytest
+from openpyxl import Workbook
 from psycopg.types.json import Jsonb
 
 from app.config import settings
@@ -174,3 +176,61 @@ def test_용역사는_배정된_사업만_본다(client, client_token, no_plan):
     other = "c0000000-0000-4000-8000-000000000002"
     res = client.get(f"/api/projects/{other}/wbs", headers=_auth(client_token("r3")))
     assert res.status_code in (403, 404), res.text
+
+
+@requires_db
+def test_인식_결과가_일정_응답에_보인다(client, client_token, plan_file):
+    """작업·묶음 수, 가중치 합, 산출물 미지정, 열 매핑, 재수집 안내 (AC-030-4, DEC-04 b)."""
+    with tx() as cur:
+        cur.execute("delete from wbs_recognition where project_id = %s", (PID,))
+        cur.execute("delete from wbs_item where project_id = %s", (PID,))
+    res = client.get(f"/api/projects/{PID}/wbs?at=2026-09-26", headers=_auth(client_token("r2")))
+    rec = res.json()["recognition"]
+    assert rec["status"] == "OK" and rec["error"] is None and rec["usingPrevious"] is False
+    assert (rec["leafCount"], rec["groupCount"], rec["weightTotal"]) == (3, 2, 1.0)
+    assert rec["missingDeliverableCount"] == 0 and rec["normalized"] is False
+    assert rec["headerRow"] == 1 and rec["planVersion"] is not None
+    assert {c["label"]: c["column"] for c in rec["columns"]}["실적"] == "H"
+    assert "원본 파일을 고쳐" in rec["guidance"]
+
+
+@requires_db
+def test_읽지_못한_계획서는_사유가_보이고_0건이_아니다(client, client_token, no_plan):
+    """머리글 없는 파일만 → 인식 결과 FAILED·사유, 0건·0% 로 보이지 않는다 (E1, DEC-04 b)."""
+    wb = Workbook()
+    wb.active.append(["사업 개요"])
+    wb.active.append(["설명만 있는 시트"])
+    buffer = io.BytesIO()
+    wb.save(buffer)
+    data = buffer.getvalue()
+    sha = hashlib.sha1(data).hexdigest()
+    folder = Path(settings.document_root) / PID / "repo"
+    folder.mkdir(parents=True, exist_ok=True)
+    (folder / f"{sha}.xlsx").write_bytes(data)
+    wp_id = str(uuid.uuid4())
+    with tx() as cur:
+        cur.execute("delete from wbs_recognition where project_id = %s", (PID,))
+        cur.execute("delete from wbs_item where project_id = %s", (PID,))
+        cur.execute(
+            """
+            insert into work_product (id, project_id, type, version, title, status, is_current,
+                                      source_kind, file_uri, source_revision, pm_activity)
+            values (%s, %s, 'PROJECT_PLAN', %s, 'WBS', 'SUBMITTED', true, 'TOOL',
+                    'docs/WBS.xlsx', %s, 'PM_1')
+            """,
+            (wp_id, PID, sha[:12], sha),
+        )
+    try:
+        h = _auth(client_token("r2"))
+        body = client.get(f"/api/projects/{PID}/wbs?at=2026-09-26", headers=h).json()
+        rec = body["recognition"]
+        assert rec["status"] == "FAILED" and "머리글을 찾지 못했습니다" in rec["error"], rec
+        assert rec["usingPrevious"] is False and rec["leafCount"] is None
+        assert body["source"] == "NONE" and body["items"] == []
+        prog = client.get(f"/api/projects/{PID}/progress?at=2026-09-26", headers=h).json()
+        assert prog["wbs"]["value"] is None, prog["wbs"]
+    finally:
+        with tx() as cur:
+            cur.execute("delete from work_product where id = %s", (wp_id,))
+            cur.execute("delete from wbs_recognition where project_id = %s", (PID,))
+        (folder / f"{sha}.xlsx").unlink(missing_ok=True)
