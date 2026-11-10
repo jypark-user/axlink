@@ -118,3 +118,4 @@
 {"defect_id": "DEF-V033", "ts": "2026-11-10T11:55:00+09:00", "kind": "product", "note": "상태 변경 줄", "status": "verified", "verified_by_run": "C02-R0375", "fix_plan": "5174(main-90b86ed, GHCR) 원격 실행에서 UC-011-S04·UC-031-S03·UC-030-S05 통과(C02-R0375, C02-R0444, C02-R0451)"}
 {"defect_id": "DEF-V021", "ts": "2026-11-10T11:55:00+09:00", "kind": "product", "note": "상태 변경 줄", "status": "fixed", "fix_plan": "5174(main-90b86ed) 반영. 확인 시나리오 UC-040-S01·S03 가 시드 로그인 401(DEF-V042)로 blocked. E 그룹 재실행 필요"}
 {"defect_id": "DEF-V022", "ts": "2026-11-10T11:55:00+09:00", "kind": "product", "note": "상태 변경 줄", "status": "fixed", "fix_plan": "5174(main-90b86ed, V60) 반영. UC-041-S01 은 DEC-02 로 예상 실패라 시나리오로 닫지 못함. 위험 처리율만 5174 에서 따로 확인 예정"}
+{"defect_id": "DEF-V021", "ts": "2026-11-10T12:30:00+09:00", "kind": "product", "note": "상태 변경 줄", "status": "verified", "verified_by_run": "C02-R0562", "fix_plan": "5174(main-90b86ed, GHCR) A·E 재실행에서 UC-040-S01·S03 통과(C02-R0562, C02-R0564)"}
