@@ -142,7 +142,7 @@ def test_용역사_WBS_파일이_그대로_작업_줄이_된다(client, client_t
         "progress": 50, "planned": 50, "externalUrl": None,
         # 산출물 "중간보고서.md" 는 저장소에도 문서에도 없다. 종료일(09.30)이 안 지났으니 미제출
         "deliverableStatus": "MISSING", "deliverableRule": None, "deliverableRef": None,
-        "deliverableUrl": None,
+        "deliverableUrl": None, "linkedIssues": [],
     }
     # 1.1(08.11 종료)·2.1(09.12 종료)은 지났고 파일이 없으니 지연, 1.2 만 미제출
     assert body["deliverables"] == {"submitted": 0, "missing": 1, "overdue": 2, "none": 0}

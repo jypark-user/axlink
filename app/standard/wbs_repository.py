@@ -278,3 +278,22 @@ def list_items(cur: Any, project_id: str) -> list[dict[str, Any]]:
         """,
         (project_id,),
     )
+
+
+def issues_for_linking(cur: Any, project_id: str) -> list[dict[str, Any]]:
+    """WBS 항목에 이을 재료. 표준 이슈와 그 수집 원본(라벨·커스텀 필드)을 함께 읽는다.
+
+    직접 등록한 이슈는 원본이 없어 제목만 본다.
+    """
+    return fetch_all(
+        cur,
+        """
+        select i.issue_key, i.title, i.status, i.external_url, ra.payload_jsonb as payload
+          from issue i
+          left join raw_artifact ra
+            on ra.tool_connection_id = i.tool_connection_id and ra.external_id = i.external_id
+         where i.project_id = %s
+         order by i.issue_key nulls last, i.created_at
+        """,
+        (project_id,),
+    )

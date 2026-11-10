@@ -169,6 +169,15 @@ WBS_SOURCE_REDMINE = "REDMINE"  # Redmine 이슈의 시작일·종료일·진척
 WBS_SOURCE_NONE = "NONE"  # 둘 다 없다. 작업 줄을 만들지 않는다
 
 
+class LinkedIssue(BaseModel):
+    """WBS 항목에 이어진 이슈 한 건(ARC-016 3-4). 상태는 표준 이슈 상태다."""
+
+    key: str | None
+    title: str
+    status: str  # OPEN | IN_PROGRESS | RESOLVED | CLOSED
+    url: str | None
+
+
 class WbsItemResponse(BaseModel):
     """일정 화면의 작업 한 줄. 프런트 ScheduleTask 와 1:1 이다."""
 
@@ -188,6 +197,8 @@ class WbsItemResponse(BaseModel):
     deliverableRule: str | None = None  # noqa: N815  REPO_PATH | FILE_NAME | PRODUCT_TYPE
     deliverableRef: str | None = None  # noqa: N815  맞춘 경로·파일명·유형
     deliverableUrl: str | None = None  # noqa: N815
+    # 번호 토큰이 정확히 맞은 이슈. 이어지지 않은 이슈는 사업 이슈 목록에 그대로 있다
+    linkedIssues: list[LinkedIssue] = []  # noqa: N815
 
 
 class WbsDeliverableDocument(BaseModel):

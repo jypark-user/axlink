@@ -26,7 +26,7 @@ from app.auth import repository as auth_repo
 from app.auth.deps import AuthPrincipal
 from app.common import clock, errors
 from app.config import settings
-from app.dashboard import deliverable, repository, wbs
+from app.dashboard import deliverable, repository, wbs, wbs_issue
 from app.dashboard.models import (
     OBSERVED,
     SELF_REPORTED,
@@ -34,6 +34,7 @@ from app.dashboard.models import (
     WBS_SOURCE_NONE,
     WBS_SOURCE_REDMINE,
     DeliverableSummary,
+    LinkedIssue,
     ProgressMeasure,
     ProgressResponse,
     WbsDeliverableDocument,
@@ -181,7 +182,7 @@ def schedule(cur: Any, project_id: str, at: date) -> WbsScheduleResponse:
             baseDate=at.isoformat(),
             planVersion=plan_row["version"],
             planUpdatedAt=plan_row["updated_at"].isoformat(),
-            items=_items_from_plan(plan, at, judged),
+            items=_items_from_plan(plan, at, judged, linked_issues(cur, project_id, plan)),
             warnings=[*warnings, *plan.warnings],
             notice=None,
             deliverables=DeliverableSummary(
@@ -453,8 +454,30 @@ def deliverable_stem(value: str) -> str:
     return deliverable.stem_of(value)
 
 
+def linked_issues(cur: Any, project_id: str, plan: wbs.WbsPlan) -> dict[str, list[LinkedIssue]]:
+    """말단 번호별로 이어진 이슈. 번호 토큰이 하나로 정확히 맞은 것만 잇는다(ARC-016 3-4)."""
+    ids = {r.wbs_id for r in plan.rows if r.wbs_id}
+    out: dict[str, list[LinkedIssue]] = {}
+    if not ids:
+        return out
+    for row in wbs_repository.issues_for_linking(cur, project_id):
+        wbs_id = wbs_issue.assign(ids, row["title"], row["payload"])
+        if wbs_id is None:
+            continue
+        out.setdefault(wbs_id, []).append(
+            LinkedIssue(
+                key=row["issue_key"], title=row["title"], status=row["status"],
+                url=row["external_url"],
+            )
+        )
+    return out
+
+
 def _items_from_plan(
-    plan: wbs.WbsPlan, at: date, judged: dict[str, deliverable.Judgement] | None = None
+    plan: wbs.WbsPlan,
+    at: date,
+    judged: dict[str, deliverable.Judgement] | None = None,
+    linked: dict[str, list[LinkedIssue]] | None = None,
 ) -> list[WbsItemResponse]:
     """상위 항목은 하위 말단의 가중 평균으로 진척을 낸다. 말단은 파일의 실적 그대로다."""
     items: list[WbsItemResponse] = []
@@ -502,6 +525,7 @@ def _items_from_plan(
                 deliverableRule=j.rule if j else None,
                 deliverableRef=j.ref if j else None,
                 deliverableUrl=j.url if j else None,
+                linkedIssues=(linked or {}).get(row.wbs_id, []),
             )
         )
     items.sort(key=lambda i: _sort_key(i.wbsId))

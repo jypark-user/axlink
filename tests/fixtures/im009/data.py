@@ -218,6 +218,7 @@ class RedmineIssue:
     due: date | None = None
     done_ratio: int | None = None
     assignee: str = "박피엠"
+    wbs_id: str | None = None  # 커스텀 필드 「WBS ID」. 일정 줄 연결 근거(ARC-016 3-4)
 
 
 REDMINE_ISSUES_PRJ1 = [
@@ -278,6 +279,7 @@ REDMINE_ISSUES_PRJ1 = [
         start=date(2026, 6, 1),
         due=date(2026, 7, 31),
         done_ratio=60,
+        wbs_id="3.2",
     ),
     RedmineIssue(
         "TD-ISS-R5",

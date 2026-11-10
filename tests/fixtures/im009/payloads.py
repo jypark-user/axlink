@@ -45,6 +45,8 @@ def redmine_issue(
     custom = []
     if issue.req_id:
         custom.append({"id": 1, "name": "요구사항 ID", "value": issue.req_id})
+    if issue.wbs_id:
+        custom.append({"id": 2, "name": "WBS ID", "value": issue.wbs_id})
     relations = []
     if issue.relation:
         target, kind = issue.relation
