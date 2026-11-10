@@ -41,6 +41,8 @@ from app.dashboard.models import (
     WbsDeliverableItem,
     WbsDeliverablesResponse,
     WbsItemResponse,
+    WbsRecognitionColumn,
+    WbsRecognitionResponse,
     WbsScheduleResponse,
 )
 from app.integration import repository as integration_repo
@@ -191,6 +193,7 @@ def schedule(cur: Any, project_id: str, at: date) -> WbsScheduleResponse:
                 overdue=counts[deliverable.OVERDUE],
                 none=counts[deliverable.NONE],
             ),
+            recognition=_recognition(cur, project_id, plan),
         )
 
     issues = integration_repo.redmine_issue_payloads(cur, project_id)
@@ -222,6 +225,51 @@ def schedule(cur: Any, project_id: str, at: date) -> WbsScheduleResponse:
         items=[],
         warnings=warnings,
         notice=_NO_WBS_NOTICE,
+        # 계획서를 올렸는데 못 읽었으면 그 사유를 보인다. 0건·0% 로 보이지 않는다
+        recognition=_recognition(cur, project_id, None) if plan_row is not None else None,
+    )
+
+
+RECOGNITION_GUIDANCE = (
+    "WBS 는 이 화면에서 고치지 않습니다. 열 이름·가중치·실적이 잘못 읽혔으면 원본 파일을 고쳐 "
+    "저장소에 커밋하거나 사업수행계획서 새 버전으로 올리세요. 다음 수집 때 다시 읽습니다."
+)
+
+
+def _recognition(
+    cur: Any, project_id: str, plan: wbs.WbsPlan | None
+) -> WbsRecognitionResponse | None:
+    """계획서 인식 결과(UC-030 3단계). 판을 읽을 때 남긴 기록을 보인다(DEC-04 (b))."""
+    rec = wbs_repository.load_recognition(cur, project_id)
+    if rec is None:
+        if plan is None:
+            return None
+        # V61 전에 읽은 판: 열 매핑은 모르고 수는 행에서 센다
+        total = plan.weight_total
+        return WbsRecognitionResponse(
+            status="OK", planVersion=None, readAt=None, headerRow=None, columns=[],
+            leafCount=len(plan.rows), groupCount=len(plan.groups), weightTotal=total,
+            normalized=abs(total - 1.0) > 0.005,
+            missingDeliverableCount=sum(1 for r in plan.rows if not r.deliverable),
+            warnings=list(plan.warnings), error=None, usingPrevious=False,
+            recordedBeforeTracking=True, guidance=RECOGNITION_GUIDANCE,
+        )
+    total = None if rec["weight_total"] is None else float(rec["weight_total"])
+    return WbsRecognitionResponse(
+        status=rec["status"],
+        planVersion=rec["plan_version"],
+        readAt=rec["read_at"].isoformat(),
+        headerRow=rec["header_row"],
+        columns=[WbsRecognitionColumn(**c) for c in rec["columns_json"]],
+        leafCount=rec["leaf_count"],
+        groupCount=rec["group_count"],
+        weightTotal=total,
+        normalized=total is not None and abs(total - 1.0) > 0.005,
+        missingDeliverableCount=rec["missing_deliverable_count"],
+        warnings=list(rec["warnings_json"]),
+        error=rec["error"],
+        usingPrevious=rec["status"] == "FAILED" and plan is not None,
+        guidance=RECOGNITION_GUIDANCE,
     )
 
 
@@ -239,22 +287,52 @@ def _load_plan(
         return None, None
     plan_id = str(plan_row["id"])
     if wbs_repository.loaded_version(cur, project_id) == plan_id:
+        _sync_recognition(cur, project_id, plan_row, plan_id)
         return wbs_repository.load_plan(cur, project_id), None
 
     path = _plan_path(project_id, plan_row, cur)
     if path is None:
-        return _previous_baseline(
-            cur, project_id,
+        return _failed(
+            cur, project_id, plan_id,
             "WBS 항목은 있지만 보관된 원본 파일을 찾지 못했습니다. 다시 수집해 주세요.",
         )
     try:
         plan = wbs.parse(path.read_bytes())
     except wbs.WbsParseError as exc:
-        return _previous_baseline(cur, project_id, f"WBS 를 읽지 못했습니다. {exc}")
+        return _failed(cur, project_id, plan_id, f"WBS 를 읽지 못했습니다. {exc}")
     except OSError as exc:
-        return _previous_baseline(cur, project_id, f"WBS 원본 파일을 열지 못했습니다. {exc}")
+        return _failed(cur, project_id, plan_id, f"WBS 원본 파일을 열지 못했습니다. {exc}")
     wbs_repository.replace_plan(cur, project_id, plan_id, plan)
+    wbs_repository.save_recognition(cur, project_id, plan_id, plan=plan)
     return plan, None
+
+
+def _sync_recognition(cur: Any, project_id: str, plan_row: dict[str, Any], plan_id: str) -> None:
+    """행은 이 판에서 왔는데 인식 결과가 다른 판(또는 없음)이면 이 판을 한 번 읽어 맞춘다.
+
+    실패한 새 판 뒤에 예전 판이 현행으로 돌아오면(같은 내용 되돌림) 행은 다시 읽지 않아 인식
+    결과가 「읽지 못함」으로 남는다. V61 전에 읽은 판은 기록이 없다. 둘 다 파일을 한 번 연다.
+    """
+    rec = wbs_repository.load_recognition(cur, project_id)
+    if rec is not None and str(rec["work_product_id"]) == plan_id:
+        return
+    path = _plan_path(project_id, plan_row, cur)
+    if path is None:
+        return
+    try:
+        plan = wbs.parse(path.read_bytes())
+    except Exception:  # noqa: BLE001 — 기록 맞추기는 보조다. 본 흐름(행 사용)을 깨지 않는다
+        # 행은 이 판에서 읽어 둔 것이다. 지금 못 읽는 사정은 기록을 바꾸지 않는다
+        return
+    wbs_repository.save_recognition(cur, project_id, plan_id, plan=plan)
+
+
+def _failed(
+    cur: Any, project_id: str, plan_id: str, reason: str
+) -> tuple[wbs.WbsPlan | None, str]:
+    """이 판을 못 읽었다. 사유를 인식 결과로 남기고 직전 판으로 돌아간다(AC-030-3)."""
+    wbs_repository.save_recognition(cur, project_id, plan_id, error=reason)
+    return _previous_baseline(cur, project_id, reason)
 
 
 def _previous_baseline(

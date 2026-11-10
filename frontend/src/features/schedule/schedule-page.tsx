@@ -19,6 +19,7 @@ import {
 import { toScheduleTasks } from '@/features/schedule/wbs-tasks';
 import type { WbsScheduleResponse } from '@/types/api';
 import { CompletionPanel } from '@/features/schedule/completion-panel';
+import { RecognitionPanel } from '@/features/schedule/recognition-panel';
 
 const VIEW_KEY = 'ax-link.schedule-view';
 
@@ -73,103 +74,114 @@ export function SchedulePage(): ReactNode {
           const dl = data.deliverables ?? { submitted: 0, missing: 0, overdue: 0, none: 0 };
           const expected = dl.submitted + dl.missing + dl.overdue;
 
+          const recognition = data.recognition ? (
+            <RecognitionPanel recognition={data.recognition} shownLeaves={leaves.length} />
+          ) : null;
+
           if (data.source === 'NONE') {
             return (
-              <Window title="작업 일정" className="pt-0" bleed>
-                <Alert variant="destructive" className="mb-4">
-                  <AlertTitle>진척률 산정의 핵심 입력이 빠져 있습니다</AlertTitle>
-                  <AlertDescription>{data.notice}</AlertDescription>
-                </Alert>
+              <>
+                {recognition}
+                <Window title="작업 일정" className="pt-0" bleed>
+                  <Alert variant="destructive" className="mb-4">
+                    <AlertTitle>진척률 산정의 핵심 입력이 빠져 있습니다</AlertTitle>
+                    <AlertDescription>{data.notice}</AlertDescription>
+                  </Alert>
+                  {data.warnings.map((w) => (
+                    <Alert key={w} className="mb-2">
+                      <AlertDescription>{w}</AlertDescription>
+                    </Alert>
+                  ))}
+                </Window>
+              </>
+            );
+          }
+
+          return (
+            <>
+              {recognition}
+              <Window
+                title="작업 일정"
+                hint={
+                  <>
+                    작업 {leaves.length}개
+                    {late > 0 ? (
+                      <>
+                        {' '}
+                        · 계획보다 늦은 작업{' '}
+                        <span className="tnum text-destructive font-medium">{late}</span>개
+                      </>
+                    ) : (
+                      ' · 모두 계획대로 진행 중'
+                    )}
+                    {expected > 0 && (
+                      <>
+                        {/* 파일·문서가 있는지 대조한 결과다. 정식 제출·승인과 다르다 */} · 산출물
+                        파일 대조 <span className="tnum">{dl.submitted}</span>/{expected}개
+                        {dl.overdue > 0 && (
+                          <>
+                            , 지연{' '}
+                            <span className="tnum text-destructive font-medium">{dl.overdue}</span>
+                            개
+                          </>
+                        )}
+                      </>
+                    )}
+                  </>
+                }
+                className="pt-0"
+                action={<ScheduleLegend />}
+                bleed
+              >
+                <p className="text-muted-foreground mb-3 text-sm">
+                  {SOURCE_DESCRIPTION[data.source]}{' '}
+                  {data.sourceUrl ? (
+                    <a
+                      href={data.sourceUrl}
+                      target="_blank"
+                      rel="noreferrer"
+                      className="text-primary underline-offset-2 hover:underline"
+                    >
+                      {data.sourceLabel}
+                    </a>
+                  ) : (
+                    <span>{data.sourceLabel}</span>
+                  )}
+                  {data.planVersion && <span className="tnum"> · 버전 {data.planVersion}</span>}
+                  <span className="tnum"> · 기준일 {data.baseDate}</span>
+                </p>
+
                 {data.warnings.map((w) => (
                   <Alert key={w} className="mb-2">
                     <AlertDescription>{w}</AlertDescription>
                   </Alert>
                 ))}
+
+                <Tabs value={view} onValueChange={pick}>
+                  <TabsList aria-label="일정 보기 방식">
+                    {VIEWS.map((item) => (
+                      <TabsTrigger key={item.id} value={item.id}>
+                        <item.icon />
+                        {item.label}
+                      </TabsTrigger>
+                    ))}
+                  </TabsList>
+
+                  <TabsContent value="gantt" className="pt-2">
+                    <GanttView tasks={tasks} today={today} />
+                  </TabsContent>
+                  <TabsContent value="kanban" className="pt-2">
+                    <KanbanView tasks={leaves} />
+                  </TabsContent>
+                  <TabsContent value="calendar" className="pt-2">
+                    <CalendarView tasks={tasks} today={today} />
+                  </TabsContent>
+                  <TabsContent value="wbs" className="pt-2">
+                    <WbsView tasks={tasks} />
+                  </TabsContent>
+                </Tabs>
               </Window>
-            );
-          }
-
-          return (
-            <Window
-              title="작업 일정"
-              hint={
-                <>
-                  작업 {leaves.length}개
-                  {late > 0 ? (
-                    <>
-                      {' '}
-                      · 계획보다 늦은 작업{' '}
-                      <span className="tnum text-destructive font-medium">{late}</span>개
-                    </>
-                  ) : (
-                    ' · 모두 계획대로 진행 중'
-                  )}
-                  {expected > 0 && (
-                    <>
-                      {/* 파일·문서가 있는지 대조한 결과다. 정식 제출·승인과 다르다 */} · 산출물
-                      파일 대조 <span className="tnum">{dl.submitted}</span>/{expected}개
-                      {dl.overdue > 0 && (
-                        <>
-                          , 지연{' '}
-                          <span className="tnum text-destructive font-medium">{dl.overdue}</span>개
-                        </>
-                      )}
-                    </>
-                  )}
-                </>
-              }
-              className="pt-0"
-              action={<ScheduleLegend />}
-              bleed
-            >
-              <p className="text-muted-foreground mb-3 text-sm">
-                {SOURCE_DESCRIPTION[data.source]}{' '}
-                {data.sourceUrl ? (
-                  <a
-                    href={data.sourceUrl}
-                    target="_blank"
-                    rel="noreferrer"
-                    className="text-primary underline-offset-2 hover:underline"
-                  >
-                    {data.sourceLabel}
-                  </a>
-                ) : (
-                  <span>{data.sourceLabel}</span>
-                )}
-                {data.planVersion && <span className="tnum"> · 버전 {data.planVersion}</span>}
-                <span className="tnum"> · 기준일 {data.baseDate}</span>
-              </p>
-
-              {data.warnings.map((w) => (
-                <Alert key={w} className="mb-2">
-                  <AlertDescription>{w}</AlertDescription>
-                </Alert>
-              ))}
-
-              <Tabs value={view} onValueChange={pick}>
-                <TabsList aria-label="일정 보기 방식">
-                  {VIEWS.map((item) => (
-                    <TabsTrigger key={item.id} value={item.id}>
-                      <item.icon />
-                      {item.label}
-                    </TabsTrigger>
-                  ))}
-                </TabsList>
-
-                <TabsContent value="gantt" className="pt-2">
-                  <GanttView tasks={tasks} today={today} />
-                </TabsContent>
-                <TabsContent value="kanban" className="pt-2">
-                  <KanbanView tasks={leaves} />
-                </TabsContent>
-                <TabsContent value="calendar" className="pt-2">
-                  <CalendarView tasks={tasks} today={today} />
-                </TabsContent>
-                <TabsContent value="wbs" className="pt-2">
-                  <WbsView tasks={tasks} />
-                </TabsContent>
-              </Tabs>
-            </Window>
+            </>
           );
         }}
       </DataState>

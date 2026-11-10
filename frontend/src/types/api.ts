@@ -1671,6 +1671,33 @@ export interface WbsScheduleResponse {
   deliverables?: DeliverableSummary;
   /** 원천이 없을 때만. 진척률 산정의 핵심 입력이 빠졌음을 그대로 보인다. */
   notice: string | null;
+  /** 계획서 인식 결과(UC-030 3단계, DEC-04 (b)). 계획서가 없으면 null */
+  recognition?: WbsRecognitionResponse | null;
+}
+
+export interface WbsRecognitionColumn {
+  field: string;
+  label: string;
+  header: string | null;
+  column: string | null;
+}
+
+export interface WbsRecognitionResponse {
+  status: 'OK' | 'FAILED';
+  planVersion: string | null;
+  readAt: string | null;
+  headerRow: number | null;
+  columns: WbsRecognitionColumn[];
+  leafCount: number | null;
+  groupCount: number | null;
+  weightTotal: number | null;
+  normalized: boolean;
+  missingDeliverableCount: number | null;
+  warnings: string[];
+  error: string | null;
+  usingPrevious: boolean;
+  recordedBeforeTracking: boolean;
+  guidance: string;
 }
 
 // --- AI 모델 설정 (ARC-011) ----------------------------------------------------

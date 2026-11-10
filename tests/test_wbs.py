@@ -173,3 +173,18 @@ def test_our_own_wbs_parses() -> None:
     result = wbs.progress(plan, at=date(2026, 9, 8))
     assert 0.0 < result.actual < 1.0
     assert 0.0 < result.planned < 1.0
+
+
+def test_인식_결과에_머리글_행과_열_매핑이_남는다() -> None:
+    """UC-030 3단계 인식 결과: 어느 열을 무엇으로 읽었는지. 없는 열은 None (DEC-04 (b))."""
+    headers = ["업무분류", "가중치(%)", "실적", "종료일"]
+    data = build([["착수", 100, 50, "2026-01-10"]], headers=headers, preamble=2)
+    plan = wbs.parse(data)
+    assert plan.header_row == 3
+    by = {c["field"]: c for c in plan.columns}
+    assert by["name"] == {"field": "name", "label": "작업명", "header": "업무분류", "column": "A"}
+    assert by["weight"]["header"] == "가중치(%)" and by["weight"]["column"] == "B"
+    assert by["actual"]["column"] == "C" and by["end"]["column"] == "D"
+    assert by["wbs_id"]["header"] is None and by["wbs_id"]["column"] is None
+    labels = [c["label"] for c in plan.columns]
+    assert labels == ["번호", "작업명", "산출물", "시작일", "종료일", "가중치", "계획", "실적"]

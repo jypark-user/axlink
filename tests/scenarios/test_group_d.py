@@ -170,9 +170,42 @@ def test_UC_030_S10_WBS_없음(target, s0):
     assert len(w2["items"]) >= 6, len(w2["items"])
 
 
-@pytest.mark.skip(reason="DEC-04(WBS 인식 결과 확인 단계) 결정 전")
-def test_UC_030_S07_확인_다시_지정(target, s0):
-    """인식 결과에서 확인 / 다시 지정 (A1)."""
+def test_UC_030_S07_인식_결과_표시(target, s0, replay, screen):
+    """DEC-04 (b): 인식 결과(말단 5·묶음 1·가중치 합 1.000·산출물 미지정 0·열 매핑)와 재수집 안내가 보인다.
+    머리글 없는 판을 수집하면 사유가 보이고 직전 5건이 기준선으로 남아 0건·0% 로 보이지 않는다 (AC-030-3·4)."""
+    pid = s0.ids["TD-PRJ-1"]
+    rec = _wbs(target, s0, acc="TD-ACC-V1")["recognition"]
+    assert rec["status"] == "OK", rec
+    assert (rec["leafCount"], rec["groupCount"], rec["weightTotal"], rec["missingDeliverableCount"]) == (5, 1, 1.0, 0), rec
+    headers = {c["label"]: c["header"] for c in rec["columns"]}
+    assert headers["작업명"] == "업무분류" and headers["가중치"] == "가중치" and headers["실적"] == "실적", headers
+    assert rec["headerRow"] == 1 and "원본 파일을 고쳐" in rec["guidance"]
+    sc = screen("TD-ACC-V1") if screen else None
+    if sc:
+        sc.open(f"/p/{pid}/schedule").see("계획서 인식 결과", "업무분류", "원본 파일을 고쳐")
+        facts = sc.page.get_by_test_id("recognition-facts").inner_text()
+        for want in ("말단 작업", "5개", "1.000", "산출물 미지정", "0개"):
+            assert want in facts, facts
+        sc.shot("인식_결과")
+    replay.faults = Faults(wbs_variant="TD-WBS-NOHEAD", wbs_sha="7d7d7d7d" + "0" * 32)
+    _sync(target, s0)
+    try:
+        w = _wbs(target, s0, acc="TD-ACC-V1")
+        failed = w["recognition"]
+        assert failed["status"] == "FAILED" and "머리글을 찾지 못했습니다" in (failed["error"] or ""), failed
+        assert failed["usingPrevious"] is True
+        assert len([i for i in w["items"] if i["weight"] and i["level"] > 0]) == 5
+        prog = _progress(target, s0)
+        assert prog["representative"] is not None and round(prog["representative"], 4) == 0.3, prog
+        if sc:
+            sc.open(f"/p/{pid}/schedule").see("읽지 못했습니다", "머리글을 찾지 못했습니다", "작업 5개를 이전 기준선으로")
+            sc.see(re.compile(r"보고 진척률\s*30\.0%"))
+            sc.shot("읽지_못한_판")
+    finally:
+        _restore_wbs(target, s0, replay)
+    assert _wbs(target, s0, acc="TD-ACC-V1")["recognition"]["status"] == "OK", "되돌린 뒤에도 인식 결과가 실패로 남았다"
+    if sc:
+        sc.done()
 
 
 # ------------------------------------------------------------------ UC-031 (S0 → S0a → 승인)

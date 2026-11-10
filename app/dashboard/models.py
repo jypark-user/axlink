@@ -242,6 +242,35 @@ class DeliverableSummary(BaseModel):
     none: int = 0
 
 
+class WbsRecognitionColumn(BaseModel):
+    field: str
+    label: str  # 번호·작업명·산출물·시작일·종료일·가중치·계획·실적
+    header: str | None  # 파일의 머리글 글자. 못 찾았으면 None
+    column: str | None  # 엑셀 열 이름(A·B…)
+
+
+class WbsRecognitionResponse(BaseModel):
+    """계획서 인식 결과 (UC-030 3단계, DEC-04 (b)). 확인·재지정 단계는 없다."""
+
+    status: str  # OK · FAILED
+    planVersion: str | None  # noqa: N815 — 읽으려 한 판
+    readAt: str | None  # noqa: N815
+    headerRow: int | None  # noqa: N815 — 1부터 센 머리글 행
+    columns: list[WbsRecognitionColumn]
+    leafCount: int | None  # noqa: N815
+    groupCount: int | None  # noqa: N815
+    weightTotal: float | None  # noqa: N815
+    normalized: bool  # 가중치 합이 1.00 이 아니라 합으로 나눴다
+    missingDeliverableCount: int | None  # noqa: N815
+    warnings: list[str]
+    error: str | None
+    # 이 판을 못 읽어 직전 판에서 읽은 작업을 계속 쓰고 있다
+    usingPrevious: bool  # noqa: N815
+    # 인식 결과를 남기기 전(V61 전)에 읽은 판. 열 매핑은 없고 수는 행에서 셌다
+    recordedBeforeTracking: bool = False  # noqa: N815
+    guidance: str
+
+
 class WbsScheduleResponse(BaseModel):
     source: str  # WBS_FILE | REDMINE | NONE
     sourceLabel: str  # noqa: N815
@@ -254,6 +283,7 @@ class WbsScheduleResponse(BaseModel):
     # 원천이 없을 때만 채운다. 진척률 산정의 핵심 입력이 빠졌음을 화면이 그대로 보인다.
     notice: str | None
     deliverables: DeliverableSummary = DeliverableSummary()
+    recognition: WbsRecognitionResponse | None = None
 
 
 # --- 인포 템플릿 카탈로그 (ARC-012) ----------------------------------------------

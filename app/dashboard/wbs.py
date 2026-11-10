@@ -38,6 +38,18 @@ _HEADER_SCAN_ROWS = 20
 # 진척으로 인정할 최소 컬럼. 이게 없으면 산정 자체가 성립하지 않는다.
 _REQUIRED = ("weight", "actual")
 
+# 인식 결과 화면에 보이는 열 이름(UC-030 3단계 「열 매핑」)
+COLUMN_LABELS: dict[str, str] = {
+    "wbs_id": "번호",
+    "name": "작업명",
+    "deliverable": "산출물",
+    "start": "시작일",
+    "end": "종료일",
+    "weight": "가중치",
+    "planned": "계획",
+    "actual": "실적",
+}
+
 
 @dataclass
 class WbsRow:
@@ -78,6 +90,9 @@ class WbsPlan:
     weight_total: float
     warnings: list[str] = field(default_factory=list)
     groups: list[WbsGroup] = field(default_factory=list)
+    # 파일에서 읽었을 때만 있다(행에서 되살린 계획에는 없다). 1부터 센 머리글 행, 열 매핑
+    header_row: int | None = None
+    columns: list[dict] = field(default_factory=list)
 
     @property
     def leaf_count(self) -> int:
@@ -146,7 +161,30 @@ def parse(data: bytes) -> WbsPlan:
     if abs(total - 1.0) > 0.005:
         warnings.append(f"가중치 합이 1.00 이 아닙니다({total:.3f}). 합으로 나눠 맞췄습니다")
 
-    return WbsPlan(rows=rows, weight_total=total, warnings=warnings, groups=groups)
+    header = grid[header_row]
+    mapping = [
+        {
+            "field": key,
+            "label": COLUMN_LABELS[key],
+            "header": str(header[columns[key]]).strip() if key in columns else None,
+            "column": _column_letter(columns[key]) if key in columns else None,
+        }
+        for key in _COLUMNS
+    ]
+    return WbsPlan(
+        rows=rows, weight_total=total, warnings=warnings, groups=groups,
+        header_row=header_row + 1, columns=mapping,
+    )
+
+
+def _column_letter(position: int) -> str:
+    """0 부터 센 열 위치 → 엑셀 열 이름(A, B, … Z, AA)."""
+    name = ""
+    n = position + 1
+    while n:
+        n, rest = divmod(n - 1, 26)
+        name = chr(65 + rest) + name
+    return name
 
 
 def progress(plan: WbsPlan, at: date | None = None) -> WbsProgress:

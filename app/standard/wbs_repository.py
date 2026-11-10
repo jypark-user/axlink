@@ -11,6 +11,8 @@ import re
 import uuid
 from typing import Any
 
+from psycopg.types.json import Jsonb
+
 from app.dashboard import wbs
 from app.db import fetch_all, fetch_one
 
@@ -190,6 +192,50 @@ def load_plan(cur: Any, project_id: str) -> wbs.WbsPlan | None:
     if abs(total - 1.0) > 0.005:
         warnings.append(f"가중치 합이 1.00 이 아닙니다({total:.3f}). 합으로 나눠 맞췄습니다")
     return wbs.WbsPlan(rows=leaves, weight_total=total, warnings=warnings, groups=groups)
+
+
+def save_recognition(
+    cur: Any, project_id: str, work_product_id: str | None,
+    plan: wbs.WbsPlan | None = None, error: str | None = None,
+) -> None:
+    """계획서 판을 읽은 결과(UC-030 3단계). 읽었으면 plan, 못 읽었으면 error 를 준다."""
+    if plan is not None:
+        values = (
+            "OK", plan.header_row, Jsonb(plan.columns), len(plan.rows), len(plan.groups),
+            plan.weight_total, sum(1 for r in plan.rows if not r.deliverable),
+            Jsonb(plan.warnings), None,
+        )
+    else:
+        values = ("FAILED", None, Jsonb([]), None, None, None, None, Jsonb([]), error)
+    cur.execute(
+        """
+        insert into wbs_recognition (project_id, work_product_id, status, header_row,
+                                     columns_json, leaf_count, group_count, weight_total,
+                                     missing_deliverable_count, warnings_json, error, read_at)
+        values (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, now())
+        on conflict (project_id) do update set
+          work_product_id = excluded.work_product_id, status = excluded.status,
+          header_row = excluded.header_row, columns_json = excluded.columns_json,
+          leaf_count = excluded.leaf_count, group_count = excluded.group_count,
+          weight_total = excluded.weight_total,
+          missing_deliverable_count = excluded.missing_deliverable_count,
+          warnings_json = excluded.warnings_json, error = excluded.error, read_at = now()
+        """,
+        (project_id, work_product_id, *values),
+    )
+
+
+def load_recognition(cur: Any, project_id: str) -> dict[str, Any] | None:
+    return fetch_one(
+        cur,
+        """
+        select r.*, wp.version as plan_version
+          from wbs_recognition r
+          left join work_product wp on wp.id = r.work_product_id
+         where r.project_id = %s
+        """,
+        (project_id,),
+    )
 
 
 def save_judgements(cur: Any, project_id: str, judgements: list) -> list[tuple[str, str, str]]:
