@@ -4,9 +4,9 @@
   "ac_denominator": 179,
   "ac_pass": 53,
   "overall_completion": 29.6,
-  "runs_executed": 1180,
-  "runs_pass": 954,
-  "executed_pass_rate": 80.8,
+  "runs_executed": 1246,
+  "runs_pass": 1010,
+  "executed_pass_rate": 81.1,
   "ac_by_status": {
     "auto-only": 5,
     "decision-wait": 4,
@@ -20,7 +20,7 @@
     "pass-needs-evidence": 16,
     "revalidate": 23
   },
-  "runs_total": 1300,
+  "runs_total": 1366,
   "runs_invalidated": 31,
   "obligations_total": 147,
   "obligations_with_ac": 137,
