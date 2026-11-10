@@ -19,7 +19,8 @@ from app.auth.models import AuthPrincipal
 from app.common import errors
 from app.common.paging import PageQuery, PageResponse
 from app.config import settings
-from app.db import fetch_all
+from app.db import fetch_all, fetch_one
+from app.document import extractor
 from app.rag import indexing
 from app.standard import (
     mapping,
@@ -114,7 +115,12 @@ def promote_connection(cur: Any, connection: dict[str, Any], port: EmbeddingPort
                 result.unmapped += 1
                 continue
             _store_file(project_id, payload)
-            repository.upsert_work_product(cur, project_id, connection_id, external_id, rec)
+            row_id = repository.upsert_work_product(
+                cur, project_id, connection_id, external_id, rec
+            )
+            found = _file_source(cur, project_id, row_id, rec, payload)
+            if found is not None:
+                sources.append(found)
             target = "WORK_PRODUCT"
         else:
             rec = mapping.to_code_change(kind, payload)
@@ -401,6 +407,51 @@ def _store_file(project_id: str, payload: dict[str, Any]) -> None:
         return
     target.parent.mkdir(parents=True, exist_ok=True)
     target.write_bytes(base64.b64decode(encoded))
+
+
+def _file_source(
+    cur: Any, project_id: str, row_id: str | None, rec: dict[str, Any], payload: dict[str, Any]
+) -> indexing.IndexSource | None:
+    """수집한 파일도 업로드 문서처럼 읽어 색인한다(DEF-V031, SWFR.RAG.003).
+
+    산출물 행 하나는 파일 한 판(sha)이라 내용이 바뀌지 않는다. 이미 색인한 행은 다시 읽지 않는다.
+    새 판이 현행이 되면 같은 항목의 지난 판 조각은 지운다. 검색이 낡은 내용을 출처로 내면 안 된다.
+    XLSX 는 시트를 표제로, 엑셀 행 번호를 첫 열로 남겨 출처에 「시트 · 행」이 붙는다.
+    """
+    path = payload.get("path", "")
+    if row_id is None or not extractor.is_supported(path) or not payload.get("sha"):
+        return None
+    cur.execute(
+        """
+        delete from doc_chunk c
+         using work_product w
+         where c.source_type = 'WORK_PRODUCT' and c.source_id = w.id
+           and w.project_id = %s and w.type = %s and w.id <> %s
+        """,
+        (project_id, rec["type"], row_id),
+    )
+    if fetch_one(
+        cur,
+        "select 1 from doc_chunk where source_type = 'WORK_PRODUCT' and source_id = %s limit 1",
+        (row_id,),
+    ):
+        return None
+    stored = (
+        Path(settings.document_root) / project_id / "repo"
+        / f"{payload['sha']}{Path(path).suffix}"
+    )
+    if not stored.exists():
+        return None
+    try:
+        text = extractor.extract(stored, extractor.ext_of(path)).text
+    except Exception:  # noqa: BLE001 — 파일 하나를 못 읽어도 승격은 이어간다
+        return None
+    if not text.strip():
+        return None
+    return indexing.IndexSource(
+        source_type="WORK_PRODUCT", source_id=row_id, project_id=project_id,
+        title=rec["title"], body=text, uri=rec["external_url"],
+    )
 
 
 def _iso(value: Any) -> str | None:

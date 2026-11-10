@@ -7,7 +7,7 @@
 
 import json
 from collections.abc import Iterator
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from typing import Any
 
 from app.common.korean import attach
@@ -164,6 +164,40 @@ def user_prompt(
 def _evidence(no: int, chunk: RetrievedChunk) -> str:
     where = location_label(chunk)
     return f"[{no}] {chunk.source_title}{where}\n{chunk.content.strip()}"
+
+
+def focus_rows(chunk: RetrievedChunk, query: str) -> RetrievedChunk:
+    """XLSX 표 조각에서 질문 낱말이 맞는 행만 남긴다. 위치도 그 행으로 좁힌다(AC-060-11).
+
+    시트 하나가 조각 하나로 들어가면 출처가 「2~7행」이 되고 앞부분만 보여 정작 답인 행이
+    잘린다. 맞는 행이 없거나 모든 행이 맞으면 조각을 그대로 둔다. 값은 원문 줄 그대로다.
+    """
+    if chunk.row_start is None:
+        return chunk
+    words = [w.lower() for w in query.split() if len(w) >= 2]
+    if not words:
+        return chunk
+    lines = chunk.content.split("\n")
+    rows: list[tuple[int, str, int]] = []
+    head: list[str] = []
+    for line in lines:
+        cells = [c.strip() for c in line.strip().strip("|").split("|")]
+        if line.lstrip().startswith("|") and cells and cells[0].isdigit():
+            hits = sum(1 for w in words if any(w in c.lower() for c in cells[1:]))
+            rows.append((int(cells[0]), line, hits))
+        else:
+            head.append(line)
+    best = max((h for _, _, h in rows), default=0)
+    picked = [(n, line) for n, line, h in rows if best and h == best]
+    if not picked or len(picked) == len(rows):
+        return chunk
+    numbers = [n for n, _ in picked]
+    return replace(
+        chunk,
+        content="\n".join([*head, *(line for _, line in picked)]),
+        row_start=min(numbers),
+        row_end=max(numbers),
+    )
 
 
 def location_label(chunk: RetrievedChunk) -> str:

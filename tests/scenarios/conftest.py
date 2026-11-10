@@ -71,7 +71,6 @@ KNOWN_FAILURES: dict[str, str] = {
     # F
     # G·H
     "test_UC_060_S02_집계_질문": "DEC-02 결함이 섞여(11건) 9건 문장이 수치 검문에 걸림",
-    "test_UC_060_S15_XLSX_시트_행_위치": "DEF-V031 저장소 WBS.xlsx 미색인",
 }
 
 

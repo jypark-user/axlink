@@ -101,6 +101,28 @@ def test_원문_위치는_표제_쪽_행을_잇고_걸치면_범위로_쓴다():
     assert answer.location_label(_chunk("c", page_no=2)) == " (p.2)"
 
 
+def test_XLSX_표_조각은_질문이_가리키는_행만_남기고_위치를_좁힌다():
+    # 시트 하나가 조각 하나면 출처가 「2~7행」이 되고 답인 행이 잘린다(AC-060-11, DEF-V031)
+    table = "\n".join([
+        "시트: WBS",
+        "| 행 | WBS ID | 업무분류 | 산출물 |",
+        "| --- | --- | --- | --- |",
+        "| 4 | 3.2 | 설계 | SW설계서 |",
+        "| 5 | 3.3 | 구현 | 프로그램 목록 |",
+        "| 6 | 3.4 | 시험 | 시험결과서 |",
+    ])
+    chunk = _chunk("c", heading=["시트: WBS"], content=table, row_start=4, row_end=6)
+    focused = answer.focus_rows(chunk, "WBS 3.3 산출물")
+    assert answer.location_text(focused) == "시트: WBS / 5행"
+    assert "프로그램 목록" in focused.content and "SW설계서" not in focused.content
+    assert "| 행 | WBS ID |" in focused.content  # 머리글은 남긴다
+    # 맞는 행이 없거나 모두 맞으면, 표가 아닌 조각이면 그대로다
+    assert answer.focus_rows(chunk, "일정 지연") is chunk
+    assert answer.focus_rows(chunk, "| 3") is chunk
+    plain = _chunk("d", content="3.3 구현")
+    assert answer.focus_rows(plain, "3.3") is plain
+
+
 def test_출처_조각은_위치를_앞에_두고_길이를_자른다():
     chunk = _chunk("c1", heading=["1장"], content="가 " * 400)
     text = answer.snippet(chunk, limit=50)
