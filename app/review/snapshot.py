@@ -15,6 +15,8 @@ from app.dashboard import completion
 from app.dashboard import service as dashboard_service
 from app.db import fetch_all, fetch_one
 from app.review.models import ReviewStateChange, ReviewTargetOption
+from app.semantic import service as semantic
+from app.semantic.models import WidgetQuery, WidgetSpec
 from app.standard import work_product_type
 
 # 화면에 보여 줄 필드 이름. 발주기관 어휘로 (작업 규약 1절 9번).
@@ -50,6 +52,13 @@ FIELD_LABELS = {
     "denominator": "분모",
     "level": "산정 수준",
     "basis": "근거",
+    "source_priority": "우선순위",
+    "linked_issues": "연결 이슈",
+    "progress_representative": "보고 진척률",
+    "progress_level": "진척률 산정 수준",
+    "issue_resolution_rate": "일반 이슈 처리율",
+    "risk_resolution_rate": "위험 처리율",
+    "open_risk_count": "열린 리스크",
 }
 
 METRIC_KEYS = {
@@ -62,6 +71,23 @@ METRIC_KEYS = {
 
 def _iso(value: Any) -> Any:
     return value.isoformat() if hasattr(value, "isoformat") else value
+
+
+def _measure(cur: Any, principal: AuthPrincipal, project_id: str, key: str) -> Any:
+    """사업 하나의 지표 값. 화면·질의와 같은 시맨틱 레이어 값이다(절대 규칙 1). 없으면 None."""
+    spec = WidgetSpec(
+        template="STAT_CARD", title=key,
+        query=WidgetQuery(measure=key, dimensions=[], filters=[], projectScope=[project_id]),
+    )
+    try:
+        # 세이브포인트 안에서 묻는다. 지표 쿼리가 실패해도 요청 트랜잭션은 살아 있어야 한다
+        with cur.connection.transaction():
+            data = semantic.run(cur, principal, spec)
+    except Exception:  # noqa: BLE001 — 지표가 없어도 요청은 남는다. 값이 없음으로 둔다
+        return None
+    row = data.total or (data.rows[0] if data.rows else None)
+    value = row.values.get("value") if row else None
+    return float(value) if value is not None else None
 
 
 def capture(
@@ -94,18 +120,23 @@ def capture(
         row = fetch_one(
             cur,
             """
-            select issue_key, title, status, severity, assignee, resolved_at
+            select issue_key, title, status, severity, source_priority, assignee, resolved_at
               from issue where project_id = %s and id = %s
             """,
             (project_id, target_key),
         )
         if row is None:
             raise ValueError("이슈를 찾을 수 없습니다.")
+        # 관련 지표는 그 시점의 사업 값이다. 보고 때 다시 떠서 변화를 보인다(AC-050-2)
         return f"{row['issue_key'] or ''} {row['title']}".strip(), {
             "status": row["status"],
             "severity": row["severity"],
+            "source_priority": row["source_priority"],
             "assignee": row["assignee"],
             "resolved_at": _iso(row["resolved_at"]),
+            "issue_resolution_rate": _measure(
+                cur, principal, project_id, "issue_resolution_rate"
+            ),
         }
 
     if target_type == "RISK":
@@ -124,6 +155,8 @@ def capture(
             "severity": row["severity"],
             "owner": row["owner"],
             "closed_at": _iso(row["closed_at"]),
+            "risk_resolution_rate": _measure(cur, principal, project_id, "risk_resolution_rate"),
+            "open_risk_count": _measure(cur, principal, project_id, "open_risk_count"),
         }
 
     if target_type == "WBS_ITEM":
@@ -138,6 +171,11 @@ def capture(
         judged = next((j for j in check.judgements if j.wbs_id == target_key), None)
         facts = completion.facts_from(cur, judged, check.tree_sha)
         item = completion.current_item(cur, project_id, wbs_id=target_key)
+        # 연결 이슈는 일정 화면과 같은 규칙(ARC-016 3-4)으로, 보고 진척률은 현황 화면 값이다
+        linked = dashboard_service.linked_issues_by_ids(
+            cur, project_id, {r.wbs_id for r in rows if r.wbs_id}
+        ).get(target_key, [])
+        progress = dashboard_service.project_progress(cur, principal, project_id)
         return f"{match.wbs_id} {match.name.strip()}", {
             "actual": match.actual,
             "declared_planned": match.declared_planned,
@@ -154,6 +192,9 @@ def capture(
             "task_key": str(item["task_key"]) if item else None,
             "scope_hash": item["scope_hash"] if item else None,
             "end": _iso(match.end),
+            "linked_issues": [f"{i.key} {i.status}" for i in linked],
+            "progress_representative": progress.representative,
+            "progress_level": progress.level,
         }
 
     if target_type == "METRIC":

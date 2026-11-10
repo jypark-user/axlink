@@ -456,7 +456,13 @@ def deliverable_stem(value: str) -> str:
 
 def linked_issues(cur: Any, project_id: str, plan: wbs.WbsPlan) -> dict[str, list[LinkedIssue]]:
     """말단 번호별로 이어진 이슈. 번호 토큰이 하나로 정확히 맞은 것만 잇는다(ARC-016 3-4)."""
-    ids = {r.wbs_id for r in plan.rows if r.wbs_id}
+    return linked_issues_by_ids(cur, project_id, {r.wbs_id for r in plan.rows if r.wbs_id})
+
+
+def linked_issues_by_ids(
+    cur: Any, project_id: str, ids: set[str]
+) -> dict[str, list[LinkedIssue]]:
+    """번호 집합으로 잇는다. 확인 요청 저장 상태도 이 규칙을 쓴다(DEF-V027)."""
     out: dict[str, list[LinkedIssue]] = {}
     if not ids:
         return out
