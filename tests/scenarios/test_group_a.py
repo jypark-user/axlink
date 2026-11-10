@@ -409,6 +409,25 @@ def test_UC_004_S02_틀린_자격증명(target, s0):
     assert "accessToken" not in wrong.text and "accessToken" not in disabled.text
 
 
+def test_UC_004_S01_역할별_첫_화면(target, s0, screen):
+    """화면 로그인 직후: C1 자기 조직 사업, V1 배정 사업(TD-PRJ-1·9)만, A1 다른 기관 사업까지."""
+    if not screen:
+        pytest.skip("화면 시나리오. 원격 대상 + AXLINK_BROWSER_CHROME 에서 돈다")
+    from tests.fixtures.im009.seed import ADMIN_PASS, ADMIN_USER
+
+    name = {k: d.PROJECTS[k].name for k in ("TD-PRJ-1", "TD-PRJ-2", "TD-PRJ-9")}
+    for acc, password, see, hidden in (
+        ("TD-ACC-C1", PASSWORD, ("TD-PRJ-1", "TD-PRJ-9"), ("TD-PRJ-2",)),
+        ("TD-ACC-V1", PASSWORD, ("TD-PRJ-1", "TD-PRJ-9"), ("TD-PRJ-2",)),
+        (ADMIN_USER, ADMIN_PASS, ("TD-PRJ-1", "TD-PRJ-2"), ()),
+    ):
+        sc = screen(acc, fresh_password=password)
+        assert sc.page.url.rstrip("/").endswith("/projects"), f"{acc} 첫 화면 {sc.page.url}"
+        sc.see("사업 목록", *(name[k] for k in see))
+        sc.not_see(*(name[k] for k in hidden))
+        sc.done()
+
+
 def test_UC_004_S03_직접_주소_접근(target, s0, screen):
     """V1 이 플랫폼 설정 주소·TD-PRJ-2 주소 → 서버 거절 (AC-004-2)."""
     v1 = auth(s0.tokens["TD-ACC-V1"])

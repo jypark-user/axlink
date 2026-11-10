@@ -474,9 +474,15 @@ def test_UC_022_S11_커스텀_필드_문서_안_코드(target, s0):
     assert (doc[0]["evidence_url"] or "").endswith("#L6"), doc[0]["evidence_url"]
 
 
-@pytest.mark.skip(reason="수집 전 사업의 추적표 안내는 브라우저 시나리오. 5174 에서 본다")
-def test_UC_022_S06_수집_전_사업(target, s0):
-    """TD-PRJ-3 추적표 → 전부 연결 없음, 안내 (E1)."""
+def test_UC_022_S06_수집_전_사업(target, s0, screen):
+    """TD-PRJ-3 추적표 → 연결 없음, 안내 (E1). 화면 시나리오."""
+    if not screen:
+        pytest.skip("화면 시나리오. 원격 대상 + AXLINK_BROWSER_CHROME 에서 돈다")
+    sc = screen("TD-ACC-C1")
+    sc.open(f"/p/{s0.ids['TD-PRJ-3']}/traceability")
+    sc.see("요구사항이 없습니다", "명세서를 등록하고 발주기관이 확정하면 목록이 생깁니다")
+    sc.not_see(re.compile(r"외 \d+건 더 보기"), "근거:")
+    sc.done()
 
 
 def test_UC_022_S02_근거_사라짐(target, s0, replay):
