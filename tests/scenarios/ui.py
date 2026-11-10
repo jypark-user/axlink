@@ -36,15 +36,33 @@ class Screen:
         self.failed: list[str] = []
         self.denied: list[str] = []  # 서버가 거절한 응답(403·404)
         self.allow_denied = False
+        self.injected: list[str] = []  # 시험이 일부러 실패시킨 요청 주소 조각
         page.on("console", lambda m: m.type == "error" and self.console.append(m.text))
         page.on("pageerror", lambda e: self.console.append(str(e)))
         page.on("response", self._response)
 
     def _response(self, r: Any) -> None:
+        if any(x in r.url for x in self.injected):
+            return
         if r.status >= 500:
             self.failed.append(f"{r.status} {r.url}")
         elif r.status in (403, 404) and "/api/" in r.url:
             self.denied.append(f"{r.status} {r.url}")
+
+    def inject_error(self, url_part: str, message: str = "집계 서버 오류(시험 주입)") -> Screen:
+        """그 주소의 요청만 브라우저에서 500 으로 바꾼다. 서버와 다른 사용자에게는 영향이 없다."""
+        self.injected.append(url_part)
+        body = '{"code":"INTERNAL_ERROR","message":"' + message + '"}'
+        self.page.route(
+            f"**{url_part}",
+            lambda route: route.fulfill(status=500, content_type="application/json", body=body),
+        )
+        return self
+
+    def clear_injection(self, url_part: str) -> Screen:
+        """주입을 거둔다. 그 뒤 요청은 서버로 간다(콘솔에 남은 주입 오류는 계속 무시한다)."""
+        self.page.unroute(f"**{url_part}")
+        return self
 
     def expect_denied(self) -> Screen:
         """거절을 기대하는 화면. 서버의 403·404 가 콘솔에 남는 것을 오류로 보지 않는다."""
@@ -112,6 +130,8 @@ class Screen:
         console = self.console
         if self.allow_denied:
             console = [c for c in console if not re.search(r"status of (403|404)", c)]
+        if self.injected:
+            console = [c for c in console if not re.search(r"status of 500", c)]
         assert not console, f"콘솔 오류: {console[:5]}"
         self.record_property("proves", "browser")
         self.record_property("screenshots", (OUT / self.test).as_posix())
@@ -140,6 +160,22 @@ class UI:
         page.close()
         self.contexts[username] = ctx
         return ctx
+
+    def fresh(self, username: str, password: str, test: str) -> Screen:
+        """새 브라우저 문맥에서 화면 로그인 양식으로 로그인한 직후의 화면(첫 화면 확인용)."""
+        ctx = self.browser.new_context(
+            viewport={"width": 1440, "height": 900}, locale="ko-KR", timezone_id="Asia/Seoul"
+        )
+        self.contexts[f"fresh:{username}:{len(self.contexts)}"] = ctx
+        page = ctx.new_page()
+        sc = Screen(self, page, test)
+        page.goto(self.base + "/login", wait_until="networkidle")
+        page.fill("#username", username)
+        page.fill("#password", password)
+        page.click("button[type=submit]")
+        page.wait_for_url(lambda u: "/login" not in u, timeout=40000)
+        page.wait_for_load_state("networkidle")
+        return sc
 
     def screen(self, username: str, test: str) -> Screen:
         return Screen(self, self._context(username).new_page(), test)

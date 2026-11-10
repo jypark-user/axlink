@@ -53,9 +53,32 @@ def _total(body: dict):
 # ------------------------------------------------------------------ UC-040
 
 
+def test_UC_053_S01_미처리_건수(target, s0, screen):
+    """S0 → S0r: 목록·현황 머리줄 미처리 0 → 1, 머리줄에서 요청 목록으로 (AC-053-1). 화면 시나리오."""
+    if not screen:
+        pytest.skip("화면 시나리오. 원격 대상 + AXLINK_BROWSER_CHROME 에서 돈다")
+    pid, name = s0.ids["TD-PRJ-1"], d.PROJECTS["TD-PRJ-1"].name
+    rows = {p["id"]: p for p in _get(target, s0, "/api/projects?size=100")["content"]}
+    assert rows[pid]["openReviewRequestCount"] == 0, rows[pid]["openReviewRequestCount"]
+    sc = screen("TD-ACC-C1")
+    sc.open("/projects").see(name)
+    assert "요청" not in sc.row(name), sc.row(name)
+    sc.open(f"/p/{pid}/dashboard").see("미처리 확인 요청 0건")
+    sc.shot("요청_전")
+    s0.s0r()
+    sc.open("/projects").see(name)
+    assert "요청 1" in sc.row(name), sc.row(name)
+    sc.open(f"/p/{pid}/dashboard").see("미처리 확인 요청 1건")
+    sc.page.get_by_test_id("open-review-count").click()
+    sc.page.wait_for_url(re.compile(r"/reviews"))
+    sc.see(d.REVIEW_REQUEST_TD_RR_1["title"])
+    sc.done()
+
+
 def test_UC_040_S01_세_사업_목록(target, s0, screen):
     """S0r: PRJ-1 진척 30.0%·편차 −36.9%p·미처리 1·리스크 1·승인 1/22. PRJ-3 지표 「—」·미처리 0 (AC-040-1·2·3·4)."""
-    s0.s0r()
+    if "TD-RR-1" not in s0.ids:  # 화면 실행에서는 UC-053-S01 이 S0r 을 만든다
+        s0.s0r()
     rows = {p["id"]: p for p in _get(target, s0, "/api/projects?size=100")["content"]}
     p1, p3, p9 = rows[s0.ids["TD-PRJ-1"]], rows[s0.ids["TD-PRJ-3"]], rows[s0.ids["TD-PRJ-9"]]
     assert s0.ids["TD-PRJ-2"] not in rows  # C1 은 자기 조직 사업만
@@ -101,9 +124,49 @@ def test_UC_040_S04_일정_준수_칸(target, s0):
     """목록의 일정 준수 칸 (AC-040-5)."""
 
 
-@pytest.mark.skip(reason="집계 서버 오류 주입과 화면 표시는 브라우저 시나리오. 5174 에서 본다")
-def test_UC_040_S05_조회_실패_구분(target, s0):
-    """목록은 뜨고 지표 칸 오류 표시 (E2)."""
+def test_UC_040_S05_조회_실패_구분(target, s0, screen, monkeypatch):
+    """한 사업의 진척 집계가 실패해도 목록은 뜨고 그 칸만 「조회 실패」(「-」와 다름) (E2, DEF-V044).
+
+    API: 시험 프로세스 안 실행에서 TD-PRJ-3 의 집계만 실패시킨다(원격 서버에는 닿지 않아 원격은 건너뛴다).
+    화면: 브라우저가 받은 목록 응답에서 TD-PRJ-3 을 집계 실패로 바꿔 넣고 표시를 본다."""
+    from tests.scenarios.conftest import TARGET_URL
+
+    p1, p3 = s0.ids["TD-PRJ-1"], s0.ids["TD-PRJ-3"]
+    if not TARGET_URL:
+        from app.dashboard import service as dashboard_service
+
+        real = dashboard_service.compute
+
+        def broken(cur, pid, today):
+            if str(pid) == p3:
+                cur.execute("select 1/0")  # 질의 실패: 저장점이 없으면 트랜잭션 전체가 깨진다
+            return real(cur, pid, today)
+
+        monkeypatch.setattr(dashboard_service, "compute", broken)
+        res = target.get("/api/projects?size=100", headers=auth(s0.tokens["TD-ACC-C1"]))
+        assert res.status_code == 200, res.text[:300]
+        rows = {p["id"]: p for p in res.json()["content"]}
+        assert rows[p3]["progressError"] is True and rows[p3]["representative"] is None
+        assert rows[p1]["progressError"] is False and rows[p1]["representative"] is not None
+        assert rows[p1]["openReviewRequestCount"] >= 0  # 나머지 칸은 그대로 계산된다
+    if not screen:
+        return
+    sc = screen("TD-ACC-C1")
+
+    def tamper(route):
+        body = route.fetch().json()
+        for p in body["content"]:
+            if p["id"] == p3:
+                p.update(representative=None, progressLevel=None, progressDeviation=None, progressError=True)
+        route.fulfill(json=body)
+
+    sc.page.route("**/api/projects?*", tamper)
+    sc.open("/projects").see(d.PROJECTS["TD-PRJ-1"].name, d.PROJECTS["TD-PRJ-3"].name)
+    row3 = sc.row(d.PROJECTS["TD-PRJ-3"].name)
+    assert "조회 실패" in row3, row3
+    assert "조회 실패" not in sc.row(d.PROJECTS["TD-PRJ-1"].name)
+    assert "%" in sc.row(d.PROJECTS["TD-PRJ-1"].name)
+    sc.done()
 
 
 # ------------------------------------------------------------------ UC-041
@@ -257,9 +320,49 @@ def test_UC_041_S08_결함_처리율(target, s0):
     """결함 처리율 카드 (AC-041-10)."""
 
 
-@pytest.mark.skip(reason="집계 오류 주입과 카드 표시는 브라우저 시나리오")
-def test_UC_041_S10_조회_실패(target, s0):
-    """그 카드만 오류·재시도 (AC-041-11)."""
+def test_UC_041_S10_조회_실패(target, s0, screen):
+    """한 카드의 집계만 실패 → 그 카드만 오류·재시도, 나머지 정상, 데이터 없음과 모양이 다르다 (AC-041-11).
+
+    장애는 브라우저에서 그 위젯의 값 요청(/api/widgets/{id}/data)만 500 으로 바꿔 넣는다. 서버와 다른
+    사용자에게는 영향이 없다. 재시도 전에 주입을 거둬 회복도 본다."""
+    if not screen:
+        pytest.skip("화면 시나리오. 원격 대상 + AXLINK_BROWSER_CHROME 에서 돈다")
+    pid = s0.ids["TD-PRJ-3"]
+    c1 = auth(s0.tokens["TD-ACC-C1"])
+    board = next(b for b in _get(target, s0, f"/api/dashboards?projectId={pid}") if b["isDefault"])
+    made: list[dict] = []
+    try:
+        for measure, title in (
+            ("open_risk_count", "TST 정상 카드"),
+            ("issue_resolution_rate", "TST 자료 없는 카드"),
+            ("open_risk_count", "TST 장애 카드"),
+        ):
+            res = target.post(f"/api/dashboards/{board['id']}/widgets", json={"spec": _spec(measure, [], [pid], "STAT_CARD", title)}, headers=c1)
+            assert res.status_code == 201, res.text
+            made.append(res.json())
+        broken = f"/api/widgets/{made[2]['id']}/data"
+        sc = screen("TD-ACC-C1").inject_error(broken)
+        sc.open(f"/p/{pid}/dashboard")
+
+        def card(title):
+            return sc.page.locator("[data-slot=card]", has_text=title).first
+
+        failed = "위젯을 불러오지 못했습니다"
+        from playwright.sync_api import expect
+
+        expect(card("TST 장애 카드")).to_contain_text(failed, timeout=15000)
+        expect(card("TST 장애 카드")).to_contain_text("재시도")
+        for title in ("TST 정상 카드", "TST 자료 없는 카드"):
+            expect(card(title)).not_to_contain_text(failed)
+        assert card("TST 자료 없는 카드").inner_text() != card("TST 장애 카드").inner_text()
+        sc.shot("장애_주입")
+        sc.clear_injection(broken)
+        card("TST 장애 카드").get_by_role("button", name="재시도").click()
+        expect(card("TST 장애 카드")).not_to_contain_text(failed, timeout=15000)
+        sc.done()
+    finally:
+        for w in made:
+            target.delete(f"/api/widgets/{w['id']}", headers=c1)
 
 
 @pytest.mark.skip(reason="실모델이 필요하다. 온프레미스 모델 선정 뒤 5174 에서 본다")

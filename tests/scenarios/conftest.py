@@ -63,9 +63,13 @@ def screen(ui, request, record_property):
         return None
     name = request.node.originalname or request.node.name
 
-    def make(acc: str):
+    def make(acc: str, *, fresh_password: str | None = None):
+        """fresh_password 를 주면 새 문맥에서 화면으로 로그인한 직후의 화면을 준다."""
         username = d.ACCOUNTS[acc].username if acc in d.ACCOUNTS else acc
-        sc = ui.screen(username, name)
+        if fresh_password is not None:
+            sc = ui.fresh(username, fresh_password, name)
+        else:
+            sc = ui.screen(username, name)
         sc.record_property = record_property
         return sc
 
