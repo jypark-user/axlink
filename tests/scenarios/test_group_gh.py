@@ -3,12 +3,14 @@
 
 모델은 대본대로 답하는 흉내(ScriptedLlm)다. 여기서 보는 것은 라우팅·게이트·수치 검문·출처 위치가
 설계대로 움직이는지이고, 문장 품질과 실모델 일치(AC-060-8·10)는 5174 실모델에서 본다.
-PDF(TD-DOC-4)·HWP·HWPX·손상·대용량 자료는 생성기가 없어 「자료 없음」으로 보류한다(files.MISSING).
+PDF 두 건(TD-DOC-4·7)은 커밋해 둔 가상 시험자료다(fixtures/im009/pdf). HWP·HWPX·손상·대용량 자료는
+생성기가 없어 「자료 없음」으로 보류한다(files.MISSING).
 """
 
 from __future__ import annotations
 
 import json
+import re
 from collections.abc import Iterator
 
 import pytest
@@ -16,7 +18,7 @@ import pytest
 from app.ai.port import LlmResult
 from app.common import errors
 from app.config import settings
-from app.db import fetch_one, tx
+from app.db import fetch_all, fetch_one, tx
 from app.rag import number_guard
 from app.rag import service as ask_service
 from tests.scenarios.conftest import auth
@@ -249,19 +251,50 @@ def test_UC_060_S16_이슈_출처_링크(target, s0, llm):
     assert cited["sourceType"] == "ISSUE" and (cited.get("externalUrl") or "").endswith("/issues/204"), cited
 
 
-@pytest.mark.skip(reason="TD-DOC-4(과업지시서.pdf) 자료 없음(files.MISSING). 자료 확보 뒤 실행")
-def test_UC_060_S01_문서_질문과_출처(target, s0):
-    """「납품 산품은 몇 종인가」 → 22종·각주·2쪽 (AC-060-1)."""
+def _sow_source(sources: list[dict], phrase: str) -> dict | None:
+    return next(
+        (s for s in sources if "과업지시서" in (s.get("sourceLabel") or "") and phrase in (s.get("snippet") or "")),
+        None,
+    )
 
 
-@pytest.mark.skip(reason="TD-DOC-4 자료 없음. S01 과 함께 실행")
-def test_UC_060_S03_결합(target, s0):
-    """22종(문서)+9건(집계) 한 답 (AC-060-5)."""
+def test_UC_060_S01_문서_질문과_출처(target, s0, llm):
+    """「납품 산출물은 몇 종인가」 → 22종·각주, 출처 과업지시서 2쪽, 원문 연결 (AC-060-1, IM-009 7.5)."""
+    llm({"route": "DOCUMENT", "query": "납품 산출물 종"}, "납품 산출물은 22종입니다[1].")
+    events = _ask(target, s0, "TD-ACC-C1", "납품 산출물은 몇 종인가", [s0.ids["TD-PRJ-1"]])
+    text, sources = _text(events), _sources(events)
+    assert "22종" in text and "[1]" in text, text
+    cited = _sow_source(sources, "22종")
+    assert cited is not None, [(s.get("sourceLabel"), s.get("location")) for s in sources]
+    loc = cited.get("location") or ""
+    # 「22종」은 2쪽에만 있다. 2~3쪽처럼 걸친 위치는 원문 위치가 아니다
+    assert re.search(r"p\.2(?![~\d])", loc), loc
+    assert s0.ids["TD-DOC-4"] in str(cited), cited
 
 
-@pytest.mark.skip(reason="TD-DOC-4 자료 없음. S01 과 함께 실행")
-def test_UC_060_S13_PDF_쪽_위치(target, s0):
-    """9개월, 출처 3쪽 (AC-060-11·1)."""
+def test_UC_060_S03_결합(target, s0, llm):
+    """「납품 산출물은 몇 종이고 일반 이슈는 몇 건이야」 → 22종(문서 출처)+9건(집계) 한 답, 결합 (AC-060-5)."""
+    llm({"route": "AGGREGATE", "measure": "issue_count", "template": "STAT_CARD", "query": "납품 산출물 종"},
+        "납품 산출물은 22종이고[1] 일반 이슈는 9건입니다.")
+    events = _ask(target, s0, "TD-ACC-C1", "납품 산출물은 몇 종이고 일반 이슈는 몇 건이야", [s0.ids["TD-PRJ-1"]])
+    text, done, start = _text(events), _done(events), events[0][1]
+    assert start["routing"]["type"] == "MIXED", start["routing"]
+    assert _sow_source(_sources(events), "22종") is not None
+    assert done["finishReason"] != "NUMBER_GUARD", f"9건이 집계(현재 결함 포함 11건, DEC-02)와 어긋나 막혔다: {text}"
+    assert "22종" in text and "9건" in text, text
+
+
+def test_UC_060_S13_PDF_쪽_위치(target, s0, llm):
+    """「사업 기간은 몇 개월인가」 → 9개월, 출처 3쪽(2쪽 아님), 연결이 TD-DOC-4 (AC-060-11·1)."""
+    llm({"route": "DOCUMENT", "query": "사업 기간 개월"}, "사업 기간은 9개월입니다[1].")
+    events = _ask(target, s0, "TD-ACC-C1", "사업 기간은 몇 개월인가", [s0.ids["TD-PRJ-1"]])
+    text, sources = _text(events), _sources(events)
+    assert "9개월" in text, text
+    cited = _sow_source(sources, "9개월")
+    assert cited is not None, [(s.get("sourceLabel"), s.get("location")) for s in sources]
+    loc = cited.get("location") or ""
+    assert re.search(r"p\.3(?![~\d])", loc) and "p.2" not in loc, loc
+    assert s0.ids["TD-DOC-4"] in str(cited), cited
 
 
 @pytest.mark.skip(reason="실모델이 필요하다. 온프레미스 모델 선정 뒤 5174 에서 본다")
@@ -400,9 +433,29 @@ def test_UC_070_S06_삭제(target, s0):
     assert wp is not None and wp["version"] == "v1" and wp["status"] == "APPROVED", wp
 
 
-@pytest.mark.skip(reason="TD-DOC-4(PDF) 자료 없음(files.MISSING)")
-def test_UC_070_S01_PDF_업로드_처리(target, s0):
-    """PDF 3쪽, 2쪽 「22종」·3쪽 「9개월」 (AC-070-2·3·8)."""
+def test_UC_070_S01_PDF_업로드_처리(target, s0, screen):
+    """TD-DOC-4(PDF 3쪽) 올리기 → 완료, 쪽 수 3, 2쪽 「22종」·3쪽 「9개월」, 청크 위치에 쪽 (AC-070-2·3·8).
+
+    올리기는 S0 투입(V1)이 했다. 접수 → 처리 → 완료 흐름은 투입의 await_document 가 거쳤다."""
+    did = s0.ids["TD-DOC-4"]
+    doc = target.get(f"/api/documents/{did}", headers=auth(s0.tokens["TD-ACC-V1"])).json()
+    assert doc["processingState"] == "DONE" and doc["status"] != "FAILED", doc
+    assert doc["pageCount"] == 3, doc["pageCount"]
+    with tx() as cur:
+        rows = fetch_all(
+            cur,
+            "select content, (meta_json->>'page')::int as page from doc_chunk "
+            "where source_id = %s order by chunk_index",
+            (did,),
+        )
+    pages = {r["page"] for r in rows}
+    assert {2, 3} <= pages, rows
+    assert any("22종" in r["content"] and r["page"] == 2 for r in rows), rows
+    assert any("9개월" in r["content"] and r["page"] == 3 for r in rows), rows
+    if screen:
+        sc = screen("TD-ACC-V1")
+        sc.open(f"/p/{s0.ids['TD-PRJ-1']}/documents/{did}").see("과업지시서.pdf", "납품 산출물은 22종이다", "사업 기간은 9개월이다")
+        sc.done()
 
 
 @pytest.mark.skip(reason="TD-DOC-12(HWP 5.0) 자료 없음")
