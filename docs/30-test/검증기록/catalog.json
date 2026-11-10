@@ -6,12 +6,12 @@
    "sha256": "deb83121a42d0c00068c90ddd92fefc133a95cb3c8303a29b7b4b505ae7c7364"
   },
   "IM-007-유스케이스명세서.md": {
-   "version": "v0.2.7",
-   "sha256": "836fad1d9976898b239807c6b5571437496c04f425c0b99b9f84b3754c8de833"
+   "version": "v0.2.8",
+   "sha256": "036a45a35e700c3af9a91e02a596167a827fa72c3ae697b059f3460d4d0f8c09"
   },
   "IM-007A-요구사항-세부의무-대응표.md": {
-   "version": "v0.1.4",
-   "sha256": "55860bc01f90d5bf6d4da81c897d78650e910f165741cb1fa0bc1a3316beb4f7"
+   "version": "v0.1.5",
+   "sha256": "02f2287c045521a26daa69c9ca4d722693f6d9517bb31cb0d22011f22e5bc587"
   },
   "IM-008-용어사전.md": {
    "version": "v0.2.3",
@@ -1869,12 +1869,16 @@
    "scenarios": [
     "UC-030-S03",
     "UC-030-S04",
+    "UC-030-S07",
     "UC-041-S12"
    ],
    "decs": [
     "DEC-19"
    ],
-   "needs": [],
+   "needs": [
+    "api",
+    "browser"
+   ],
    "obligations": [
     "SWFR.PIP.006-o3",
     "SWFR.PIP.010-o2",
@@ -1887,12 +1891,17 @@
    "text": "인식 결과 화면에 작업 수·열 매핑·가중치 합·산출물 미지정 수·경고가 보인다",
    "scenarios": [
     "UC-030-S01",
+    "UC-030-S07",
     "UC-030-S09"
    ],
    "decs": [],
-   "needs": [],
+   "needs": [
+    "api",
+    "browser"
+   ],
    "obligations": [
-    "SWFR.PIP.010-o4"
+    "SWFR.PIP.010-o4",
+    "SWFR.PIP.010-o11"
    ]
   },
   "AC-030-5": {
@@ -5010,17 +5019,19 @@
   "UC-030-S07": {
    "id": "UC-030-S07",
    "uc": "UC-030",
-   "title": "확인·다시 지정",
-   "state": "S01",
-   "input": "인식 결과에서 확인 / 다시 지정",
-   "expected": "**DEC-04** 결정 뒤 기대값 작성",
-   "pass": "A1",
-   "verify": "브라우저 · **DEC-04**",
-   "acs": [],
-   "decs": [
-    "DEC-04"
+   "title": "인식 결과 표시",
+   "state": "S01. V1",
+   "input": "일정 화면 인식 결과 → 머리글 없는 판(TD-WBS-NOHEAD) 수집 → 다시 봄 → 원래 판으로 되돌림",
+   "expected": "말단 5·묶음 1·가중치 합 1.000·산출물 미지정 0·머리글 1행, 열 매핑(작업명 = 업무분류 등), 재수집 안내. 머리글 없는 판: 「읽지 못했습니다」·사유, 직전 5건을 이전 기준선으로, 보고 진척률 30.0%(0% 아님). 되돌리면 인식 결과가 다시 정상",
+   "pass": "AC-030-3·4, A1",
+   "verify": "API·브라우저",
+   "acs": [
+    "AC-030-3",
+    "AC-030-4"
    ],
+   "decs": [],
    "needs": [
+    "api",
     "browser"
    ]
   },
@@ -8933,20 +8944,20 @@
   "SWFR.PIP.010-o11": {
    "id": "SWFR.PIP.010-o11",
    "requirement": "SWFR.PIP.010",
-   "text": "인식 결과 확인/다시 지정 (E2E S2-4)",
-   "uc_flow": "UC-030 A1",
-   "acs": [],
-   "ac_text": "—",
+   "text": "인식 결과 표시와 재수집 안내 (E2E S2-4, DEC-04 (b) 2026-11-10: 확인·다시 지정 단계 없음)",
+   "uc_flow": "UC-030 3·A1",
+   "acs": [
+    "AC-030-4"
+   ],
+   "ac_text": "AC-030-4",
    "scenarios": [
     "UC-030-S07"
    ],
-   "data_expected": "—",
-   "verify": "브라우저",
-   "link": "일부 연결(AC 미정)",
-   "decision": "결정 대기(DEC-04)",
-   "decs": [
-    "DEC-04"
-   ],
+   "data_expected": "일정 화면 인식 결과, TD-WBS-NOHEAD",
+   "verify": "API·브라우저",
+   "link": "연결 완료",
+   "decision": "확정",
+   "decs": [],
    "execution": "미실행",
    "supplement": ""
   },
