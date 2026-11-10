@@ -109,6 +109,19 @@ class IssueSourceCount(BaseModel):
     count: int
 
 
+class WorkProductVersionResponse(BaseModel):
+    """점검표 항목의 지난 버전 하나(AC-031-5). 판정자·일자는 마지막 승인·반려 기록이다."""
+
+    id: str
+    version: str | None
+    title: str | None
+    status: str
+    submittedAt: str | None  # noqa: N815
+    rejectReason: str | None  # noqa: N815
+    decidedBy: str | None  # noqa: N815
+    decidedAt: str | None  # noqa: N815
+
+
 class WorkProductResponse(BaseModel):
     id: str
     projectId: str  # noqa: N815
@@ -126,6 +139,7 @@ class WorkProductResponse(BaseModel):
     approvedBy: str | None  # noqa: N815
     approvedAt: str | None  # noqa: N815
     updatedAt: str  # noqa: N815
+    history: list[WorkProductVersionResponse] = []  # 지난 버전. 최신이 먼저
 
 
 class WorkProductChecklistResponse(BaseModel):

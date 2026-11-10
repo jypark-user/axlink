@@ -797,6 +797,19 @@ export interface WorkProductResponse {
   approvedBy: string | null;
   approvedAt: string | null;
   updatedAt: string;
+  /** 지난 버전. 최신이 먼저(AC-031-5). */
+  history: WorkProductVersionResponse[];
+}
+
+export interface WorkProductVersionResponse {
+  id: string;
+  version: string | null;
+  title: string | null;
+  status: WorkProductStatus;
+  submittedAt: string | null;
+  rejectReason: string | null;
+  decidedBy: string | null;
+  decidedAt: string | null;
 }
 
 export interface WorkProductChecklistResponse {

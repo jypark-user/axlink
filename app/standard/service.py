@@ -40,6 +40,7 @@ from app.standard.models import (
     SourceRef,
     WorkProductChecklistResponse,
     WorkProductResponse,
+    WorkProductVersionResponse,
 )
 
 
@@ -416,6 +417,19 @@ def work_product_checklist(
         raise errors.project_access_denied()
 
     rows = repository.list_work_products(cur, project_id)
+    history: dict[str, list[WorkProductVersionResponse]] = {}
+    for p in repository.list_past_work_products(cur, project_id):
+        decided = p["decided_kind"] is not None
+        history.setdefault(p["type"], []).append(WorkProductVersionResponse(
+            id=str(p["id"]),
+            version=p["version"],
+            title=p["title"],
+            status=p["status"],
+            submittedAt=_iso(p["submitted_at"]),
+            rejectReason=p["reject_reason"],
+            decidedBy=p["decided_by"] if decided else p["approved_by"],
+            decidedAt=_iso(p["decided_at"] if decided else p["approved_at"]),
+        ))
     items = [
         WorkProductResponse(
             id=str(r["id"]),
@@ -434,6 +448,7 @@ def work_product_checklist(
             approvedBy=r["approved_by"],
             approvedAt=_iso(r["approved_at"]),
             updatedAt=r["updated_at"].isoformat(),
+            history=history.get(r["type"], []),
         )
         for r in rows
     ]

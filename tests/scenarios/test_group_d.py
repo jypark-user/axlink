@@ -326,6 +326,9 @@ def test_UC_031_S04_반려_뒤_재제출_이력(target, s0):
     assert hist["v2"] == ("REJECTED", False) and hist["v3"] == ("SUBMITTED", True), hist
     # 지난 버전과 반려 사유가 점검표 응답에 보여야 한다(AC-031-5)
     assert any(k in now for k in ("versions", "history", "previousVersions")), f"점검표 응답에 지난 버전·반려 사유가 없다: {sorted(now)}"
+    past = {h["version"]: h for h in now["history"]}
+    assert past["v2"]["status"] == "REJECTED" and past["v2"]["rejectReason"] == "목차 누락", past
+    assert past["v2"]["decidedBy"] and past["v2"]["decidedAt"], "반려한 사람·일자가 없다"
 
 
 def test_UC_031_S05b_지난_버전_승인(target, s0):

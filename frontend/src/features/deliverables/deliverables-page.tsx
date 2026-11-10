@@ -433,7 +433,33 @@ function Checklist({ projectId }: { projectId: string }): ReactNode {
       {
         accessorKey: 'version',
         header: '버전',
-        cell: ({ row }) => <span className="tnum text-sm">{row.original.version ?? '-'}</span>,
+        cell: ({ row }) => {
+          const wp = row.original;
+          return (
+            <div className="flex flex-col gap-0.5 text-sm">
+              <span className="tnum">{wp.version ?? '-'}</span>
+              {wp.history.length > 0 && (
+                <details className="text-muted-foreground text-xs">
+                  <summary className="cursor-pointer">지난 버전 {wp.history.length}건</summary>
+                  <ul className="mt-1 flex flex-col gap-1">
+                    {wp.history.map((h) => (
+                      <li key={h.id}>
+                        <span className="tnum">{h.version ?? '-'}</span> · {label(h.status)}
+                        {h.decidedAt && (
+                          <>
+                            {' '}
+                            · {h.decidedBy ?? '-'} · {formatDate(h.decidedAt)}
+                          </>
+                        )}
+                        {h.rejectReason && <div>반려 사유: {h.rejectReason}</div>}
+                      </li>
+                    ))}
+                  </ul>
+                </details>
+              )}
+            </div>
+          );
+        },
       },
       {
         id: 'activity',

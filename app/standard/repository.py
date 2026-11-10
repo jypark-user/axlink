@@ -422,6 +422,35 @@ def list_work_product_versions(
     )
 
 
+def list_past_work_products(cur: Any, project_id: str) -> list[dict[str, Any]]:
+    """현행이 아닌 지난 버전 전부와 마지막 판정(승인·반려) 기록(AC-031-5).
+
+    반려하면 승인자 열이 비워지므로 판정자·일자는 활동 기록에서 읽는다. 최신이 먼저다.
+    """
+    return fetch_all(
+        cur,
+        """
+        select w.type, w.id, w.version, w.title, w.status, w.submitted_at, w.reject_reason,
+               w.approved_at, u.name as approved_by,
+               d.actor_label as decided_by, d.occurred_at as decided_at, d.kind as decided_kind
+          from work_product w
+          left join app_user u on u.id = w.approved_by_user_id
+          left join lateral (
+                select e.actor_label, e.occurred_at, e.kind
+                  from activity_event e
+                 where e.project_id = w.project_id
+                   and e.target_type = 'WORK_PRODUCT' and e.target_key = w.id::text
+                   and e.kind in ('WORK_PRODUCT_APPROVED', 'WORK_PRODUCT_REJECTED')
+                 order by e.occurred_at desc
+                 limit 1
+          ) d on true
+         where w.project_id = %s and not w.is_current
+         order by w.type, w.submitted_at desc nulls last, w.created_at desc
+        """,
+        (project_id,),
+    )
+
+
 def current_work_product(
     cur: Any, project_id: str, product_type: str
 ) -> dict[str, Any] | None:
