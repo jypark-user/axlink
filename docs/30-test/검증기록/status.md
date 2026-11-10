@@ -1,4 +1,4 @@
-# 검증 상태 요약 (2026-11-09)
+# 검증 상태 요약 (2026-11-10)
 
 이 파일은 `python scripts/verification_records.py status --md` 가 이력(runs.jsonl 등)에서 다시 만든다. 손으로 고치지 않는다.
 
@@ -6,11 +6,11 @@
 |---|---|
 | 합의된 전체 AC | 179 |
 | 공식 범위 제외(승인 기록 있음) | 0 |
-| 통과 AC | 68 |
-| **전체 완료율** (통과 AC ÷ 분모 179) | **38.0%** |
-| 실행한 시험(통과·실패) | 1112 |
-| **실행 시험 통과율** | **80.4%** |
-| 재검증 필요로 표시된 실행 | 0 |
+| 통과 AC | 53 |
+| **전체 완료율** (통과 AC ÷ 분모 179) | **29.6%** |
+| 실행한 시험(통과·실패) | 1246 |
+| **실행 시험 통과율** | **81.1%** |
+| 재검증 필요로 표시된 실행 | 31 |
 
 ## AC 상태별 건수 (별도 건수)
 
@@ -18,14 +18,14 @@
 |---|---|
 | auto-only | 5 |
 | decision-wait | 4 |
-| fail | 25 |
+| fail | 20 |
 | no-scenario | 2 |
 | not-run | 9 |
-| partial | 31 |
-| pass | 68 |
-| pass-ci-only | 6 |
+| partial | 29 |
+| pass | 53 |
+| pass-ci-only | 9 |
 | pass-decision-wait | 9 |
-| pass-defect-open | 1 |
-| pass-needs-evidence | 19 |
+| pass-needs-evidence | 16 |
+| revalidate | 23 |
 
 상태 뜻: pass 통과 · fail 실패 · blocked 실행 차단 · not-run 미실행 · decision-wait 결정 대기(미실행) · pass-decision-wait 근거는 통과했으나 결정 전(미완료) · auto-only 자동 시험만 통과, 명세 시나리오 미실행(미완료) · pass-ci-only 통과했으나 5174 실행 근거 없음(미완료) · revalidate 재검증 필요 · partial 일부만 · pass-needs-evidence 5174 통과했으나 필요한 증거 종류 없음(미완료) · pass-defect-open 통과했으나 걸린 결함이 열림·재확인 전(미완료) · excluded 공식 범위 제외 · no-scenario 시나리오 없음

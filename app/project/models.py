@@ -136,4 +136,8 @@ class ProjectSummaryResponse(BaseModel):
     openCorrectionActionCount: int  # noqa: N815
     openRiskCount: int  # noqa: N815
     openReviewRequestCount: int  # noqa: N815 — 미처리 확인 요청 (SWFR.WEB.006)
+    # 현황 화면과 같은 산정(dashboard.service.compute). 산출 불가면 None
+    representative: float | None = None
+    progressLevel: str | None = None  # noqa: N815 — L1~L4
+    progressDeviation: float | None = None  # noqa: N815 — WBS 실적 − 계획선. WBS 가 없으면 None
     updatedAt: str  # noqa: N815

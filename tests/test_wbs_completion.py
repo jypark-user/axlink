@@ -433,7 +433,7 @@ def plan_file(monkeypatch, tmp_path):
     holder: dict[str, wbs.WbsPlan] = {}
     path = tmp_path / "WBS.xlsx"
     path.write_bytes(b"x")
-    monkeypatch.setattr(dashboard_service, "_plan_path", lambda project_id, row: path)
+    monkeypatch.setattr(dashboard_service, "_plan_path", lambda project_id, row, cur=None: path)
     monkeypatch.setattr(wbs, "parse", lambda data: holder["plan"])
     return holder
 

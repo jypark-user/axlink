@@ -143,6 +143,30 @@ function projectColumns(role: Role | undefined): ColumnDef<ProjectSummaryRespons
   }
 
   columns.push({
+    id: 'progress',
+    // 현황 화면 진척 카드와 같은 값이다. WBS 실적이 아니면 추정으로 적는다
+    header: '진척률·계획 대비',
+    cell: ({ row }) => {
+      const { representative: rep, progressLevel: level, progressDeviation: dev } = row.original;
+      if (rep == null) return <span className="text-muted-foreground">-</span>;
+      return (
+        <span className="flex flex-col tnum">
+          <span>
+            {(rep * 100).toFixed(1)}%
+            {level !== 'L1' && <span className="ml-1 text-xs text-muted-foreground">추정</span>}
+          </span>
+          {dev != null && (
+            <span className={dev < 0 ? 'text-xs text-destructive' : 'text-xs text-muted-foreground'}>
+              {dev < 0 ? '−' : '+'}
+              {Math.abs(dev * 100).toFixed(1)}%p
+            </span>
+          )}
+        </span>
+      );
+    },
+  });
+
+  columns.push({
     id: 'alerts',
     // 요청·시정·리스크 건수다. 수집한 이슈 수가 아니다
     header: '요청·시정·리스크',

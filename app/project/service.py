@@ -12,7 +12,7 @@ import psycopg
 
 from app.auth import repository as auth_repository
 from app.auth.models import AuthPrincipal
-from app.common import errors
+from app.common import clock, errors
 from app.common.hashes import random_token, sha256_hex
 from app.common.paging import PageQuery, PageResponse
 from app.project import participants, repository
@@ -478,6 +478,7 @@ def list_projects(
     risks = repository.open_risks(cur, ids)
     corrections = repository.open_correction_actions(cur, ids)
     reviews = review_repository.open_counts(cur, ids)
+    progress = _list_progress(cur, ids)
 
     content = [
         ProjectSummaryResponse(
@@ -495,8 +496,22 @@ def list_projects(
             openCorrectionActionCount=corrections.get(str(r["id"]), 0),
             openRiskCount=risks.get(str(r["id"]), 0),
             openReviewRequestCount=reviews.get(str(r["id"]), 0),
+            representative=progress[str(r["id"])].representative,
+            progressLevel=progress[str(r["id"])].level,
+            progressDeviation=progress[str(r["id"])].wbsDeviation,
             updatedAt=r["updated_at"].isoformat(),
         )
         for r in rows
     ]
     return PageResponse.of(content, page, total)
+
+
+def _list_progress(cur: Any, ids: list[str]) -> dict[str, Any]:
+    """목록 칸의 진척률·편차. 현황 화면과 같은 함수로 낸다(AC-040-2). 값이 어긋나면 버그다.
+
+    산정 규칙(L1~L4)이 바뀌어도 목록이 따로 놀지 않게 여기서 다시 계산하지 않는다.
+    """
+    from app.dashboard import service as dashboard_service  # 순환 import 회피
+
+    today = clock.today()
+    return {pid: dashboard_service.compute(cur, pid, today) for pid in ids}
