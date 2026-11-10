@@ -8,6 +8,8 @@ DEC 에 걸린 값(이행률 분모, 승인률)은 단언하지 않고 결정 �
 
 from __future__ import annotations
 
+import re
+
 import pytest
 
 from app.db import fetch_all, fetch_one, tx
@@ -89,7 +91,7 @@ def test_UC_020_S07_등록_취소(target, s0):
     assert set(_reqs(target, s0)) == {"UR.PORT.001", "UR.PORT.002", "UR.PORT.003"}
 
 
-def test_UC_020_S01_표_형식_명세서_등록_제출(target, s0):
+def test_UC_020_S01_표_형식_명세서_등록_제출(target, s0, screen):
     """3건 추출(A 같음·B 다름·D 새), 상위 SR.PORT.001, 제출 뒤 확정 대기. 목록·이행률 불변 (AC-020-1·4).
 
     뒤 시나리오가 이 제출에 기대므로 판정은 모아서 끝에 한다(제출은 항목 판정과 무관하게 시도)."""
@@ -125,6 +127,7 @@ def test_UC_020_S01_표_형식_명세서_등록_제출(target, s0):
     if after_rate["verifiedRate"] != before_rate["verifiedRate"]:
         problems.append("제출로 이행률이 바뀌었다")
     assert not problems, problems
+    _ui_UC_020_S01(screen, s0)
 
 
 def test_UC_020_S11_제출_뒤_수정(target, s0):
@@ -164,7 +167,7 @@ def test_UC_021_S05_같음을_바꾸겠다고_선택(target, s0):
     assert target.get(f"{_base(s0)}/{bid}", headers=c1).json()["status"] == "SUBMITTED"
 
 
-def test_UC_021_S03_돌려보내기(target, s0):
+def test_UC_021_S03_돌려보내기(target, s0, screen):
     """사유 「중요도 재검토」로 돌려보냄 → 정리 중, 용역사 화면에 사유, 활동 기록 (AC-021-8)."""
     bid = s0.ids["BASELINE-1"]
     c1, v1 = auth(s0.tokens["TD-ACC-C1"]), auth(s0.tokens["TD-ACC-V1"])
@@ -176,15 +179,17 @@ def test_UC_021_S03_돌려보내기(target, s0):
     acts = target.get(f"/api/projects/{s0.ids['TD-PRJ-1']}/activity?size=50", headers=v1)
     if acts.status_code == 200:
         assert "돌려" in acts.text or "반려" in acts.text, "활동 기록에 돌려보냄이 없다"
+    _ui_UC_021_S03(screen, s0)
 
 
-def test_UC_020_S08_돌려보냄_뒤_재제출(target, s0):
+def test_UC_020_S08_돌려보냄_뒤_재제출(target, s0, screen):
     """사유 확인 → 고침 → 제출 → 확정 대기, 사유 표시 사라짐 (AC-020-7). API 부분."""
     bid = s0.ids["BASELINE-1"]
     v1 = auth(s0.tokens["TD-ACC-V1"])
     res = target.post(f"{_base(s0)}/{bid}/submit", headers=v1)
     assert res.status_code == 200 and res.json()["status"] == "SUBMITTED", res.text
     assert not res.json()["returnedReason"], "재제출 뒤에도 돌려보낸 사유가 남아 있다"
+    _ui_UC_020_S08(screen, s0)
 
 
 @pytest.mark.skip(reason="동시 확정은 두 요청을 겹쳐 보내야 한다. 5174 에서 따로 돈다")
@@ -242,7 +247,7 @@ def test_UC_021_S06_확정_실패_롤백(target, s0):
     """저장 실패 → 어느 것도 바뀌지 않음 (AC-021-5)."""
 
 
-def test_UC_021_S01_기존_없는_사업의_첫_확정(target, s0):
+def test_UC_021_S01_기존_없는_사업의_첫_확정(target, s0, screen):
     """TD-PRJ-9 에 같은 3행 명세서 → 확정 → 요구사항 3, 확정본 v1, 포함되지 않음 0, 확정자 (AC-021-1·4·9)."""
     v1, c1 = auth(s0.tokens["TD-ACC-V1"]), auth(s0.tokens["TD-ACC-C1"])
     pid = s0.ids["TD-PRJ-9"]
@@ -266,6 +271,7 @@ def test_UC_021_S01_기존_없는_사업의_첫_확정(target, s0):
     assert set(reqs) == {"UR.PORT.001", "UR.PORT.002", "UR.PORT.004"}
     state = target.get(_base(s0, "TD-PRJ-9"), headers=c1).json()
     assert state["outsideBaselineCount"] == 0
+    _ui_UC_021_S01(screen, s0)
 
 
 def test_UC_021_S07_확정_뒤_재수집(target, s0, replay):
@@ -312,7 +318,7 @@ def test_UC_021_S10_분모_AI_범위(target, s0):
 # ------------------------------------------------------------------ UC-022
 
 
-def test_UC_022_S01_커밋_이슈_연결(target, s0):
+def test_UC_022_S01_커밋_이슈_연결(target, s0, screen):
     """A 상세: TD-CMT-1(구현, 근거 「[UR.PORT.001]」), R1·R2·R9 커스텀 필드 연결. 근거 원문·링크 (AC-022-1·2)."""
     detail = _detail(target, s0, s0.ids["TD-REQ-A"])
     links = [lk for lk in detail["traceLinks"] if lk["status"] == "ACTIVE"]
@@ -326,6 +332,7 @@ def test_UC_022_S01_커밋_이슈_연결(target, s0):
     assert all(lk["evidenceKind"] and lk["externalUrl"] for lk in links), links
     assert all(lk["evidenceText"] for lk in links), "근거 원문이 비어 있는 자동 연결이 있다"
     assert by_from  # 사용만
+    _ui_UC_022_S01(screen, s0)
 
 
 def test_UC_022_S03_멱등_재생성(target, s0):
@@ -565,3 +572,68 @@ def test_UC_020_S09_명세서_문서_삭제_시도(target, s0):
     res = target.delete(f"/api/documents/{s0.ids['TD-DOC-1']}", headers=auth(s0.tokens["TD-ACC-V1"]))
     assert res.status_code in (400, 409), f"명세서 문서 삭제가 막히지 않았다: {res.status_code} {res.text[:200]}"
     assert target.get(f"/api/documents/{s0.ids['TD-DOC-1']}", headers=auth(s0.tokens["TD-ACC-V1"])).status_code == 200
+
+
+def _ui_UC_020_S01(screen, s0):
+    """화면: 용역사 기준선 화면 「발주기관 확정 대기」·추출 항목, 발주기관 요구사항 목록은 기존 3건."""
+    if not screen:
+        return
+    pid = s0.ids["TD-PRJ-1"]
+    sc = screen("TD-ACC-V1")
+    sc.open(f"/p/{pid}/requirement-baseline").see("발주기관 확정 대기", "UR.PORT.004", "SR.PORT.001")
+    sc.done()
+    sc = screen("TD-ACC-C1")
+    sc.open(f"/p/{pid}/traceability").see("UR.PORT.001", "UR.PORT.003")
+    sc.not_see("UR.PORT.004", selector="table")
+    sc.done()
+
+
+def _ui_UC_021_S03(screen, s0):
+    """화면: 용역사 기준선 화면에 돌려보낸 사유."""
+    if not screen:
+        return
+    sc = screen("TD-ACC-V1")
+    sc.open(f"/p/{s0.ids['TD-PRJ-1']}/requirement-baseline")
+    sc.see("발주기관이 돌려보냈습니다", "중요도 재검토")
+    sc.done()
+
+
+def _ui_UC_020_S08(screen, s0):
+    """화면: 재제출 뒤 「발주기관 확정 대기」, 돌려보낸 사유 사라짐."""
+    if not screen:
+        return
+    sc = screen("TD-ACC-V1")
+    sc.open(f"/p/{s0.ids['TD-PRJ-1']}/requirement-baseline").see("발주기관 확정 대기")
+    sc.not_see("발주기관이 돌려보냈습니다", "중요도 재검토")
+    sc.done()
+
+
+def _ui_UC_021_S01(screen, s0):
+    """화면: TD-PRJ-9 확정본 v1·확정자, 요구사항 3건."""
+    if not screen:
+        return
+    pid = s0.ids["TD-PRJ-9"]
+    sc = screen("TD-ACC-C1")
+    who = d.ACCOUNTS["TD-ACC-C1"].display
+    sc.open(f"/p/{pid}/requirement-baseline").see("확정본 v1", f"확정 {who}")
+    sc.shot("확정본")
+    sc.open(f"/p/{pid}/traceability").see("UR.PORT.001", "UR.PORT.002", "UR.PORT.004", "3건")
+    sc.done()
+
+
+def _ui_UC_022_S01(screen, s0):
+    """화면: A 줄에 커밋(근거 메시지)·커스텀 필드 이슈 R1·R2·R9 가 링크로 보인다."""
+    if not screen:
+        return
+    sc = screen("TD-ACC-C1")
+    sc.open(f"/p/{s0.ids['TD-PRJ-1']}/traceability").see("UR.PORT.001")
+    row = sc.page.locator("tr", has_text="UR.PORT.001").first
+    more = row.get_by_text(re.compile(r"외 \d+건 더 보기"))
+    if more.count():
+        more.first.click()
+    row_text = row.inner_text()
+    for want in ("[UR.PORT.001]", "RM-201", "RM-202", "RM-209"):
+        assert want in row_text, f"A 줄에 {want} 가 없다: {row_text!r}"
+    hrefs = [a.get_attribute("href") or "" for a in row.locator("a").all()]
+    assert sum(1 for h in hrefs if h.startswith("http")) >= 4, hrefs
+    sc.done()

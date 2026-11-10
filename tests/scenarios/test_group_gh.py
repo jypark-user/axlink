@@ -157,11 +157,12 @@ def test_UC_060_S17_잘못된_대상_결합(target, s0, llm):
     assert _done(events)["finishReason"] == "NUMBER_GUARD", _done(events)
 
 
-def test_UC_060_S06a_다른_사업_접근_거절(target, s0):
+def test_UC_060_S06a_다른_사업_접근_거절(target, s0, screen):
     """C2 / V3 가 TD-PRJ-1 을 범위에 넣어 질문 → 서버 거절 (AC-060-6)."""
     for acc in ("TD-ACC-C2", "TD-ACC-V3"):
         res = _conversation(target, s0, acc, [s0.ids["TD-PRJ-1"]])
         assert res.status_code == 403, (acc, res.status_code, res.text[:120])
+    _ui_UC_060_S06a(screen, s0)
 
 
 @pytest.mark.skip(reason="DEC-15(용역사 질의 허용) 결정 전. 결정 뒤 V1 의 답 또는 거절을 단언한다")
@@ -427,3 +428,18 @@ def test_UC_070_S05_색인_장애_뒤_재처리(target, s0):
 @pytest.mark.skip(reason="처리 중 작업자 재시작은 5174 환경 주입으로 본다")
 def test_UC_070_S07_재시작(target, s0):
     """대기열 복귀·반복 실패 사유 (AC-070-7)."""
+
+
+def _ui_UC_060_S06a(screen, s0):
+    """화면: C2·V3 의 사업 목록에 TD-PRJ-1 이 없고, 그 사업 질의 화면 주소는 권한 없음."""
+    if not screen:
+        return
+    from tests.fixtures.im009 import data as d
+
+    for acc in ("TD-ACC-C2", "TD-ACC-V3"):
+        sc = screen(acc).expect_denied()
+        sc.open("/projects").see("사업 목록")
+        sc.not_see(d.PROJECTS["TD-PRJ-1"].name)
+        sc.open(f"/p/{s0.ids['TD-PRJ-1']}/ask").see("접근 권한이 없습니다", selector="body")
+        assert sc.denied, f"{acc}: 화면만 막고 서버가 거절하지 않았다"
+        sc.done()

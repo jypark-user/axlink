@@ -33,6 +33,10 @@ dev = [
   "httpx>=0.27",
   "ruff>=0.7",
 ]
+# 시나리오의 화면 단계(tests/scenarios/ui.py). 브라우저는 설치된 Chrome 을 쓴다(내려받지 않는다)
+browser = [
+  "playwright>=1.49",
+]
 
 [build-system]
 requires = ["setuptools>=68"]

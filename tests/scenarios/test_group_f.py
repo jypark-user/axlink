@@ -177,7 +177,7 @@ def test_UC_051_S03a_발주기관_공백_보고(target, s0):
     assert target.post(f"/api/review-requests/{rid}/report", json={"body": "   ", "evidence": []}, headers=auth(s0.tokens["TD-ACC-V1"])).status_code in (400, 422)
 
 
-def test_UC_051_S01_조치_뒤_보고(target, s0):
+def test_UC_051_S01_조치_뒤_보고(target, s0, screen):
     """S1 → S1r: 변경 내역(실적 40→85, 제출본 없음→v1, 지연→제출, #204 진행중→해결, 진척률 30→39), 보고문 저장, 미처리 1 (AC-051-1·2)."""
     s0.s1r()
     det = _detail(target, s0, s0.ids["TD-RR-1"])
@@ -200,6 +200,7 @@ def test_UC_051_S01_조치_뒤_보고(target, s0):
     c1n = _get(target, s0, "/api/notifications", acc="TD-ACC-C1")
     s0.ids["N-C1-AFTER-REPORT"] = str([i["kind"] for i in c1n["items"]]) + f"|{c1n['unread']}"
     assert not problems, problems
+    _ui_UC_051_S01(screen, s0)
 
 
 def test_UC_053_S02_알림_흐름(target, s0):
@@ -253,7 +254,7 @@ def test_UC_051_S04_재요청_뒤_재보고(target, s0):
     assert _ratio(det["events"][0]["snapshot"].get("actual")) == 0.4 and _ratio(det["currentState"].get("actual")) == 0.85
 
 
-def test_UC_052_S01_확인완료(target, s0):
+def test_UC_052_S01_확인완료(target, s0, screen):
     """확인완료 → 확인자 김주무관, 미처리 1 → 0 (AC-052-2)."""
     rid = s0.ids["TD-RR-1"]
     base = int(s0.ids["PENDING-BASE"])
@@ -264,6 +265,7 @@ def test_UC_052_S01_확인완료(target, s0):
     assert det["status"] == "CONFIRMED" and det["confirmedByName"] == d.ACCOUNTS["TD-ACC-C1"].display, det
     assert _pending(target, s0) == base
     assert _ratio(det["events"][0]["snapshot"].get("actual")) == 0.4  # 확인 뒤 상태는 바뀌지 않는다
+    _ui_UC_052_S01(screen, s0)
 
 
 def test_UC_052_S04_중복(target, s0):
@@ -352,3 +354,33 @@ def test_UC_053_S04_내_차례(target, s0):
 @pytest.mark.skip(reason="원천 비교는 5174 실연동에서 본다. 정적 검사는 UC-050-S05")
 def test_UC_051_S05_원천_무기록(target, s0):
     """보고가 원천에 기록을 남기지 않는다 (AC-051-5)."""
+
+
+def _ui_UC_051_S01(screen, s0):
+    """화면: 용역사 요청 상세에 요청 시점과 지금이 나란히, 바뀐 줄 구분, 보고문."""
+    if not screen:
+        return
+    sc = screen("TD-ACC-V1")
+    sc.open(f"/p/{s0.ids['TD-PRJ-1']}/reviews?open={s0.ids['TD-RR-1']}")
+    dlg = "[role=dialog]"
+    sc.see("요청 시점과 지금", "조치 보고", d.REVIEW_REQUEST_TD_RR_1["report"], selector=dlg)
+    sc.see(re.compile(r"요청 이후 \d+개 값이 바뀌었습니다"), selector=dlg)
+    changed = sc.page.locator(f"{dlg} tbody tr[class*=bg-warning]")
+    assert changed.count() >= 4, f"바뀐 줄 {changed.count()} (기대 4 이상)"
+    body = sc.text(dlg)
+    for want in ("40", "85", "39.0"):
+        assert want in body, f"요청 상세에 {want} 가 없다"
+    sc.done()
+
+
+def _ui_UC_052_S01(screen, s0):
+    """화면: 요청 상세 「확인완료」·확인자, 현황 머리줄 미처리 건수가 기준으로 돌아옴."""
+    if not screen:
+        return
+    pid = s0.ids["TD-PRJ-1"]
+    sc = screen("TD-ACC-C1")
+    sc.open(f"/p/{pid}/reviews?open={s0.ids['TD-RR-1']}")
+    sc.see("확인완료", d.ACCOUNTS["TD-ACC-C1"].display, selector="[role=dialog]")
+    sc.shot("상세")
+    sc.open(f"/p/{pid}/dashboard").see(f"미처리 확인 요청 {int(s0.ids['PENDING-BASE'])}건")
+    sc.done()

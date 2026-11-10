@@ -458,7 +458,11 @@ function Summary({ b }: { b: BaselineResponse }): ReactNode {
 
 const NO_PARENT = '';
 
-/** 항목을 상위 요구사항별로 묶는다. 상위가 없는 명세서는 한 묶음이다. 순서는 명세서 순서. */
+/**
+ * 항목을 상위 요구사항별로 묶는다. 상위가 없는 명세서는 한 묶음이다. 순서는 명세서 순서.
+ * 상위는 항목이 그 코드를 적어야 묶인다(위치로 짐작하지 않는다). 묶인 항목이 없는 상위도
+ * 줄로 남긴다. 빼면 「상위 요구사항 n건」만 보이고 어떤 상위인지 화면에서 알 수 없다.
+ */
 function groupByParent(
   items: BaselineItem[],
   parents: BaselineParent[],
@@ -474,7 +478,7 @@ function groupByParent(
   return [
     ...parents.map((p) => ({ parent: p, items: groups.get(p.code) ?? [] })),
     { parent: null, items: groups.get(NO_PARENT) ?? [] },
-  ].filter((g) => g.items.length > 0);
+  ].filter((g) => g.parent !== null || g.items.length > 0);
 }
 
 function ItemsTable({
