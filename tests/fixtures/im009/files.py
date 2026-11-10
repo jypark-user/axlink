@@ -281,10 +281,19 @@ def design_doc_r1(path: Path) -> Path:
     return path
 
 
+def _committed_pdf(name: str):
+    """커밋해 둔 가상 시험자료 PDF 를 복사한다. 만든 방법·글꼴·해시는 pdf/README.md."""
+
+    def make(path: Path) -> Path:
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_bytes((Path(__file__).parent / "pdf" / name).read_bytes())
+        return path
+
+    return make
+
+
 # 생성기가 없는 자료. 투입 때 「자료 없음」으로 기록한다.
 MISSING = {
-    "TD-DOC-4": "과업지시서.pdf (한글 글꼴 포함 PDF 생성기 없음)",
-    "TD-DOC-7": "카드형-명세서.pdf",
     "TD-DOC-10": "손상파일.docx",
     "TD-DOC-11": "대용량.pdf",
     "TD-DOC-12": "설계검토회의록.hwp (HWP 5.0 바이너리)",
@@ -295,6 +304,8 @@ MISSING = {
 
 GENERATORS = {
     "TD-DOC-1": ("요구사항명세서_v1.0.docx", spec_v1),
+    "TD-DOC-4": ("과업지시서.pdf", _committed_pdf("과업지시서.pdf")),
+    "TD-DOC-7": ("카드형-명세서.pdf", _committed_pdf("카드형-명세서.pdf")),
     "TD-DOC-2": ("요구사항정의서.docx", requirements_definition),
     "TD-DOC-3": ("SW설계서_v0.9.docx", sw_design),
     "TD-DOC-5": ("회의록_2026-08-25.docx", meeting_minutes),

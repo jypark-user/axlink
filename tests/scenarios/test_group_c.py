@@ -247,6 +247,63 @@ def test_UC_021_S06_확정_실패_롤백(target, s0):
     """저장 실패 → 어느 것도 바뀌지 않음 (AC-021-5)."""
 
 
+def test_UC_020_S02_읽히지_않는_양식_보완(target, s0, screen):
+    """TD-PRJ-9, TD-DOC-7(카드형 명세서 PDF) 등록 → 「찾지 못했습니다」(0건) → 항목 3건 직접 추가 → 제출 (AC-020-1 E2).
+
+    화면 시나리오. 끝에 돌려보내고 등록을 취소해 TD-PRJ-9 를 비운다(UC-021-S01 이 같은 사업에 첫 확정을 한다)."""
+    if not screen:
+        pytest.skip("화면 시나리오. 원격 대상 + AXLINK_BROWSER_CHROME 에서 돈다")
+    pid = s0.ids["TD-PRJ-9"]
+    v1, c1 = auth(s0.tokens["TD-ACC-V1"]), auth(s0.tokens["TD-ACC-C1"])
+    s0._upload("TD-ACC-V1", "TD-PRJ-9", "TD-DOC-7")
+    cards = [
+        ("UR.CARD.001", "알림 수신 설정", "시민은 민원 처리 알림을 받을 방법(문자, 앱)을 고를 수 있다.", "필수"),
+        ("UR.CARD.002", "처리 결과 알림", "민원 처리가 끝나면 시민이 고른 방법으로 결과를 알린다.", "필수"),
+        ("UR.CARD.003", "알림 이력 조회", "시민은 지난 30일 동안 받은 알림을 목록으로 볼 수 있다.", "권장"),
+    ]
+    bid = None
+    try:
+        sc = screen("TD-ACC-V1")
+        page = sc.page
+        sc.open(f"/p/{pid}/requirement-baseline").see("요구사항 명세서")
+        page.locator("#spec-doc").click()
+        page.get_by_role("option", name=re.compile("카드형-명세서")).click()
+        page.get_by_role("button", name="명세서로 등록").click()
+        sc.see("명세서에서 요구사항을 찾지 못했습니다")
+        sc.shot("0건_안내")
+        for code, title, body, priority in cards:
+            page.get_by_role("button", name="항목 추가").click()
+            dlg = page.get_by_role("dialog")
+            dlg.locator("#b-code").fill(code)
+            dlg.locator("#b-title").fill(title)
+            dlg.locator("#b-body").fill(body)
+            dlg.locator("#b-priority").click()
+            page.get_by_role("option", name=priority, exact=True).click()
+            dlg.get_by_role("button", name="저장").click()
+            sc.see(code)
+        sc.shot("직접_추가_3건")
+        page.get_by_role("button", name="제출", exact=True).click()
+        sc.see("발주기관 확정 대기", "UR.CARD.001", "UR.CARD.002", "UR.CARD.003")
+        state = target.get(_base(s0, "TD-PRJ-9"), headers=v1).json()
+        bid = state["working"]["id"]
+        working = target.get(f"{_base(s0, 'TD-PRJ-9')}/{bid}", headers=v1).json()
+        assert working["status"] == "SUBMITTED", working["status"]
+        got = {i["code"]: (i["title"], i["priority"]) for i in working["items"]}
+        assert got == {
+            "UR.CARD.001": ("알림 수신 설정", "MUST"),
+            "UR.CARD.002": ("처리 결과 알림", "MUST"),
+            "UR.CARD.003": ("알림 이력 조회", "SHOULD"),
+        }, got
+        sc.done()
+    finally:
+        if bid is None:
+            state = target.get(_base(s0, "TD-PRJ-9"), headers=v1).json()
+            bid = (state.get("working") or {}).get("id")
+        if bid:
+            target.post(f"{_base(s0, 'TD-PRJ-9')}/{bid}/return", json={"reason": "시험 정리(UC-020-S02)"}, headers=c1)
+            target.delete(f"{_base(s0, 'TD-PRJ-9')}/{bid}", headers=v1)
+
+
 def test_UC_021_S01_기존_없는_사업의_첫_확정(target, s0, screen):
     """TD-PRJ-9 에 같은 3행 명세서 → 확정 → 요구사항 3, 확정본 v1, 포함되지 않음 0, 확정자 (AC-021-1·4·9)."""
     v1, c1 = auth(s0.tokens["TD-ACC-V1"]), auth(s0.tokens["TD-ACC-C1"])
