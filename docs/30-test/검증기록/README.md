@@ -41,7 +41,7 @@ IM-005 시험계획·결과서의 **원천 데이터**다. 문서 요약(IM-005 
   환경이든). 통과면 5174 에서 돈 가장 최근 실행이 통과여야 하고(아니면 `pass-ci-only`), 시나리오 `needs` 의 증거
   종류를 그 실행이 전부 증명해야 한다(아니면 `pass-needs-evidence`). 뒤에 돈 로컬 통과가 5174 근거를 지우지 않는다.
 - 증거 종류: `api` · `browser` · `live-tool` · `live-model` · `airgap`. 실행 기록의 `proves` 에 적는다(`record-junit
-  --proves`). 없으면 5174 의 `api`·`live` 실행은 `api` 만 증명한다. `env.tools` 에 replay 가 있으면 `live-tool`,
+  --proves`). 없으면 5174 의 `api`·`live` 실행은 `api` 만 증명한다. 시험이 junit 속성 `proves` 를 남기면(시나리오의 화면 단계, `tests/scenarios/ui.py`) `record-junit` 이 그 시험의 실행에만 그 증거 종류를 더하고 화면 사진 폴더를 `screenshots` 증거로 단다. 속성은 junit 형식 `xunit1` 에서만 남는다(`-o junit_family=xunit1`). `env.tools` 에 replay 가 있으면 `live-tool`,
   `env.model` 이 가짜면 `live-model` 은 증명하지 않는다. 모델이 설정돼 있다는 사실은 증거가 아니다.
 - 결함(`defects.jsonl` 마지막 상태)이 `open`·`fixed` 이면 그 결함의 `acs` 는 통과여도 `pass-defect-open` 이다.
 - AC 밖 집계(status.json): 세부 의무(AC 가 있는 것 / 없는 것), 공통 시나리오(COMMON), 공통 제약(CC).

@@ -8,6 +8,8 @@ S0 에서 시작해 UC-040-S01 이 S0r(TD-RR-1 등록)을 만들고, 다섯 축�
 
 from __future__ import annotations
 
+import re
+
 import pytest
 
 from tests.fixtures.im009 import data as d
@@ -51,7 +53,7 @@ def _total(body: dict):
 # ------------------------------------------------------------------ UC-040
 
 
-def test_UC_040_S01_세_사업_목록(target, s0):
+def test_UC_040_S01_세_사업_목록(target, s0, screen):
     """S0r: PRJ-1 진척 30.0%·편차 −36.9%p·미처리 1·리스크 1·승인 1/22. PRJ-3 지표 「—」·미처리 0 (AC-040-1·2·3·4)."""
     s0.s0r()
     rows = {p["id"]: p for p in _get(target, s0, "/api/projects?size=100")["content"]}
@@ -73,6 +75,7 @@ def test_UC_040_S01_세_사업_목록(target, s0):
         problems.append(f"PRJ-3 미처리 {p3['openReviewRequestCount']}")
     assert p9["id"]
     assert not problems, problems
+    _ui_UC_040_S01(screen, s0)
 
 
 def test_UC_040_S02_용역사_목록(target, s0):
@@ -178,12 +181,13 @@ def test_UC_041_S03_L3_추정(target, s0):
     assert "추정" in str(prog) or "L1" in str(prog["warnings"]), "추정 표시·L1 아님 경고가 없다"
 
 
-def test_UC_041_S04_재료_없음(target, s0):
+def test_UC_041_S04_재료_없음(target, s0, screen):
     """TD-PRJ-3: 진척 산출 안 함, 카드 데이터 없음, 스냅샷 산정 불가 (AC-041-5·6). API 부분."""
     pid = s0.ids["TD-PRJ-3"]
     prog = _get(target, s0, f"/api/projects/{pid}/progress?at={T0}")
     assert prog["representative"] is None, f"재료 없는 사업의 진척이 {prog['representative']} 로 산출됐다(DEF-V003)"
     assert prog["wbs"]["value"] is None and prog["issue"]["value"] is None
+    _ui_UC_041_S04(screen, s0)
 
 
 def test_UC_041_S05_수동_스냅샷(target, s0):
@@ -444,3 +448,37 @@ def test_UC_041_S06_스냅샷_추이(target, s0):
     assert round(b["wbsPlannedPct"] - a["wbsPlannedPct"], 2) == 0.59
     t0 = rows["2026-09-15"]
     assert round(t0["representativePct"], 1) == 30.0 and round(t0["wbsPlannedPct"], 2) == 66.95, t0
+
+
+def _ui_UC_040_S01(screen, s0):
+    """화면: 발주기관 목록 3건, PRJ-1 진척 30.0%·편차·요청 1·리스크 1, PRJ-3 비율 없음·요청 없음."""
+    if not screen:
+        return
+    sc = screen("TD-ACC-C1")
+    sc.open("/projects").see("총 3건")
+    sc.not_see(d.PROJECTS["TD-PRJ-2"].name)
+    p1 = sc.row(d.PROJECTS["TD-PRJ-1"].name)
+    for want in ("30.0%", "%p", "요청 1", "리스크 1"):
+        assert want in p1, f"PRJ-1 줄에 {want} 가 없다: {p1!r}"
+    p3 = sc.row(d.PROJECTS["TD-PRJ-3"].name)
+    assert "%" not in p3 and "요청" not in p3, p3
+    sc.done()
+    sc = screen("TD-ACC-V1")
+    sc.open("/projects").see("총 2건", d.PROJECTS["TD-PRJ-1"].name, d.PROJECTS["TD-PRJ-9"].name)
+    sc.done()
+
+
+def _ui_UC_041_S04(screen, s0):
+    """화면: TD-PRJ-3 일정 고지문·「산출 불가」, 스냅샷을 기록하면 「산정 불가」."""
+    if not screen:
+        return
+    pid = s0.ids["TD-PRJ-3"]
+    sc = screen("TD-ACC-C1")
+    sc.open(f"/p/{pid}/schedule").see("진척률 산정의 핵심 입력이 빠져 있습니다", "산출 불가")
+    sc.not_see(re.compile(r"(?<![\d.])0(\.0)?%"))
+    sc.shot("일정")
+    res = s0.c.post(f"/api/projects/{pid}/snapshots", headers=auth(s0.tokens["TD-ACC-C1"]))
+    assert res.status_code == 200, res.text
+    sc.open(f"/p/{pid}/snapshots").see("산정 불가")
+    sc.not_see(re.compile(r"(?<![\d.])0(\.0)?%"))
+    sc.done()

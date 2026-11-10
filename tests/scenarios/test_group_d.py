@@ -9,6 +9,8 @@ WBS 변형(합≠1·머리글 없음·v2·L2·산출물 열 변경)은 저장소
 
 from __future__ import annotations
 
+import re
+
 import pytest
 
 from app.db import fetch_all, tx
@@ -184,7 +186,7 @@ def test_UC_031_S07_지연_판정(target, s0):
     assert {items[k]["status"] for k in ("3.3", "3.4", "3.5")} <= {"MISSING", "NONE"}, [items[k]["status"] for k in ("3.3", "3.4", "3.5")]
 
 
-def test_UC_031_S01_올려_제출하고_승인(target, s0):
+def test_UC_031_S01_올려_제출하고_승인(target, s0, screen):
     """TD-DOC-3 업로드(3.2) → SW설계서 제출(S0a) → C1 승인. 판정 제출(연결 문서), 승인자, 지표 불변 (AC-031-1·3·4·6)."""
     before = (_progress(target, s0)["representative"], _completion(target, s0)["completionRate"])
     s0.s0a()
@@ -202,6 +204,7 @@ def test_UC_031_S01_올려_제출하고_승인(target, s0):
     after = (_progress(target, s0)["representative"], _completion(target, s0)["completionRate"])
     assert after == before, (before, after)
     assert round(after[0], 4) == 0.3 and round(after[1], 4) == 0.15
+    _ui_UC_031_S01(screen, s0)
 
 
 def test_UC_031_S11_승인_중복(target, s0):
@@ -308,7 +311,7 @@ def test_UC_032_S09_WBS_없음(target, s0):
 # ------------------------------------------------------------------ UC-031 S04 (반려 뒤 재제출)
 
 
-def test_UC_031_S04_반려_뒤_재제출_이력(target, s0):
+def test_UC_031_S04_반려_뒤_재제출_이력(target, s0, screen):
     """v2 반려 「목차 누락」 → v3 제출 → 점검표에 현행 v3, 이력에 v2·사유 (AC-031-4·5)."""
     pid = s0.ids["TD-PRJ-1"]
     c1 = auth(s0.tokens["TD-ACC-C1"])
@@ -329,6 +332,7 @@ def test_UC_031_S04_반려_뒤_재제출_이력(target, s0):
     past = {h["version"]: h for h in now["previousVersions"]}
     assert past["v2"]["status"] == "REJECTED" and past["v2"]["rejectReason"] == "목차 누락", past
     assert past["v2"]["decidedBy"] and past["v2"]["decidedAt"], "반려한 사람·일자가 없다"
+    _ui_UC_031_S04(screen, s0)
 
 
 def test_UC_031_S05b_지난_버전_승인(target, s0):
@@ -561,3 +565,45 @@ def test_UC_033_S02_교체_뒤_재지정(target, s0):
 @pytest.mark.skip(reason="DEC-10 결정 전. 지정 API 가 없어 거절(403)과 미구현(404)을 가를 수 없다")
 def test_UC_033_S03_용역사_지정_시도(target, s0):
     """V1 지정 → 거절 (AC-033-1)."""
+
+
+def _ui_UC_031_S01(screen, s0):
+    """화면: 3.2 판정 제출, 점검표 SW설계서 v1 승인·승인자, 일정 화면 진척 30.0%·완료 확인율 15.0%."""
+    if not screen:
+        return
+    pid = s0.ids["TD-PRJ-1"]
+    sc = screen("TD-ACC-C1")
+    sc.open(f"/p/{pid}/deliverables").see("SW설계서")
+    row = sc.row("SW설계서")
+    assert "제출" in row and "지연" not in row, row
+    wp = _checklist_row(sc, "SOFTWARE_DESIGN").inner_text()
+    assert "v1" in wp and "승인" in wp and d.ACCOUNTS["TD-ACC-C1"].display in wp, wp
+    sc.shot("점검표")
+    # 완료 확인율은 화면이 소수 없이 「15%」로 쓴다
+    sc.open(f"/p/{pid}/schedule").see(
+        re.compile(r"보고 진척률\s*30\.0%"), re.compile(r"완료 확인율\s*15(\.0)?%")
+    )
+    sc.done()
+
+
+def _ui_UC_031_S04(screen, s0):
+    """화면: 점검표 SW설계서 현행 v3, 지난 버전에 v2 반려·사유·결정자."""
+    if not screen:
+        return
+    sc = screen("TD-ACC-C1")
+    sc.open(f"/p/{s0.ids['TD-PRJ-1']}/deliverables")
+    row = _checklist_row(sc, "SOFTWARE_DESIGN")
+    row.get_by_text(re.compile(r"지난 버전 \d+건")).click()
+    text = row.inner_text()
+    for want in ("v3", "v2", "목차 누락", d.ACCOUNTS["TD-ACC-C1"].display):
+        assert want in text, f"점검표 SW설계서 줄에 {want} 가 없다: {text!r}"
+    sc.done()
+
+
+def _checklist_row(sc, product_type: str):
+    """산출물 화면의 인도 점검표(버전 열이 있는 표)를 펴고 그 유형 줄을 준다."""
+    sc.page.get_by_text("인도 점검표 보기").click()
+    table = sc.page.locator("table").filter(has=sc.page.locator("th", has_text="버전"))
+    row = table.locator("tbody tr", has_text=product_type).first
+    row.wait_for()
+    return row

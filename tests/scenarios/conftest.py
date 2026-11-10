@@ -20,7 +20,9 @@ import httpx
 import pytest
 
 from tests.conftest import requires_db
-from tests.fixtures.im009.seed import Seeder
+from tests.fixtures.im009 import data as d
+from tests.fixtures.im009.seed import PASSWORD, Seeder
+from tests.scenarios.ui import CHROME, open_ui
 
 TARGET_URL = os.environ.get("AXLINK_TARGET_URL")
 
@@ -46,6 +48,28 @@ def s0(target):
         yield s
     finally:
         s.cleanup()
+
+
+@pytest.fixture(scope="module")
+def ui():
+    """원격 대상 + AXLINK_BROWSER_CHROME 일 때만 브라우저. 아니면 None (tests/scenarios/ui.py)."""
+    yield from open_ui(TARGET_URL, PASSWORD)
+
+
+@pytest.fixture
+def screen(ui, request, record_property):
+    """`screen("TD-ACC-C1")`(또는 아이디) → 그 계정으로 로그인한 화면. 브라우저가 없으면 None."""
+    if ui is None:
+        return None
+    name = request.node.originalname or request.node.name
+
+    def make(acc: str):
+        username = d.ACCOUNTS[acc].username if acc in d.ACCOUNTS else acc
+        sc = ui.screen(username, name)
+        sc.record_property = record_property
+        return sc
+
+    return make
 
 
 def auth(token: str) -> dict[str, str]:
@@ -86,6 +110,10 @@ LOCAL_ONLY: dict[str, str] = {
 REMOTE_KNOWN_FAILURES: dict[str, str] = {
 }
 
+# 화면 단계에서만 드러나는 실패. API 단언은 통과하므로 브라우저가 있는 원격 실행에만 붙인다
+BROWSER_KNOWN_FAILURES: dict[str, str] = {
+}
+
 # 이 표시가 붙은 예상 실패는 고친 PR 이 아직 병합 전이다. 통과해도(XPASS) 실패로 보지 않는다
 PENDING_FIX = "수정 PR"
 
@@ -106,6 +134,8 @@ def pytest_collection_modifyitems(config, items):
         reason = KNOWN_FAILURES.get(item.originalname or item.name)
         if TARGET_URL:
             reason = reason or REMOTE_KNOWN_FAILURES.get(item.originalname or item.name)
+        if TARGET_URL and CHROME:
+            reason = reason or BROWSER_KNOWN_FAILURES.get(item.originalname or item.name)
         if reason:
             # 수정 PR 이 열린 결함은 그 PR 에서 시험이 통과해도 실패로 보지 않는다. 수정 PR 마다
             # 이 표의 줄을 지우면 이웃한 줄끼리 병합 충돌이 난다. 수정 PR 이 병합되면 줄을 지운다

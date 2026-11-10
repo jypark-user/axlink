@@ -780,6 +780,19 @@ def record_junit(a: argparse.Namespace) -> int:
             evidence = [{"path": a.evidence, "sha256": junit_sha, "kind": "junit"}]
             if a.url:
                 evidence.append({"path": a.url, "kind": "url"})
+            # 시험이 junit 속성으로 남긴 증거 종류(화면 단계를 끝까지 돈 시험의 browser 등)
+            props = {
+                (pr.get("name"), pr.get("value"))
+                for pr in tc.iter("property")
+                if pr.get("name") in ("proves", "screenshots")
+            }
+            run_proves = [x for x in a.proves.split(",") if x] if a.proves else []
+            run_proves += sorted({v for k, v in props if k == "proves"} - set(run_proves))
+            # 증거 폴더는 저장소 기준 경로(var/verify/...)로 적는다. 실행 PC 절대 경로는 뺀다
+            for k, v in props:
+                if k == "screenshots":
+                    rel = v[v.find("var/verify/") :] if "var/verify/" in v else v
+                    evidence.append({"path": rel, "kind": "screenshots"})
             row = {
                 "run_id": f"{a.cycle}-R{n:04d}",
                 "cycle_id": a.cycle,
@@ -803,7 +816,7 @@ def record_junit(a: argparse.Namespace) -> int:
                     "model": a.model,
                 },
                 "mode": a.mode,
-                **({"proves": a.proves.split(",")} if a.proves else {}),
+                **({"proves": run_proves} if run_proves else {}),
                 "start_state": {"state": sc["state"][:200], "actor": "", "project": ""},
                 "procedure": f"pytest {tc.get('classname')}::{tc.get('name')}",
                 "expected": sc["expected"],

@@ -8,6 +8,8 @@
 
 from __future__ import annotations
 
+import re
+
 import pytest
 
 from tests.fixtures.im009 import data as d
@@ -139,7 +141,7 @@ def test_UC_001_S06_비밀번호_재설정(target, s0):
 # ------------------------------------------------------------------ UC-002
 
 
-def test_UC_002_S01_등록_직후_상태(target, s0):
+def test_UC_002_S01_등록_직후_상태(target, s0, screen):
     """TD-PRJ-3: 요구사항 미등록, 진척 산출 불가, 점검표 22종 미제출, 미처리 0 (AC-002-1)."""
     h = auth(s0.tokens["TD-ACC-C1"])
     pid = s0.ids["TD-PRJ-3"]
@@ -153,6 +155,7 @@ def test_UC_002_S01_등록_직후_상태(target, s0):
     assert all(i["status"] not in ("SUBMITTED", "APPROVED") for i in wps["items"])
     rr = target.get(f"/api/projects/{pid}/review-requests", headers=h).json()
     assert rr["totalElements"] == 0
+    _ui_UC_002_S01(screen, s0)
 
 
 def test_UC_002_S02_다른_발주기관(target, s0):
@@ -233,7 +236,7 @@ def test_UC_002_S05_삭제_비밀번호(target, s0):
 # ------------------------------------------------------------------ UC-003
 
 
-def test_UC_003_S01_초대_가입_범위(target, s0):
+def test_UC_003_S01_초대_가입_범위(target, s0, screen):
     """업체 지정 초대 → 가입 → 조직 V1·역할 용역사·TD-PRJ-1 만, TD-PRJ-2 거절 (AC-003-1·2)."""
     h = auth(s0.tokens["TD-ACC-C1"])
     inv = target.post(
@@ -259,6 +262,7 @@ def test_UC_003_S01_초대_가입_범위(target, s0):
     listing = target.get("/api/projects?size=100", headers=tok).json()
     assert {p["id"] for p in listing["content"]} == {s0.ids["TD-PRJ-1"]}
     s0.ids["UC-003-S01:token"] = inv["token"]
+    _ui_UC_003_S01(screen, s0)
 
 
 def test_UC_003_S02_취소된_링크(target, s0):
@@ -405,7 +409,7 @@ def test_UC_004_S02_틀린_자격증명(target, s0):
     assert "accessToken" not in wrong.text and "accessToken" not in disabled.text
 
 
-def test_UC_004_S03_직접_주소_접근(target, s0):
+def test_UC_004_S03_직접_주소_접근(target, s0, screen):
     """V1 이 플랫폼 설정 주소·TD-PRJ-2 주소 → 서버 거절 (AC-004-2)."""
     v1 = auth(s0.tokens["TD-ACC-V1"])
     assert target.get("/api/admin/organizations", headers=v1).status_code == 403
@@ -415,6 +419,7 @@ def test_UC_004_S03_직접_주소_접근(target, s0):
         403,
         404,
     )
+    _ui_UC_004_S03(screen, s0)
 
 
 def test_UC_004_S04_비밀번호_변경(target, s0):
@@ -446,3 +451,58 @@ def test_UC_004_S05_갱신_토큰_재사용(target, s0):
     assert first.status_code == 200, first.text
     second = target.post("/api/auth/refresh", json={"refreshToken": login["refreshToken"]})
     assert second.status_code in (401, 403), second.text
+
+
+def _ui_UC_002_S01(screen, s0):
+    """화면: 목록 진척 칸 「-」, 일정 「산출 불가」·고지문, 요구사항·점검표·요청 없음."""
+    if not screen:
+        return
+    sc = screen("TD-ACC-C1")
+    pid, name = s0.ids["TD-PRJ-3"], d.PROJECTS["TD-PRJ-3"].name
+    sc.open("/projects").see(name)
+    row = sc.row(name)
+    assert "%" not in row, f"등록 직후 사업의 목록 줄에 비율이 보인다: {row!r}"
+    sc.shot("목록")
+    sc.open(f"/p/{pid}/schedule").see("산출 불가", "WBS 가 없습니다")
+    sc.not_see(re.compile(r"(?<![\d.])0(\.0)?%"))
+    sc.shot("일정")
+    sc.open(f"/p/{pid}/traceability").see("요구사항이 없습니다")
+    sc.shot("요구사항")
+    sc.open(f"/p/{pid}/deliverables")
+    sc.page.get_by_text("인도 점검표 보기").click()
+    sc.see("사업수행계획서")
+    rows = sc.page.locator("tbody tr").filter(has_text="없음")
+    assert rows.count() == 22, f"점검표 미제출 줄 {rows.count()} (기대 22)"
+    sc.shot("점검표")
+    sc.open(f"/p/{pid}/reviews").see("확인 요청이 없습니다")
+    sc.done()
+
+
+def _ui_UC_003_S01(screen, s0):
+    """화면: 가입한 계정으로 로그인 → 업체 이름, 목록에 TD-PRJ-1 만, TD-PRJ-2 주소는 거절."""
+    if not screen:
+        return
+    sc = screen("td-v0-s01").expect_denied()
+    sc.open("/projects").see(d.PROJECTS["TD-PRJ-1"].name, "총 1건")
+    sc.see(d.ORGS["TD-ORG-V1"].name, selector="body")
+    sc.not_see(d.PROJECTS["TD-PRJ-2"].name, d.PROJECTS["TD-PRJ-9"].name)
+    sc.shot("목록")
+    sc.open(f"/p/{s0.ids['TD-PRJ-2']}").see("접근 권한이 없습니다", selector="body")
+    assert sc.denied, "화면만 막고 서버가 거절하지 않았다"
+    sc.done()
+
+
+def _ui_UC_004_S03(screen, s0):
+    """화면: V1 이 관리 화면·TD-PRJ-2 주소를 직접 열면 권한 없음 화면."""
+    if not screen:
+        return
+    sc = screen("TD-ACC-V1").expect_denied()
+    p2 = s0.ids["TD-PRJ-2"]
+    for path in ("/admin/accounts", f"/p/{p2}", f"/p/{p2}/dashboard"):
+        before = len(sc.denied)
+        sc.open(path).see("접근 권한이 없습니다", selector="body")
+        # 관리 화면은 역할을 보고 화면이 API 를 부르지 않는다. 서버 거절은 위 API 단언이 본다
+        if path.startswith("/p/"):
+            assert len(sc.denied) > before, f"{path}: 화면만 막고 서버가 거절하지 않았다"
+        sc.shot(path.strip("/").split("/")[0])
+    sc.done()
