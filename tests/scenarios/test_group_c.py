@@ -44,6 +44,14 @@ def _detail(target, s0, rid: str, acc: str = "TD-ACC-C1") -> dict:
     return res.json()
 
 
+def _activity_kinds(target, s0, baseline_id: str, acc: str = "TD-ACC-V1") -> list[str]:
+    """그 기준선을 대상으로 한 활동 기록 종류(오래된 것부터). AC-020-9."""
+    res = target.get(f"/api/projects/{s0.ids['TD-PRJ-1']}/activity?size=100", headers=auth(s0.tokens[acc]))
+    assert res.status_code == 200, res.text
+    rows = [a for a in res.json()["content"] if a["targetType"] == "REQUIREMENT_BASELINE" and a["targetKey"] == baseline_id]
+    return [a["kind"] for a in sorted(rows, key=lambda a: a["occurredAt"])]
+
+
 def _links(cur, pid: str) -> set[tuple]:
     rows = fetch_all(
         cur,
@@ -80,7 +88,7 @@ def test_UC_020_S10_다른_사업_문서(target, s0):
 
 
 def test_UC_020_S07_등록_취소(target, s0):
-    """등록 뒤 취소 → 확정 전 목록 없음, TD-DOC-1 남음, 기존 3건 그대로 (AC-020-6)."""
+    """등록 뒤 취소 → 확정 전 목록 없음, TD-DOC-1 남음, 기존 3건 그대로, 등록·취소 활동 기록 (AC-020-6·9)."""
     v1 = auth(s0.tokens["TD-ACC-V1"])
     made = target.post(_base(s0), json={"documentId": s0.ids["TD-DOC-1"]}, headers=v1)
     assert made.status_code == 201, made.text
@@ -89,10 +97,11 @@ def test_UC_020_S07_등록_취소(target, s0):
     assert target.get(_base(s0), headers=v1).json()["state"] == "NONE"
     assert target.get(f"/api/documents/{s0.ids['TD-DOC-1']}", headers=v1).status_code == 200
     assert set(_reqs(target, s0)) == {"UR.PORT.001", "UR.PORT.002", "UR.PORT.003"}
+    assert _activity_kinds(target, s0, bid) == ["BASELINE_REGISTERED", "BASELINE_DISCARDED"]
 
 
 def test_UC_020_S01_표_형식_명세서_등록_제출(target, s0, screen):
-    """3건 추출(A 같음·B 다름·D 새), 상위 SR.PORT.001, 제출 뒤 확정 대기. 목록·이행률 불변 (AC-020-1·4).
+    """3건 추출(A 같음·B 다름·D 새), 상위 SR.PORT.001, 제출 뒤 확정 대기. 목록·이행률 불변, 등록·제출 활동 기록 (AC-020-1·4·9).
 
     뒤 시나리오가 이 제출에 기대므로 판정은 모아서 끝에 한다(제출은 항목 판정과 무관하게 시도)."""
     v1, c1 = auth(s0.tokens["TD-ACC-V1"]), auth(s0.tokens["TD-ACC-C1"])
@@ -126,6 +135,9 @@ def test_UC_020_S01_표_형식_명세서_등록_제출(target, s0, screen):
     after_rate = target.get(f"/api/projects/{s0.ids['TD-PRJ-1']}/requirements/summary", headers=c1).json()
     if after_rate["verifiedRate"] != before_rate["verifiedRate"]:
         problems.append("제출로 이행률이 바뀌었다")
+    kinds = _activity_kinds(target, s0, b["id"])
+    if kinds != ["BASELINE_REGISTERED", "BASELINE_SUBMITTED"]:
+        problems.append(f"활동 기록 {kinds} (기대 등록·제출)")
     assert not problems, problems
     _ui_UC_020_S01(screen, s0)
 
