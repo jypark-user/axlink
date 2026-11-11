@@ -33,6 +33,7 @@ from fastapi.responses import JSONResponse, PlainTextResponse, Response
 
 from app.common import errors
 from tests.fixtures.im009 import data as d
+from tests.fixtures.im009 import embed_proxy
 from tests.fixtures.im009 import files as fixture_files
 from tests.fixtures.im009.replay import Faults, ReplaySource
 
@@ -79,6 +80,7 @@ def _faults_from(body: dict[str, Any]) -> Faults:
 
 def create_app(source: ReplaySource) -> FastAPI:
     app = FastAPI(title="IM-009 원천 재생")
+    embed_proxy.mount(app)  # 5174 전용 임베딩 장애 주입(UC-070-S05·S07)
     gh_items = source.fetch_items("GITHUB")
     rm_items = source.fetch_items("REDMINE")
     gh_file = source.fetch_file("GITHUB")
