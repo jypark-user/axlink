@@ -1,6 +1,7 @@
 """IM-009 공통 시험 자료의 가상 파일을 만든다 (docs/30-test/IM-009-공통시험자료.md 4.2·4.4·5.1·5.2).
 
-여기서 만드는 것은 DOCX·XLSX·MD 다. PDF(TD-DOC-4·7·11·16)·HWP(TD-DOC-12·15)·HWPX(TD-DOC-13)·
+여기서 만드는 것은 DOCX·XLSX·MD 다. PDF(TD-DOC-4·7·16)·HWP(TD-DOC-12·15)·HWPX(TD-DOC-13)는
+커밋해 둔 가상 파일을 복사한다(pdf/·hwp/ 의 README 에 제작 절차·해시). 대용량 PDF(TD-DOC-11)·
 손상 파일(TD-DOC-10)은 생성기가 없어 `make_all()` 이 만들지 않는다. `MISSING` 목록으로 돌려주고
 투입 스크립트가 「자료 없음」으로 기록한다. 내용은 문서의 「핵심 내용·위치」 열과 같아야 한다.
 값을 바꾸면 IM-009 7절 기대값이 깨진다.
@@ -281,12 +282,12 @@ def design_doc_r1(path: Path) -> Path:
     return path
 
 
-def _committed_pdf(name: str):
-    """커밋해 둔 가상 시험자료 PDF 를 복사한다. 만든 방법·글꼴·해시는 pdf/README.md."""
+def _committed_pdf(name: str, folder: str = "pdf"):
+    """커밋해 둔 가상 시험자료를 복사한다. 만든 방법·해시는 pdf/README.md·hwp/README.md."""
 
     def make(path: Path) -> Path:
         path.parent.mkdir(parents=True, exist_ok=True)
-        path.write_bytes((Path(__file__).parent / "pdf" / name).read_bytes())
+        path.write_bytes((Path(__file__).parent / folder / name).read_bytes())
         return path
 
     return make
@@ -296,16 +297,16 @@ def _committed_pdf(name: str):
 MISSING = {
     "TD-DOC-10": "손상파일.docx",
     "TD-DOC-11": "대용량.pdf",
-    "TD-DOC-12": "설계검토회의록.hwp (HWP 5.0 바이너리)",
-    "TD-DOC-13": "설계검토회의록.hwpx",
-    "TD-DOC-15": "암호문서.hwp",
-    "TD-DOC-16": "스캔문서.pdf",
 }
 
 GENERATORS = {
     "TD-DOC-1": ("요구사항명세서_v1.0.docx", spec_v1),
     "TD-DOC-4": ("과업지시서.pdf", _committed_pdf("과업지시서.pdf")),
     "TD-DOC-7": ("카드형-명세서.pdf", _committed_pdf("카드형-명세서.pdf")),
+    "TD-DOC-16": ("스캔문서.pdf", _committed_pdf("스캔문서.pdf")),
+    "TD-DOC-12": ("설계검토회의록.hwp", _committed_pdf("설계검토회의록.hwp", "hwp")),
+    "TD-DOC-13": ("설계검토회의록.hwpx", _committed_pdf("설계검토회의록.hwpx", "hwp")),
+    "TD-DOC-15": ("암호문서.hwp", _committed_pdf("암호문서.hwp", "hwp")),
     "TD-DOC-2": ("요구사항정의서.docx", requirements_definition),
     "TD-DOC-3": ("SW설계서_v0.9.docx", sw_design),
     "TD-DOC-5": ("회의록_2026-08-25.docx", meeting_minutes),

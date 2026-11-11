@@ -6,6 +6,8 @@ PDF 는 라이브러리 없이 손으로 만든다. 객체 몇 개와 xref 표�
 
 from pathlib import Path
 
+import pytest
+
 from app.document import extractor
 
 
@@ -75,11 +77,23 @@ def test_표_없는_쪽은_본문만_나온다(tmp_path: Path):
     assert "Progress report" in result.text and "|" not in result.text
 
 
-def test_글자_없는_쪽은_스캔본으로_본다(tmp_path: Path):
+def test_글자가_한_자도_없는_PDF_는_스캔_문서로_지원_제한이다(tmp_path: Path):
+    """쪽은 있는데 뽑을 글자가 없다 → 손상이 아니라 「지원 제한(스캔)」(AC-070-10, UC-070-S13).
+
+    예전에는 「텍스트 없음」 자리 글자로 처리 완료가 됐다. 빈 문서가 완료로 보이면 안 된다."""
     path = tmp_path / "scan.pdf"
     path.write_bytes(_pdf_bytes(with_table=False, prose=""))
 
-    result = extractor.extract(path, "PDF")
+    with pytest.raises(extractor.UnsupportedDocument) as exc:
+        extractor.extract(path, "PDF")
 
-    assert "텍스트 없음" in result.text
-    assert "스캔" in result.warning
+    assert exc.value.kind == "스캔"
+    assert "스캔" in str(exc.value)
+
+
+def test_시험자료_스캔_PDF_도_지원_제한이다():
+    """TD-DOC-16: 정상 가상 문서를 그림으로 렌더링한 PDF(fixtures/im009/pdf/make_scan_pdf.py)."""
+    path = Path(__file__).parent / "fixtures" / "im009" / "pdf" / "스캔문서.pdf"
+    with pytest.raises(extractor.UnsupportedDocument) as exc:
+        extractor.extract(path, "PDF")
+    assert exc.value.kind == "스캔"
