@@ -13,9 +13,10 @@ import re
 
 import pytest
 
-from app.db import fetch_all, tx
+from app.db import fetch_all, fetch_one, tx
 from tests.fixtures.im009 import data as d
 from tests.fixtures.im009 import files
+from tests.fixtures.im009.db_faults import fail_insert, rejected
 from tests.fixtures.im009.replay import Faults, ReplaySource, install, restore_faults, tool_base
 from tests.scenarios.conftest import auth
 
@@ -580,9 +581,40 @@ def test_UC_031_S10_승인률(target, s0):
     """승인률 (AC-031-9)."""
 
 
-@pytest.mark.skip(reason="기록 저장 실패 주입은 DB 장애 모의가 필요하다. 별도 자동 시험으로 설계")
 def test_UC_032_S07_기록_실패_롤백(target, s0):
-    """저장 실패 → 상태 불변 (AC-032-7)."""
+    """요청·보고 뒤 완료 기록 저장 실패 주입 → 확인 실패, 요청 상태 「조치보고」·완료 기록·완료 확인율 불변 (AC-032-7).
+
+    명세의 작업은 3.2 다. 이 모듈에서는 앞 시나리오가 3.2 를 이미 확인해(S01·S02) 열린 요청을 새로 못 만들고,
+    요청을 취소하는 기능이 없어 실패 뒤 3.2 를 S0a 로 되돌릴 수도 없다. 그래서 아직 손대지 않은 말단 3.4 로
+    같은 흐름을 본다. 실패는 확인의 마지막 단계(완료 기록 저장)에 건다. 그 앞의 상태 변경·이벤트가 되돌아가야 한다."""
+    pid = s0.ids["TD-PRJ-1"]
+    c1, v1 = auth(s0.tokens["TD-ACC-C1"]), auth(s0.tokens["TD-ACC-V1"])
+    req = target.post(f"/api/projects/{pid}/review-requests", json={
+        "targetType": "WBS_ITEM", "targetKey": "3.4", "title": "3.4 완료 확인", "body": "", "purpose": "WBS_COMPLETION", "completionScope": "시험 완료",
+    }, headers=c1)
+    assert req.status_code == 201, req.text
+    rid = req.json()["id"]
+    rep = target.post(f"/api/review-requests/{rid}/report", json={"body": "보고", "evidence": [{"kind": "OTHER", "ref": "시험 결과", "note": "", "workProductId": None}]}, headers=v1)
+    assert rep.status_code == 200, rep.text
+
+    def state() -> dict:
+        detail = target.get(f"/api/review-requests/{rid}", headers=c1).json()
+        c = _completion(target, s0)
+        item = next(i for i in c["items"] if i["wbsId"] == "3.4")
+        with tx() as cur:
+            n = fetch_one(cur, "select count(*) as n from review_request_event where review_request_id = %s", (rid,))["n"]
+        return {
+            "status": detail["status"], "records": detail["completionRecords"], "events": n,
+            "rate": c["completionRate"], "item": item["completionStatus"],
+        }
+
+    before = state()
+    assert before["status"] == "REPORTED", before
+    with fail_insert("wbs_completion_record", "review_request_id", rid, "completion_record"):
+        failed = rejected(lambda: target.post(f"/api/review-requests/{rid}/confirm", json={"acknowledgeCompletion": True, "note": "확인"}, headers=c1))
+    assert failed, "저장 실패를 주입했는데 확인이 성공했다"
+    after = state()
+    assert after == before, {k: (before[k], after[k]) for k in before if before[k] != after[k]}
 
 
 @pytest.mark.skip(reason="DEC-10(협의 범위 코드·계약 범위) 결정 전. 지정 API 미구현")

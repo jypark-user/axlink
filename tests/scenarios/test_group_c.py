@@ -15,6 +15,7 @@ import pytest
 from app.db import fetch_all, fetch_one, tx
 from app.standard import trace_service
 from tests.fixtures.im009 import data as d
+from tests.fixtures.im009.db_faults import fail_insert, rejected
 from tests.fixtures.im009.replay import Faults, ReplaySource, install
 from tests.scenarios.conftest import auth
 
@@ -209,6 +210,48 @@ def test_UC_021_S09_동시_확정(target, s0):
     """확정 2회 동시 → 1회만 확정 (COMMON-S04)."""
 
 
+def test_UC_021_S06_확정_실패_롤백(target, s0):
+    """UC-021-S02 의 3단계(확정)에서 저장 실패 주입 → 요구사항 3행 그대로, 확정본 연결 없음, 상태 확정 대기.
+    추적관계·이력·활동 기록도 그대로 (AC-021-5).
+
+    실패는 확정의 뒤쪽 단계(기준선 상태 이력 저장)에 건다. 그 앞에서 요구사항을 만들고 붙인 것까지
+    되돌아가는지 본다. 재시도 성공은 바로 뒤 UC-021-S02 가 같은 등록을 같은 선택으로 확정해 본다
+    (확정은 한 번뿐이라 여기서 재시도하면 S02 의 시작 상태가 사라진다)."""
+    bid = s0.ids["BASELINE-1"]
+    pid = s0.ids["TD-PRJ-1"]
+    c1 = auth(s0.tokens["TD-ACC-C1"])
+
+    def state() -> dict:
+        with tx() as cur:
+            counts = fetch_one(
+                cur,
+                """
+                select (select count(*) from requirement where project_id = %(p)s) as requirements,
+                       (select count(*) from entity_history where project_id = %(p)s) as history
+                """,
+                {"p": pid},
+            )
+            links = _links(cur, pid)
+        reqs = {code: (r["id"], r["title"], r["priority"], r["inBaseline"], r["status"]) for code, r in _reqs(target, s0).items()}
+        return {
+            **counts,
+            "links": links,
+            "reqs": reqs,
+            "status": target.get(f"{_base(s0)}/{bid}", headers=c1).json()["status"],
+            "state": target.get(_base(s0), headers=c1).json()["state"],
+            "activity": _activity_kinds(target, s0, bid),
+        }
+
+    before = state()
+    assert before["status"] == "SUBMITTED" and set(before["reqs"]) == {"UR.PORT.001", "UR.PORT.002", "UR.PORT.003"}, before
+    with fail_insert("entity_history", "entity_id", bid, "baseline_confirm"):
+        failed = rejected(lambda: target.post(f"{_base(s0)}/{bid}/confirm", json={"applySpecCodes": ["UR.PORT.002"]}, headers=c1))
+    assert failed, "저장 실패를 주입했는데 확정이 성공했다"
+    after = state()
+    assert after == before, {k: (before[k], after[k]) for k in before if before[k] != after[k]}
+    assert after["state"] != "CONFIRMED"
+
+
 def test_UC_021_S02_기존_있는_사업의_확정(target, s0):
     """미리보기 새1·같음1·바뀜1·포함되지 않음1. 확정 뒤 4행, 확정 목록 3, B 명칭·이력, A 보존 (AC-021-1·2·3·4)."""
     bid = s0.ids["BASELINE-1"]
@@ -252,11 +295,6 @@ def test_UC_020_S06b_확정본_있을_때_등록(target, s0):
     """확정본이 있으면 새 등록 거절 (AC-020-5 둘째 절)."""
     res = target.post(_base(s0), json={"documentId": s0.ids["TD-DOC-1"]}, headers=auth(s0.tokens["TD-ACC-V1"]))
     assert res.status_code == 409 and res.json().get("code") == "BASELINE_CONFIRMED", res.text
-
-
-@pytest.mark.skip(reason="확정 중 저장 실패 주입은 DB 장애 모의가 필요하다. 별도 자동 시험으로 설계")
-def test_UC_021_S06_확정_실패_롤백(target, s0):
-    """저장 실패 → 어느 것도 바뀌지 않음 (AC-021-5)."""
 
 
 def test_UC_020_S02_읽히지_않는_양식_보완(target, s0, screen):
