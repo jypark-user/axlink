@@ -376,3 +376,33 @@ def test_검색_모델은_현황만_보이고_바꾸지_못한다(client, admin_
 def test_검색_모델_현황은_관리자만(client, client_token):
     res = client.get("/api/ai/embedding", headers={"Authorization": f"Bearer {client_token('r2')}"})
     assert res.status_code == 403
+
+
+# --- 클라우드 위임 모델 (UC-061 1단계, AC-061-4) ------------------------------------
+
+
+def test_클라우드_위임_모델은_tags_의_remote_host_로_안다():
+    """Ollama 클라우드 모델은 /api/tags 에 remote_host·remote_model 이 온다(로컬에는 껍데기만)."""
+    m = ollama_admin.parse_tag({
+        "name": "gemma4:31b-cloud", "remote_model": "gemma4:31b",
+        "remote_host": "https://ollama.com", "details": {"parameter_size": "32.7B"},
+        "capabilities": ["completion", "tools"],
+    })
+    assert m.remote_host == "https://ollama.com"
+    assert ollama_admin.parse_tag({"name": "qwen3:4b", "details": {}}).remote_host is None
+
+
+@requires_db
+def test_목록에서_클라우드_위임_모델을_구분한다(client, admin_headers, fake_ollama, monkeypatch):
+    cloud = ollama_admin.DiscoveredModel(
+        "gemma4:31b-cloud", 0, True, "32.7B", "BF16", ("completion", "tools"),
+        remote_host="https://ollama.com",
+    )
+    monkeypatch.setattr(model_settings.ollama_admin, "list_models", lambda base: [*_TAGS, cloud])
+    body = client.post(
+        "/api/ai/models/refresh", params={"baseUrl": _BASE}, headers=admin_headers
+    ).json()
+    by_name = {m["name"]: m for m in body["models"]}
+    assert by_name["gemma4:31b-cloud"]["cloud"] is True
+    assert by_name["gemma4:31b-cloud"]["remoteHost"] == "https://ollama.com"
+    assert by_name["qwen3:4b"]["cloud"] is False and by_name["qwen3:4b"]["remoteHost"] is None

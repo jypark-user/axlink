@@ -147,8 +147,8 @@ def replace_cache(
             insert into llm_model_cache
               (base_url, name, context_length, supports_tools, parameter_size, quantization,
                tok_per_sec, measured_at, num_ctx, num_predict, fetched_at, updated_at,
-               capabilities, verified_at)
-            values (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+               capabilities, verified_at, remote_host)
+            values (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
             """,
             (
                 base_url, m.name, m.context_length, m.supports_tools, m.parameter_size,
@@ -161,6 +161,7 @@ def replace_cache(
                 now, now,
                 list(m.capabilities) if m.capabilities is not None else None,
                 old["verified_at"] if old else None,
+                m.remote_host,
             ),
         )
 
@@ -290,6 +291,8 @@ def _to_response(row: dict[str, Any]) -> LlmModelResponse:
         capabilities=list(row["capabilities"]) if row.get("capabilities") is not None else None,
         purpose=purpose_of(row.get("capabilities")),
         verifiedAt=_iso(row.get("verified_at")),
+        cloud=bool(row.get("remote_host")),
+        remoteHost=row.get("remote_host"),
     )
 
 

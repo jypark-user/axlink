@@ -1723,6 +1723,10 @@ export interface LlmModelResponse {
   purpose: LlmModelPurpose;
   /** 마지막 짧은 생성 확인 성공 시각 */
   verifiedAt: string | null;
+  /** 클라우드 위임 모델(생성이 외부로 나감). 폐쇄망 부적합 (AC-061-4) */
+  cloud: boolean;
+  /** 위임 대상 주소. 로컬 모델은 null */
+  remoteHost: string | null;
 }
 
 export type LlmModelPurpose = 'ANSWER' | 'EMBEDDING' | 'UNKNOWN';

@@ -546,9 +546,21 @@ def test_UC_061_S03_불일치(target, s0, llm):
             cur.execute("delete from doc_chunk where id = %s", (row["id"],))
 
 
-@pytest.mark.skip(reason="클라우드 위임 모델이 든 모델 서버 목록이 필요하다. 5174 에서 본다")
+@pytest.mark.skipif(not TARGET_URL, reason="클라우드 위임 모델이 든 모델 서버 목록이 필요하다. 5174 에서 본다(구분 규칙은 tests/test_llm_settings.py)")
 def test_UC_061_S04_클라우드_표시(target, s0):
-    """클라우드 위임 모델 구분 표시 (AC-061-4)."""
+    """새로 고침 → 클라우드 위임 모델이 목록에서 구분된다 (AC-061-4).
+
+    원격 대상의 모델 서버(5174 공유 axlink-ollama) 목록에 클라우드 위임 모델(gemma4:31b-cloud)과
+    로컬 모델이 같이 있다. 목록 조회만 하고 설정은 바꾸지 않는다."""
+    adm = auth(s0.tokens["TD-ACC-A1"])
+    base = target.get("/api/ai/settings", headers=adm).json()["baseUrl"]
+    listed = target.post("/api/ai/models/refresh", params={"baseUrl": base}, headers=adm).json()
+    assert not listed.get("error"), listed
+    cloud = [m for m in listed["models"] if m.get("cloud")]
+    local = [m for m in listed["models"] if not m.get("cloud")]
+    assert cloud, f"클라우드 위임 모델이 구분되지 않았다: {[(m['name'], m.get('cloud')) for m in listed['models']]}"
+    assert all(m["remoteHost"] for m in cloud), cloud
+    assert local and all(m["remoteHost"] is None for m in local), local
 
 
 # ------------------------------------------------------------------ UC-070
