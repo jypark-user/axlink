@@ -119,6 +119,28 @@ def _load_schedules(cur: Any) -> list[Schedule]:
     ]
 
 
+def sync_connection(conn: dict) -> str:
+    """예약 수집 한 건. synced·skipped·error 중 하나를 돌려준다.
+
+    같은 연결의 회차가 진행 중이면(수동 수집 등) 건너뛴다. 잡을 남기지 않는다(AC-011-8)."""
+    from app.common import errors
+    from app.integration import sync
+
+    try:
+        with tx() as cur:
+            sync.run_sync(cur, conn)
+        return "synced"
+    except errors.ApiError as exc:
+        if exc.code == sync.SYNC_RUNNING:
+            log.info("주기 수집 건너뜀(이미 수집 중): connection=%s", conn.get("id"))
+            return "skipped"
+        log.exception("주기 수집 실패: connection=%s", conn.get("id"))
+        return "error"
+    except Exception:  # noqa: BLE001 — 한 연결의 실패가 회차를 멈추면 안 된다
+        log.exception("주기 수집 실패: connection=%s", conn.get("id"))
+        return "error"
+
+
 def run_once(now: datetime, *, just_started: bool, taken_at_scheduled: set[str]) -> dict[str, int]:
     """한 회차. 수집을 먼저, 스냅샷을 뒤에 한다. 그날 수집이 반영된 값이 그날의 사실이다.
 
@@ -127,7 +149,6 @@ def run_once(now: datetime, *, just_started: bool, taken_at_scheduled: set[str])
     """
     from app.dashboard import snapshot
     from app.integration import repository as integ_repo
-    from app.integration import sync
 
     counts = {"synced": 0, "snapshots": 0, "errors": 0}
     with tx() as cur:
@@ -145,13 +166,11 @@ def run_once(now: datetime, *, just_started: bool, taken_at_scheduled: set[str])
                     )
                 ]
             for conn in connections:
-                try:
-                    with tx() as cur:
-                        sync.run_sync(cur, conn)
+                outcome = sync_connection(conn)
+                if outcome == "synced":
                     counts["synced"] += 1
-                except Exception:  # noqa: BLE001 — 한 연결의 실패가 회차를 멈추면 안 된다
+                elif outcome == "error":
                     counts["errors"] += 1
-                    log.exception("주기 수집 실패: connection=%s", conn.get("id"))
 
         # 2) 스냅샷
         local_today = now.astimezone(LOCAL_TZ).date()

@@ -32,6 +32,7 @@ from app.standard.mapping_rules import MappingRules
 _EPOCH = datetime(1970, 1, 1, tzinfo=UTC)
 _PER_PAGE = 50
 _MAX_PAGES = 20  # PoC 상한. 우리 저장소 규모엔 충분하고 폭주를 막는다.
+SYNC_RUNNING = "SYNC_RUNNING"  # 같은 연결의 회차가 진행 중(AC-011-8)
 
 # 내부 오류코드 → sync_job.error_code CHECK 허용값
 _ERROR_CODE = {
@@ -114,6 +115,11 @@ def run_sync(
     """
     now = datetime.now(UTC)
     cid = str(connection["id"])
+    if not repository.try_lock_sync(cur, cid):
+        # 같은 연결의 회차가 진행 중이다. 둘째 회차는 잡을 남기지 않고 거절한다(AC-011-8)
+        raise errors.ApiError(
+            409, SYNC_RUNNING, "이 연결은 이미 수집 중입니다. 끝난 뒤 다시 시도하세요."
+        )
     since = None if full else repository.last_success_cursor(cur, cid)
     job_id = repository.insert_sync_job(
         cur, cid, "POLL" if since else "BACKFILL", since or _EPOCH, now, retry_of

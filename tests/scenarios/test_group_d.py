@@ -580,11 +580,6 @@ def test_UC_031_S10_승인률(target, s0):
     """승인률 (AC-031-9)."""
 
 
-@pytest.mark.skip(reason="기록 저장 실패 주입은 DB 장애 모의가 필요하다. 별도 자동 시험으로 설계")
-def test_UC_032_S07_기록_실패_롤백(target, s0):
-    """저장 실패 → 상태 불변 (AC-032-7)."""
-
-
 @pytest.mark.skip(reason="DEC-10(협의 범위 코드·계약 범위) 결정 전. 지정 API 미구현")
 def test_UC_033_S01_지정_제출_승인(target, s0):
     """작업별 산출물 항목·양식 지정 (AC-033-1~3)."""

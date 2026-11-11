@@ -6,12 +6,17 @@
 
 from __future__ import annotations
 
+import threading
+import time
+
 import pytest
 
+from app import scheduler
 from app.db import fetch_all, fetch_one, tx
+from app.integration import repository as integ_repo
 from tests.fixtures.im009 import data as d
-from tests.fixtures.im009.replay import Faults, ReplaySource, install, tool_base
-from tests.scenarios.conftest import auth
+from tests.fixtures.im009.replay import BULK_TARGET, Faults, ReplaySource, install, tool_base
+from tests.scenarios.conftest import TARGET_URL, auth
 
 pytestmark = pytest.mark.db
 
@@ -276,9 +281,113 @@ def test_UC_011_S09_시작_전_연결_실패(target, s0, replay):
     assert "연결" in (job["error"] or "") or "서버" in (job["error"] or ""), job["error"]
 
 
-@pytest.mark.skip(reason="동시 실행은 장시간 응답 주입과 둘째 호출이 필요하다. 5174 에서 따로 돈다")
-def test_UC_011_S06_동시_실행(target, s0):
-    """같은 연결 수집 중 새 수집 → 「이미 수집 중」 (AC-011-8)."""
+def _job_count(cid: str) -> int:
+    with tx() as cur:
+        return int(
+            fetch_one(cur, "select count(*) as n from sync_job where tool_connection_id = %s",
+                      (cid,))["n"]
+        )
+
+
+def test_UC_011_S06_동시_실행(target, s0, replay):
+    """TD-CON-1 수집 회차 진행 중(장시간 응답 주입) → 지금 수집 「이미 수집 중」,
+    예약 도래도 건너뜀. 진행 중이던 회차는 끝까지 돌고 잡은 그 한 건만 남는다
+    (AC-011-8, COMMON-S04)."""
+    cid = s0.ids["TD-CON-1"]
+    url = f"/api/connections/{cid}/sync"
+    v1 = auth(s0.tokens["TD-ACC-V1"])
+    before = _job_count(cid)
+    # 원천 이슈 목록이 5초 늦게 온다. 연결의 응답 대기 상한(10초) 안이라 회차는 성공한다
+    replay.faults = Faults(delay_seconds=5)
+    first: dict = {}
+    runner = threading.Thread(target=lambda: first.setdefault("res", target.post(url, headers=v1)))
+    runner.start()
+    try:
+        deadline = time.monotonic() + 20
+        while not any(c[0] == "GITHUB" and c[1] == "issue" for c in replay.calls()):
+            assert time.monotonic() < deadline, "첫 회차가 원천 이슈 목록을 부르지 않는다"
+            time.sleep(0.2)
+        # 지금 수집(수동)
+        second = target.post(url, headers=v1)
+        assert second.status_code == 409, f"진행 중인데 둘째 수집이 시작됐다: {second.text[:200]}"
+        assert "이미 수집 중" in second.json()["message"], second.text
+        # 예약 도래: 예약 수집이 같은 연결을 집어도 진행 중이면 건너뛴다(스케줄러의 한 건 처리 경로)
+        with tx() as cur:
+            conn = integ_repo.find_by_id(cur, cid)
+        assert scheduler.sync_connection(conn) == "skipped"
+    finally:
+        runner.join(60)
+        replay.faults = Faults()
+    assert not runner.is_alive()
+    res = first["res"]
+    assert res.status_code == 202 and res.json()["status"] == "SUCCEEDED", res.text[:300]
+    assert _job_count(cid) == before + 1, "거절된 회차의 잡이 남았다"
+
+
+def _bulk_state(cid: str, pid: str) -> dict:
+    with tx() as cur:
+        row = fetch_one(
+            cur,
+            """
+            select (select count(*) from raw_artifact
+                     where tool_connection_id = %(c)s and object_kind = 'issue') as raw,
+                   (select count(*) from issue where tool_connection_id = %(c)s) as issues,
+                   (select count(*) from issue
+                     where tool_connection_id = %(c)s and status = 'OPEN') as open_issues,
+                   (select count(distinct status) from issue
+                     where tool_connection_id = %(c)s) as statuses,
+                   (select count(*) from trace_link where project_id = %(p)s) as links
+            """,
+            {"c": cid, "p": pid},
+        )
+    return dict(row)
+
+
+def test_UC_011_S08_상한_초과_이어_읽기(target, s0, replay):
+    """이슈 1,001건 변형 → 1회차 「부분 성공(이어 읽기)」 1,000건, 2회차 1,001건 완성, 3회차 불변
+    (AC-011-10·5). 회차 상한은 종류마다 50건 × 20쪽 = 1,000건(app/integration/sync.py)."""
+    pid = s0.ids["TD-PRJ-9"]
+    v1 = auth(s0.tokens["TD-ACC-V1"])
+    replay.faults = Faults(bulk_issues=1001)
+    made = target.post(
+        f"/api/projects/{pid}/connections", json=_conn_body("대량 이슈", BULK_TARGET), headers=v1
+    )
+    assert made.status_code == 201, made.text
+    cid = made.json()["id"]
+    try:
+        assert target.post(f"/api/connections/{cid}/test", headers=v1).status_code == 200
+
+        def run() -> dict:
+            # 원격은 1,000건 승격·색인까지 한 요청 안에서 끝난다. 기본 60초로는 모자랄 수 있다
+            wait = {"timeout": 600} if TARGET_URL else {}
+            res = target.post(f"/api/connections/{cid}/sync", headers=v1, **wait)
+            assert res.status_code == 202, res.text
+            return res.json()
+
+        first = run()
+        assert first["status"] == "SUCCEEDED", first
+        assert "이어 읽" in (first["error"] or ""), f"상한 도달이 이어 읽기로 안 남았다: {first}"
+        state1 = _bulk_state(cid, pid)
+        assert state1["raw"] == 1000 and state1["issues"] == 1000, state1
+
+        second = run()
+        assert second["status"] == "SUCCEEDED", second
+        assert "이어 읽" not in (second["error"] or ""), second["error"]
+        state2 = _bulk_state(cid, pid)
+        assert state2["raw"] == 1001 and state2["issues"] == 1001, state2
+
+        third = run()
+        assert third["status"] == "SUCCEEDED", third
+        assert third["stats"]["changed"] == 0, third["stats"]
+        assert _bulk_state(cid, pid) == state2
+    finally:
+        replay.faults = Faults()
+        with tx() as cur:
+            for table in ("issue", "code_change", "requirement", "risk", "milestone"):
+                cur.execute(f"delete from {table} where tool_connection_id = %s", (cid,))
+            cur.execute("delete from raw_artifact where tool_connection_id = %s", (cid,))
+            cur.execute("delete from sync_job where tool_connection_id = %s", (cid,))
+            cur.execute("delete from tool_connection where id = %s", (cid,))
 
 
 def test_UC_011_S07d_증분_응답에_없음(target, s0, replay):

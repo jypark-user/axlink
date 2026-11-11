@@ -254,11 +254,6 @@ def test_UC_020_S06b_확정본_있을_때_등록(target, s0):
     assert res.status_code == 409 and res.json().get("code") == "BASELINE_CONFIRMED", res.text
 
 
-@pytest.mark.skip(reason="확정 중 저장 실패 주입은 DB 장애 모의가 필요하다. 별도 자동 시험으로 설계")
-def test_UC_021_S06_확정_실패_롤백(target, s0):
-    """저장 실패 → 어느 것도 바뀌지 않음 (AC-021-5)."""
-
-
 def test_UC_020_S02_읽히지_않는_양식_보완(target, s0, screen):
     """TD-PRJ-9, TD-DOC-7(카드형 명세서 PDF) 등록 → 「찾지 못했습니다」(0건) → 항목 3건 직접 추가 → 제출 (AC-020-1 E2).
 
