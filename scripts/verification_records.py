@@ -364,6 +364,50 @@ def parse_test_map(text: str) -> list[dict]:
     return rows
 
 
+SCENARIO_TESTS = ROOT / "tests" / "scenarios"
+
+
+def scenario_test_ids() -> set[str]:
+    """시나리오 시험 코드에 있는 시나리오 ID(하위 문자 포함)."""
+    pat = re.compile(r"^def test_UC_(\d{3})_S(\d{2}[a-z]?)_", re.M)
+    ids: set[str] = set()
+    for p in sorted(SCENARIO_TESTS.glob("test_*.py")):
+        ids.update(f"UC-{u}-S{s}" for u, s in pat.findall(p.read_text(encoding="utf-8")))
+    return ids
+
+
+def attach_subs(scenarios: dict[str, dict], test_ids: set[str]) -> dict[str, str]:
+    """명세에 한 행(UC-051-S03)인데 시험이 하위 문자(S03a·S03b)로 나뉜 것을 잇는다.
+
+    하위 시나리오는 그 행의 필수 부분이다. 명세에 따로 행이 있는 하위 문자(UC-060-S05a 등)는
+    그 자체가 시나리오라 건드리지 않는다. {하위 ID: 상위 ID}."""
+    out: dict[str, str] = {}
+    for tid in sorted(test_ids):
+        if tid in scenarios or not tid[-1].isalpha():
+            continue
+        parent = tid[:-1]
+        if parent in scenarios:
+            out[tid] = parent
+            subs = scenarios[parent].setdefault("subs", [])
+            if parent in test_ids and parent not in subs:
+                subs.insert(0, parent)  # 상위 ID 그대로인 시험도 있으면 그것도 필수 부분이다
+            subs.append(tid)
+    return out
+
+
+def combine_sub_status(sts: list[str]) -> str:
+    """하위 시나리오 판정들 → 상위 판정. 하나라도 실패·재검증·차단이면 그것, 모두 통과여야 통과,
+    아직 안 돈 하위가 있으면 미실행."""
+    for bad in ("fail", "revalidate", "blocked"):
+        if bad in sts:
+            return bad
+    if sts and all(x == "pass" for x in sts):
+        return "pass"
+    if sts and all(x.startswith("pass") for x in sts):
+        return "pass-needs-evidence" if "pass-needs-evidence" in sts else "pass-ci-only"
+    return "not-run"
+
+
 def build_catalog() -> dict:
     im007 = parse_im007(IM007.read_text(encoding="utf-8"))
     im007a_text = IM007A.read_text(encoding="utf-8")
@@ -380,6 +424,7 @@ def build_catalog() -> dict:
                 im007["acs"][ac].setdefault("obligations", []).append(ob["id"])
     for ac in im007["acs"].values():
         ac.setdefault("obligations", [])
+    sub_scenarios = attach_subs(im007["scenarios"], scenario_test_ids())
     sources = {
         p.name: {"version": doc_version(p), "sha256": sha256(p)}
         for p in (IM001, IM007, IM007A, IM008, IM009, IM005, MAPPING)
@@ -397,6 +442,7 @@ def build_catalog() -> dict:
             "obligations": len(obligations),
         },
         **im007,
+        "sub_scenarios": sub_scenarios,
         "obligations": obligations,
         "dec_impacts": dec_impacts,
         "test_map_draft": parse_test_map(MAPPING.read_text(encoding="utf-8")),
@@ -478,8 +524,7 @@ def compute_status(cat: dict) -> dict:
             for aid in d.get("acs") or []:
                 open_defect_acs[aid].append(did)
 
-    sc_status: dict[str, dict] = {}
-    for sid, sc in cat["scenarios"].items():
+    def one(sid: str, needs: list[str]) -> tuple[str, dict | None, dict | None, list[str]]:
         r = latest(sid)
         t = latest_target(sid)
         missing: list[str] = []
@@ -497,8 +542,24 @@ def compute_status(cat: dict) -> dict:
             # 통과했지만 5174 통과 근거가 없거나, 5174 의 마지막 결과가 통과가 아니다
             st = "pass-ci-only"
         else:
-            missing = [n for n in sc["needs"] if n not in proves(t)]
+            missing = [n for n in needs if n not in proves(t)]
             st = "pass-needs-evidence" if missing else "pass"
+        return st, r, t, missing
+
+    sc_status: dict[str, dict] = {}
+    for sid, sc in cat["scenarios"].items():
+        subs = sc.get("subs") or []
+        if not subs:
+            st, r, t, missing = one(sid, sc["needs"])
+        else:
+            # 명세 한 행을 시험이 하위 문자(S03a·S03b)로 나눠 돈다. 하위가 모두 통과해야 통과다
+            parts = [(s, *one(s, sc["needs"])) for s in subs]
+            st = combine_sub_status([p[1] for p in parts])
+            ran = [p for p in parts if p[2] is not None]
+            r = max((p[2] for p in ran), key=run_time, default=None)
+            tgt = [p[3] for p in parts if p[3] is not None]
+            t = max(tgt, key=run_time, default=None)
+            missing = sorted({m for p in parts for m in p[4]})
         sc_status[sid] = {
             "scenario": sid,
             "uc": sc["uc"],
@@ -771,7 +832,9 @@ def record_junit(a: argparse.Namespace) -> int:
             sid = f"UC-{m.group(1)}-S{m.group(2)}"
             if only is not None and sid not in only:
                 continue
-            sc = cat["scenarios"].get(sid)
+            # 하위 문자 시험(UC-051-S03a)은 상위 행의 AC 로 적고, 상위는 하위가 모두 통과해야 통과다
+            parent = cat.get("sub_scenarios", {}).get(sid)
+            sc = cat["scenarios"].get(parent or sid)
             if sc is None:
                 print(f"카탈로그에 없는 시나리오 {sid}: {tc.get('name')}")
                 continue
@@ -806,6 +869,7 @@ def record_junit(a: argparse.Namespace) -> int:
                 "ts": a.ts or datetime_now(),
                 "operator": a.operator,
                 "scenarios": [sid],
+                **({"parent_scenario": parent} if parent else {}),
                 "acs": acs,
                 "ac_verdicts": {x: verdict for x in acs},
                 "obligations": obligations,
