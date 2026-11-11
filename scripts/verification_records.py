@@ -125,7 +125,8 @@ def proves(run: dict) -> set[str]:
         got = {"api"} if run.get("mode") in ("api", "live") else set()
     if "replay" in tools:
         got.discard("live-tool")
-    if "가짜" in model or "fake" in model.lower():
+    mock = run.get("model_kind") == "mock" or "모의" in model
+    if mock or "가짜" in model or "fake" in model.lower():
         got.discard("live-model")
     return got
 
@@ -485,6 +486,7 @@ def compute_status(cat: dict) -> dict:
         invalidated.update(imp.get("invalidates_runs", []))
 
     by_sc: dict[str, list[dict]] = defaultdict(list)
+    variants: dict[str, set[str]] = defaultdict(set)
     # 시나리오 없이 AC 에 바로 붙는 실행(자동 시험 등)은 AC 별로 따로 모은다
     by_ac_direct: dict[str, list[dict]] = defaultdict(list)
     # 시각은 UTC(Z)와 +09:00 이 섞여 있다. 글자 순으로 줄 세우면 순서가 틀린다
@@ -503,6 +505,10 @@ def compute_status(cat: dict) -> dict:
         }
         for sid in r.get("scenarios", []):
             by_sc[sid].append(view)
+            if r.get("variant"):
+                # 매개변수로 나뉜 시험(UC-060-S10[캐시있음-집계] 등)은 경우마다 따로 최신을 본다
+                by_sc[f"{sid}[{r['variant']}]"].append(view)
+                variants[sid].add(r["variant"])
         if not r.get("scenarios"):
             for aid in set(list(verdicts) + list(r.get("acs") or [])):
                 by_ac_direct[aid].append(view)
@@ -525,6 +531,14 @@ def compute_status(cat: dict) -> dict:
                 open_defect_acs[aid].append(did)
 
     def one(sid: str, needs: list[str]) -> tuple[str, dict | None, dict | None, list[str]]:
+        if variants.get(sid):
+            # 경우가 나뉜 시나리오는 모든 경우의 최신 판정이 통과여야 통과다. 경우 구분이 생기기
+            # 전의 실행(경우 표시 없음)은 보지 않는다
+            parts = [one(f"{sid}[{v}]", needs) for v in sorted(variants[sid])]
+            st = combine_sub_status([p[0] for p in parts])
+            r = max((p[1] for p in parts if p[1] is not None), key=run_time, default=None)
+            t = max((p[2] for p in parts if p[2] is not None), key=run_time, default=None)
+            return st, r, t, sorted({m for p in parts for m in p[3]})
         r = latest(sid)
         t = latest_target(sid)
         missing: list[str] = []
@@ -854,8 +868,11 @@ def record_junit(a: argparse.Namespace) -> int:
             props = {
                 (pr.get("name"), pr.get("value"))
                 for pr in tc.iter("property")
-                if pr.get("name") in ("proves", "screenshots")
+                if pr.get("name") in ("proves", "screenshots", "model")
             }
+            # 모의 모델(재생 서버 대본)로 돈 시험은 시험이 model 속성을 남긴다. 실모델 증거가 아니다
+            mock_model = next((v for k, v in props if k == "model"), None)
+            variant = re.search(r"\[(.+)\]$", tc.get("name", ""))
             run_proves = [x for x in a.proves.split(",") if x] if a.proves else []
             run_proves += sorted({v for k, v in props if k == "proves"} - set(run_proves))
             # 증거 폴더는 저장소 기준 경로(var/verify/...)로 적는다. 실행 PC 절대 경로는 뺀다
@@ -884,8 +901,14 @@ def record_junit(a: argparse.Namespace) -> int:
                 "env": {
                     "name": a.env,
                     "tools": a.tools.split(",") if a.tools else [],
-                    "model": a.model,
+                    "model": (
+                        f"모의 모델({mock_model}, 재생 서버 대본 응답). 실모델 증거 아님"
+                        if mock_model
+                        else a.model
+                    ),
                 },
+                **({"model_kind": "mock"} if mock_model else {}),
+                **({"variant": variant.group(1)} if variant else {}),
                 "mode": a.mode,
                 **({"proves": run_proves} if run_proves else {}),
                 "start_state": {"state": sc["state"][:200], "actor": "", "project": ""},
