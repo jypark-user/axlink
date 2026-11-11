@@ -160,6 +160,76 @@ def test_UC_020_S06_두_번째_등록(target, s0):
     assert res.status_code == 409, res.text
 
 
+def _discard_prj9(target, s0, bid: str | None) -> None:
+    """TD-PRJ-9 의 등록을 비운다. UC-020-S02·UC-021-S01 이 같은 사업에 새로 등록한다."""
+    v1, c1 = auth(s0.tokens["TD-ACC-V1"]), auth(s0.tokens["TD-ACC-C1"])
+    if bid is None:
+        bid = (target.get(_base(s0, "TD-PRJ-9"), headers=v1).json().get("working") or {}).get("id")
+    if bid:
+        target.post(f"{_base(s0, 'TD-PRJ-9')}/{bid}/return", json={"reason": "시험 정리(UC-020-S03·S04)"}, headers=c1)
+        target.delete(f"{_base(s0, 'TD-PRJ-9')}/{bid}", headers=v1)
+
+
+def test_UC_020_S03_중복_코드(target, s0):
+    """TD-DOC-8(2·3행 코드 UR.TEST.002 중복) 등록 → 제출 「1건」 거절 → 하나 삭제 → 제출 성공 (AC-020-2, E6)."""
+    v1 = auth(s0.tokens["TD-ACC-V1"])
+    base = _base(s0, "TD-PRJ-9")
+    problems: list[str] = []
+    bid = None
+    try:
+        made = target.post(base, json={"documentId": s0.ids["TD-DOC-8"]}, headers=v1)
+        assert made.status_code == 201, made.text
+        b = made.json()
+        bid = b["id"]
+        got = [(i["code"], i["problems"]) for i in b["items"]]
+        if [c for c, _ in got] != ["UR.TEST.001", "UR.TEST.002", "UR.TEST.002", "UR.TEST.003"]:
+            problems.append(f"추출 코드 {got}")
+        dups = [i for i in b["items"] if "DUPLICATE_CODE" in i["problems"]]
+        if len(dups) != 2:
+            problems.append(f"코드 중복 표시 {got}")
+        rej = target.post(f"{base}/{bid}/submit", headers=v1)
+        if rej.status_code not in (400, 422):
+            problems.append(f"막는 문제가 있는데 제출이 거절되지 않았다: {rej.status_code} {rej.text[:200]}")
+        elif "1건" not in rej.text:
+            problems.append(f"거절 안내 건수가 명세(「1건」, 중복 1쌍)와 다르다: {rej.json().get('message')}")
+        third = next((i for i in b["items"] if i["title"].startswith("셋째")), None)
+        assert third is not None, got
+        after = target.delete(f"{base}/{bid}/items/{third['id']}", headers=v1)
+        assert after.status_code == 200, after.text
+        if after.json()["blockingCount"] != 0:
+            problems.append(f"하나 삭제 뒤 막는 문제 {after.json()['blockingCount']}")
+        sub = target.post(f"{base}/{bid}/submit", headers=v1)
+        if not (sub.status_code == 200 and sub.json()["status"] == "SUBMITTED"):
+            problems.append(f"삭제 뒤 제출 실패: {sub.status_code} {sub.text[:200]}")
+    finally:
+        _discard_prj9(target, s0, bid)
+    assert not problems, problems
+
+
+def test_UC_020_S04_형식_경고_명칭_없음(target, s0):
+    """TD-DOC-9 등록 → 1행 「추적에 쓸 수 없는 형식」 경고, 2행 명칭 없음(막음), 막는 문제 1, 제출 거절 (AC-020-2)."""
+    v1 = auth(s0.tokens["TD-ACC-V1"])
+    base = _base(s0, "TD-PRJ-9")
+    bid = None
+    try:
+        made = target.post(base, json={"documentId": s0.ids["TD-DOC-9"]}, headers=v1)
+        assert made.status_code == 201, made.text
+        b = made.json()
+        bid = b["id"]
+        items = b["items"]
+        assert [i["code"] for i in items] == ["UR-TEST-001", "UR.TEST.002"], items
+        # 1행: 추적에 쓸 수 없는 형식(경고만, 막지 않음)
+        assert items[0]["problems"] == ["UNTRACEABLE_CODE"], items[0]
+        # 2행: 명칭 없음(막음)
+        assert items[1]["problems"] == ["MISSING_TITLE"], items[1]
+        assert b["blockingCount"] == 1, b["blockingCount"]
+        rej = target.post(f"{base}/{bid}/submit", headers=v1)
+        assert rej.status_code in (400, 422), rej.text
+        assert "1건" in rej.json()["message"], rej.json()["message"]
+    finally:
+        _discard_prj9(target, s0, bid)
+
+
 # ------------------------------------------------------------------ UC-021 (앞부분)
 
 
