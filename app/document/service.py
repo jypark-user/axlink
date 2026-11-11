@@ -212,6 +212,11 @@ def _run_steps(
     t = time.perf_counter()
     try:
         result = extractor.extract(Path(settings.document_root) / stored_path, ext)
+    except extractor.UnsupportedDocument as exc:
+        # 암호·스캔: 손상이 아니라 지원 제한이다. 사유와 대응 방법을 남긴다(AC-070-10)
+        steps["extract_s"] = _since(t)
+        _fail_extract(txf, document_id, str(exc), steps, label=f"지원 제한({exc.kind})")
+        return
     except Exception as exc:  # noqa: BLE001 — 파서가 죽어도 업로드 자체는 남긴다
         steps["extract_s"] = _since(t)
         _fail_extract(txf, document_id, f"{type(exc).__name__}: {exc}", steps)
@@ -268,11 +273,12 @@ def _fail_extract(
     document_id: str,
     message: str,
     steps: dict[str, Any],
+    label: str = "본문 읽기 실패",
 ) -> None:
     with txf() as cur:
         if repository.lock_for_write(cur, document_id):
             repository.mark_failed(cur, document_id, message)
-            repository.fail(cur, document_id, f"본문 읽기 실패: {message}", steps)
+            repository.fail(cur, document_id, f"{label}: {message}", steps)
 
 
 def _since(t: float) -> float:
