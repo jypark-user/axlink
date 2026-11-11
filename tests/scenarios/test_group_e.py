@@ -14,7 +14,7 @@ import pytest
 
 from tests.fixtures.im009 import data as d
 from tests.fixtures.im009.replay import Faults, ReplaySource, install, tool_base
-from tests.scenarios.conftest import auth
+from tests.scenarios.conftest import TARGET_URL, auth
 
 pytestmark = pytest.mark.db
 
@@ -418,7 +418,10 @@ def test_UC_042_S02_없는_짝(target, s0):
     assert res.status_code == 400, res.text
 
 
-@pytest.mark.skip(reason="가짜 모델은 자연어를 명세로 바꾸지 못한다(NOT_EXPRESSIBLE). 실모델로 5174 에서 본다")
+@pytest.mark.skipif(
+    not TARGET_URL,
+    reason="가짜 모델은 자연어를 명세로 바꾸지 못한다(NOT_EXPRESSIBLE). 원격 대상(5174 실모델)에서 본다",
+)
 def test_UC_042_S03_자연어_위젯(target, s0):
     """「심각도별 열린 리스크 막대」 → open_risk_count·risk_severity·BAR_CHART 선택, 값은 집계 (AC-042-3)."""
     pid = s0.ids["TD-PRJ-1"]

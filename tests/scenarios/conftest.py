@@ -134,9 +134,12 @@ def pytest_collection_modifyitems(config, items):
             continue
         if TARGET_URL:
             name = item.originalname or item.name
+            # remote_llm 표시가 붙은 시험은 재생 서버의 대본 모델(replay_ollama)로 원격에서도 돈다
             why = LOCAL_ONLY.get(name) or (
                 "가짜(대본) 모델은 대상 서버에 닿지 않는다. 실모델 실행으로 본다"
-                if "llm" in getattr(item, "fixturenames", ()) else None
+                if "llm" in getattr(item, "fixturenames", ())
+                and item.get_closest_marker("remote_llm") is None
+                else None
             )
             if why:
                 item.add_marker(pytest.mark.skip(reason=f"원격 대상 제외: {why}"))

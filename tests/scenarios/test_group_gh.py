@@ -27,6 +27,7 @@ from app.config import settings
 from app.db import fetch_all, fetch_one, tx
 from app.rag import number_guard
 from app.rag import service as ask_service
+from tests.fixtures.im009 import replay_ollama
 from tests.scenarios.conftest import TARGET_URL, auth
 
 pytestmark = pytest.mark.db
@@ -102,15 +103,72 @@ def _done(events) -> dict:
     return events[-1][1]
 
 
+class RemoteScriptedLlm:
+    """원격 대상의 대본 모델. 재생 서버(replay_ollama)에 대본을 넣고 호출 수를 거기서 읽는다."""
+
+    def __init__(self, base: str) -> None:
+        self._base = base
+
+    def script(self, route: dict | None, text: str, fail: bool = False) -> None:
+        res = httpx.put(f"{self._base}/ollama/_script", json={"route": route, "text": text, "fail": fail}, timeout=10)
+        res.raise_for_status()
+
+    def _calls(self) -> dict:
+        return httpx.get(f"{self._base}/ollama/_calls", timeout=10).json()
+
+    @property
+    def stream_calls(self) -> int:
+        return self._calls()["stream"]
+
+    @property
+    def complete_calls(self) -> int:
+        return self._calls()["complete"]
+
+
 @pytest.fixture
-def llm(monkeypatch):
+def llm(monkeypatch, record_property):
+    """대본 모델(모의 모델: 장애·오류 처리 검증용, 실모델 검증 아님). 프로세스 안은 llm_port 를 바꾸고, 원격(remote_llm 표시)은 시험 DB 의 llm_setting 을
+    재생 서버의 Ollama 흉내로 돌린 뒤 끝나면 되돌린다. 원격은 문턱·top_k 가 서버 설정이라 못 바꾼다:
+    실제 문턱(rag_min_similarity)과 실임베딩으로 본다(min_sim 인자는 프로세스 안에서만 쓴다)."""
+    if TARGET_URL:
+        # 모의 모델 증거 표시(원격 실행의 junit 속성). 실모델 검증(live-model)이 아니다.
+        # record-junit 은 아직 이 속성을 읽지 않는다. 프로세스 안(CI, junit xunit2)은 남기지 않는다
+        record_property("model", "mock-replay")
+        host = os.environ["AXLINK_REPLAY_URL"].rstrip("/")
+        inner = (os.environ.get("AXLINK_REPLAY_TARGET_URL") or host).rstrip("/")
+        with tx() as cur:
+            before = fetch_one(cur, "select base_url, model, updated_by_user_id, updated_at from llm_setting where id = 1")
+            cur.execute(
+                "insert into llm_setting (id, base_url, model, updated_at) values (1, %s, %s, now()) "
+                "on conflict (id) do update set base_url = excluded.base_url, model = excluded.model, updated_at = now()",
+                (inner + "/ollama", replay_ollama.MODEL),
+            )
+        remote = RemoteScriptedLlm(host)
+
+        def _install_remote(route: dict | None, text: str, fail: bool = False, min_sim: float = -1.0) -> RemoteScriptedLlm:
+            remote.script(route, text, fail)
+            return remote
+
+        try:
+            yield _install_remote
+        finally:
+            with tx() as cur:
+                if before is None:
+                    cur.execute("delete from llm_setting where id = 1")
+                else:
+                    cur.execute(
+                        "update llm_setting set base_url = %s, model = %s, updated_by_user_id = %s, updated_at = %s where id = 1",
+                        (before["base_url"], before["model"], before["updated_by_user_id"], before["updated_at"]),
+                    )
+        return
+
     def _install(route: dict | None, text: str, fail: bool = False, min_sim: float = -1.0) -> ScriptedLlm:
         scripted = ScriptedLlm(route, text, fail)
         monkeypatch.setattr(ask_service, "llm_port", lambda: scripted)
         monkeypatch.setattr(settings, "rag_min_similarity", min_sim)
         monkeypatch.setattr(settings, "rag_top_k", 20)
         return scripted
-    return _install
+    yield _install
 
 
 # ------------------------------------------------------------------ UC-060
@@ -127,8 +185,9 @@ def test_UC_060_S02_집계_질문(target, s0, llm):
     assert scripted.stream_calls == 1
 
 
+@pytest.mark.remote_llm
 def test_UC_060_S04_근거_부족(target, s0, llm):
-    """「이번 달 지출 내역 알려줘」 → 생성 호출 0, 근거 부족 문안, 출처 0 (AC-060-3)."""
+    """모의 모델: 장애·오류 처리 검증(근거 게이트). 「이번 달 지출 내역 알려줘」 → 생성 호출 0, 근거 부족 문안, 출처 0 (AC-060-3)."""
     scripted = llm({"route": "DOCUMENT", "query": "지출 내역"}, "지어낸 답", min_sim=0.99)
     events = _ask(target, s0, "TD-ACC-C1", "이번 달 지출 내역 알려줘", [s0.ids["TD-PRJ-1"]])
     assert scripted.stream_calls == 0
@@ -178,8 +237,9 @@ def test_UC_060_S06b_배정된_용역사의_질의(target, s0):
     """V1 이 TD-PRJ-1 범위로 질문 (AC-060-6, DEC-15)."""
 
 
+@pytest.mark.remote_llm
 def test_UC_060_S08_값_없음_구분(target, s0, llm):
-    """TD-PRJ-3 「진척률이 얼마야」 → 「WBS 없음」 문안, 문서 경로로 안 감 (AC-060-7)."""
+    """모의 모델: 장애·오류 처리 검증(값 없음 문안). TD-PRJ-3 「진척률이 얼마야」 → 「WBS 없음」 문안, 문서 경로로 안 감 (AC-060-7)."""
     scripted = llm({"route": "AGGREGATE", "measure": "progress_representative_pct", "template": "STAT_CARD"}, "진척률은 계산할 수 없습니다.")
     events = _ask(target, s0, "TD-ACC-C1", "진척률이 얼마야", [s0.ids["TD-PRJ-3"]])
     start = events[0][1]
@@ -190,23 +250,67 @@ def test_UC_060_S08_값_없음_구분(target, s0, llm):
     assert scripted.stream_calls <= 1
 
 
-def test_UC_060_S10_모델_장애(target, s0, llm):
-    """모델 서버 중단 → 집계 값으로 답(생성 없음) 또는 「쓸 수 없음」, 생성 호출 없음 (AC-060-9)."""
-    scripted = llm(None, "", fail=True)
-    # 시작 상태는 S0 다. 앞 시나리오가 같은 질문의 판정을 캐시에 남기면 판정 단계를 건너뛰어
-    # 생성 호출부터 시도한다. 그 경우(캐시가 있는 운영 상태)는 DEF-V041 로 따로 본다
-    with tx() as cur:
-        cur.execute("delete from route_cache where question = %s", ("일반 이슈가 몇 건이야",))
+_AGG_ROUTE = {"route": "AGGREGATE", "measure": "issue_count", "dimensions": [], "template": "STAT_CARD", "title": "이슈 건수", "query": "이슈 건수"}
+_DOC_ROUTE = {"route": "DOCUMENT", "query": "사업 기간 개월"}
+
+
+def _ask_raw(target, s0, question: str) -> list[tuple[str, dict]]:
+    """장애 때는 200 이 아닐 수 있다. 상태와 상관없이 사건을 돌려준다."""
     conv = _conversation(target, s0, "TD-ACC-C1", [s0.ids["TD-PRJ-1"]])
     assert conv.status_code == 201
-    with target.stream("POST", f"/api/conversations/{conv.json()['id']}/messages", json={"question": "일반 이슈가 몇 건이야", "projectScope": []}, headers={**auth(s0.tokens["TD-ACC-C1"]), "Accept": "text/event-stream"}) as res:
+    with target.stream("POST", f"/api/conversations/{conv.json()['id']}/messages", json={"question": question, "projectScope": []}, headers={**auth(s0.tokens["TD-ACC-C1"]), "Accept": "text/event-stream"}) as res:
         assert res.status_code in (200, 502, 503), res.read()
-        events = _events(res) if res.status_code == 200 else []
-    # 안내는 delta(집계 값 답) 또는 error 사건의 문장으로 온다. 화면은 error 문장을 그대로 보인다
-    text = _text(events) + "".join(dd.get("message", "") for e, dd in events if e == "error")
-    assert ("건" in text) or ("쓸 수 없" in text), text
-    assert "Errno" not in text, "연결 오류 원문이 화면에 나간다"
-    assert scripted.stream_calls == 0
+        return _events(res) if res.status_code == 200 else []
+
+
+def _shown(events) -> str:
+    """화면에 나가는 글. delta 와 error 사건의 문장(화면은 error 문장을 그대로 보인다)."""
+    return _text(events) + "".join(dd.get("message", "") for e, dd in events if e == "error")
+
+
+@pytest.mark.remote_llm
+@pytest.mark.parametrize(
+    ("cached", "kind"),
+    [(False, "aggregate"), (False, "document"), (True, "aggregate"), (True, "document")],
+    ids=["캐시없음-집계", "캐시없음-문서", "캐시있음-집계", "캐시있음-문서"],
+)
+def test_UC_060_S10_모델_장애(target, s0, llm, cached, kind):
+    """모의 모델: 장애·오류 처리 검증. 모델 서버 장애 때 집계 질문은 집계 값 서버 문안, 문서 질문은
+    「쓸 수 없음」. 모델이 생성한 문장은 나가지 않는다 (AC-060-9).
+
+    판정 캐시 있음/없음 × 집계/문서 네 경우(DEF-V041). 캐시가 없으면 판정 단계에서 장애를 알아
+    생성 호출이 0회다. 캐시가 있으면 판정 단계를 건너뛰어 생성을 한 번 시도할 수 있다."""
+    question = {"aggregate": "일반 이슈가 몇 건이야", "document": "사업 기간은 몇 개월인가"}[kind]
+    route = _AGG_ROUTE if kind == "aggregate" else _DOC_ROUTE
+    model_text = "모델이 지어낸 문장입니다." if kind == "aggregate" else "사업 기간은 9개월입니다[1]."
+    with tx() as cur:
+        cur.execute("delete from route_cache where question = %s", (question,))
+        expected = cur.execute("select count(*) as n from issue where project_id = %s", (s0.ids["TD-PRJ-1"],)).fetchone()["n"]
+    if cached:
+        # 모델이 살아 있을 때 한 번 답해 판정을 캐시에 남긴다(운영 상태)
+        alive = llm(route, model_text if kind == "document" else "일반 이슈 건수를 알려 드립니다.")
+        first = _ask(target, s0, "TD-ACC-C1", question, [s0.ids["TD-PRJ-1"]])
+        assert _done(first)["finishReason"] == "STOP", first
+        assert alive.stream_calls == 1
+    down = llm(None, model_text, fail=True)
+    events = _ask_raw(target, s0, question)
+    shown = _shown(events)
+    assert "Errno" not in shown, "연결 오류 원문이 화면에 나간다"
+    assert model_text not in shown and "알려 드립니다" not in shown, shown
+    if cached:
+        assert events and events[0][1]["routing"]["routeCached"] is True, events[:1]
+        assert down.stream_calls <= 1, "생성 시도는 한 번까지(AC-060-9)"
+    else:
+        assert down.stream_calls == 0, "판정 단계에서 장애를 알았는데 생성을 불렀다"
+    if kind == "aggregate" and cached:
+        assert "error" not in [e for e, _ in events], events
+        assert _done(events)["finishReason"] == "MODEL_DOWN", _done(events)
+        assert "쓸 수 없" in shown and str(expected) in shown, shown
+    elif kind == "aggregate":
+        assert ("건" in shown) or ("쓸 수 없" in shown), shown
+    else:
+        assert "쓸 수 없" in shown, shown
+        assert _sources(events) == [], _sources(events)
 
 
 def test_UC_060_S12_되묻기(target, s0, llm):
@@ -340,14 +444,110 @@ def test_UC_061_S02_거절들(target, s0):
     assert target.put("/api/ai/settings", json={"baseUrl": base, "model": "x"}, headers=auth(s0.tokens["TD-ACC-C1"])).status_code == 403
 
 
-@pytest.mark.skip(reason="시험 모델 서버가 필요하다. 5174 의 모델 서버(axlink-ollama)로 본다")
-def test_UC_061_S01_모델_선택(target, s0):
-    """새로 고침 → 생성 모델 선택·저장 → 질의 배지 (AC-061-2·5)."""
+def _llm_setting_row():
+    with tx() as cur:
+        return fetch_one(cur, "select base_url, model, updated_by_user_id, updated_at from llm_setting where id = 1")
 
 
-@pytest.mark.skip(reason="S0 복제본에 다른 임베딩 모델 조각을 주입하는 변형 절차는 별도 설계")
-def test_UC_061_S03_불일치(target, s0):
-    """임베딩 모델·차원 불일치 표시, 질의는 집계만 (AC-061-3)."""
+def _restore_llm_setting(before) -> None:
+    with tx() as cur:
+        if before is None:
+            cur.execute("delete from llm_setting where id = 1")
+        else:
+            cur.execute(
+                "insert into llm_setting (id, base_url, model, updated_by_user_id, updated_at) values (1, %s, %s, %s, %s) "
+                "on conflict (id) do update set base_url = excluded.base_url, model = excluded.model, "
+                "updated_by_user_id = excluded.updated_by_user_id, updated_at = excluded.updated_at",
+                (before["base_url"], before["model"], before["updated_by_user_id"], before["updated_at"]),
+            )
+
+
+def test_UC_061_S01_모델_선택(target, s0, screen):
+    """새로 고침 → 생성 모델 선택·저장 → 질의 배지 (AC-061-2·5).
+
+    모델 서버가 있는 원격 대상(5174, 공유 axlink-ollama)에서 목록·저장·배지를 본다. 생성 확인 실패
+    (E3)는 재생 서버의 Ollama 흉내를 장애로 두고 본다. 프로세스 안(CI)은 고정 응답 모드라 질의 배지가
+    「고정 응답(시험용)」 경고를 내는 근거(runtime.fixed)만 본다."""
+    c1 = auth(s0.tokens["TD-ACC-C1"])
+    if not TARGET_URL:
+        runtime = target.get("/api/ai/runtime", headers=c1).json()
+        assert runtime["fixed"] is True, runtime
+        return
+    adm = auth(s0.tokens["TD-ACC-A1"])
+    before = _llm_setting_row()
+    start = target.get("/api/ai/settings", headers=adm).json()
+    try:
+        base = start["baseUrl"]
+        listed = target.post("/api/ai/models/refresh", params={"baseUrl": base}, headers=adm).json()
+        assert not listed.get("error"), listed
+        answer = [m["name"] for m in listed["models"] if m["purpose"] == "ANSWER"]
+        assert answer, listed
+        chosen = start["model"] if start["model"] in answer else answer[0]
+
+        # E3: 생성 확인이 실패하면 저장하지 않고 설정도 그대로다
+        replay = os.environ["AXLINK_REPLAY_URL"].rstrip("/")
+        inner = (os.environ.get("AXLINK_REPLAY_TARGET_URL") or replay).rstrip("/") + "/ollama"
+        RemoteScriptedLlm(replay).script(None, "", fail=True)
+        flaky = target.post("/api/ai/models/refresh", params={"baseUrl": inner}, headers=adm).json()
+        assert replay_ollama.MODEL in [m["name"] for m in flaky["models"]], flaky
+        res = target.put("/api/ai/settings", json={"baseUrl": inner, "model": replay_ollama.MODEL}, headers=adm)
+        assert res.status_code == 400 and res.json()["code"] == "MODEL_CHECK_FAILED", res.text
+        after = target.get("/api/ai/settings", headers=adm).json()
+        assert (after["baseUrl"], after["model"]) == (start["baseUrl"], start["model"]), after
+
+        # 저장: DB 설정이 되고 질의 화면 배지가 그 모델을 보인다
+        res = target.put("/api/ai/settings", json={"baseUrl": base, "model": chosen}, headers=adm)
+        assert res.status_code == 200, res.text
+        saved = res.json()
+        assert saved["model"] == chosen and saved["source"] == "DB", saved
+        runtime = target.get("/api/ai/runtime", headers=c1).json()
+        assert runtime["model"] == chosen and runtime["fixed"] is False, runtime
+        if screen:
+            sc = screen("TD-ACC-C1")
+            sc.open(f"/p/{s0.ids['TD-PRJ-1']}/ask").see(f"답변 모델 {chosen}", selector="body")
+            sc.not_see("고정 응답", selector="body")
+            sc.done()
+    finally:
+        _restore_llm_setting(before)
+
+
+@pytest.mark.remote_llm
+def test_UC_061_S03_불일치(target, s0, llm):
+    """모의 모델: 장애·오류 처리 검증(검색 멈춤). 임베딩 모델·차원 불일치 표시, 질의는 집계만 (AC-061-3).
+
+    변형: 시험 DB 에 다른 임베딩 모델 이름의 조각 하나를 넣는다(끝에 지운다). 그동안 검색·색인이
+    멈추므로 이 시나리오 안에서만 둔다."""
+    pid = s0.ids["TD-PRJ-1"]
+    other = "other-embed:test"
+    vec = "[" + ",".join(["0.01"] * 1024) + "]"
+    with tx() as cur:
+        issue = fetch_one(cur, "select id from issue where project_id = %s order by id limit 1", (pid,))
+        row = fetch_one(
+            cur,
+            "insert into doc_chunk (project_id, source_type, source_id, chunk_index, content, embedding, embedding_model, "
+            "source_title, source_uri, content_hash) values (%s, 'ISSUE', %s, 9999, '불일치 시험 조각', %s::vector, %s, "
+            "'불일치 시험', 'test://mismatch', repeat('0', 64)) returning id",
+            (pid, issue["id"], vec, other),
+        )
+    try:
+        status = target.get("/api/ai/embedding", headers=auth(s0.tokens["TD-ACC-A1"])).json()
+        assert status["consistent"] is False, status
+        assert other in (status["message"] or "") and other in [m["model"] for m in status["indexModels"]], status
+
+        # 집계 질문: 문서 검색 없이 집계로 답한다
+        llm({"route": "AGGREGATE", "measure": "issue_count", "dimensions": [], "template": "STAT_CARD", "title": "이슈 건수", "query": "이슈 건수"}, "일반 이슈 건수를 알려 드립니다.")
+        events = _ask(target, s0, "TD-ACC-C1", "일반 이슈가 몇 건인지 알려줘", [pid])
+        assert events[0][1]["routing"]["type"] != "DOCUMENT", events[0][1]
+        assert events[0][1]["retrievedChunkCount"] == 0 and _sources(events) == [], events[0][1]
+        assert _done(events)["finishReason"] == "STOP", _done(events)
+        # 문서 질문: 검색이 멈췄다고 안내한다
+        llm({"route": "DOCUMENT", "query": "사업 기간"}, "지어낸 답")
+        events = _ask(target, s0, "TD-ACC-C1", "사업 기간은 몇 개월인가", [pid])
+        assert _done(events)["finishReason"] == "SEARCH_DISABLED", _done(events)
+        assert "지어낸 답" not in _text(events) and _sources(events) == [], _text(events)
+    finally:
+        with tx() as cur:
+            cur.execute("delete from doc_chunk where id = %s", (row["id"],))
 
 
 @pytest.mark.skip(reason="클라우드 위임 모델이 든 모델 서버 목록이 필요하다. 5174 에서 본다")
