@@ -147,6 +147,19 @@ def last_sync_status(cur: Any, connection_id: str) -> str | None:
 
 # --- 수집(BACKFILL) ---------------------------------------------------------
 
+def try_lock_sync(cur: Any, connection_id: str) -> bool:
+    """이 연결의 수집 잠금을 잡는다. 다른 회차가 잡고 있으면 False (AC-011-8).
+
+    회차는 트랜잭션 하나 안에서 돌아 진행 중인 잡 행이 다른 요청에 보이지 않는다. 그래서 행이
+    아니라 트랜잭션 잠금으로 막는다. 회차가 끝나거나(커밋·롤백) 프로세스가 죽으면 풀린다."""
+    row = fetch_one(
+        cur,
+        "select pg_try_advisory_xact_lock(hashtextextended('sync:' || %s, 0)) as ok",
+        (connection_id,),
+    )
+    return bool(row and row["ok"])
+
+
 def insert_sync_job(
     cur: Any,
     connection_id: str,
