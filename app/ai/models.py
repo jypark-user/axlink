@@ -20,6 +20,9 @@ class LlmModelResponse(BaseModel):
     # ANSWER 답변 모델로 쓸 수 있음 · EMBEDDING 검색(임베딩) 전용 · UNKNOWN 확인 필요
     purpose: str = "UNKNOWN"
     verifiedAt: str | None = None  # noqa: N815 — 마지막 짧은 생성 확인 성공
+    # 클라우드 위임 모델(생성이 외부로 나감). 폐쇄망 배포에 맞지 않는다(UC-061, AC-061-4)
+    cloud: bool = False
+    remoteHost: str | None = None  # noqa: N815 — 위임 대상 주소. 로컬 모델은 null
 
 
 class LlmModelListResponse(BaseModel):

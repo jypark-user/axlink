@@ -348,6 +348,7 @@ function LlmSettingsForm({
                 {m.parameterSize ? ` · ${m.parameterSize}` : ''}
                 {m.quantization ? ` · ${m.quantization}` : ''}
                 {PURPOSE_TAG[m.purpose]}
+                {m.cloud ? ' · 클라우드 위임(폐쇄망 부적합)' : ''}
               </SelectItem>
             ))}
           </SelectContent>
@@ -367,6 +368,16 @@ function LlmSettingsForm({
         {embeddingOnly && (
           <p className="rounded bg-destructive/10 p-2 text-xs text-destructive">
             서버가 이 모델을 검색(임베딩) 전용으로 알려 왔습니다. 답변 모델로 저장할 수 없습니다.
+          </p>
+        )}
+        {selected?.cloud && (
+          <p
+            className="rounded bg-destructive/10 p-2 text-xs text-destructive"
+            data-testid="llm-cloud-warning"
+          >
+            클라우드 위임 모델입니다. 이 서버에는 껍데기만 있고 생성은 외부(
+            <span className="font-mono">{selected.remoteHost}</span>)로 나갑니다. 폐쇄망
+            배포에서는 쓸 수 없습니다.
           </p>
         )}
         {selected?.purpose === 'UNKNOWN' && (

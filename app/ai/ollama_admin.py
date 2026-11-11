@@ -27,6 +27,8 @@ class DiscoveredModel:
     quantization: str | None
     # 서버가 알려준 용도(completion·embedding·tools 등). 안 알려주면 None(모름)
     capabilities: tuple[str, ...] | None = None
+    # 클라우드 위임 모델이면 생성이 나가는 외부 주소. 로컬 모델은 None
+    remote_host: str | None = None
 
 
 @dataclass(frozen=True)
@@ -66,6 +68,7 @@ def parse_tag(item: dict[str, Any]) -> DiscoveredModel:
         parameter_size=_str(details.get("parameter_size")),
         quantization=_str(details.get("quantization_level")),
         capabilities=tuple(capabilities) if raw is not None else None,
+        remote_host=_str(item.get("remote_host")),
     )
 
 
