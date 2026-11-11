@@ -128,6 +128,47 @@ def test_WBS_가_없으면_작업_줄_없이_고지한다(client, client_token, 
 
 
 @requires_db
+def test_사업_생성_때_깔린_계획서_자리는_계획서_없음으로_본다(client, client_token, no_plan):
+    """버전 '0'·파일 없음 자리 행 → 「못 읽음」이 아니라 계획서 없음 (DEF-V046)."""
+    with tx() as cur:
+        cur.execute("delete from wbs_recognition where project_id = %s", (PID,))
+        # 시드 사업에도 create_checklist 가 깐 자리 행이 있다. no_plan 이 내려 둔 것을 되살린다
+        cur.execute(
+            """
+            insert into work_product (project_id, type, version, pm_activity)
+            values (%s, 'PROJECT_PLAN', '0', 'PM_1')
+            on conflict (project_id, type, version) do nothing
+            """,
+            (PID,),
+        )
+        row = cur.execute(
+            "update work_product set is_current = true where project_id = %s "
+            "and type = 'PROJECT_PLAN' and version = '0' and file_uri is null "
+            "and document_upload_id is null and source_revision is null returning id",
+            (PID,),
+        ).fetchone()
+        assert row is not None, "시드 사업의 계획서 자리 행이 파일을 품고 있다"
+        wp_id = row["id"]
+    try:
+        h = _auth(client_token("r2"))
+        body = client.get(f"/api/projects/{PID}/wbs", headers=h).json()
+        assert body["recognition"] is None, body["recognition"]
+        assert body["source"] == "NONE" and "핵심 입력" in body["notice"]
+        assert not any("원본 파일을 찾지 못했습니다" in w for w in body["warnings"]), body
+        prog = client.get(f"/api/projects/{PID}/progress", headers=h).json()
+        assert prog["wbs"]["value"] is None
+        assert not any("원본 파일을 찾지 못했습니다" in w for w in prog["warnings"]), prog
+        with tx() as cur:
+            row = cur.execute(
+                "select 1 from wbs_recognition where project_id = %s", (PID,)
+            ).fetchone()
+        assert row is None, "자리 행을 못 읽은 판으로 남기면 안 된다"
+    finally:
+        with tx() as cur:
+            cur.execute("update work_product set is_current = false where id = %s", (wp_id,))
+
+
+@requires_db
 def test_용역사_WBS_파일이_그대로_작업_줄이_된다(client, client_token, plan_file):
     res = client.get(f"/api/projects/{PID}/wbs?at=2026-09-26", headers=_auth(client_token("r2")))
     assert res.status_code == 200, res.text
