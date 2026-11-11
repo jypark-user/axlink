@@ -1,5 +1,5 @@
 {
- "generated": "2026-11-10",
+ "generated": "2026-11-11",
  "sources": {
   "IM-001-요구사항정의서.md": {
    "version": "v0.4",
@@ -18,8 +18,8 @@
    "sha256": "a884352ef63cd96bb5a1f857b3fc386e5ca07bfa9cc7b3003fb7b7bf1b9a868c"
   },
   "IM-009-공통시험자료.md": {
-   "version": "v0.2.3",
-   "sha256": "bea80309c2a1747bfbeb7b8e48f18ff0f3b40834c5bfbcccaf407dc120c89e1f"
+   "version": "v0.2.4",
+   "sha256": "fb39b5e9270f9a60064974c2392de702cfde863313dd49bba07971a7d0e48bf1"
   },
   "IM-005-시험계획및결과서.md": {
    "version": "v0.2",
