@@ -34,6 +34,7 @@ from fastapi.responses import JSONResponse, PlainTextResponse, Response
 from app.common import errors
 from tests.fixtures.im009 import data as d
 from tests.fixtures.im009 import files as fixture_files
+from tests.fixtures.im009 import replay_ollama
 from tests.fixtures.im009.replay import Faults, ReplaySource
 
 GITHUB_KINDS = {"issues": "issue", "pulls": "pull_request", "commits": "commit",
@@ -79,6 +80,7 @@ def _faults_from(body: dict[str, Any]) -> Faults:
 
 def create_app(source: ReplaySource) -> FastAPI:
     app = FastAPI(title="IM-009 원천 재생")
+    app.include_router(replay_ollama.router)  # 대본 모델(원격 대상의 llm 시나리오)
     gh_items = source.fetch_items("GITHUB")
     rm_items = source.fetch_items("REDMINE")
     gh_file = source.fetch_file("GITHUB")
