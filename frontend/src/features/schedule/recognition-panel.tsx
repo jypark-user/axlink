@@ -31,7 +31,7 @@ export function RecognitionPanel({
             <p className="mt-1">
               {r.usingPrevious
                 ? `직전에 읽은 계획서의 작업 ${shownLeaves}개를 이전 기준선으로 계속 씁니다.`
-                : '읽은 작업이 없어 WBS 기준 진척률은 산출하지 않습니다(0% 가 아닙니다).'}
+                : '읽은 작업이 없어 WBS 기준 진척률은 산출하지 않습니다. 진척률 칸은 「산출 불가」로 둡니다.'}
             </p>
           </AlertDescription>
         </Alert>

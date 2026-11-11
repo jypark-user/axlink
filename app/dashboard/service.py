@@ -283,7 +283,7 @@ def _load_plan(
     경고한다(IM-007 AC-030-3, DEF-V038). 화면이 갑자기 비는 것보다 어느 판인지 밝히고 직전 값을
     보이는 편이 낫다. 읽어 둔 행이 없으면 못 읽었다고만 한다.
     """
-    if plan_row is None:
+    if plan_row is None or _placeholder(plan_row):
         return None, None
     plan_id = str(plan_row["id"])
     if wbs_repository.loaded_version(cur, project_id) == plan_id:
@@ -305,6 +305,20 @@ def _load_plan(
     wbs_repository.replace_plan(cur, project_id, plan_id, plan)
     wbs_repository.save_recognition(cur, project_id, plan_id, plan=plan)
     return plan, None
+
+
+def _placeholder(plan_row: dict[str, Any]) -> bool:
+    """사업을 만들 때 깔아 둔 산출물 목록 자리(DEF-V046). 아직 계획서가 없다는 뜻이다.
+
+    create_checklist 가 유형마다 버전 '0' 행을 하나씩 만든다. 파일도 업로드도 수집 판도
+    없으니 「못 읽은 계획서」가 아니라 「계획서 없음」으로 본다.
+    """
+    return (
+        not plan_row.get("file_uri")
+        and not plan_row.get("document_upload_id")
+        and not plan_row.get("source_revision")
+        and (plan_row.get("version") or "0") == "0"
+    )
 
 
 def _sync_recognition(cur: Any, project_id: str, plan_row: dict[str, Any], plan_id: str) -> None:
