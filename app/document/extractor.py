@@ -42,6 +42,24 @@ class LimitError(ValueError):
     """파일이 처리 상한을 넘었다. 메시지가 그대로 문서의 처리 실패 이유가 된다."""
 
 
+class UnsupportedDocument(ValueError):
+    """형식은 맞는데 일부러 읽을 수 없게 된 문서(암호·스캔). 손상 파일의 「본문 읽기 실패」와
+    구분해 「지원 제한(종류)」로 실패시키고 대응 방법을 알린다(AC-070-10)."""
+
+    def __init__(self, kind: str, message: str) -> None:
+        super().__init__(message)
+        self.kind = kind
+
+
+ENCRYPTED_HWP = (
+    "암호가 걸린 HWP 문서는 읽을 수 없습니다. 암호를 풀어 저장하거나 HWPX 로 변환해 다시 올리세요."
+)
+SCANNED_PDF = (
+    "글자 층이 없는 스캔 문서라 본문을 읽을 수 없습니다(문자 인식은 지원하지 않습니다). "
+    "원본에서 바로 PDF 로 저장한 판을 다시 올리세요."
+)
+
+
 @dataclass
 class ExtractResult:
     text: str
@@ -101,9 +119,24 @@ def check_zip(path: Path) -> None:
         )
 
 
+def _hwp5_encrypted(path: Path) -> bool:
+    """HWP 5.0 파일 머리(FileHeader) 속성의 암호 비트(bit 1). OLE 가 아니면 False(파서가 판단)."""
+    import olefile
+
+    if not olefile.isOleFile(str(path)):
+        return False
+    with olefile.OleFileIO(str(path)) as ole:
+        if not ole.exists("FileHeader"):
+            return False
+        header = ole.openstream("FileHeader").read(40)
+    return len(header) >= 40 and bool(int.from_bytes(header[36:40], "little") & 0x2)
+
+
 def _hwp5(path: Path) -> ExtractResult:
     from hwp_hwpx_parser import ExtractOptions, HWP5Reader, TableStyle, extract_hwp5
 
+    if _hwp5_encrypted(path):
+        raise UnsupportedDocument("암호", ENCRYPTED_HWP)
     text, err = extract_hwp5(path, ExtractOptions(table_style=TableStyle.MARKDOWN))
     return ExtractResult(text, len(HWP5Reader(path).get_tables()), warning=err or "")
 
@@ -211,8 +244,11 @@ def _pdf(path: Path) -> ExtractResult:
                 pages.append(f"<!-- {i}쪽 -->\n" + "\n\n".join(chunks))
             else:
                 pages.append(f"<!-- {i}쪽 --> 텍스트 없음")
-    # 스캔본은 페이지는 있는데 글자가 하나도 안 나온다. OCR 은 범위 밖이라 판별만 한다.
-    warning = "" if found else "텍스트가 추출되지 않았습니다 — 스캔 이미지 PDF 로 보입니다."
+    # 스캔본은 페이지는 있는데 글자가 하나도 안 나온다. OCR 은 범위 밖이라 판별만 하고
+    # 「지원 제한(스캔)」으로 실패시킨다. 빈 본문이 처리 완료로 보이면 안 된다(AC-070-10)
+    if page_count and not found:
+        raise UnsupportedDocument("스캔", SCANNED_PDF)
+    warning = ""
     if page_count > MAX_PDF_PAGES:
         warning = f"쪽이 많아 앞 {MAX_PDF_PAGES:,}쪽만 읽었습니다. {warning}".strip()
     return ExtractResult("\n\n".join(pages), table_count, page_count=page_count, warning=warning)
