@@ -7,6 +7,7 @@ ValueError 를 내 문서 전체가 실패로 남았다. 쪽 하나의 표를 �
 import io
 from pathlib import Path
 
+import pytest
 from pptx import Presentation
 from pptx.util import Inches
 
@@ -128,3 +129,25 @@ def test_docx_는_표제를_절로_남기고_표를_제자리에_둔다(tmp_path
     drafts = chunking.chunk("DOCUMENT_UPLOAD", "회의록.docx", text)
     hit = next(d for d in drafts if "지연" in d.content)
     assert hit.meta["headingPath"][-1] == "논의 사항", hit.meta
+
+
+HWP_DIR = Path(__file__).parent / "fixtures" / "im009" / "hwp"
+
+
+def test_hwp_와_hwpx_는_표를_행_열로_남긴다():
+    """TD-DOC-12·13(한글 자동화로 만든 가상 시험자료) → 같은 문단·3행×4열 표 (AC-070-8)."""
+    for name, ext in (("설계검토회의록.hwp", "HWP"), ("설계검토회의록.hwpx", "HWPX")):
+        result = extractor.extract(HWP_DIR / name, ext)
+        assert "| 항목 | 검토자 | 결과 | 비고 |" in result.text, name
+        assert "| 외부 연계 규격 | 김주무관 | 보완 | 응답 코드 표 추가 |" in result.text, name
+        assert result.table_count == 1, name
+
+
+def test_암호_걸린_hwp_는_손상이_아니라_지원_제한이다():
+    """TD-DOC-15: 문서 암호가 걸린 HWP 5.0 → 「지원 제한(암호)」(AC-070-10, UC-070-S13).
+
+    예전에는 파서 오류(ValueError)가 그대로 「본문 읽기 실패」가 돼 손상 파일과 구분되지 않았다."""
+    with pytest.raises(extractor.UnsupportedDocument) as exc:
+        extractor.extract(HWP_DIR / "암호문서.hwp", "HWP")
+    assert exc.value.kind == "암호"
+    assert "HWPX" in str(exc.value)  # 대응 절차를 안내한다

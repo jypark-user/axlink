@@ -8,9 +8,10 @@ IM-009 자료를 「원천」처럼 돌려준다. 실연동이 없을 때 수집
 from __future__ import annotations
 
 import os
+import time
 from collections.abc import Generator
 from dataclasses import asdict, dataclass, field
-from datetime import datetime
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
 
 import httpx
@@ -18,7 +19,7 @@ import httpx
 from app.common import errors
 from app.integration.adapter import github_connector as gh
 from app.integration.adapter import redmine_connector as rm
-from app.integration.port import ProbeResult
+from app.integration.port import PageResult, ProbeResult
 from tests.fixtures.im009 import data as d
 from tests.fixtures.im009 import payloads
 
@@ -31,6 +32,19 @@ def tool_base(tool: str, default: str) -> str:
     """시험이 만드는 연결의 주소. 원격 대상이면 재생 서버, 아니면 원래 주소(어댑터를 바꿔 쓴다)."""
     return f"{REPLAY_URL.rstrip('/')}/{tool.lower()}" if REPLAY_URL else default
 DESIGN_DOC_PATH = "docs/20-design/설계-민원조회.md"
+# 대량 이슈 변형(UC-011-S08)을 내는 저장소. 이슈마다 갱신 시각이 1분씩 늘어난다
+BULK_TARGET = "replay/bulk-issues"
+BULK_BASE = datetime(2026, 1, 1, tzinfo=UTC)
+
+
+def _bulk_issue(n: int, target: str) -> tuple[str, dict]:
+    stamp = (BULK_BASE + timedelta(minutes=n)).strftime("%Y-%m-%dT%H:%M:%SZ")
+    return f"issue:{n}", {
+        "number": n, "title": f"대량 이슈 {n}", "body": "", "labels": [], "state": "open",
+        "assignee": None, "milestone": None, "created_at": "2026-01-01T00:00:00Z",
+        "updated_at": stamp, "closed_at": None,
+        "html_url": f"https://github.com/{target}/issues/{n}",
+    }
 
 
 @dataclass
@@ -49,6 +63,8 @@ class Faults:
     wbs_targets: set[str] = field(default_factory=set)  # WBS 를 서빙할 추가 저장소(TD-PRJ-9 연결)
     extra_tree_paths: list[str] = field(default_factory=list)  # 트리에 더할 경로(UC-031-S03)
     serve_design_file: bool = False  # 설정 경로 설계서 파일(DESIGN_FILE_PATH) 제공(UC-031-S02)
+    delay_seconds: float = 0.0  # 이슈 목록 응답을 이만큼 늦춘다(장시간 응답, UC-011-S06)
+    bulk_issues: int = 0  # BULK_TARGET 의 이슈 건수(상한 초과 변형, UC-011-S08)
     calls: list[tuple[str, str, str]] = field(default_factory=list)  # (tool, kind, since)
 
 
@@ -79,6 +95,10 @@ class ReplaySource:
 
     # ------------------------------------------------------------ 자료
     def _github_items(self, target: str, kind: str) -> list[tuple[str, dict]]:
+        if target == BULK_TARGET:
+            if kind == "issue":
+                return [_bulk_issue(n, target) for n in range(1, self.faults.bulk_issues + 1)]
+            return []
         ms = {m.name: m for m in d.MILESTONES if m.connection == "TD-CON-1"}
         if target == d.CONNECTIONS["TD-CON-1"].target:
             issues = [
@@ -190,19 +210,37 @@ class ReplaySource:
 
         return _verify
 
-    def fetch_items(self, tool: str):
+    def fetch_items(self, tool: str, emulate_cap: bool = False):
+        """emulate_cap: 프로세스 안 재생은 어댑터의 쪽 넘김을 거치지 않으니, 대량 변형에 한해
+        회차 상한(per_page × max_pages)과 이어 읽을 자리를 어댑터처럼 돌려준다. 재생 서버는
+        실제 어댑터가 쪽을 넘기므로 쓰지 않는다."""
         def _fetch(
             base_url, target, secret, kind, per_page, max_pages, since=None, until=None
-        ) -> Generator[tuple[str, dict], None, None]:
+        ) -> Generator[tuple[str, dict], None, PageResult | None]:
             self.faults.calls.append(
                 (tool, kind, since.isoformat() if isinstance(since, datetime) else "")
             )
             self._check(tool, kind)
+            if kind == "issue" and self.faults.delay_seconds:
+                time.sleep(self.faults.delay_seconds)
             items = (
                 self._github_items(target, kind)
                 if tool == "GITHUB"
                 else self._redmine_items(target, kind)
             )
+            if target == BULK_TARGET and kind == "issue":
+                # GitHub 처럼 since(이상)로 거르고 갱신 오름차순으로 낸다
+                if isinstance(since, datetime):
+                    edge = since.astimezone(UTC).strftime("%Y-%m-%dT%H:%M:%SZ")
+                    items = [(e, p) for e, p in items if p["updated_at"] >= edge]
+                cap = per_page * max_pages
+                if emulate_cap and len(items) > cap:
+                    yield from items[:cap]
+                    last = items[cap - 1][1]["updated_at"]
+                    return PageResult(
+                        truncated=True,
+                        resume_since=datetime.fromisoformat(last.replace("Z", "+00:00")),
+                    )
             for n, (eid, payload) in enumerate(items, 1):
                 if (
                     kind == "issue"
@@ -294,7 +332,7 @@ def install(monkeypatch, source: ReplaySource) -> ReplaySource:
     if REPLAY_URL:
         return RemoteReplay(REPLAY_URL, source)
     monkeypatch.setattr(gh, "verify", source.verify("GITHUB", tuple(gh.ITEM_PATHS)))
-    monkeypatch.setattr(gh, "fetch_items", source.fetch_items("GITHUB"))
+    monkeypatch.setattr(gh, "fetch_items", source.fetch_items("GITHUB", emulate_cap=True))
     monkeypatch.setattr(gh, "fetch_file", source.fetch_file("GITHUB"))
     monkeypatch.setattr(rm, "verify", source.verify("REDMINE", rm.ITEM_KINDS))
     monkeypatch.setattr(rm, "fetch_items", source.fetch_items("REDMINE"))

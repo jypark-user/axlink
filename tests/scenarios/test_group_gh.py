@@ -3,15 +3,19 @@
 
 모델은 대본대로 답하는 흉내(ScriptedLlm)다. 여기서 보는 것은 라우팅·게이트·수치 검문·출처 위치가
 설계대로 움직이는지이고, 문장 품질과 실모델 일치(AC-060-8·10)는 5174 실모델에서 본다.
-PDF 두 건(TD-DOC-4·7)은 커밋해 둔 가상 시험자료다(fixtures/im009/pdf). HWP·HWPX·손상·대용량 자료는
-생성기가 없어 「자료 없음」으로 보류한다(files.MISSING).
+PDF(TD-DOC-4·7·16)·HWP·HWPX(TD-DOC-12·13·15)는 커밋해 둔 가상 시험자료다(fixtures/im009/pdf·hwp).
+손상(TD-DOC-10)·대용량(TD-DOC-11) 자료는 생성기가 없어 「자료 없음」으로 보류한다(files.MISSING).
 """
 
 from __future__ import annotations
 
+import io
 import json
 import os
 import re
+import subprocess
+import time
+import uuid
 from collections.abc import Iterator
 
 import httpx
@@ -660,29 +664,271 @@ def test_UC_070_S01_PDF_업로드_처리(target, s0, screen):
         sc.done()
 
 
-@pytest.mark.skip(reason="TD-DOC-12(HWP 5.0) 자료 없음")
+HWP = "application/x-hwp"
+HWPX = "application/hwp+zip"
+# TD-DOC-12·13 의 내용(tests/fixtures/im009/hwp/make_hwp.ps1). 표 3행 × 4열 = 머리글 1행 + 자료 2행
+HWP_TABLE_ROWS = (
+    ("항목", "검토자", "결과", "비고"),
+    ("외부 연계 규격", "김주무관", "보완", "응답 코드 표 추가"),
+    ("화면 설계", "박피엠", "적합", "없음"),
+)
+HWP_PARAGRAPHS = (
+    "회의 일시는 2026년 8월 25일 14시이고 장소는 가람시 정보화원 회의실이다.",
+    "검토 대상은 SW설계서 v0.9 이며 외부 연계 규격을 중심으로 검토했다.",
+    "결론: 지적 사항 2건을 반영해 SW설계서 v1.0 으로 다시 제출한다.",
+)
+
+
+def _hwp_case(target, s0, tid: str, name: str, mime: str) -> None:
+    """표 3행×4열 보존(항목·검토자·결과·비고), 문단 3개, 2쪽 (UC-070-S10·S11)."""
+    res = _upload(target, s0, "TD-PRJ-9", s0.files[tid].read_bytes(), name, mime)
+    assert res.status_code in (200, 201, 202), res.text
+    did = res.json()["id"]
+    v1 = auth(s0.tokens["TD-ACC-V1"])
+    doc = target.get(f"/api/documents/{did}", headers=v1).json()
+    assert doc["processingState"] == "DONE" and doc["status"] != "FAILED", doc
+    text = target.get(f"/api/documents/{did}/text", headers=v1).json()["text"]
+    rows = [[c.strip() for c in ln.strip().strip("|").split("|")] for ln in text.splitlines() if ln.startswith("|") and "---" not in ln]
+    assert [tuple(r) for r in rows] == list(HWP_TABLE_ROWS), rows
+    missing = [p for p in HWP_PARAGRAPHS if p not in text]
+    assert not missing, (missing, text[:400])
+    assert doc["pageCount"] == 2, f"쪽 수 {doc['pageCount']} (기대 2쪽)"
+
+
 def test_UC_070_S10_HWP_표(target, s0):
-    """HWP 5.0 표 3행×4열 (AC-070-8)."""
+    """TD-DOC-12(HWP 5.0) → 표 3행×4열(항목·검토자·결과·비고), 문단 3개, 2쪽 (AC-070-8)."""
+    _hwp_case(target, s0, "TD-DOC-12", "설계검토회의록.hwp", HWP)
 
 
-@pytest.mark.skip(reason="TD-DOC-13(HWPX) 자료 없음")
 def test_UC_070_S11_HWPX_표(target, s0):
-    """HWPX 표 (AC-070-8)."""
+    """TD-DOC-13(HWPX) → TD-DOC-12 와 같은 표·문단 (AC-070-8)."""
+    _hwp_case(target, s0, "TD-DOC-13", "설계검토회의록.hwpx", HWPX)
 
 
-@pytest.mark.skip(reason="TD-DOC-15·16(암호 HWP·스캔 PDF) 자료 없음")
 def test_UC_070_S13_지원_제한_구분(target, s0):
-    """지원 제한 사유 구분 (AC-070-10·5)."""
+    """TD-DOC-15(암호 HWP)·TD-DOC-16(스캔 PDF) → 둘 다 「처리 실패: 지원 제한(암호/스캔)」.
+    TD-DOC-15 를 HWPX 로 변환한 판(TD-DOC-13 과 같은 내용)을 다시 올리면 정상 (AC-070-10·5).
+
+    변환본 재업로드는 대응 절차다. HWP 5.0 정상 지원의 근거(UC-070-S10)로 세지 않는다."""
+    v1 = auth(s0.tokens["TD-ACC-V1"])
+    for tid, name, mime, kind in (
+        ("TD-DOC-15", "암호문서.hwp", HWP, "암호"),
+        ("TD-DOC-16", "스캔문서.pdf", "application/pdf", "스캔"),
+    ):
+        res = _upload(target, s0, "TD-PRJ-9", s0.files[tid].read_bytes(), name, mime)
+        assert res.status_code in (200, 201, 202), res.text
+        doc = target.get(f"/api/documents/{res.json()['id']}", headers=v1).json()
+        assert doc["processingState"] == "FAILED", (tid, doc)
+        reason = doc.get("processingError") or ""
+        # 손상 파일의 「본문 읽기 실패」(UC-070-S04)·색인 장애의 「색인 실패」(UC-070-S05)와 구분된다
+        assert reason.startswith(f"지원 제한({kind})"), (tid, reason)
+    res = _upload(target, s0, "TD-PRJ-9", s0.files["TD-DOC-13"].read_bytes(), "암호문서.hwpx", HWPX)
+    assert res.status_code in (200, 201, 202), res.text
+    doc = target.get(f"/api/documents/{res.json()['id']}", headers=v1).json()
+    assert doc["processingState"] == "DONE" and doc["status"] != "FAILED", doc
 
 
-@pytest.mark.skip(reason="임베딩 서버 중단·복구는 5174 환경 주입으로 본다")
-def test_UC_070_S05_색인_장애_뒤_재처리(target, s0):
-    """색인 실패 → 같은 문서 ID 로 완료 (AC-070-4·5)."""
+# ---- 5174 전용 장애 주입 (UC-070-S05·S07) ----------------------------------------------
+# 원격에서는 5174 API 의 임베딩 주소를 재생 서버의 임베딩 중계로 돌려 둔 실행에서만 돈다
+# (AXLINK_VERIFY_EMBED_PROXY=1). 공유 모델 서버는 멈추지 않는다(tests/fixtures/im009/embed_proxy.py).
+# 재시작은 AXLINK_VERIFY_RESTART 에 적은 5174 API 컨테이너 하나만, 대상이 5174 일 때만 한다.
+RESTART_CONTAINER = "axlink-int-api"
 
 
-@pytest.mark.skip(reason="처리 중 작업자 재시작은 5174 환경 주입으로 본다")
-def test_UC_070_S07_재시작(target, s0):
-    """대기열 복귀·반복 실패 사유 (AC-070-7)."""
+def _remote_injection(*, restart: bool = False) -> None:
+    if not TARGET_URL:
+        return
+    if os.environ.get("AXLINK_VERIFY_EMBED_PROXY") != "1" or not os.environ.get("AXLINK_REPLAY_URL"):
+        pytest.skip("5174 임베딩 중계가 설정되지 않았다(AXLINK_VERIFY_EMBED_PROXY·AXLINK_REPLAY_URL)")
+    if restart:
+        if os.environ.get("AXLINK_VERIFY_RESTART") != RESTART_CONTAINER:
+            pytest.skip(f"재시작 주입이 허용되지 않았다(AXLINK_VERIFY_RESTART={RESTART_CONTAINER})")
+        if not re.search(r"//(127\.0\.0\.1|localhost):5174/", TARGET_URL + "/"):
+            pytest.skip(f"재시작 주입은 5174 대상에서만 한다: {TARGET_URL}")
+
+
+def _embed(mode: str | None = None) -> dict:
+    """원격 임베딩 중계 상태. mode 를 주면 바꾼다."""
+    base = os.environ["AXLINK_REPLAY_URL"].rstrip("/")
+    with httpx.Client(timeout=10) as c:
+        res = c.put(f"{base}/_replay/embed", json={"mode": mode}) if mode else c.get(f"{base}/_replay/embed")
+    res.raise_for_status()
+    return res.json()
+
+
+def _wait(cond, what: str, timeout: float = 90.0, every: float = 0.5):
+    deadline = time.monotonic() + timeout
+    while True:
+        got = cond()
+        if got:
+            return got
+        if time.monotonic() > deadline:
+            raise AssertionError(f"{timeout:.0f}초 안에 {what} 되지 않았다")
+        time.sleep(every)
+
+
+def _doc_row(did: str) -> dict:
+    with tx() as cur:
+        return fetch_one(cur, "select processing_state, processing_attempts, processing_error from document_upload where id = %s", (did,))
+
+
+def _post_doc(target, s0, prj: str, content: bytes, name: str, mime: str, acc="TD-ACC-V1") -> str:
+    """올리기만 한다(처리를 기다리지 않는다)."""
+    res = target.post(f"/api/projects/{s0.ids[prj]}/documents", files={"file": (name, content, mime)}, headers=auth(s0.tokens[acc]))
+    assert res.status_code in (200, 201, 202), res.text
+    return res.json()["id"]
+
+
+def _unique_docx(tag: str) -> bytes:
+    """내용이 실행마다 다른 DOCX(같은 해시로 기존 문서에 묶이지 않게)."""
+    from docx import Document
+
+    doc = Document()
+    doc.add_heading(f"재시작 시험 문서 {tag}", level=1)
+    for i in range(1, 6):
+        doc.add_paragraph(f"{i}. 민원 처리 현황 주간 점검 기록 {tag}-{i}. 처리 기한을 넘긴 민원은 담당 부서에 알린다.")
+    buf = io.BytesIO()
+    doc.save(buf)
+    return buf.getvalue()
+
+
+class _DownEmbedding:
+    """임베딩 서버가 멈춘 것과 같은 꼴(실제 어댑터가 재시도 뒤 내는 오류)."""
+
+    def model_name(self) -> str:
+        return settings.embedding_model
+
+    def dimension(self) -> int:
+        return settings.embedding_dimension
+
+    def embed(self, texts):
+        raise errors.ApiError(503, "AI_UNAVAILABLE", "임베딩 모델에 닿지 못했습니다: 시험 주입(서버 중단)")
+
+
+def test_UC_070_S05_색인_장애_뒤_재처리(target, s0, monkeypatch):
+    """임베딩 서버 중단 중 TD-DOC-5 올리기 → 「색인 실패」 → 복구 → 같은 파일 재업로드 → 같은 문서 ID 로 완료 (AC-070-4·5)."""
+    from app.document import service as doc_service
+
+    _remote_injection()
+    content = s0.files["TD-DOC-5"].read_bytes()
+    v1 = auth(s0.tokens["TD-ACC-V1"])
+    try:
+        if TARGET_URL:
+            _embed("down")
+        else:
+            monkeypatch.setattr(doc_service, "embedding_port", lambda: _DownEmbedding())
+        res = _upload(target, s0, "TD-PRJ-9", content, "회의록_2026-08-25.docx", DOCX)
+        assert res.status_code in (200, 201, 202), res.text
+        did = res.json()["id"]
+        doc = target.get(f"/api/documents/{did}", headers=v1).json()
+        assert doc["processingState"] == "FAILED", doc
+        # 색인 장애는 「색인 실패」로, 손상 파일의 「본문 읽기 실패」(UC-070-S04)와 구분된다(AC-070-5)
+        assert (doc.get("processingError") or "").startswith("색인 실패"), doc
+    finally:
+        if TARGET_URL:
+            _embed("pass")
+        else:
+            monkeypatch.undo()
+    res = _upload(target, s0, "TD-PRJ-9", content, "회의록_2026-08-25.docx", DOCX)
+    assert res.status_code in (200, 201, 202), res.text
+    assert res.json()["id"] == did, "같은 파일 재업로드가 새 문서가 됐다(AC-070-4)"
+    doc = target.get(f"/api/documents/{did}", headers=v1).json()
+    assert doc["processingState"] == "DONE" and not doc.get("processingError"), doc
+    with tx() as cur:
+        n = fetch_one(cur, "select count(*) as n from doc_chunk where source_id = %s", (did,))["n"]
+    assert n > 0, "재처리 뒤 색인 조각이 없다"
+
+
+def _restart_api(target) -> None:
+    """5174 API 컨테이너 하나만 다시 시작하고 응답할 때까지 기다린다."""
+    subprocess.run(["docker", "restart", RESTART_CONTAINER], check=True, capture_output=True, timeout=180)
+
+    def up() -> bool:
+        try:
+            return target.get("/api/health").status_code == 200
+        except httpx.HTTPError:
+            return False
+
+    _wait(up, "API 가 다시 응답", timeout=240, every=2)
+
+
+def test_UC_070_S07_재시작(target, s0, monkeypatch):
+    """처리 중 작업자 재시작 → 대기열 복귀 → 완료. 같은 작업이 3회 끊기면 사유와 함께 실패 (AC-070-7).
+
+    원격: 임베딩 중계가 색인 요청을 붙잡은 사이 5174 API 를 실제로 다시 시작한다. 기동 정리가
+    처리 중이던 작업을 대기열에 다시 넣고, 같은 작업이 3번 끊기면 실패로 남긴다.
+    프로세스 안: 처리를 끊긴 채(처리 중) 두고 기동 정리(recover)를 부른다. 같은 저장소 SQL 이다."""
+    from app.document import repository as doc_repo
+    from app.document import service as doc_service
+
+    _remote_injection(restart=True)
+    tag = uuid.uuid4().hex[:8]
+    ok_bytes, fail_bytes = _unique_docx(f"{tag}-A"), _unique_docx(f"{tag}-B")
+    max_attempts = 3  # 명세(UC-070-S07) 「3회 반복 시 실패」. 제품 설정 document_max_attempts 기본값과 같다
+    v1 = auth(s0.tokens["TD-ACC-V1"])
+
+    if not TARGET_URL:
+        assert settings.document_max_attempts == max_attempts
+        real_run = doc_service.run_job
+        monkeypatch.setattr(doc_service, "run_job", lambda job, txf: None)  # 처리 중에 끊긴 것처럼 둔다
+
+        def restart() -> None:
+            doc_service.recover(True)  # 기동 정리
+
+        def reclaim() -> None:
+            with tx() as cur:
+                assert doc_repo.claim_next(cur) is not None  # 작업자가 다시 가져가 처리 중
+
+        ok = _post_doc(target, s0, "TD-PRJ-9", ok_bytes, f"재시작-완료-{tag}.docx", DOCX)
+        assert _doc_row(ok)["processing_state"] == "RUNNING"
+        restart()
+        assert _doc_row(ok)["processing_state"] == "QUEUED", "재시작 뒤 대기열로 돌아가지 않았다"
+        monkeypatch.setattr(doc_service, "run_job", real_run)
+        assert doc_service.process_next()
+        row = _doc_row(ok)
+        assert row["processing_state"] == "DONE" and row["processing_attempts"] == 2, row
+
+        monkeypatch.setattr(doc_service, "run_job", lambda job, txf: None)
+        bad = _post_doc(target, s0, "TD-PRJ-9", fail_bytes, f"재시작-실패-{tag}.docx", DOCX)
+        for i in range(1, max_attempts + 1):
+            restart()
+            if i < max_attempts:
+                assert _doc_row(bad)["processing_state"] == "QUEUED", (i, _doc_row(bad))
+                reclaim()
+        monkeypatch.setattr(doc_service, "run_job", real_run)
+    else:
+        try:
+            # 1) 한 번 끊김 → 대기열 복귀 → 완료
+            _embed("hold")
+            calls = _embed()["calls"]
+            ok = _post_doc(target, s0, "TD-PRJ-9", ok_bytes, f"재시작-완료-{tag}.docx", DOCX)
+            _wait(lambda: _embed()["calls"] > calls and _doc_row(ok)["processing_state"] == "RUNNING", "처리 중(색인 대기)")
+            calls = _embed()["calls"]
+            _restart_api(target)
+            _wait(lambda: _embed()["calls"] > calls, "재시작 뒤 같은 작업을 다시 처리", timeout=120)
+            assert _doc_row(ok)["processing_state"] == "RUNNING"
+            _embed("pass")
+            done = s0.await_document("TD-ACC-V1", ok)
+            row = _doc_row(ok)
+            assert done["processingState"] == "DONE" and row["processing_attempts"] == 2, (done, row)
+
+            # 2) 같은 작업이 3번 끊김 → 실패와 사유
+            _embed("hold")
+            calls = _embed()["calls"]
+            bad = _post_doc(target, s0, "TD-PRJ-9", fail_bytes, f"재시작-실패-{tag}.docx", DOCX)
+            for i in range(1, max_attempts + 1):
+                _wait(lambda n=calls: _embed()["calls"] > n and _doc_row(bad)["processing_state"] == "RUNNING", f"{i}번째 처리 중", timeout=120)
+                calls = _embed()["calls"]
+                _restart_api(target)
+            s0.await_document("TD-ACC-V1", bad, timeout=60)
+        finally:
+            _embed("pass")
+
+    doc = target.get(f"/api/documents/{bad}", headers=v1).json()
+    row = _doc_row(bad)
+    assert row["processing_state"] == "FAILED" and row["processing_attempts"] == max_attempts, row
+    reason = doc.get("processingError") or ""
+    assert f"{max_attempts}번 중단" in reason and "재시작" in reason, reason
 
 
 def _ui_UC_060_S06a(screen, s0):

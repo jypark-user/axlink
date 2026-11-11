@@ -408,18 +408,30 @@ def test_UC_031_S03_설정_경로_아닌_커밋(target, s0, replay):
     _restore_wbs(target, s0, replay)
 
 
-def test_UC_031_S02_설정_경로_커밋(target, s0, replay, monkeypatch):
-    """설정 경로에 설계서 파일 커밋 → 수집 → 제출본 생성(버전 = 해시), 판정 「제출(저장소 경로)」 (AC-031-2)."""
-    from app.config import settings
+def test_UC_031_S02_설정_경로_커밋(target, s0, replay):
+    """설정 경로에 설계서 파일 커밋 → 수집 → 제출본 생성(버전 = 해시), 판정 「제출(저장소 경로)」 (AC-031-2).
 
-    monkeypatch.setattr(settings, "collect_files", "docs/00-management/WBS.xlsx=PROJECT_PLAN,docs/20-design/SW설계서_v0.9.docx=SOFTWARE_DESIGN")
-    replay.faults = Faults(serve_design_file=True, extra_tree_paths=["docs/20-design/SW설계서_v0.9.docx"])
-    _sync(target, s0)
-    with tx() as cur:
-        rows = fetch_all(cur, "select version, status, source_kind, is_current from work_product where project_id = %s and type = 'SOFTWARE_DESIGN' order by created_at", (s0.ids["TD-PRJ-1"],))
-    tool_rows = [r for r in rows if r["source_kind"] == "TOOL"]
-    assert tool_rows and tool_rows[-1]["status"] == "SUBMITTED" and tool_rows[-1]["version"].startswith("d3d3d3d3"), rows
-    _restore_wbs(target, s0, replay)
+    설정 경로는 TD-CON-1 의 연결별 매핑 규칙 collectFiles 로 준다(DEF-V012 수정 뒤 연결별 설정).
+    서버 설정을 바꾸지 않아 원격(5174)에서도 같은 절차로 돈다. 끝에 원래 규칙으로 되돌린다."""
+    c1 = auth(s0.tokens["TD-ACC-C1"])
+    con = f"/api/connections/{s0.ids['TD-CON-1']}"
+    got = target.get(f"/api/projects/{s0.ids['TD-PRJ-1']}/connections", headers=c1)
+    assert got.status_code == 200, got.text
+    conn = next(c for c in got.json() if c["id"] == s0.ids["TD-CON-1"])
+    original = dict(conn.get("mappingRules") or {})
+    rules = {**original, "collectFiles": "docs/00-management/WBS.xlsx=PROJECT_PLAN,docs/20-design/SW설계서_v0.9.docx=SOFTWARE_DESIGN"}
+    res = target.patch(f"{con}/mapping", json={"mappingRules": rules}, headers=c1)
+    assert res.status_code == 200, res.text
+    try:
+        replay.faults = Faults(serve_design_file=True, extra_tree_paths=["docs/20-design/SW설계서_v0.9.docx"])
+        _sync(target, s0)
+        with tx() as cur:
+            rows = fetch_all(cur, "select version, status, source_kind, is_current from work_product where project_id = %s and type = 'SOFTWARE_DESIGN' order by created_at", (s0.ids["TD-PRJ-1"],))
+        tool_rows = [r for r in rows if r["source_kind"] == "TOOL"]
+        assert tool_rows and tool_rows[-1]["status"] == "SUBMITTED" and tool_rows[-1]["version"].startswith("d3d3d3d3"), rows
+    finally:
+        target.patch(f"{con}/mapping", json={"mappingRules": original}, headers=c1)
+        _restore_wbs(target, s0, replay)
 
 
 def test_UC_030_S03_합이_1이_아님(target, s0, replay):
@@ -578,11 +590,6 @@ def test_UC_032_S10_가중치_기준_확인(target, s0, replay):
 @pytest.mark.skip(reason="DEC-12(승인률 분모·분자) 결정 전")
 def test_UC_031_S10_승인률(target, s0):
     """승인률 (AC-031-9)."""
-
-
-@pytest.mark.skip(reason="기록 저장 실패 주입은 DB 장애 모의가 필요하다. 별도 자동 시험으로 설계")
-def test_UC_032_S07_기록_실패_롤백(target, s0):
-    """저장 실패 → 상태 불변 (AC-032-7)."""
 
 
 @pytest.mark.skip(reason="DEC-10(협의 범위 코드·계약 범위) 결정 전. 지정 API 미구현")
