@@ -191,3 +191,53 @@ def test_쪽을_넘어_이어지는_본문은_여전히_두_쪽에_걸친다():
     [draft] = chunking.chunk("DOCUMENT_UPLOAD", "보고서.pdf", body)
     assert draft.meta["page"] == 1 and draft.meta["pageEnd"] == 2
 
+
+_HWP_TEXT = "\n".join(
+    [
+        "설계검토회의록",
+        "회의 일시는 8월 25일이다.",
+        "",
+        "| 항목 | 검토자 |",
+        "| --- | --- |",
+        "| 외부 연계 | 김주무관 |",
+        "| 화면 설계 | 박피엠 |",
+        "",
+        "결론: 다시 제출한다.",
+    ]
+)
+
+
+def test_문단_위치_모드는_문단_순번과_표_행을_남기고_쪽은_만들지_않는다():
+    """DEC-21. HWP·HWPX 는 쪽 대신 추출한 문단·표·행 위치를 출처로 쓴다."""
+    [draft] = chunking.chunk("DOCUMENT_UPLOAD", "회의록.hwp", _HWP_TEXT, block_positions=True)
+    assert draft.meta["paraStart"] == 1 and draft.meta["paraEnd"] == 3
+    assert draft.meta["table"] == 1
+    assert (draft.meta["tableRowStart"], draft.meta["tableRowEnd"]) == (1, 3)
+    assert "page" not in draft.meta and "pageEnd" not in draft.meta
+    assert "⟦" not in draft.content
+    assert "| 외부 연계 | 김주무관 |" in draft.content.split("\n")
+
+
+def test_문단_위치_모드가_아니면_위치를_붙이지_않는다():
+    [draft] = chunking.chunk("DOCUMENT_UPLOAD", "회의록.docx", _HWP_TEXT)
+    assert set(draft.meta) == {"headingPath"}
+
+
+def test_문단_가운데서_시작한_조각도_그_문단_순번을_잇는다():
+    long_para = " ".join(f"긴 문단의 {i}번째 문장이다." for i in range(400))
+    body = "\n".join(["1. 개관", "첫 문단이다.", long_para, "마지막 문단이다."])
+    drafts = chunking.chunk("DOCUMENT_UPLOAD", "보고서.hwpx", body, block_positions=True)
+    assert len(drafts) >= 3
+    assert drafts[0].meta["headingPath"] == ["1. 개관"]
+    assert drafts[0].meta["paraStart"] == 1  # 표제도 한글에서는 문단이다
+    middle = drafts[1]
+    assert (middle.meta["paraStart"], middle.meta["paraEnd"]) == (3, 3)
+    assert drafts[-1].meta["paraEnd"] == 4
+    assert all("⟦" not in d.content for d in drafts)
+
+
+def test_두_표에_걸친_조각은_표_범위만_남긴다():
+    body = "| a | b |\n| --- | --- |\n| 1 | 2 |\n\n| c | d |\n| --- | --- |\n| 3 | 4 |"
+    [draft] = chunking.chunk("DOCUMENT_UPLOAD", "표.hwp", body, block_positions=True)
+    assert (draft.meta["table"], draft.meta["tableEnd"]) == (1, 2)
+    assert "tableRowStart" not in draft.meta

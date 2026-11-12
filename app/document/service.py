@@ -237,6 +237,7 @@ def _run_steps(
     source = indexing.IndexSource(
         source_type="DOCUMENT_UPLOAD", source_id=document_id, project_id=project_id,
         title=filename, body=result.text, uri=stored_path,
+        block_positions=ext.upper() in extractor.BLOCK_POSITION_EXTS,
     )
     port = embedding_port()
     try:

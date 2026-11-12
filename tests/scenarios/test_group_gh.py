@@ -25,7 +25,9 @@ from app.ai.port import LlmResult
 from app.common import errors
 from app.config import settings
 from app.db import fetch_all, fetch_one, tx
+from app.rag import answer as ask_answer
 from app.rag import number_guard
+from app.rag import search as ask_search
 from app.rag import service as ask_service
 from tests.fixtures.im009 import replay_ollama
 from tests.scenarios.conftest import TARGET_URL, auth
@@ -701,7 +703,10 @@ HWP_PARAGRAPHS = (
 
 
 def _hwp_case(target, s0, tid: str, name: str, mime: str) -> None:
-    """표 3행×4열 보존(항목·검토자·결과·비고), 문단 3개, 2쪽 (UC-070-S10·S11)."""
+    """표 3행×4열 보존(항목·검토자·결과·비고), 문단 3개, 출처 위치는 문단·표·행 (UC-070-S10·S11).
+
+    HWP·HWPX 파일에는 쪽 나눔 정보가 없다. 쪽 수·쪽 위치를 만들지 않고 실제 확보한 문단·표·행
+    위치를 출처로 낸다(DEC-21)."""
     res = _upload(target, s0, "TD-PRJ-9", s0.files[tid].read_bytes(), name, mime)
     assert res.status_code in (200, 201, 202), res.text
     did = res.json()["id"]
@@ -713,11 +718,27 @@ def _hwp_case(target, s0, tid: str, name: str, mime: str) -> None:
     assert [tuple(r) for r in rows] == list(HWP_TABLE_ROWS), rows
     missing = [p for p in HWP_PARAGRAPHS if p not in text]
     assert not missing, (missing, text[:400])
-    assert doc["pageCount"] == 2, f"쪽 수 {doc['pageCount']} (기대 2쪽)"
+    assert doc["pageCount"] is None, f"없는 쪽 수를 냈다: {doc['pageCount']}"
+    with tx() as cur:
+        rows = fetch_all(
+            cur,
+            "select c.id::text as id, c.project_id::text as project_id, p.name as project_name, "
+            "c.source_type, c.source_id::text as source_id, c.source_title, c.source_uri, "
+            "c.chunk_index, c.content, c.meta_json, 1.0 as similarity "
+            "from doc_chunk c join project p on p.id = c.project_id "
+            "where c.source_id = %s order by c.chunk_index",
+            (did,),
+        )
+    assert rows, "색인 조각이 없다"
+    # 문서 질의 출처 카드에 붙는 위치 문구를 제품 함수 그대로 만든다
+    locations = [ask_answer.location_text(ask_search._chunk(r, 0.0)) for r in rows]
+    assert not any("p." in (loc or "") for loc in locations), locations
+    # 문단 5개(머리 표기·제목·본문 3) 와 표 1개 3행이 한 조각에 든다
+    assert locations == ["문단 1~5 / 표 1 · 1~3행"], locations
 
 
 def test_UC_070_S10_HWP_표(target, s0):
-    """TD-DOC-12(HWP 5.0) → 표 3행×4열(항목·검토자·결과·비고), 문단 3개, 2쪽 (AC-070-8)."""
+    """TD-DOC-12(HWP 5.0) → 표 3행×4열(항목·검토자·결과·비고), 문단 3개, 출처 「문단 1~5 / 표 1 · 1~3행」 (AC-070-8)."""
     _hwp_case(target, s0, "TD-DOC-12", "설계검토회의록.hwp", HWP)
 
 

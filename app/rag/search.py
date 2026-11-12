@@ -37,6 +37,13 @@ class RetrievedChunk:
     page_end: int | None = None
     row_start: int | None = None
     row_end: int | None = None
+    # 쪽이 없는 형식(HWP·HWPX)의 위치. 문단 순번 범위, 표 번호(걸치면 끝 표), 표 안 행 범위
+    para_start: int | None = None
+    para_end: int | None = None
+    table_no: int | None = None
+    table_end: int | None = None
+    table_row_start: int | None = None
+    table_row_end: int | None = None
     score: float = 0.0  # RRF 융합 점수. 순위 결정에만 쓴다
 
 
@@ -204,6 +211,12 @@ def _chunk(row: dict, score: float) -> RetrievedChunk:
         page_end=_int(meta.get("pageEnd")),
         row_start=_int(meta.get("rowStart")),
         row_end=_int(meta.get("rowEnd")),
+        para_start=_int(meta.get("paraStart")),
+        para_end=_int(meta.get("paraEnd")),
+        table_no=_int(meta.get("table")),
+        table_end=_int(meta.get("tableEnd")),
+        table_row_start=_int(meta.get("tableRowStart")),
+        table_row_end=_int(meta.get("tableRowEnd")),
     )
 
 

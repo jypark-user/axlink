@@ -101,6 +101,21 @@ def test_원문_위치는_표제_쪽_행을_잇고_걸치면_범위로_쓴다():
     assert answer.location_label(_chunk("c", page_no=2)) == " (p.2)"
 
 
+def test_HWP_원문_위치는_쪽_대신_문단과_표_행으로_쓴다():
+    # DEC-21. 없는 쪽 번호는 만들지 않는다
+    assert (
+        answer.location_text(
+            _chunk("c", para_start=3, para_end=4, table_no=1, table_row_start=2, table_row_end=2)
+        )
+        == "문단 3~4 / 표 1 · 2행"
+    )
+    assert (
+        answer.location_text(_chunk("c", heading=["2. 검토 결과"], para_start=5, para_end=5))
+        == "2. 검토 결과 / 문단 5"
+    )
+    assert answer.location_text(_chunk("c", table_no=1, table_end=2)) == "표 1~2"
+
+
 def test_XLSX_표_조각은_질문이_가리키는_행만_남기고_위치를_좁힌다():
     # 시트 하나가 조각 하나면 출처가 「2~7행」이 되고 답인 행이 잘린다(AC-060-11, DEF-V031)
     table = "\n".join([
