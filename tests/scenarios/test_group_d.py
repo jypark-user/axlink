@@ -59,7 +59,10 @@ def _checklist(target, s0, prj="TD-PRJ-1", acc="TD-ACC-C1") -> dict[str, dict]:
 
 
 def _sync(target, s0, con="TD-CON-1", acc="TD-ACC-V1") -> dict:
-    job = target.post(f"/api/connections/{s0.ids[con]}/sync", json={"kind": "BACKFILL"}, headers=auth(s0.tokens[acc])).json()
+    res = target.post(f"/api/connections/{s0.ids[con]}/sync", json={"kind": "BACKFILL"}, headers=auth(s0.tokens[acc]))
+    # 거절(409 수집 중 등)이면 잡 대신 오류 본문이 온다. 원인을 그대로 보이게 코드와 본문을 남긴다
+    assert res.status_code == 202, (res.status_code, res.text[:300])
+    job = res.json()
     assert job["status"] == "SUCCEEDED", job
     return job
 
@@ -484,6 +487,10 @@ def test_UC_032_S05_계획서_교체_뒤(target, s0, replay):
     path = s0.files["TD-DOC-6"].parent / "WBS-DELIV32.xlsx"
     files._xlsx(path, "WBS", header, rows)
     s0.files["TD-WBS-DELIV32"] = path
+    # 선행: 3.2 가 확인돼 있어야 「다시 확인 필요」가 성립한다(UC-032-S01·S02 가 만든다). 이 시험만
+    # 골라 돌리면 확인이 없어 NONE 이 나온다. 그때는 제품 결함이 아니라 시작 상태가 다르다
+    before = next(i for i in _completion(target, s0)["items"] if i["wbsId"] == "3.2")
+    assert before["completionStatus"] == "CONFIRMED", f"시작 상태가 아니다(3.2 확인 없음): {before}"
     replay.faults = Faults(wbs_variant="TD-WBS-DELIV32", wbs_sha="d32d32d3" + "0" * 32)
     _sync(target, s0)
     c = _completion(target, s0)

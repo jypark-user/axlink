@@ -235,6 +235,10 @@ def confirm(
     status = "CONFIRMED" if rec["type"] == row["proposed_type"] else "MANUAL_OVERRIDE"
     draft_repository.mark_confirmed(cur, str(row["id"]), principal.user_id, work_product_id, status)
     draft_repository.set_document_status(cur, document_id, "CONFIRMED")
+    # 산출물 항목이 생겼다. 승인률 지표가 읽는 작업-산출물 연결을 지금 맞춘다(DEC-12)
+    from app.dashboard import service as dashboard_service  # 순환 import 회피
+
+    dashboard_service.sync_product_links(cur, project_id)
 
     return StructuringConfirmResponse(
         workProductId=work_product_id,
