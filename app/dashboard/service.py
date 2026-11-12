@@ -179,6 +179,7 @@ def compute(cur: Any, project_id: str, at: date) -> ProgressResponse:
         workProduct=product_measure,
         defect=defect_measure,
         behind=[] if wbs_progress is None else wbs_progress.behind,
+        delayed=[] if wbs_progress is None else wbs_progress.delayed,
         warnings=warnings,
         planVersion=None if shown_row is None else shown_row["version"],
         planUpdatedAt=None if shown_row is None else shown_row["updated_at"].isoformat(),

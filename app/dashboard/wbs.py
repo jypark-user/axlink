@@ -117,6 +117,8 @@ class WbsProgress:
     warnings: list[str]
     estimated: bool = False
     unavailable: list[str] = field(default_factory=list)
+    # 지연 작업: 종료일이 기준일 전에 지났는데 실적 100% 미만인 말단(IM-009 7.1)
+    delayed: list[str] = field(default_factory=list)
 
     @property
     def deviation(self) -> float | None:
@@ -263,6 +265,12 @@ def progress(plan: WbsPlan, at: date | None = None) -> WbsProgress:
         if r.actual is not None and r.actual + 0.01 < r.planned_at(at)
     ]
 
+    delayed = [
+        _label(r)
+        for r in plan.rows
+        if r.end is not None and r.end < at and r.actual is not None and r.actual + 0.0001 < 1.0
+    ]
+
     return WbsProgress(
         actual=None if actual is None else round(actual, 4),
         planned=None if planned is None else round(planned, 4),
@@ -270,6 +278,7 @@ def progress(plan: WbsPlan, at: date | None = None) -> WbsProgress:
         leaf_count=plan.leaf_count,
         weight_total=plan.weight_total,
         behind=behind,
+        delayed=delayed,
         warnings=plan.warnings,
         estimated=plan.estimated,
         unavailable=unavailable_reasons(plan),

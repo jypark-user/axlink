@@ -40,6 +40,8 @@ class ProgressResponse(BaseModel):
     defect: ProgressMeasure | None = None
 
     behind: list[str]
+    # 지연 작업(종료일 지남·실적 100% 미만). 스냅샷 「지연 작업 수」와 같은 기준
+    delayed: list[str] = []
     warnings: list[str]
     planVersion: str | None  # noqa: N815
     planUpdatedAt: str | None  # noqa: N815
