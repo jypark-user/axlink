@@ -1,5 +1,15 @@
 import { useEffect, useState, type ReactNode } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from '@/components/ui/alert-dialog';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -25,13 +35,10 @@ import {
   type Priority,
   type StructuringConfirmResponse,
   type StructuringDraftResponse,
-  type WorkProductStatus,
   type WorkProductType,
 } from '@/types/api';
 
 const PRIORITIES: Priority[] = ['MUST', 'SHOULD', 'COULD', 'WONT'];
-/** 확정은 산출물 등록이다. 승인은 발주기관이 산출물 화면에서 따로 한다. */
-const STATUSES: WorkProductStatus[] = ['DRAFT', 'SUBMITTED'];
 
 export function StructuringDraftPage(): ReactNode {
   const { projectId, documentId } = useParams();
@@ -48,7 +55,7 @@ export function StructuringDraftPage(): ReactNode {
   const [title, setTitle] = useState('');
   const [version, setVersion] = useState('');
   const [authoredDate, setAuthoredDate] = useState('');
-  const [status, setStatus] = useState<WorkProductStatus>('DRAFT');
+  const [asking, setAsking] = useState(false);
   const [requirements, setRequirements] = useState<DraftRequirement[]>([]);
   const [pending, setPending] = useState(false);
 
@@ -61,14 +68,20 @@ export function StructuringDraftPage(): ReactNode {
     setRequirements(draft.requirements);
   }, [draft]);
 
-  const confirm = async () => {
+  /** 확정 = 산출물 제출(DEC-14). 뜻을 알리는 확인을 한 번 거친다 */
+  const ask = () => {
     if (!type || !title.trim() || !version.trim() || requirements.length === 0) {
       toast({ title: '유형·제목·버전·요구사항은 필수입니다.', variant: 'error' });
       return;
     }
+    setAsking(true);
+  };
+
+  const confirm = async () => {
+    setAsking(false);
     setPending(true);
     try {
-      const res = await api.post<StructuringConfirmResponse>(
+      await api.post<StructuringConfirmResponse>(
         `/documents/${documentId}/draft/confirm`,
         {
           type: type as WorkProductType,
@@ -76,17 +89,17 @@ export function StructuringDraftPage(): ReactNode {
           version: version.trim(),
           authoredDate: authoredDate || null,
           requirements,
-          workProductStatus: status,
         },
       );
       toast({
-        title: `확정했습니다. 요구사항 ${res.createdRequirementIds.length}건 생성.`,
+        title: `${title.trim()} ${version.trim()} 제출본으로 등록했습니다.`,
+        description: '발주기관 검토 대상입니다.',
         variant: 'success',
       });
       void navigate(`/p/${projectId}/documents`);
     } catch (e) {
       toast({
-        title: '확정에 실패했습니다.',
+        title: '제출에 실패했습니다.',
         description: isApiError(e) ? e.message : undefined,
         variant: 'error',
       });
@@ -150,24 +163,11 @@ export function StructuringDraftPage(): ReactNode {
                   onChange={(e) => setAuthoredDate(e.target.value)}
                 />
               </div>
-              <div className="flex flex-col gap-1.5">
-                <Label htmlFor="status">확정 상태</Label>
-                <Select value={status} onValueChange={(v) => setStatus(v as WorkProductStatus)}>
-                  <SelectTrigger id="status">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {STATUSES.map((s) => (
-                      <SelectItem key={s} value={s}>
-                        {label(s)}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-                <p className="text-muted-foreground text-xs">
-                  승인은 확정과 별도로 발주기관이 산출물 화면에서 합니다.
-                </p>
-              </div>
+              <p className="text-muted-foreground text-xs sm:col-span-2">
+                「산출물로 제출」하면 이 문서가 산출물 제출본(상태 「제출」)이 됩니다. 승인은
+                발주기관이 산출물 화면에서 따로 합니다. 제출하지 않을 문서는 반려하고 자료로만
+                두세요.
+              </p>
             </div>
 
             <div className="flex flex-col gap-3">
@@ -225,8 +225,8 @@ export function StructuringDraftPage(): ReactNode {
             </div>
 
             <div className="flex gap-2 pb-8">
-              <Button onClick={confirm} disabled={pending}>
-                확정
+              <Button onClick={ask} disabled={pending}>
+                산출물로 제출
               </Button>
               <Button variant="outline" onClick={reject} disabled={pending}>
                 반려
@@ -235,6 +235,23 @@ export function StructuringDraftPage(): ReactNode {
           </div>
         )}
       </DataState>
+      <AlertDialog open={asking} onOpenChange={setAsking}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>산출물로 제출할까요?</AlertDialogTitle>
+            <AlertDialogDescription>
+              이 문서를 {title.trim()} {version.trim()} 제출본으로 등록합니다. 발주기관 검토
+              대상이 됩니다.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>취소</AlertDialogCancel>
+            <AlertDialogAction onClick={() => void confirm()} disabled={pending}>
+              제출
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </>
   );
 }

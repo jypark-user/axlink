@@ -75,9 +75,10 @@ def _upload(target, s0, prj: str, path, name: str, mime: str, acc="TD-ACC-V1", w
     return res.json()["id"]
 
 
-def _confirm(target, s0, doc_id: str, type_code: str, title: str, version: str, acc="TD-ACC-V1", status="SUBMITTED"):
+def _confirm(target, s0, doc_id: str, type_code: str, title: str, version: str, acc="TD-ACC-V1"):
+    """초안 확정 = 산출물 제출본 등록(DEC-14). 상태를 고르지 않는다."""
     return target.post(f"/api/documents/{doc_id}/draft/confirm", json={
-        "type": type_code, "title": title, "version": version, "requirements": [], "workProductStatus": status,
+        "type": type_code, "title": title, "version": version, "requirements": [],
     }, headers=auth(s0.tokens[acc]))
 
 

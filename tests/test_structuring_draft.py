@@ -172,7 +172,6 @@ def _confirm_body(draft: dict, **overrides) -> dict:
         "version": draft["version"],
         "authoredDate": draft["authoredDate"],
         "requirements": draft["requirements"],
-        "workProductStatus": "SUBMITTED",
     }
     body.update(overrides)
     return body
@@ -252,6 +251,23 @@ def test_overriding_the_suggested_type_is_recorded(client, as_pm, im001):
     design = next(i for i in items if i["type"] == "SOFTWARE_DESIGN")
     assert design["status"] == "SUBMITTED" and design["approvedAt"] is None
     assert (design["pmActivity"], design["siActivity"]) == (None, "SI_3")  # 설계서는 SI 설계
+
+
+@requires_db
+def test_확정은_곧_제출이고_임시_등록은_없다(client, as_pm, im001):
+    """초안 확정 = 산출물 제출본 등록(DEC-14 (a)). 예전처럼 DRAFT 를 고르면 거절한다.
+
+    조용히 제출본으로 바꾸면 임시로 둘 생각이던 사람의 문서가 발주기관 검토 대상이 된다.
+    """
+    draft = _draft(client, as_pm, im001["id"])
+    res = client.post(
+        f"/api/documents/{im001['id']}/draft/confirm",
+        json=_confirm_body(draft, workProductStatus="DRAFT"),
+        headers=_auth(as_pm),
+    )
+    assert res.status_code == 400
+    assert "제출본" in res.json()["message"]
+    assert _draft(client, as_pm, im001["id"])["status"] == "PROPOSED"
 
 
 @requires_db

@@ -1584,7 +1584,8 @@ export interface StructuringConfirmRequest {
   version: string;
   authoredDate: string | null;
   requirements: DraftRequirement[];
-  workProductStatus: WorkProductStatus;
+  /** 확정이 곧 제출이다(DEC-14). 보내지 않는다. 보내면 SUBMITTED 만 받는다 */
+  workProductStatus?: 'SUBMITTED';
 }
 
 export interface StructuringConfirmResponse {
