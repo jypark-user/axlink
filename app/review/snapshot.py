@@ -92,8 +92,11 @@ def _measure(cur: Any, principal: AuthPrincipal, project_id: str, key: str) -> A
 
 
 def _approval_rate(cur: Any, principal: AuthPrincipal, project_id: str) -> Any:
-    dashboard_service.deliverable_approval_now(cur, project_id, clock.today())
-    return _measure(cur, principal, project_id, "deliverable_approval_rate")
+    """산출물 승인률(%). 현황 화면과 같은 산정을 읽기만 해서 낸다. 상태 뜨기는 쓰지 않는다."""
+    approved, defined = dashboard_service.deliverable_approval_now(
+        cur, project_id, clock.today()
+    )
+    return round(100.0 * approved / defined, 2) if defined else None
 
 
 def capture(
@@ -120,8 +123,7 @@ def capture(
             "submitted_at": _iso(row["submitted_at"]),
             "approved_at": _iso(row["approved_at"]),
             "file_uri": row["file_uri"],
-            # 관련 지표: 사업의 산출물 승인률(WBS 가 정한 산출물 기준, DEC-12). 지표가 읽는 산출물
-            # 연결을 먼저 지금 판정에 맞춘다(판정 상태·활동은 남기지 않는다)
+            # 관련 지표: 사업의 산출물 승인률(WBS 가 정한 산출물 기준, DEC-12). 현황과 같은 값
             "deliverable_approval_rate": _approval_rate(cur, principal, project_id),
         }
 

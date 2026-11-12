@@ -209,6 +209,10 @@ def run_sync(
     stats["indexed"] = promoted.indexed
     # 승격이 끝나야 링크의 양 끝이 있다. 다른 연결의 원본까지 같이 보므로 사업 단위로 돈다.
     trace_service.build_project_links(cur, str(connection["project_id"]))
+    # 수집한 파일이 산출물 항목이 됐을 수 있다. 승인률 지표의 작업-산출물 연결을 맞춘다(DEC-12)
+    from app.dashboard import service as dashboard_service  # 순환 import 회피
+
+    dashboard_service.sync_product_links(cur, str(connection["project_id"]))
 
     notes = []
     if limited:
