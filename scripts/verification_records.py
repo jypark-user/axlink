@@ -824,6 +824,11 @@ def _verdict_of(tc) -> tuple[str, str]:
     return "pass", ""
 
 
+def _unescape(text: str) -> str:
+    """pytest 가 junit 매개변수 이름의 한글을 역슬래시 u 네 자리로 적는다. 사람이 읽게 되돌린다."""
+    return re.sub(r"\\u([0-9a-fA-F]{4})", lambda m: chr(int(m.group(1), 16)), text)
+
+
 def record_junit(a: argparse.Namespace) -> int:
     """시나리오 시험 junit → runs.jsonl.
 
@@ -908,7 +913,7 @@ def record_junit(a: argparse.Namespace) -> int:
                     ),
                 },
                 **({"model_kind": "mock"} if mock_model else {}),
-                **({"variant": variant.group(1)} if variant else {}),
+                **({"variant": _unescape(variant.group(1))} if variant else {}),
                 "mode": a.mode,
                 **({"proves": run_proves} if run_proves else {}),
                 "start_state": {"state": sc["state"][:200], "actor": "", "project": ""},

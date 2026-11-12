@@ -78,7 +78,7 @@ def test_junit_의_경우와_모의_모델_표시를_적는다(tmp_path, monkeyp
     junit = tmp_path / "j.xml"
     junit.write_text(
         '<testsuite><testcase classname="tests.scenarios.test_group_gh" '
-        'name="test_UC_060_S10_모델_장애[캐시있음-문서]"><properties>'
+        'name="test_UC_060_S10_모델_장애[\\uce90\\uc2dc\\uc788\\uc74c-\\ubb38\\uc11c]"><properties>'
         '<property name="model" value="mock-replay"/></properties></testcase></testsuite>',
         encoding="utf-8",
     )
