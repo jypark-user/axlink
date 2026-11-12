@@ -531,3 +531,19 @@ def test_목록_프롬프트는_범위_절을_근거_앞에_둔다():
     scope = "사업 범위 안의 이슈 전체 0건이 아래 근거다."
     prompt = answer.user_prompt("이슈 목록", [], None, scope)
     assert prompt.index("## 목록 범위") < prompt.index("## 근거")
+def test_차원_없이_막대만_고르면_나눠_세되_그림은_안_붙인다():
+    """「일반 이슈가 몇 건이야」에 모델이 막대 템플릿만 적었다. 기본 차원(상태)으로 나눠 센
+    값은 프롬프트에 들어가지만 나눠 보기를 묻지 않았으니 그림은 없다(UC-060-S02, 실모델)."""
+    choice = {
+        "route": "AGGREGATE", "measure": "issue_count", "dimensions": [], "template": "BAR_CHART",
+    }
+    decision = routing.from_choice(_catalog(), choice)
+    assert decision.dimensions == ["issue_status"] and decision.breakdown is False
+    # 나눠 보기를 물으면 그림까지
+    choice["dimensions"] = ["issue_status"]
+    assert routing.from_choice(_catalog(), choice).breakdown is True
+    # 추이 템플릿은 그 자체가 나눠 보기다
+    trend = {"route": "AGGREGATE", "measure": "issue_count", "template": "LINE_CHART"}
+    assert routing.from_choice(_catalog(), trend).breakdown is True
+
+

@@ -95,14 +95,17 @@ def aggregate_lines(data: WidgetDataResponse) -> list[str]:
         if num is not None and den is not None:
             line += f" ({format_value(num)}건 / {format_value(den)}건)"
         lines.append(line)
+    # 전체 줄에도 지표 이름을 붙인다. "전체" 만 있으면 수치 검문의 라벨 짝짓기에서 "일반 이슈는
+    # 9건" 의 9 가 지표 이름을 가진 범주 줄(일반 이슈 상태 …)에 밀려 막혔다(UC-060-S02 실모델)
     if data.total is not None and data.dimensions:
-        lines.append(f"- 전체: {format_value(data.total.values.get('value'))}{unit}")
+        total = format_value(data.total.values.get("value"))
+        lines.append(f"- {data.measureLabel} 전체: {total}{unit}")
     elif data.dimensions and unit == "건" and not data.truncated:
         # 건수는 나눈 값을 더하면 전체다. 서버가 더해 준다. 모델이 더하면 수치 검문에 막힌다
         # (10-07 "이슈가 몇 건이야?" 가 상태별 7·5 를 받아 12 를 만들어 막혔다)
         values = [row.values.get("value") for row in data.rows]
         if values and all(isinstance(v, int | float) for v in values):
-            lines.append(f"- 전체(항목 합): {format_value(sum(values))}{unit}")
+            lines.append(f"- {data.measureLabel} 전체(항목 합): {format_value(sum(values))}{unit}")
     if data.previousTotal is not None:
         previous = format_value(data.previousTotal.values.get("value"))
         lines.append(f"- 직전 구간 전체: {previous}{unit}")

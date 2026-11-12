@@ -515,7 +515,7 @@ def test_건수를_나눠_받으면_서버가_전체를_더해_준다():
 
     data = _data("건", [("OPEN", 7), ("CLOSED", 5)])
     lines = answer.aggregate_lines(data)
-    assert "- 전체(항목 합): 12건" in lines
+    assert "- 일반 이슈 건수 전체(항목 합): 12건" in lines
     checker = number_guard.Checker(
         number_guard.facts_from_lines(lines, "집계", subject="일반 이슈 건수"),
         question="이슈가 몇 건이야?",

@@ -10,7 +10,7 @@ from typing import Any
 
 from app.ai.port import LlmPort
 from app.dashboard import generation
-from app.dashboard.widget_template import prompt_guide
+from app.dashboard.widget_template import TIME_TEMPLATES, prompt_guide
 from app.rag import entity_table, intents
 from app.semantic.catalog import Catalog, MeasureDef
 
@@ -91,6 +91,8 @@ class RouteDecision:
     period: str | None = None  # 기간 변화의 비교 단위 WEEK | MONTH
     options: list[str] = field(default_factory=list)  # CLARIFY 의 선택지 키
     related: list[str] = field(default_factory=list)  # 이어서 볼 만한 질문 키. 권장 질문 재료
+    # 집계 질문이 나눠 보기(차원·추이)를 물었는가. 아니면 값이 여럿이어도 그림을 붙이지 않는다
+    breakdown: bool = True
 
 
 # 권장 질문·선택지·누른 질문의 키. 모델이 고르고 서버가 다시 검증한다. 문장은 서버가 만든다.
@@ -279,6 +281,12 @@ def from_choice(catalog: Catalog, choice: dict[str, Any] | None) -> RouteDecisio
         )
 
     template = generation._template_of(choice)
+    # 질문이 나눠 보기를 물었는가(차원을 골랐거나 추이 템플릿). 안 물었는데 모델이 막대 템플릿만
+    # 적으면 지표의 기본 차원으로 나눠 센다. 그 값은 프롬프트·검문 재료로 쓰고 그림은 붙이지
+    # 않는다("일반 이슈가 몇 건이야", UC-060-S02 「그림 없음」). 빈 건수의 수집 상태 판정
+    # (GH-127)은 나눈 값으로 하므로 차원은 그대로 둔다
+    asked = choice.get("dimensions")
+    breakdown = bool(isinstance(asked, list) and asked) or template in TIME_TEMPLATES
     dimensions = generation._dimensions_of(choice, measure, catalog, template)
     if template is None or not generation._fits(template, measure, dimensions, catalog):
         template = generation._default_template(dimensions, catalog)
@@ -294,6 +302,7 @@ def from_choice(catalog: Catalog, choice: dict[str, Any] | None) -> RouteDecisio
         listing_status=listing_status,
         follow_up=follow_up,
         related=[k for k in related if k != f"measure:{measure.key}"],
+        breakdown=breakdown,
     )
 
 

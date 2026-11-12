@@ -536,7 +536,13 @@ def _resolve(
                     )
             else:
                 turn.aggregate = aggregate
-                if infographic is not None and blocks.worth_drawing(infographic.data):
+                # 나눠 보기를 묻지 않은 질문("일반 이슈가 몇 건이야")에는 그림을 붙이지 않는다
+                # (UC-060-S02 「그림 없음」). 기본 차원으로 나눈 값은 프롬프트에만 들어간다
+                if (
+                    infographic is not None
+                    and decision.breakdown
+                    and blocks.worth_drawing(infographic.data)
+                ):
                     # 값이 하나뿐이면 문장이 그 숫자를 말한다. 그림은 붙이지 않는다. 값은
                     # aggregate 로 프롬프트와 수치 검문에 그대로 들어간다(ARC-013 4-1).
                     turn.block_list.append(
