@@ -171,7 +171,8 @@ def _discard_prj9(target, s0, bid: str | None) -> None:
 
 
 def test_UC_020_S03_중복_코드(target, s0):
-    """TD-DOC-8(2·3행 코드 UR.TEST.002 중복) 등록 → 제출 「1건」 거절 → 하나 삭제 → 제출 성공 (AC-020-2, E6)."""
+    """TD-DOC-8(2·3행 코드 UR.TEST.002 중복) 등록 → 제출 「중복 코드 1개 · 해당 행 2개」 거절 → 하나 삭제
+    → 제출 성공 (AC-020-2, E6, DEC-22)."""
     v1 = auth(s0.tokens["TD-ACC-V1"])
     base = _base(s0, "TD-PRJ-9")
     problems: list[str] = []
@@ -190,8 +191,11 @@ def test_UC_020_S03_중복_코드(target, s0):
         rej = target.post(f"{base}/{bid}/submit", headers=v1)
         if rej.status_code not in (400, 422):
             problems.append(f"막는 문제가 있는데 제출이 거절되지 않았다: {rej.status_code} {rej.text[:200]}")
-        elif "1건" not in rej.text:
-            problems.append(f"거절 안내 건수가 명세(「1건」, 중복 1쌍)와 다르다: {rej.json().get('message')}")
+        elif not (
+            "항목이 2건" in rej.json().get("message", "")
+            and "중복 코드 1개 · 해당 행 2개" in rej.json().get("message", "")
+        ):
+            problems.append(f"거절 안내가 명세(「중복 코드 1개 · 해당 행 2개」)와 다르다: {rej.json().get('message')}")
         third = next((i for i in b["items"] if i["title"].startswith("셋째")), None)
         assert third is not None, got
         after = target.delete(f"{base}/{bid}/items/{third['id']}", headers=v1)

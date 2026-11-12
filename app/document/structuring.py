@@ -458,6 +458,34 @@ def problems_of(items: list[dict]) -> list[list[str]]:
     return out
 
 
+PROBLEM_WORDS = {
+    DUPLICATE_CODE: "코드 중복",
+    INVALID_CODE: "코드 형식 아님",
+    MISSING_TITLE: "명칭 없음",
+    UNTRACEABLE_CODE: "추적에 쓸 수 없는 ID 형식",
+}
+
+
+def blocking_summary(items: list[dict], problems: list[list[str]]) -> str:
+    """제출을 막는 문제 안내. 막힌 행 수와 함께 중복 코드는 코드 수·해당 행 수를 같이 적는다.
+
+    중복 1쌍은 「1건」으로도 「2건」으로도 읽혀 명세끼리 어긋났다. 둘 다 보이게 한다(DEC-22).
+    예: 「고쳐야 제출할 수 있는 항목이 2건 있습니다. 중복 코드 1개 · 해당 행 2개.」
+    """
+    rows = sum(1 for found in problems if any(p in BLOCKING_PROBLEMS for p in found))
+    if not rows:
+        return ""
+    text = f"고쳐야 제출할 수 있는 항목이 {rows}건 있습니다."
+    dup_codes = {
+        item.get("code") for item, found in zip(items, problems, strict=True)
+        if DUPLICATE_CODE in found
+    }
+    dup_rows = sum(1 for found in problems if DUPLICATE_CODE in found)
+    if dup_codes:
+        text += f" 중복 코드 {len(dup_codes)}개 · 해당 행 {dup_rows}개."
+    return text
+
+
 def is_code(value: str) -> bool:
     return bool(_CODE_FULL.match(value))
 
