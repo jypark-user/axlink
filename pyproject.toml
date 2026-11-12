@@ -58,6 +58,7 @@ addopts = ["--strict-markers"]
 markers = [
   "db: 시험용 DB(*_test)가 있어야 돈다. AXLINK_REQUIRE_DB=1 이면 DB 문제가 skip 이 아니라 실패다",
   "live: 실모델·실원천을 부른다. AXLINK_LIVE=1 일 때만 돈다",
+  "live_tool: 실제 도구(GitHub) 저장소를 원천으로 수집한다. live 와 함께 붙인다(tests/fixtures/im009/live/README.md)",
   "remote_llm: 원격 대상에서도 재생 서버의 대본 모델(tests/fixtures/im009/replay_ollama.py)로 돈다",
 ]
 filterwarnings = [
