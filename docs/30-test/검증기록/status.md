@@ -1,4 +1,4 @@
-# 검증 상태 요약 (2026-11-11)
+# 검증 상태 요약 (2026-11-12)
 
 이 파일은 `python scripts/verification_records.py status --md` 가 이력(runs.jsonl 등)에서 다시 만든다. 손으로 고치지 않는다.
 
@@ -6,25 +6,26 @@
 |---|---|
 | 합의된 전체 AC | 179 |
 | 공식 범위 제외(승인 기록 있음) | 1 |
-| 통과 AC | 98 |
-| **전체 완료율** (통과 AC ÷ 분모 178) | **55.1%** |
-| 실행한 시험(통과·실패) | 2041 |
-| **실행 시험 통과율** | **85.8%** |
-| 재검증 필요로 표시된 실행 | 52 |
+| 통과 AC | 114 |
+| **전체 완료율** (통과 AC ÷ 분모 178) | **64.0%** |
+| 실행한 시험(통과·실패) | 2094 |
+| **실행 시험 통과율** | **85.9%** |
+| 재검증 필요로 표시된 실행 | 53 |
 
 ## AC 상태별 건수 (별도 건수)
 
 | 상태 | 건수 |
 |---|---|
-| auto-only | 4 |
+| auto-only | 3 |
+| blocked | 1 |
 | decision-wait | 3 |
 | excluded | 1 |
-| fail | 12 |
+| fail | 16 |
 | no-scenario | 2 |
-| not-run | 8 |
-| partial | 27 |
-| pass | 98 |
-| pass-ci-only | 6 |
+| not-run | 3 |
+| partial | 16 |
+| pass | 114 |
+| pass-ci-only | 2 |
 | pass-decision-wait | 15 |
 | pass-needs-evidence | 3 |
 
