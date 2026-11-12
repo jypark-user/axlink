@@ -6,20 +6,20 @@
    "sha256": "deb83121a42d0c00068c90ddd92fefc133a95cb3c8303a29b7b4b505ae7c7364"
   },
   "IM-007-유스케이스명세서.md": {
-   "version": "v0.2.9",
-   "sha256": "0837137cb14668b203ec440034405787f8d93eb203dcfcdeac85e522f2243166"
+   "version": "v0.2.13",
+   "sha256": "496e00193d8a0473226d2aba152989981260560f0f00604933eb711d6d60ff84"
   },
   "IM-007A-요구사항-세부의무-대응표.md": {
-   "version": "v0.1.6",
-   "sha256": "c2c06d255dd0c6515a600a6831ac5ebd6325fc618e4dfdf8aeb9dfa642afdfe7"
+   "version": "v0.1.7",
+   "sha256": "5a2b079bb5daee251bcc7c995d7ef3b56aa59167b1d0c3a545075a6df8b820db"
   },
   "IM-008-용어사전.md": {
    "version": "v0.2.3",
    "sha256": "a884352ef63cd96bb5a1f857b3fc386e5ca07bfa9cc7b3003fb7b7bf1b9a868c"
   },
   "IM-009-공통시험자료.md": {
-   "version": "v0.2.4",
-   "sha256": "fb39b5e9270f9a60064974c2392de702cfde863313dd49bba07971a7d0e48bf1"
+   "version": "v0.2.7",
+   "sha256": "e2c5e3c8ccb9a7c142c5ec29f6a40c0545d9032238e9fd54994b1b73ab1a6d08"
   },
   "IM-005-시험계획및결과서.md": {
    "version": "v0.2",
@@ -674,6 +674,7 @@
    "needs": [
     "api"
    ],
+   "decs_decided": [],
    "obligations": []
   },
   "AC-001-2": {
@@ -687,6 +688,7 @@
    "needs": [
     "api"
    ],
+   "decs_decided": [],
    "obligations": [
     "SER.SEC.001-o3"
    ]
@@ -702,6 +704,7 @@
    "needs": [
     "api"
    ],
+   "decs_decided": [],
    "obligations": []
   },
   "AC-001-4": {
@@ -715,6 +718,7 @@
    "needs": [
     "api"
    ],
+   "decs_decided": [],
    "obligations": []
   },
   "AC-001-5": {
@@ -728,6 +732,7 @@
    "needs": [
     "api"
    ],
+   "decs_decided": [],
    "obligations": []
   },
   "AC-002-1": {
@@ -742,6 +747,7 @@
     "api",
     "browser"
    ],
+   "decs_decided": [],
    "obligations": []
   },
   "AC-002-2": {
@@ -755,6 +761,7 @@
    "needs": [
     "api"
    ],
+   "decs_decided": [],
    "obligations": []
   },
   "AC-002-3": {
@@ -768,6 +775,7 @@
    "needs": [
     "api"
    ],
+   "decs_decided": [],
    "obligations": []
   },
   "AC-002-4": {
@@ -781,6 +789,7 @@
    "needs": [
     "api"
    ],
+   "decs_decided": [],
    "obligations": []
   },
   "AC-003-1": {
@@ -795,6 +804,7 @@
     "api",
     "browser"
    ],
+   "decs_decided": [],
    "obligations": [
     "SER.SEC.003-o3"
    ]
@@ -811,6 +821,7 @@
     "api",
     "browser"
    ],
+   "decs_decided": [],
    "obligations": [
     "SER.SEC.003-o2"
    ]
@@ -822,11 +833,12 @@
    "scenarios": [
     "UC-003-S03"
    ],
-   "decs": [
-    "DEC-10"
-   ],
+   "decs": [],
    "needs": [
     "api"
+   ],
+   "decs_decided": [
+    "DEC-10"
    ],
    "obligations": []
   },
@@ -842,6 +854,7 @@
    "needs": [
     "api"
    ],
+   "decs_decided": [],
    "obligations": [
     "SER.SEC.003-o3"
    ]
@@ -853,11 +866,12 @@
    "scenarios": [
     "UC-003-S04"
    ],
-   "decs": [
-    "DEC-10"
-   ],
+   "decs": [],
    "needs": [
     "api"
+   ],
+   "decs_decided": [
+    "DEC-10"
    ],
    "obligations": []
   },
@@ -872,6 +886,7 @@
    "needs": [
     "api"
    ],
+   "decs_decided": [],
    "obligations": []
   },
   "AC-004-2": {
@@ -886,6 +901,7 @@
     "api",
     "browser"
    ],
+   "decs_decided": [],
    "obligations": [
     "SER.SEC.003-o1",
     "SER.SEC.003-o5"
@@ -902,6 +918,7 @@
    "needs": [
     "api"
    ],
+   "decs_decided": [],
    "obligations": []
   },
   "AC-004-4": {
@@ -915,6 +932,7 @@
    "needs": [
     "api"
    ],
+   "decs_decided": [],
    "obligations": []
   },
   "AC-010-1": {
@@ -931,6 +949,7 @@
     "browser",
     "live-tool"
    ],
+   "decs_decided": [],
    "obligations": [
     "SWFR.CON.006-o1",
     "SER.SEC.001-o1",
@@ -950,6 +969,7 @@
     "browser",
     "live-tool"
    ],
+   "decs_decided": [],
    "obligations": [
     "SWFR.CON.004-o1",
     "SWFR.CON.006-o2",
@@ -967,6 +987,7 @@
    "needs": [
     "live-tool"
    ],
+   "decs_decided": [],
    "obligations": [
     "QUR.CON.001-o1"
    ]
@@ -982,6 +1003,7 @@
    "needs": [
     "api"
    ],
+   "decs_decided": [],
    "obligations": [
     "SER.SEC.003-o4"
    ]
@@ -997,6 +1019,7 @@
    "needs": [
     "api"
    ],
+   "decs_decided": [],
    "obligations": []
   },
   "AC-010-6": {
@@ -1011,6 +1034,7 @@
     "browser",
     "live-tool"
    ],
+   "decs_decided": [],
    "obligations": [
     "SWFR.CON.006-o3",
     "QUR.CON.001-o2"
@@ -1027,6 +1051,7 @@
    "needs": [
     "api"
    ],
+   "decs_decided": [],
    "obligations": [
     "SWFR.CON.002-o1"
    ]
@@ -1043,6 +1068,7 @@
    "needs": [
     "live-tool"
    ],
+   "decs_decided": [],
    "obligations": [
     "SWFR.CON.005-o1",
     "SWFR.DEM.001-o2"
@@ -1061,6 +1087,7 @@
    "needs": [
     "live-tool"
    ],
+   "decs_decided": [],
    "obligations": [
     "SWFR.CON.005-o3",
     "SWFR.DEM.001-o2"
@@ -1077,6 +1104,7 @@
    "needs": [
     "live-tool"
    ],
+   "decs_decided": [],
    "obligations": [
     "SWFR.CON.003-o2",
     "SWFR.CON.003-o4",
@@ -1094,6 +1122,7 @@
    ],
    "decs": [],
    "needs": [],
+   "decs_decided": [],
    "obligations": [
     "SWFR.CON.005-o2",
     "SWFR.PIP.002-o4"
@@ -1109,6 +1138,7 @@
    ],
    "decs": [],
    "needs": [],
+   "decs_decided": [],
    "obligations": [
     "SWFR.CON.005-o2"
    ]
@@ -1123,6 +1153,7 @@
    ],
    "decs": [],
    "needs": [],
+   "decs_decided": [],
    "obligations": []
   },
   "AC-011-6b": {
@@ -1133,10 +1164,11 @@
     "UC-011-S05b",
     "UC-011-S07b"
    ],
-   "decs": [
+   "decs": [],
+   "needs": [],
+   "decs_decided": [
     "DEC-16"
    ],
-   "needs": [],
    "obligations": []
   },
   "AC-011-6c": {
@@ -1148,6 +1180,7 @@
    ],
    "decs": [],
    "needs": [],
+   "decs_decided": [],
    "obligations": []
   },
   "AC-011-7": {
@@ -1160,10 +1193,11 @@
     "UC-011-S07c",
     "UC-011-S07d"
    ],
-   "decs": [
+   "decs": [],
+   "needs": [],
+   "decs_decided": [
     "DEC-18"
    ],
-   "needs": [],
    "obligations": [
     "SWFR.PIP.002-o5"
    ]
@@ -1179,6 +1213,7 @@
    "needs": [
     "api"
    ],
+   "decs_decided": [],
    "obligations": []
   },
   "AC-011-9": {
@@ -1188,10 +1223,11 @@
    "scenarios": [
     "UC-011-S10"
    ],
-   "decs": [
+   "decs": [],
+   "needs": [],
+   "decs_decided": [
     "DEC-16"
    ],
-   "needs": [],
    "obligations": [
     "SWFR.CON.005-o5"
    ]
@@ -1205,6 +1241,7 @@
    ],
    "decs": [],
    "needs": [],
+   "decs_decided": [],
    "obligations": [
     "SWFR.CON.005-o4"
    ]
@@ -1220,6 +1257,7 @@
    "needs": [
     "live-tool"
    ],
+   "decs_decided": [],
    "obligations": [
     "SWFR.CON.003-o1",
     "SWFR.CON.003-o2",
@@ -1241,6 +1279,7 @@
    "needs": [
     "live-tool"
    ],
+   "decs_decided": [],
    "obligations": [
     "SWFR.CON.004-o1",
     "SWFR.CON.004-o2",
@@ -1259,11 +1298,12 @@
     "UC-012-S01",
     "UC-012-S04"
    ],
-   "decs": [
-    "DEC-09"
-   ],
+   "decs": [],
    "needs": [
     "api"
+   ],
+   "decs_decided": [
+    "DEC-09"
    ],
    "obligations": [
     "SWFR.CON.002-o1",
@@ -1281,6 +1321,7 @@
    "needs": [
     "api"
    ],
+   "decs_decided": [],
    "obligations": [
     "SWFR.CON.002-o2"
    ]
@@ -1292,11 +1333,12 @@
    "scenarios": [
     "UC-012-S01"
    ],
-   "decs": [
-    "DEC-09"
-   ],
+   "decs": [],
    "needs": [
     "api"
+   ],
+   "decs_decided": [
+    "DEC-09"
    ],
    "obligations": [
     "SWFR.CON.002-o2"
@@ -1313,6 +1355,7 @@
    "needs": [
     "api"
    ],
+   "decs_decided": [],
    "obligations": [
     "SWFR.PIP.005-o1"
    ]
@@ -1326,6 +1369,7 @@
    ],
    "decs": [],
    "needs": [],
+   "decs_decided": [],
    "obligations": [
     "SWFR.CON.002-o1"
    ]
@@ -1343,6 +1387,7 @@
     "api",
     "browser"
    ],
+   "decs_decided": [],
    "obligations": [
     "SWFR.CON.007-o9",
     "SWFR.PIP.002-o3"
@@ -1356,11 +1401,12 @@
     "UC-020-S03",
     "UC-020-S04"
    ],
-   "decs": [
-    "DEC-22"
-   ],
+   "decs": [],
    "needs": [
     "api"
+   ],
+   "decs_decided": [
+    "DEC-22"
    ],
    "obligations": []
   },
@@ -1377,6 +1423,7 @@
    "needs": [
     "api"
    ],
+   "decs_decided": [],
    "obligations": []
   },
   "AC-020-4": {
@@ -1391,6 +1438,7 @@
     "api",
     "browser"
    ],
+   "decs_decided": [],
    "obligations": []
   },
   "AC-020-5": {
@@ -1404,6 +1452,7 @@
    "needs": [
     "api"
    ],
+   "decs_decided": [],
    "obligations": []
   },
   "AC-020-6": {
@@ -1417,6 +1466,7 @@
    "needs": [
     "api"
    ],
+   "decs_decided": [],
    "obligations": []
   },
   "AC-020-7": {
@@ -1430,6 +1480,7 @@
    "needs": [
     "browser"
    ],
+   "decs_decided": [],
    "obligations": []
   },
   "AC-020-8": {
@@ -1443,6 +1494,7 @@
    "needs": [
     "api"
    ],
+   "decs_decided": [],
    "obligations": []
   },
   "AC-020-9": {
@@ -1458,6 +1510,7 @@
     "api",
     "browser"
    ],
+   "decs_decided": [],
    "obligations": []
   },
   "AC-021-1": {
@@ -1473,6 +1526,7 @@
     "api",
     "browser"
    ],
+   "decs_decided": [],
    "obligations": []
   },
   "AC-021-2": {
@@ -1486,6 +1540,7 @@
    "needs": [
     "api"
    ],
+   "decs_decided": [],
    "obligations": []
   },
   "AC-021-3": {
@@ -1499,6 +1554,7 @@
    "needs": [
     "api"
    ],
+   "decs_decided": [],
    "obligations": []
   },
   "AC-021-4": {
@@ -1514,6 +1570,7 @@
     "api",
     "browser"
    ],
+   "decs_decided": [],
    "obligations": []
   },
   "AC-021-5": {
@@ -1525,6 +1582,7 @@
    ],
    "decs": [],
    "needs": [],
+   "decs_decided": [],
    "obligations": []
   },
   "AC-021-6": {
@@ -1536,6 +1594,7 @@
    ],
    "decs": [],
    "needs": [],
+   "decs_decided": [],
    "obligations": [
     "SWFR.PIP.002-o4"
    ]
@@ -1549,6 +1608,7 @@
    ],
    "decs": [],
    "needs": [],
+   "decs_decided": [],
    "obligations": [
     "SWFR.PIP.003-o2",
     "SWFR.PIP.003-o7"
@@ -1569,6 +1629,7 @@
     "api",
     "browser"
    ],
+   "decs_decided": [],
    "obligations": []
   },
   "AC-021-9": {
@@ -1578,28 +1639,30 @@
    "scenarios": [
     "UC-021-S01"
    ],
-   "decs": [
-    "DEC-07"
-   ],
+   "decs": [],
    "needs": [
     "api",
     "browser"
+   ],
+   "decs_decided": [
+    "DEC-07"
    ],
    "obligations": []
   },
   "AC-021-10": {
    "id": "AC-021-10",
    "uc": "UC-021",
-   "text": "이행률 분모·AI 요구사항 범위가 DEC-11 결정대로 동작한다(결정 뒤 활성)",
+   "text": "확정 명세서에 없는 기존 요구사항은 목록에서 구분 표시되고, 이행률 분모에서 빠지며, AI 목록 답에서도 구분된다(DEC-11 (a))",
    "scenarios": [
     "UC-021-S10"
    ],
-   "decs": [
-    "DEC-11"
-   ],
+   "decs": [],
    "needs": [
     "api",
     "live-model"
+   ],
+   "decs_decided": [
+    "DEC-11"
    ],
    "obligations": []
   },
@@ -1617,6 +1680,7 @@
     "api",
     "browser"
    ],
+   "decs_decided": [],
    "obligations": [
     "SWFR.PIP.003-o1",
     "SWFR.PIP.004-o1",
@@ -1642,6 +1706,7 @@
     "api",
     "browser"
    ],
+   "decs_decided": [],
    "obligations": [
     "SWFR.PIP.003-o1",
     "SWFR.PIP.003-o2",
@@ -1661,6 +1726,7 @@
    ],
    "decs": [],
    "needs": [],
+   "decs_decided": [],
    "obligations": [
     "QUR.PIP.001-o2"
    ]
@@ -1675,6 +1741,7 @@
    ],
    "decs": [],
    "needs": [],
+   "decs_decided": [],
    "obligations": [
     "SWFR.PIP.004-o3"
    ]
@@ -1688,6 +1755,7 @@
    ],
    "decs": [],
    "needs": [],
+   "decs_decided": [],
    "obligations": [
     "SWFR.PIP.003-o3"
    ]
@@ -1703,6 +1771,7 @@
    "needs": [
     "api"
    ],
+   "decs_decided": [],
    "obligations": [
     "SWFR.WEB.002-o1"
    ]
@@ -1717,6 +1786,7 @@
    ],
    "decs": [],
    "needs": [],
+   "decs_decided": [],
    "obligations": [
     "SWFR.CON.004-o5",
     "SWFR.PIP.003-o4",
@@ -1732,6 +1802,7 @@
    ],
    "decs": [],
    "needs": [],
+   "decs_decided": [],
    "obligations": [
     "SWFR.PIP.004-o3",
     "SWFR.PIP.004-o4"
@@ -1744,11 +1815,12 @@
    "scenarios": [
     "UC-023-S01"
    ],
-   "decs": [
-    "DEC-03"
-   ],
+   "decs": [],
    "needs": [
     "api"
+   ],
+   "decs_decided": [
+    "DEC-03"
    ],
    "obligations": [
     "SWFR.PIP.008-o4"
@@ -1763,6 +1835,7 @@
    ],
    "decs": [],
    "needs": [],
+   "decs_decided": [],
    "obligations": [
     "SWFR.PIP.002-o4",
     "SWFR.PIP.008-o4"
@@ -1779,6 +1852,7 @@
    "needs": [
     "api"
    ],
+   "decs_decided": [],
    "obligations": [
     "SWFR.PIP.008-o4"
    ]
@@ -1786,18 +1860,19 @@
   "AC-023-4": {
    "id": "AC-023-4",
    "uc": "UC-023",
-   "text": "이행률 분자는 검증·인수 상태 수이고, 목록·추적표·스냅샷·AI 답이 같은 값을 쓴다(DEC-03 결정에 따라 분자 정의 갱신)",
+   "text": "이행률 분자는 검증·인수 상태 수, 분모는 확정 목록(DEC-11 (a))이고, 목록·추적표·스냅샷·AI 답이 같은 값을 쓴다(DEC-03 결정에 따라 분자 정의 갱신)",
    "scenarios": [
     "UC-023-S01",
     "UC-023-S06"
    ],
-   "decs": [
-    "DEC-03",
-    "DEC-11"
-   ],
+   "decs": [],
    "needs": [
     "api",
     "live-model"
+   ],
+   "decs_decided": [
+    "DEC-03",
+    "DEC-11"
    ],
    "obligations": [
     "SWFR.PIP.008-o3"
@@ -1816,6 +1891,7 @@
    "needs": [
     "api"
    ],
+   "decs_decided": [],
    "obligations": []
   },
   "AC-023-6": {
@@ -1829,6 +1905,7 @@
    "needs": [
     "api"
    ],
+   "decs_decided": [],
    "obligations": []
   },
   "AC-030-1": {
@@ -1844,6 +1921,7 @@
    "needs": [
     "api"
    ],
+   "decs_decided": [],
    "obligations": []
   },
   "AC-030-2": {
@@ -1856,6 +1934,7 @@
    ],
    "decs": [],
    "needs": [],
+   "decs_decided": [],
    "obligations": [
     "SWFR.CON.007-o9",
     "SWFR.PIP.010-o1",
@@ -1874,12 +1953,13 @@
     "UC-030-S07",
     "UC-041-S12"
    ],
-   "decs": [
-    "DEC-19"
-   ],
+   "decs": [],
    "needs": [
     "api",
     "browser"
+   ],
+   "decs_decided": [
+    "DEC-19"
    ],
    "obligations": [
     "SWFR.PIP.006-o3",
@@ -1901,6 +1981,7 @@
     "api",
     "browser"
    ],
+   "decs_decided": [],
    "obligations": [
     "SWFR.PIP.010-o4",
     "SWFR.PIP.010-o11"
@@ -1915,6 +1996,7 @@
    ],
    "decs": [],
    "needs": [],
+   "decs_decided": [],
    "obligations": []
   },
   "AC-030-6": {
@@ -1926,6 +2008,7 @@
    ],
    "decs": [],
    "needs": [],
+   "decs_decided": [],
    "obligations": [
     "SWFR.PIP.010-o3"
    ]
@@ -1941,6 +2024,7 @@
    "needs": [
     "api"
    ],
+   "decs_decided": [],
    "obligations": [
     "SWFR.PIP.010-o10",
     "QUR.WEB.001-o1"
@@ -1953,12 +2037,13 @@
    "scenarios": [
     "UC-031-S01"
    ],
-   "decs": [
-    "DEC-14"
-   ],
+   "decs": [],
    "needs": [
     "api",
     "browser"
+   ],
+   "decs_decided": [
+    "DEC-14"
    ],
    "obligations": [
     "SWFR.CON.007-o9",
@@ -1975,6 +2060,7 @@
    ],
    "decs": [],
    "needs": [],
+   "decs_decided": [],
    "obligations": [
     "SWFR.PIP.009-o1"
    ]
@@ -1993,6 +2079,7 @@
     "api",
     "browser"
    ],
+   "decs_decided": [],
    "obligations": [
     "SWFR.PIP.009-o1"
    ]
@@ -2013,6 +2100,7 @@
     "api",
     "browser"
    ],
+   "decs_decided": [],
    "obligations": [
     "SWFR.PIP.009-o2"
    ]
@@ -2029,6 +2117,7 @@
     "api",
     "browser"
    ],
+   "decs_decided": [],
    "obligations": [
     "SWFR.PIP.009-o2"
    ]
@@ -2046,6 +2135,7 @@
     "api",
     "browser"
    ],
+   "decs_decided": [],
    "obligations": [
     "SWFR.PIP.009-o3"
    ]
@@ -2061,6 +2151,7 @@
    "needs": [
     "api"
    ],
+   "decs_decided": [],
    "obligations": []
   },
   "AC-031-8": {
@@ -2074,20 +2165,22 @@
    "needs": [
     "api"
    ],
+   "decs_decided": [],
    "obligations": []
   },
   "AC-031-9": {
    "id": "AC-031-9",
    "uc": "UC-031",
-   "text": "산출물 승인률 분자·분모가 DEC-12 결정대로이며 산출 근거 문장에 적힌다",
+   "text": "산출물 승인률의 분모는 WBS 가 정한 산출물, 분자는 그중 현행 버전이 승인 상태인 것이며(DEC-12 (b)) 산출 근거 문장에 적힌다",
    "scenarios": [
     "UC-031-S10"
    ],
-   "decs": [
-    "DEC-12"
-   ],
+   "decs": [],
    "needs": [
     "api"
+   ],
+   "decs_decided": [
+    "DEC-12"
    ],
    "obligations": [
     "SWFR.PIP.009-o2"
@@ -2104,6 +2197,7 @@
    "needs": [
     "api"
    ],
+   "decs_decided": [],
    "obligations": [
     "SWFR.WEB.006-o5"
    ]
@@ -2119,6 +2213,7 @@
    "needs": [
     "api"
    ],
+   "decs_decided": [],
    "obligations": []
   },
   "AC-032-3": {
@@ -2133,6 +2228,7 @@
    "needs": [
     "api"
    ],
+   "decs_decided": [],
    "obligations": [
     "SWFR.PIP.006-o4"
    ]
@@ -2148,6 +2244,7 @@
    "needs": [
     "api"
    ],
+   "decs_decided": [],
    "obligations": []
   },
   "AC-032-5": {
@@ -2159,6 +2256,7 @@
    ],
    "decs": [],
    "needs": [],
+   "decs_decided": [],
    "obligations": []
   },
   "AC-032-6": {
@@ -2170,6 +2268,7 @@
    ],
    "decs": [],
    "needs": [],
+   "decs_decided": [],
    "obligations": []
   },
   "AC-032-7": {
@@ -2181,6 +2280,7 @@
    ],
    "decs": [],
    "needs": [],
+   "decs_decided": [],
    "obligations": []
   },
   "AC-032-8": {
@@ -2194,6 +2294,7 @@
    "needs": [
     "api"
    ],
+   "decs_decided": [],
    "obligations": []
   },
   "AC-033-1": {
@@ -2204,12 +2305,13 @@
     "UC-033-S01",
     "UC-033-S03"
    ],
-   "decs": [
-    "DEC-10"
-   ],
+   "decs": [],
    "needs": [
     "api",
     "browser"
+   ],
+   "decs_decided": [
+    "DEC-10"
    ],
    "obligations": []
   },
@@ -2218,10 +2320,11 @@
    "uc": "UC-033",
    "text": "용역사 화면에 작업별 「내야 할 산출물」과 양식이 보이고, 제출본이 항목에 이어진다",
    "scenarios": [],
-   "decs": [
+   "decs": [],
+   "needs": [],
+   "decs_decided": [
     "DEC-10"
    ],
-   "needs": [],
    "obligations": []
   },
   "AC-033-3": {
@@ -2229,10 +2332,11 @@
    "uc": "UC-033",
    "text": "항목별 버전 이력과 승인·반려 사유가 보인다. 양식 파일은 제출본으로 세지 않는다",
    "scenarios": [],
-   "decs": [
+   "decs": [],
+   "needs": [],
+   "decs_decided": [
     "DEC-10"
    ],
-   "needs": [],
    "obligations": []
   },
   "AC-033-4": {
@@ -2242,10 +2346,11 @@
    "scenarios": [
     "UC-033-S02"
    ],
-   "decs": [
+   "decs": [],
+   "needs": [],
+   "decs_decided": [
     "DEC-10"
    ],
-   "needs": [],
    "obligations": []
   },
   "AC-040-1": {
@@ -2261,6 +2366,7 @@
     "api",
     "browser"
    ],
+   "decs_decided": [],
    "obligations": [
     "SWFR.WEB.003-o1",
     "SER.SEC.003-o2"
@@ -2269,17 +2375,18 @@
   "AC-040-2": {
    "id": "AC-040-2",
    "uc": "UC-040",
-   "text": "사업별로 대표 진척률·계획 대비 편차·미처리 요청 건수·열린 리스크 수·산출물 승인 수가 보이고, 값이 IM-009 7 절과 현황 화면(UC-041)과 같다",
+   "text": "사업별로 대표 진척률·계획 대비 편차·미처리 요청 건수·열린 리스크 수·산출물 승인 수(WBS 가 정한 산출물 기준, DEC-12 (b))가 보이고, 값이 IM-009 7 절과 현황 화면(UC-041)과 같다",
    "scenarios": [
     "UC-040-S01",
     "UC-040-S03"
    ],
-   "decs": [
-    "DEC-12"
-   ],
+   "decs": [],
    "needs": [
     "api",
     "browser"
+   ],
+   "decs_decided": [
+    "DEC-12"
    ],
    "obligations": [
     "SWFR.WEB.003-o2",
@@ -2298,6 +2405,7 @@
     "api",
     "browser"
    ],
+   "decs_decided": [],
    "obligations": [
     "SWFR.WEB.003-o2"
    ]
@@ -2314,6 +2422,7 @@
     "api",
     "browser"
    ],
+   "decs_decided": [],
    "obligations": [
     "SWFR.WEB.006-o3"
    ]
@@ -2321,15 +2430,16 @@
   "AC-040-5": {
    "id": "AC-040-5",
    "uc": "UC-040",
-   "text": "(DEC-01 뒤) 일정 준수 요약이 마일스톤 달성 기준으로 보인다",
+   "text": "일정 준수 요약이 마일스톤 달성 기준(DEC-01 (a), AC-041-9 와 같은 산식)으로 보인다",
    "scenarios": [
     "UC-040-S04"
    ],
-   "decs": [
-    "DEC-01"
-   ],
+   "decs": [],
    "needs": [
     "api"
+   ],
+   "decs_decided": [
+    "DEC-01"
    ],
    "obligations": [
     "SWFR.PIP.007-o1",
@@ -2343,13 +2453,12 @@
    "scenarios": [
     "UC-041-S01"
    ],
-   "decs": [
-    "DEC-02"
-   ],
+   "decs": [],
    "needs": [
     "api",
     "browser"
    ],
+   "decs_decided": [],
    "obligations": [
     "SWFR.PIP.008-o2",
     "SWFR.WEB.001-o1",
@@ -2370,6 +2479,7 @@
     "browser",
     "live-model"
    ],
+   "decs_decided": [],
    "obligations": [
     "QUR.WEB.002-o2",
     "SWFR.RAG.005-o2"
@@ -2383,13 +2493,13 @@
     "UC-041-S01",
     "UC-041-S12"
    ],
-   "decs": [
-    "DEC-02",
-    "DEC-19"
-   ],
+   "decs": [],
    "needs": [
     "api",
     "browser"
+   ],
+   "decs_decided": [
+    "DEC-19"
    ],
    "obligations": [
     "SWFR.PIP.006-o1",
@@ -2399,16 +2509,17 @@
   "AC-041-4": {
    "id": "AC-041-4",
    "uc": "UC-041",
-   "text": "일정 줄에서 지연(종료일 경과·실적<100%)·계획 뒤짐·격차 경고(실적 신고 + 산출물 미제출)·연결 산출물 판정·완료 확인 상태·연결 이슈 상태가 작업 단위로 보인다",
+   "text": "일정 줄에서 지연(종료일 경과·실적<100%)·계획 뒤짐·격차 경고(실적 80 이상 + 산출물 미제출 또는 열린 연결 이슈, DEC-20 (b))·연결 산출물 판정·완료 확인 상태·연결 이슈 상태가 작업 단위로 보인다",
    "scenarios": [
     "UC-041-S02"
    ],
-   "decs": [
-    "DEC-20"
-   ],
+   "decs": [],
    "needs": [
     "api",
     "browser"
+   ],
+   "decs_decided": [
+    "DEC-20"
    ],
    "obligations": [
     "SWFR.PIP.010-o5"
@@ -2424,12 +2535,14 @@
     "UC-041-S12"
    ],
    "decs": [
-    "DEC-17",
-    "DEC-19"
+    "DEC-17"
    ],
    "needs": [
     "api",
     "browser"
+   ],
+   "decs_decided": [
+    "DEC-19"
    ],
    "obligations": [
     "SWFR.PIP.010-o6",
@@ -2451,6 +2564,7 @@
     "api",
     "browser"
    ],
+   "decs_decided": [],
    "obligations": [
     "SWFR.PIP.010-o8"
    ]
@@ -2466,6 +2580,7 @@
    "needs": [
     "api"
    ],
+   "decs_decided": [],
    "obligations": [
     "SWFR.PIP.005-o1",
     "SWFR.PIP.005-o2"
@@ -2480,6 +2595,7 @@
    ],
    "decs": [],
    "needs": [],
+   "decs_decided": [],
    "obligations": [
     "SWFR.PIP.005-o2",
     "SWFR.PIP.005-o3"
@@ -2488,15 +2604,16 @@
   "AC-041-9": {
    "id": "AC-041-9",
    "uc": "UC-041",
-   "text": "(DEC-01 뒤) 일정 준수율이 마일스톤 달성 기준으로 산출되고 계획선 편차와 별도 카드다",
+   "text": "일정 준수율 = 기한이 기준일 이전인 마일스톤 중 기한 안에 닫힌 비율(분자·분모 같은 집합, 기한 없음 제외, 다시 열림은 마지막 닫힌 날, 대상 0건은 산출 불가)이고 계획선 편차와 별도 카드다(DEC-01 (a))",
    "scenarios": [
     "UC-041-S07"
    ],
-   "decs": [
-    "DEC-01"
-   ],
+   "decs": [],
    "needs": [
     "api"
+   ],
+   "decs_decided": [
+    "DEC-01"
    ],
    "obligations": [
     "SWFR.PIP.007-o1",
@@ -2506,16 +2623,15 @@
   "AC-041-10": {
    "id": "AC-041-10",
    "uc": "UC-041",
-   "text": "(DEC-02 뒤) 결함 처리율이 결함으로 분류된 이슈만으로 산출된다",
+   "text": "결함 처리율이 연결 설정의 결함 트래커·결함 라벨로 분류된 이슈만으로 산출된다. 매핑이 없으면 「산출 불가」와 이유를 보인다(DEC-02)",
    "scenarios": [
     "UC-041-S08"
    ],
-   "decs": [
-    "DEC-02"
-   ],
+   "decs": [],
    "needs": [
     "api"
    ],
+   "decs_decided": [],
    "obligations": [
     "SWFR.PIP.008-o1"
    ]
@@ -2531,6 +2647,7 @@
    "needs": [
     "browser"
    ],
+   "decs_decided": [],
    "obligations": []
   },
   "AC-042-1": {
@@ -2540,13 +2657,12 @@
    "scenarios": [
     "UC-042-S01"
    ],
-   "decs": [
-    "DEC-02"
-   ],
+   "decs": [],
    "needs": [
     "api",
     "browser"
    ],
+   "decs_decided": [],
    "obligations": []
   },
   "AC-042-2": {
@@ -2560,6 +2676,7 @@
    "needs": [
     "api"
    ],
+   "decs_decided": [],
    "obligations": []
   },
   "AC-042-3": {
@@ -2571,6 +2688,7 @@
    ],
    "decs": [],
    "needs": [],
+   "decs_decided": [],
    "obligations": []
   },
   "AC-042-4": {
@@ -2580,13 +2698,12 @@
    "scenarios": [
     "UC-042-S01"
    ],
-   "decs": [
-    "DEC-02"
-   ],
+   "decs": [],
    "needs": [
     "api",
     "browser"
    ],
+   "decs_decided": [],
    "obligations": [
     "SWFR.WEB.001-o1"
    ]
@@ -2602,6 +2719,7 @@
    "needs": [
     "api"
    ],
+   "decs_decided": [],
    "obligations": []
   },
   "AC-043-1": {
@@ -2611,13 +2729,12 @@
    "scenarios": [
     "UC-043-S01"
    ],
-   "decs": [
-    "DEC-02"
-   ],
+   "decs": [],
    "needs": [
     "api",
     "browser"
    ],
+   "decs_decided": [],
    "obligations": [
     "SWFR.CON.003-o4",
     "SWFR.CON.004-o2",
@@ -2635,6 +2752,7 @@
    "needs": [
     "api"
    ],
+   "decs_decided": [],
    "obligations": [
     "SWFR.CON.004-o2",
     "SWFR.CON.004-o3",
@@ -2654,22 +2772,22 @@
    "needs": [
     "api"
    ],
+   "decs_decided": [],
    "obligations": []
   },
   "AC-043-4": {
    "id": "AC-043-4",
    "uc": "UC-043",
-   "text": "요약 카드 건수(전체·열림·해결)가 목록 전체와 같고 IM-009 7.3 과 같다",
+   "text": "요약 카드 건수(전체·열림·해결)가 목록 전체와 같고 IM-009 7.3 과 같다. 전체 이슈(결함 포함)·일반 이슈(결함 제외)·결함 건수는 포함 관계로 따로 보인다(DEC-02)",
    "scenarios": [
     "UC-043-S01"
    ],
-   "decs": [
-    "DEC-02"
-   ],
+   "decs": [],
    "needs": [
     "api",
     "browser"
    ],
+   "decs_decided": [],
    "obligations": []
   },
   "AC-043-5": {
@@ -2683,6 +2801,7 @@
    "needs": [
     "api"
    ],
+   "decs_decided": [],
    "obligations": [
     "SWFR.PIP.008-o5"
    ]
@@ -2690,16 +2809,15 @@
   "AC-043-6": {
    "id": "AC-043-6",
    "uc": "UC-043",
-   "text": "리스크 목록과 위험 처리율이 보이고, (DEC-02 뒤) 결함 목록과 결함 처리율이 보인다",
+   "text": "리스크 목록과 위험 처리율이 보이고, 결함 목록과 결함 처리율이 보인다(DEC-02)",
    "scenarios": [
     "UC-043-S05"
    ],
-   "decs": [
-    "DEC-02"
-   ],
+   "decs": [],
    "needs": [
     "api"
    ],
+   "decs_decided": [],
    "obligations": [
     "SWFR.PIP.008-o1",
     "SWFR.PIP.008-o2"
@@ -2716,6 +2834,7 @@
    "needs": [
     "api"
    ],
+   "decs_decided": [],
    "obligations": []
   },
   "AC-050-1": {
@@ -2732,6 +2851,7 @@
    "needs": [
     "api"
    ],
+   "decs_decided": [],
    "obligations": [
     "SWFR.WEB.004-o1",
     "SWFR.WEB.004-o2",
@@ -2747,11 +2867,12 @@
    "scenarios": [
     "UC-050-S02"
    ],
-   "decs": [
-    "DEC-12"
-   ],
+   "decs": [],
    "needs": [
     "api"
+   ],
+   "decs_decided": [
+    "DEC-12"
    ],
    "obligations": [
     "SWFR.WEB.004-o5"
@@ -2770,6 +2891,7 @@
    "needs": [
     "api"
    ],
+   "decs_decided": [],
    "obligations": [
     "SWFR.WEB.004-o7"
    ]
@@ -2785,6 +2907,7 @@
    "needs": [
     "live-tool"
    ],
+   "decs_decided": [],
    "obligations": [
     "QUR.WEB.003-o1"
    ]
@@ -2800,6 +2923,7 @@
    "needs": [
     "api"
    ],
+   "decs_decided": [],
    "obligations": []
   },
   "AC-051-1": {
@@ -2814,6 +2938,7 @@
     "api",
     "browser"
    ],
+   "decs_decided": [],
    "obligations": [
     "SWFR.WEB.005-o1",
     "SWFR.WEB.005-o2"
@@ -2832,6 +2957,7 @@
     "api",
     "browser"
    ],
+   "decs_decided": [],
    "obligations": [
     "SWFR.WEB.005-o2"
    ]
@@ -2847,6 +2973,7 @@
    "needs": [
     "api"
    ],
+   "decs_decided": [],
    "obligations": [
     "SWFR.WEB.005-o1",
     "SWFR.WEB.006-o2"
@@ -2863,6 +2990,7 @@
    "needs": [
     "api"
    ],
+   "decs_decided": [],
    "obligations": [
     "SWFR.WEB.005-o3"
    ]
@@ -2878,6 +3006,7 @@
    "needs": [
     "live-tool"
    ],
+   "decs_decided": [],
    "obligations": [
     "QUR.WEB.003-o1"
    ]
@@ -2895,6 +3024,7 @@
    "needs": [
     "api"
    ],
+   "decs_decided": [],
    "obligations": [
     "SWFR.WEB.006-o2"
    ]
@@ -2912,6 +3042,7 @@
     "api",
     "browser"
    ],
+   "decs_decided": [],
    "obligations": [
     "SWFR.WEB.006-o1"
    ]
@@ -2928,6 +3059,7 @@
    "needs": [
     "api"
    ],
+   "decs_decided": [],
    "obligations": [
     "SWFR.WEB.005-o3"
    ]
@@ -2941,6 +3073,7 @@
    ],
    "decs": [],
    "needs": [],
+   "decs_decided": [],
    "obligations": []
   },
   "AC-053-1": {
@@ -2954,6 +3087,7 @@
    "needs": [
     "browser"
    ],
+   "decs_decided": [],
    "obligations": [
     "SWFR.WEB.006-o3",
     "SWFR.WEB.006-o4"
@@ -2970,6 +3104,7 @@
    "needs": [
     "api"
    ],
+   "decs_decided": [],
    "obligations": []
   },
   "AC-053-3": {
@@ -2983,6 +3118,7 @@
    "needs": [
     "api"
    ],
+   "decs_decided": [],
    "obligations": []
   },
   "AC-053-4": {
@@ -2996,6 +3132,7 @@
    "needs": [
     "api"
    ],
+   "decs_decided": [],
    "obligations": []
   },
   "AC-053-5": {
@@ -3009,6 +3146,7 @@
    "needs": [
     "browser"
    ],
+   "decs_decided": [],
    "obligations": []
   },
   "AC-060-1": {
@@ -3021,11 +3159,12 @@
     "UC-060-S13",
     "UC-060-S16"
    ],
-   "decs": [
-    "DEC-13"
-   ],
+   "decs": [],
    "needs": [
     "live-model"
+   ],
+   "decs_decided": [
+    "DEC-13"
    ],
    "obligations": [
     "SWFR.CON.007-o9",
@@ -3044,12 +3183,11 @@
     "UC-060-S02",
     "UC-060-S07"
    ],
-   "decs": [
-    "DEC-02"
-   ],
+   "decs": [],
    "needs": [
     "live-model"
    ],
+   "decs_decided": [],
    "obligations": [
     "SWFR.RAG.001-o1",
     "SWFR.RAG.001-o3",
@@ -3065,6 +3203,7 @@
    ],
    "decs": [],
    "needs": [],
+   "decs_decided": [],
    "obligations": [
     "SWFR.RAG.004-o2",
     "SWFR.RAG.007-o1"
@@ -3078,10 +3217,11 @@
     "UC-060-S05a",
     "UC-060-S17"
    ],
-   "decs": [
+   "decs": [],
+   "needs": [],
+   "decs_decided": [
     "DEC-13"
    ],
-   "needs": [],
    "obligations": [
     "QUR.RAG.002-o1"
    ]
@@ -3097,6 +3237,7 @@
    "needs": [
     "live-model"
    ],
+   "decs_decided": [],
    "obligations": [
     "SWFR.RAG.001-o3",
     "SWFR.RAG.005-o1"
@@ -3117,6 +3258,7 @@
     "api",
     "browser"
    ],
+   "decs_decided": [],
    "obligations": [
     "SWFR.RAG.001-o2"
    ]
@@ -3130,6 +3272,7 @@
    ],
    "decs": [],
    "needs": [],
+   "decs_decided": [],
    "obligations": [
     "SWFR.RAG.001-o3",
     "SWFR.RAG.007-o2"
@@ -3147,6 +3290,7 @@
     "airgap",
     "live-model"
    ],
+   "decs_decided": [],
    "obligations": [
     "QUR.RAG.001-o1"
    ]
@@ -3160,6 +3304,7 @@
    ],
    "decs": [],
    "needs": [],
+   "decs_decided": [],
    "obligations": []
   },
   "AC-060-10": {
@@ -3173,6 +3318,7 @@
    "needs": [
     "live-model"
    ],
+   "decs_decided": [],
    "obligations": [
     "QUR.RAG.002-o2"
    ]
@@ -3191,6 +3337,7 @@
    "needs": [
     "live-model"
    ],
+   "decs_decided": [],
    "obligations": [
     "SWFR.PIP.002-o3",
     "SWFR.RAG.003-o1",
@@ -3208,10 +3355,11 @@
    "scenarios": [
     "UC-060-S17"
    ],
-   "decs": [
+   "decs": [],
+   "needs": [],
+   "decs_decided": [
     "DEC-13"
    ],
-   "needs": [],
    "obligations": [
     "QUR.RAG.002-o3"
    ]
@@ -3227,6 +3375,7 @@
    "needs": [
     "api"
    ],
+   "decs_decided": [],
    "obligations": []
   },
   "AC-061-2": {
@@ -3242,6 +3391,7 @@
     "api",
     "browser"
    ],
+   "decs_decided": [],
    "obligations": [
     "SWFR.RAG.002-o1"
    ]
@@ -3255,6 +3405,7 @@
    ],
    "decs": [],
    "needs": [],
+   "decs_decided": [],
    "obligations": [
     "SWFR.RAG.004-o1"
    ]
@@ -3270,6 +3421,7 @@
    "needs": [
     "api"
    ],
+   "decs_decided": [],
    "obligations": [
     "QUR.RAG.001-o2"
    ]
@@ -3281,12 +3433,13 @@
    "scenarios": [
     "UC-061-S01"
    ],
-   "decs": [
-    "DEC-23"
-   ],
+   "decs": [],
    "needs": [
     "api",
     "browser"
+   ],
+   "decs_decided": [
+    "DEC-23"
    ],
    "obligations": []
   },
@@ -3301,6 +3454,7 @@
    "needs": [
     "api"
    ],
+   "decs_decided": [],
    "obligations": []
   },
   "AC-070-2": {
@@ -3316,6 +3470,7 @@
     "api",
     "browser"
    ],
+   "decs_decided": [],
    "obligations": [
     "SWFR.CON.007-o1",
     "SWFR.CON.007-o3",
@@ -3334,6 +3489,7 @@
     "api",
     "browser"
    ],
+   "decs_decided": [],
    "obligations": []
   },
   "AC-070-4": {
@@ -3345,6 +3501,7 @@
    ],
    "decs": [],
    "needs": [],
+   "decs_decided": [],
    "obligations": []
   },
   "AC-070-5": {
@@ -3358,6 +3515,7 @@
    ],
    "decs": [],
    "needs": [],
+   "decs_decided": [],
    "obligations": [
     "SWFR.CON.007-o8"
    ]
@@ -3371,6 +3529,7 @@
    ],
    "decs": [],
    "needs": [],
+   "decs_decided": [],
    "obligations": []
   },
   "AC-070-7": {
@@ -3382,6 +3541,7 @@
    ],
    "decs": [],
    "needs": [],
+   "decs_decided": [],
    "obligations": []
   },
   "AC-070-8": {
@@ -3395,12 +3555,13 @@
     "UC-070-S10",
     "UC-070-S11"
    ],
-   "decs": [
-    "DEC-21"
-   ],
+   "decs": [],
    "needs": [
     "api",
     "browser"
+   ],
+   "decs_decided": [
+    "DEC-21"
    ],
    "obligations": [
     "SWFR.CON.007-o1",
@@ -3419,6 +3580,7 @@
    ],
    "decs": [],
    "needs": [],
+   "decs_decided": [],
    "obligations": [
     "SWFR.CON.007-o4"
    ]
@@ -3432,6 +3594,7 @@
    ],
    "decs": [],
    "needs": [],
+   "decs_decided": [],
    "obligations": [
     "SWFR.CON.007-o7",
     "SWFR.CON.007-o8"
@@ -3454,7 +3617,8 @@
    "decs": [],
    "needs": [
     "api"
-   ]
+   ],
+   "decs_decided": []
   },
   "UC-001-S02": {
    "id": "UC-001-S02",
@@ -3471,7 +3635,8 @@
    "decs": [],
    "needs": [
     "api"
-   ]
+   ],
+   "decs_decided": []
   },
   "UC-001-S03": {
    "id": "UC-001-S03",
@@ -3488,7 +3653,8 @@
    "decs": [],
    "needs": [
     "api"
-   ]
+   ],
+   "decs_decided": []
   },
   "UC-001-S04": {
    "id": "UC-001-S04",
@@ -3503,7 +3669,8 @@
    "decs": [],
    "needs": [
     "api"
-   ]
+   ],
+   "decs_decided": []
   },
   "UC-001-S05": {
    "id": "UC-001-S05",
@@ -3520,7 +3687,8 @@
    "decs": [],
    "needs": [
     "api"
-   ]
+   ],
+   "decs_decided": []
   },
   "UC-001-S06": {
    "id": "UC-001-S06",
@@ -3537,7 +3705,8 @@
    "decs": [],
    "needs": [
     "api"
-   ]
+   ],
+   "decs_decided": []
   },
   "UC-002-S01": {
    "id": "UC-002-S01",
@@ -3555,7 +3724,8 @@
    "needs": [
     "api",
     "browser"
-   ]
+   ],
+   "decs_decided": []
   },
   "UC-002-S02": {
    "id": "UC-002-S02",
@@ -3572,7 +3742,8 @@
    "decs": [],
    "needs": [
     "api"
-   ]
+   ],
+   "decs_decided": []
   },
   "UC-002-S03": {
    "id": "UC-002-S03",
@@ -3589,7 +3760,8 @@
    "decs": [],
    "needs": [
     "api"
-   ]
+   ],
+   "decs_decided": []
   },
   "UC-002-S04": {
    "id": "UC-002-S04",
@@ -3606,7 +3778,8 @@
    "decs": [],
    "needs": [
     "api"
-   ]
+   ],
+   "decs_decided": []
   },
   "UC-002-S05": {
    "id": "UC-002-S05",
@@ -3621,7 +3794,8 @@
    "decs": [],
    "needs": [
     "api"
-   ]
+   ],
+   "decs_decided": []
   },
   "UC-003-S01": {
    "id": "UC-003-S01",
@@ -3640,7 +3814,8 @@
    "needs": [
     "api",
     "browser"
-   ]
+   ],
+   "decs_decided": []
   },
   "UC-003-S02": {
    "id": "UC-003-S02",
@@ -3657,7 +3832,8 @@
    "decs": [],
    "needs": [
     "api"
-   ]
+   ],
+   "decs_decided": []
   },
   "UC-003-S03": {
    "id": "UC-003-S03",
@@ -3671,11 +3847,12 @@
    "acs": [
     "AC-003-3"
    ],
-   "decs": [
-    "DEC-10"
-   ],
+   "decs": [],
    "needs": [
     "api"
+   ],
+   "decs_decided": [
+    "DEC-10"
    ]
   },
   "UC-003-S04": {
@@ -3690,11 +3867,12 @@
    "acs": [
     "AC-003-5"
    ],
-   "decs": [
-    "DEC-10"
-   ],
+   "decs": [],
    "needs": [
     "api"
+   ],
+   "decs_decided": [
+    "DEC-10"
    ]
   },
   "UC-003-S05": {
@@ -3712,7 +3890,8 @@
    "decs": [],
    "needs": [
     "api"
-   ]
+   ],
+   "decs_decided": []
   },
   "UC-004-S01": {
    "id": "UC-004-S01",
@@ -3727,7 +3906,8 @@
    "decs": [],
    "needs": [
     "browser"
-   ]
+   ],
+   "decs_decided": []
   },
   "UC-004-S02": {
    "id": "UC-004-S02",
@@ -3744,7 +3924,8 @@
    "decs": [],
    "needs": [
     "api"
-   ]
+   ],
+   "decs_decided": []
   },
   "UC-004-S03": {
    "id": "UC-004-S03",
@@ -3762,7 +3943,8 @@
    "needs": [
     "api",
     "browser"
-   ]
+   ],
+   "decs_decided": []
   },
   "UC-004-S04": {
    "id": "UC-004-S04",
@@ -3779,7 +3961,8 @@
    "decs": [],
    "needs": [
     "api"
-   ]
+   ],
+   "decs_decided": []
   },
   "UC-004-S05": {
    "id": "UC-004-S05",
@@ -3796,7 +3979,8 @@
    "decs": [],
    "needs": [
     "api"
-   ]
+   ],
+   "decs_decided": []
   },
   "UC-010-S01": {
    "id": "UC-010-S01",
@@ -3816,7 +4000,8 @@
    "needs": [
     "browser",
     "live-tool"
-   ]
+   ],
+   "decs_decided": []
   },
   "UC-010-S02": {
    "id": "UC-010-S02",
@@ -3833,7 +4018,8 @@
    "decs": [],
    "needs": [
     "live-tool"
-   ]
+   ],
+   "decs_decided": []
   },
   "UC-010-S03": {
    "id": "UC-010-S03",
@@ -3850,7 +4036,8 @@
    "decs": [],
    "needs": [
     "api"
-   ]
+   ],
+   "decs_decided": []
   },
   "UC-010-S04": {
    "id": "UC-010-S04",
@@ -3867,7 +4054,8 @@
    "decs": [],
    "needs": [
     "api"
-   ]
+   ],
+   "decs_decided": []
   },
   "UC-010-S05": {
    "id": "UC-010-S05",
@@ -3884,7 +4072,8 @@
    "decs": [],
    "needs": [
     "api"
-   ]
+   ],
+   "decs_decided": []
   },
   "UC-010-S06": {
    "id": "UC-010-S06",
@@ -3901,7 +4090,8 @@
    "decs": [],
    "needs": [
     "live-tool"
-   ]
+   ],
+   "decs_decided": []
   },
   "UC-010-S07": {
    "id": "UC-010-S07",
@@ -3914,7 +4104,8 @@
    "verify": "재생",
    "acs": [],
    "decs": [],
-   "needs": []
+   "needs": [],
+   "decs_decided": []
   },
   "UC-010-S08": {
    "id": "UC-010-S08",
@@ -3931,7 +4122,8 @@
    "decs": [],
    "needs": [
     "api"
-   ]
+   ],
+   "decs_decided": []
   },
   "UC-011-S01": {
    "id": "UC-011-S01",
@@ -3949,7 +4141,8 @@
    "decs": [],
    "needs": [
     "live-tool"
-   ]
+   ],
+   "decs_decided": []
   },
   "UC-011-S02": {
    "id": "UC-011-S02",
@@ -3965,7 +4158,8 @@
     "AC-011-2"
    ],
    "decs": [],
-   "needs": []
+   "needs": [],
+   "decs_decided": []
   },
   "UC-011-S03": {
    "id": "UC-011-S03",
@@ -3983,7 +4177,8 @@
    "decs": [],
    "needs": [
     "live-tool"
-   ]
+   ],
+   "decs_decided": []
   },
   "UC-011-S04": {
    "id": "UC-011-S04",
@@ -3999,7 +4194,8 @@
     "AC-011-5"
    ],
    "decs": [],
-   "needs": []
+   "needs": [],
+   "decs_decided": []
   },
   "UC-011-S05a": {
    "id": "UC-011-S05a",
@@ -4014,7 +4210,8 @@
     "AC-011-6a"
    ],
    "decs": [],
-   "needs": []
+   "needs": [],
+   "decs_decided": []
   },
   "UC-011-S05b": {
    "id": "UC-011-S05b",
@@ -4028,10 +4225,11 @@
    "acs": [
     "AC-011-6b"
    ],
-   "decs": [
+   "decs": [],
+   "needs": [],
+   "decs_decided": [
     "DEC-16"
-   ],
-   "needs": []
+   ]
   },
   "UC-011-S05c": {
    "id": "UC-011-S05c",
@@ -4046,7 +4244,8 @@
     "AC-011-6c"
    ],
    "decs": [],
-   "needs": []
+   "needs": [],
+   "decs_decided": []
   },
   "UC-011-S09": {
    "id": "UC-011-S09",
@@ -4061,7 +4260,8 @@
     "AC-011-6a"
    ],
    "decs": [],
-   "needs": []
+   "needs": [],
+   "decs_decided": []
   },
   "UC-011-S10": {
    "id": "UC-011-S10",
@@ -4075,10 +4275,11 @@
    "acs": [
     "AC-011-9"
    ],
-   "decs": [
+   "decs": [],
+   "needs": [],
+   "decs_decided": [
     "DEC-16"
-   ],
-   "needs": []
+   ]
   },
   "UC-011-S06": {
    "id": "UC-011-S06",
@@ -4095,7 +4296,8 @@
    "decs": [],
    "needs": [
     "api"
-   ]
+   ],
+   "decs_decided": []
   },
   "UC-011-S07a": {
    "id": "UC-011-S07a",
@@ -4109,10 +4311,11 @@
    "acs": [
     "AC-011-7"
    ],
-   "decs": [
+   "decs": [],
+   "needs": [],
+   "decs_decided": [
     "DEC-18"
-   ],
-   "needs": []
+   ]
   },
   "UC-011-S07b": {
    "id": "UC-011-S07b",
@@ -4128,7 +4331,8 @@
     "AC-011-7"
    ],
    "decs": [],
-   "needs": []
+   "needs": [],
+   "decs_decided": []
   },
   "UC-011-S07c": {
    "id": "UC-011-S07c",
@@ -4143,7 +4347,8 @@
     "AC-011-7"
    ],
    "decs": [],
-   "needs": []
+   "needs": [],
+   "decs_decided": []
   },
   "UC-011-S07d": {
    "id": "UC-011-S07d",
@@ -4158,7 +4363,8 @@
     "AC-011-7"
    ],
    "decs": [],
-   "needs": []
+   "needs": [],
+   "decs_decided": []
   },
   "UC-011-S08": {
    "id": "UC-011-S08",
@@ -4174,7 +4380,8 @@
     "AC-011-5"
    ],
    "decs": [],
-   "needs": []
+   "needs": [],
+   "decs_decided": []
   },
   "UC-011-S11": {
    "id": "UC-011-S11",
@@ -4191,7 +4398,8 @@
    "decs": [],
    "needs": [
     "live-tool"
-   ]
+   ],
+   "decs_decided": []
   },
   "UC-011-S12": {
    "id": "UC-011-S12",
@@ -4208,7 +4416,8 @@
    "decs": [],
    "needs": [
     "live-tool"
-   ]
+   ],
+   "decs_decided": []
   },
   "UC-012-S01": {
    "id": "UC-012-S01",
@@ -4223,11 +4432,12 @@
     "AC-012-1",
     "AC-012-3"
    ],
-   "decs": [
-    "DEC-09"
-   ],
+   "decs": [],
    "needs": [
     "api"
+   ],
+   "decs_decided": [
+    "DEC-09"
    ]
   },
   "UC-012-S02": {
@@ -4245,7 +4455,8 @@
    "decs": [],
    "needs": [
     "api"
-   ]
+   ],
+   "decs_decided": []
   },
   "UC-012-S03": {
    "id": "UC-012-S03",
@@ -4260,7 +4471,8 @@
    "decs": [],
    "needs": [
     "api"
-   ]
+   ],
+   "decs_decided": []
   },
   "UC-012-S04": {
    "id": "UC-012-S04",
@@ -4276,7 +4488,8 @@
     "AC-012-5"
    ],
    "decs": [],
-   "needs": []
+   "needs": [],
+   "decs_decided": []
   },
   "UC-012-S05": {
    "id": "UC-012-S05",
@@ -4293,7 +4506,8 @@
    "decs": [],
    "needs": [
     "api"
-   ]
+   ],
+   "decs_decided": []
   },
   "UC-020-S01": {
    "id": "UC-020-S01",
@@ -4313,7 +4527,8 @@
    "needs": [
     "api",
     "browser"
-   ]
+   ],
+   "decs_decided": []
   },
   "UC-020-S02": {
    "id": "UC-020-S02",
@@ -4330,7 +4545,8 @@
    "decs": [],
    "needs": [
     "browser"
-   ]
+   ],
+   "decs_decided": []
   },
   "UC-020-S03": {
    "id": "UC-020-S03",
@@ -4338,7 +4554,7 @@
    "title": "중복 코드",
    "state": "TD-PRJ-9, TD-DOC-8",
    "input": "2 → E6 → 하나 삭제 → 3",
-   "expected": "「1건」 거절, 삭제 뒤 제출 성공",
+   "expected": "「항목이 2건 … 중복 코드 1개 · 해당 행 2개」 거절, 삭제 뒤 제출 성공",
    "pass": "AC-020-2",
    "verify": "API",
    "acs": [
@@ -4347,7 +4563,8 @@
    "decs": [],
    "needs": [
     "api"
-   ]
+   ],
+   "decs_decided": []
   },
   "UC-020-S04": {
    "id": "UC-020-S04",
@@ -4364,7 +4581,8 @@
    "decs": [],
    "needs": [
     "api"
-   ]
+   ],
+   "decs_decided": []
   },
   "UC-020-S05": {
    "id": "UC-020-S05",
@@ -4381,7 +4599,8 @@
    "decs": [],
    "needs": [
     "api"
-   ]
+   ],
+   "decs_decided": []
   },
   "UC-020-S06": {
    "id": "UC-020-S06",
@@ -4399,6 +4618,7 @@
    "needs": [
     "api"
    ],
+   "decs_decided": [],
    "subs": [
     "UC-020-S06",
     "UC-020-S06b"
@@ -4420,7 +4640,8 @@
    "decs": [],
    "needs": [
     "api"
-   ]
+   ],
+   "decs_decided": []
   },
   "UC-020-S08": {
    "id": "UC-020-S08",
@@ -4437,7 +4658,8 @@
    "decs": [],
    "needs": [
     "browser"
-   ]
+   ],
+   "decs_decided": []
   },
   "UC-020-S09": {
    "id": "UC-020-S09",
@@ -4454,7 +4676,8 @@
    "decs": [],
    "needs": [
     "api"
-   ]
+   ],
+   "decs_decided": []
   },
   "UC-020-S10": {
    "id": "UC-020-S10",
@@ -4469,7 +4692,8 @@
    "decs": [],
    "needs": [
     "api"
-   ]
+   ],
+   "decs_decided": []
   },
   "UC-020-S11": {
    "id": "UC-020-S11",
@@ -4484,7 +4708,8 @@
    "decs": [],
    "needs": [
     "api"
-   ]
+   ],
+   "decs_decided": []
   },
   "UC-021-S01": {
    "id": "UC-021-S01",
@@ -4504,7 +4729,8 @@
    "needs": [
     "api",
     "browser"
-   ]
+   ],
+   "decs_decided": []
   },
   "UC-021-S02": {
    "id": "UC-021-S02",
@@ -4524,7 +4750,8 @@
    "decs": [],
    "needs": [
     "api"
-   ]
+   ],
+   "decs_decided": []
   },
   "UC-021-S03": {
    "id": "UC-021-S03",
@@ -4542,7 +4769,8 @@
    "needs": [
     "api",
     "browser"
-   ]
+   ],
+   "decs_decided": []
   },
   "UC-021-S04": {
    "id": "UC-021-S04",
@@ -4559,7 +4787,8 @@
    "decs": [],
    "needs": [
     "api"
-   ]
+   ],
+   "decs_decided": []
   },
   "UC-021-S05": {
    "id": "UC-021-S05",
@@ -4574,7 +4803,8 @@
    "decs": [],
    "needs": [
     "api"
-   ]
+   ],
+   "decs_decided": []
   },
   "UC-021-S06": {
    "id": "UC-021-S06",
@@ -4589,7 +4819,8 @@
     "AC-021-5"
    ],
    "decs": [],
-   "needs": []
+   "needs": [],
+   "decs_decided": []
   },
   "UC-021-S07": {
    "id": "UC-021-S07",
@@ -4604,7 +4835,8 @@
     "AC-021-6"
    ],
    "decs": [],
-   "needs": []
+   "needs": [],
+   "decs_decided": []
   },
   "UC-021-S08": {
    "id": "UC-021-S08",
@@ -4619,7 +4851,8 @@
     "AC-021-7"
    ],
    "decs": [],
-   "needs": []
+   "needs": [],
+   "decs_decided": []
   },
   "UC-021-S09": {
    "id": "UC-021-S09",
@@ -4632,7 +4865,8 @@
    "verify": "자동",
    "acs": [],
    "decs": [],
-   "needs": []
+   "needs": [],
+   "decs_decided": []
   },
   "UC-021-S10": {
    "id": "UC-021-S10",
@@ -4640,19 +4874,18 @@
    "title": "분모·AI 범위",
    "state": "S02 뒤",
    "input": "이행률 조회, AI 「요구사항 목록」 질문",
-   "expected": "DEC-11 제안 기준: 분모 3, 이행률 33.3%, AI 목록 3건 + C 구분",
+   "expected": "분모 3, 이행률 33.3%, AI 목록 표 A·B·D 「확정 목록」 + C 「확정 명세서에 없음(이행률 제외)」",
    "pass": "AC-021-10",
-   "verify": "API·실모델 · **DEC-11**",
+   "verify": "API·실모델",
    "acs": [
     "AC-021-10"
    ],
-   "decs": [
-    "DEC-11"
-   ],
+   "decs": [],
    "needs": [
     "api",
     "live-model"
-   ]
+   ],
+   "decs_decided": []
   },
   "UC-022-S01": {
    "id": "UC-022-S01",
@@ -4671,7 +4904,8 @@
    "needs": [
     "api",
     "browser"
-   ]
+   ],
+   "decs_decided": []
   },
   "UC-022-S02": {
    "id": "UC-022-S02",
@@ -4686,7 +4920,8 @@
     "AC-022-4"
    ],
    "decs": [],
-   "needs": []
+   "needs": [],
+   "decs_decided": []
   },
   "UC-022-S03": {
    "id": "UC-022-S03",
@@ -4701,7 +4936,8 @@
     "AC-022-3"
    ],
    "decs": [],
-   "needs": []
+   "needs": [],
+   "decs_decided": []
   },
   "UC-022-S04": {
    "id": "UC-022-S04",
@@ -4716,7 +4952,8 @@
     "AC-022-5"
    ],
    "decs": [],
-   "needs": []
+   "needs": [],
+   "decs_decided": []
   },
   "UC-022-S12": {
    "id": "UC-022-S12",
@@ -4731,7 +4968,8 @@
     "AC-022-2"
    ],
    "decs": [],
-   "needs": []
+   "needs": [],
+   "decs_decided": []
   },
   "UC-022-S05": {
    "id": "UC-022-S05",
@@ -4746,7 +4984,8 @@
     "AC-022-2"
    ],
    "decs": [],
-   "needs": []
+   "needs": [],
+   "decs_decided": []
   },
   "UC-022-S06": {
    "id": "UC-022-S06",
@@ -4761,7 +5000,8 @@
    "decs": [],
    "needs": [
     "browser"
-   ]
+   ],
+   "decs_decided": []
   },
   "UC-022-S07": {
    "id": "UC-022-S07",
@@ -4778,7 +5018,8 @@
    "decs": [],
    "needs": [
     "api"
-   ]
+   ],
+   "decs_decided": []
   },
   "UC-022-S08": {
    "id": "UC-022-S08",
@@ -4794,7 +5035,8 @@
     "AC-022-1"
    ],
    "decs": [],
-   "needs": []
+   "needs": [],
+   "decs_decided": []
   },
   "UC-022-S09": {
    "id": "UC-022-S09",
@@ -4810,7 +5052,8 @@
     "AC-022-2"
    ],
    "decs": [],
-   "needs": []
+   "needs": [],
+   "decs_decided": []
   },
   "UC-022-S10": {
    "id": "UC-022-S10",
@@ -4826,7 +5069,8 @@
     "AC-022-4"
    ],
    "decs": [],
-   "needs": []
+   "needs": [],
+   "decs_decided": []
   },
   "UC-022-S11": {
    "id": "UC-022-S11",
@@ -4842,7 +5086,8 @@
     "AC-022-2"
    ],
    "decs": [],
-   "needs": []
+   "needs": [],
+   "decs_decided": []
   },
   "UC-023-S01": {
    "id": "UC-023-S01",
@@ -4857,11 +5102,12 @@
     "AC-023-1",
     "AC-023-4"
    ],
-   "decs": [
-    "DEC-03"
-   ],
+   "decs": [],
    "needs": [
     "api"
+   ],
+   "decs_decided": [
+    "DEC-03"
    ]
   },
   "UC-023-S02": {
@@ -4877,7 +5123,8 @@
     "AC-023-2"
    ],
    "decs": [],
-   "needs": []
+   "needs": [],
+   "decs_decided": []
   },
   "UC-023-S03": {
    "id": "UC-023-S03",
@@ -4894,7 +5141,8 @@
    "decs": [],
    "needs": [
     "api"
-   ]
+   ],
+   "decs_decided": []
   },
   "UC-023-S04": {
    "id": "UC-023-S04",
@@ -4911,7 +5159,8 @@
    "decs": [],
    "needs": [
     "api"
-   ]
+   ],
+   "decs_decided": []
   },
   "UC-023-S05": {
    "id": "UC-023-S05",
@@ -4928,7 +5177,8 @@
    "decs": [],
    "needs": [
     "api"
-   ]
+   ],
+   "decs_decided": []
   },
   "UC-023-S06": {
    "id": "UC-023-S06",
@@ -4946,7 +5196,8 @@
    "needs": [
     "api",
     "live-model"
-   ]
+   ],
+   "decs_decided": []
   },
   "UC-030-S01": {
    "id": "UC-030-S01",
@@ -4964,7 +5215,8 @@
     "AC-030-6"
    ],
    "decs": [],
-   "needs": []
+   "needs": [],
+   "decs_decided": []
   },
   "UC-030-S02": {
    "id": "UC-030-S02",
@@ -4981,7 +5233,8 @@
    "decs": [],
    "needs": [
     "api"
-   ]
+   ],
+   "decs_decided": []
   },
   "UC-030-S03": {
    "id": "UC-030-S03",
@@ -4996,7 +5249,8 @@
     "AC-030-3"
    ],
    "decs": [],
-   "needs": []
+   "needs": [],
+   "decs_decided": []
   },
   "UC-030-S04": {
    "id": "UC-030-S04",
@@ -5011,7 +5265,8 @@
     "AC-030-3"
    ],
    "decs": [],
-   "needs": []
+   "needs": [],
+   "decs_decided": []
   },
   "UC-030-S05": {
    "id": "UC-030-S05",
@@ -5026,7 +5281,8 @@
     "AC-030-5"
    ],
    "decs": [],
-   "needs": []
+   "needs": [],
+   "decs_decided": []
   },
   "UC-030-S06": {
    "id": "UC-030-S06",
@@ -5034,12 +5290,15 @@
    "title": "가중치 없는 WBS(L2)",
    "state": "가중치 열 삭제 변형",
    "input": "수집",
-   "expected": "기간 비례 가중치, 산출물 기준 실적, 「추정」 표시, 11.7%",
-   "pass": "A3 (IM-009 7.1)",
+   "expected": "기간 비례 가중치 × 파일 실적, 「추정」 표시, 30.3%, 계획선 72.0%",
+   "pass": "A3 (IM-009 7.1, DEC-19 (b))",
    "verify": "자동",
    "acs": [],
    "decs": [],
-   "needs": []
+   "needs": [],
+   "decs_decided": [
+    "DEC-19"
+   ]
   },
   "UC-030-S07": {
    "id": "UC-030-S07",
@@ -5058,7 +5317,8 @@
    "needs": [
     "api",
     "browser"
-   ]
+   ],
+   "decs_decided": []
   },
   "UC-030-S08": {
    "id": "UC-030-S08",
@@ -5075,7 +5335,8 @@
    "decs": [],
    "needs": [
     "api"
-   ]
+   ],
+   "decs_decided": []
   },
   "UC-030-S09": {
    "id": "UC-030-S09",
@@ -5091,7 +5352,8 @@
     "AC-030-4"
    ],
    "decs": [],
-   "needs": []
+   "needs": [],
+   "decs_decided": []
   },
   "UC-030-S10": {
    "id": "UC-030-S10",
@@ -5108,7 +5370,8 @@
    "decs": [],
    "needs": [
     "api"
-   ]
+   ],
+   "decs_decided": []
   },
   "UC-031-S01": {
    "id": "UC-031-S01",
@@ -5129,7 +5392,8 @@
    "needs": [
     "api",
     "browser"
-   ]
+   ],
+   "decs_decided": []
   },
   "UC-031-S02": {
    "id": "UC-031-S02",
@@ -5144,7 +5408,8 @@
     "AC-031-2"
    ],
    "decs": [],
-   "needs": []
+   "needs": [],
+   "decs_decided": []
   },
   "UC-031-S03": {
    "id": "UC-031-S03",
@@ -5160,7 +5425,8 @@
     "AC-031-3"
    ],
    "decs": [],
-   "needs": []
+   "needs": [],
+   "decs_decided": []
   },
   "UC-031-S04": {
    "id": "UC-031-S04",
@@ -5179,7 +5445,8 @@
    "needs": [
     "api",
     "browser"
-   ]
+   ],
+   "decs_decided": []
   },
   "UC-031-S05": {
    "id": "UC-031-S05",
@@ -5197,6 +5464,7 @@
    "needs": [
     "api"
    ],
+   "decs_decided": [],
    "subs": [
     "UC-031-S05",
     "UC-031-S05b"
@@ -5217,7 +5485,8 @@
    "decs": [],
    "needs": [
     "api"
-   ]
+   ],
+   "decs_decided": []
   },
   "UC-031-S07": {
    "id": "UC-031-S07",
@@ -5232,7 +5501,8 @@
     "AC-031-3"
    ],
    "decs": [],
-   "needs": []
+   "needs": [],
+   "decs_decided": []
   },
   "UC-031-S08": {
    "id": "UC-031-S08",
@@ -5249,7 +5519,8 @@
    "decs": [],
    "needs": [
     "api"
-   ]
+   ],
+   "decs_decided": []
   },
   "UC-031-S09": {
    "id": "UC-031-S09",
@@ -5266,7 +5537,8 @@
    "decs": [],
    "needs": [
     "api"
-   ]
+   ],
+   "decs_decided": []
   },
   "UC-031-S10": {
    "id": "UC-031-S10",
@@ -5274,18 +5546,17 @@
    "title": "승인률",
    "state": "S0 / S0a",
    "input": "승인률 조회",
-   "expected": "**DEC-12 결정 뒤** 기대값. 예시(제안 (a), IM-009 7.7): S0 1/2 = 50.0%(요구사항정의서 승인·사업수행계획서 제출) / S0a 1/3 = 33.3%",
+   "expected": "S0·S0a 모두 1/5 = 20.0%(분모 = WBS 산출물 5, 분자 = 요구사항정의서 v1 승인. SW설계서 v1 은 제출 상태, 사업수행계획서는 WBS 산출물 열에 없음. IM-009 7.2)",
    "pass": "AC-031-9",
-   "verify": "API · **DEC-12**",
+   "verify": "API",
    "acs": [
     "AC-031-9"
    ],
-   "decs": [
-    "DEC-12"
-   ],
+   "decs": [],
    "needs": [
     "api"
-   ]
+   ],
+   "decs_decided": []
   },
   "UC-031-S11": {
    "id": "UC-031-S11",
@@ -5300,7 +5571,8 @@
    "decs": [],
    "needs": [
     "api"
-   ]
+   ],
+   "decs_decided": []
   },
   "UC-032-S01": {
    "id": "UC-032-S01",
@@ -5317,7 +5589,8 @@
    "decs": [],
    "needs": [
     "api"
-   ]
+   ],
+   "decs_decided": []
   },
   "UC-032-S02": {
    "id": "UC-032-S02",
@@ -5334,7 +5607,8 @@
    "decs": [],
    "needs": [
     "api"
-   ]
+   ],
+   "decs_decided": []
   },
   "UC-032-S03": {
    "id": "UC-032-S03",
@@ -5351,7 +5625,8 @@
    "decs": [],
    "needs": [
     "api"
-   ]
+   ],
+   "decs_decided": []
   },
   "UC-032-S04": {
    "id": "UC-032-S04",
@@ -5368,7 +5643,8 @@
    "decs": [],
    "needs": [
     "api"
-   ]
+   ],
+   "decs_decided": []
   },
   "UC-032-S05": {
    "id": "UC-032-S05",
@@ -5383,7 +5659,8 @@
     "AC-032-5"
    ],
    "decs": [],
-   "needs": []
+   "needs": [],
+   "decs_decided": []
   },
   "UC-032-S06": {
    "id": "UC-032-S06",
@@ -5398,7 +5675,8 @@
     "AC-032-6"
    ],
    "decs": [],
-   "needs": []
+   "needs": [],
+   "decs_decided": []
   },
   "UC-032-S07": {
    "id": "UC-032-S07",
@@ -5413,7 +5691,8 @@
     "AC-032-7"
    ],
    "decs": [],
-   "needs": []
+   "needs": [],
+   "decs_decided": []
   },
   "UC-032-S08": {
    "id": "UC-032-S08",
@@ -5430,7 +5709,8 @@
    "decs": [],
    "needs": [
     "api"
-   ]
+   ],
+   "decs_decided": []
   },
   "UC-032-S09": {
    "id": "UC-032-S09",
@@ -5445,7 +5725,8 @@
    "decs": [],
    "needs": [
     "api"
-   ]
+   ],
+   "decs_decided": []
   },
   "UC-032-S10": {
    "id": "UC-032-S10",
@@ -5462,7 +5743,8 @@
    "decs": [],
    "needs": [
     "api"
-   ]
+   ],
+   "decs_decided": []
   },
   "UC-033-S01": {
    "id": "UC-033-S01",
@@ -5476,12 +5758,13 @@
    "acs": [
     "AC-033-1"
    ],
-   "decs": [
-    "DEC-10"
-   ],
+   "decs": [],
    "needs": [
     "api",
     "browser"
+   ],
+   "decs_decided": [
+    "DEC-10"
    ]
   },
   "UC-033-S02": {
@@ -5496,10 +5779,11 @@
    "acs": [
     "AC-033-4"
    ],
-   "decs": [
+   "decs": [],
+   "needs": [],
+   "decs_decided": [
     "DEC-10"
-   ],
-   "needs": []
+   ]
   },
   "UC-033-S03": {
    "id": "UC-033-S03",
@@ -5516,7 +5800,8 @@
    "decs": [],
    "needs": [
     "api"
-   ]
+   ],
+   "decs_decided": []
   },
   "UC-040-S01": {
    "id": "UC-040-S01",
@@ -5537,7 +5822,8 @@
    "needs": [
     "api",
     "browser"
-   ]
+   ],
+   "decs_decided": []
   },
   "UC-040-S02": {
    "id": "UC-040-S02",
@@ -5554,7 +5840,8 @@
    "decs": [],
    "needs": [
     "api"
-   ]
+   ],
+   "decs_decided": []
   },
   "UC-040-S03": {
    "id": "UC-040-S03",
@@ -5571,26 +5858,26 @@
    "decs": [],
    "needs": [
     "api"
-   ]
+   ],
+   "decs_decided": []
   },
   "UC-040-S04": {
    "id": "UC-040-S04",
    "uc": "UC-040",
    "title": "일정 준수 칸",
-   "state": "S0, DEC-01 제안 산식",
+   "state": "S0, 기준일 T0",
    "input": "목록",
-   "expected": "1/3 (33.3%)",
+   "expected": "1/3 (33.3%). 마일스톤 없는 TD-PRJ-3 은 「-」",
    "pass": "AC-040-5",
-   "verify": "API · **DEC-01**",
+   "verify": "API",
    "acs": [
     "AC-040-5"
    ],
-   "decs": [
-    "DEC-01"
-   ],
+   "decs": [],
    "needs": [
     "api"
-   ]
+   ],
+   "decs_decided": []
   },
   "UC-040-S05": {
    "id": "UC-040-S05",
@@ -5605,7 +5892,8 @@
    "decs": [],
    "needs": [
     "browser"
-   ]
+   ],
+   "decs_decided": []
   },
   "UC-041-S01": {
    "id": "UC-041-S01",
@@ -5613,7 +5901,7 @@
    "title": "다섯 축 한 화면",
    "state": "TD-PRJ-1 S0, T0. C1",
    "input": "1→2",
-   "expected": "진척 30.0%·계획 66.9%·편차 −36.9%p(L1) · 위험 처리율 50.0% · 열린 리스크 높음 1 · 제출 1/미제출 3/지연 1 · 일반 이슈 처리율 66.7% · 완료 확인율 15.0%. 이행률(DEC-03)·승인률(DEC-12)·일정 준수율(DEC-01)·결함 처리율(DEC-02)은 결정 뒤 기대값. 각 카드 산출 근거 문장",
+   "expected": "진척 30.0%·계획 66.9%·편차 −36.9%p(L1) · 위험 처리율 50.0% · 열린 리스크 높음 1 · 제출 1/미제출 3/지연 1 · 일반 이슈(결함 제외) 처리율 66.7% · 결함 처리율 50.0% · 완료 확인율 15.0%. 이행률 33.3%·산출물 승인률 20.0%·일정 준수율 33.3%(IM-009 7.1·7.3). 각 카드 산출 근거 문장",
    "pass": "AC-041-1·2·3",
    "verify": "API·브라우저",
    "acs": [
@@ -5625,7 +5913,8 @@
    "needs": [
     "api",
     "browser"
-   ]
+   ],
+   "decs_decided": []
   },
   "UC-041-S02": {
    "id": "UC-041-S02",
@@ -5633,7 +5922,7 @@
    "title": "진척률에서 작업까지",
    "state": "S0",
    "input": "3→4",
-   "expected": "3.2 지연·격차 경고(40%, 미제출), 계획선 100%, 연결 이슈 #204 진행중, 완료 확인 없음. 3.1 확인됨. 3.3 격차 경고",
+   "expected": "3.2 지연(40%, 산출물 지연 판정), 계획선 100%, 연결 이슈 #204 진행중, 완료 확인 없음. 3.1 확인됨. 격차 경고 없음(3.2 40%·3.3 20% 는 문턱 80 아래, DEC-20 (b))",
    "pass": "AC-041-4",
    "verify": "API·브라우저",
    "acs": [
@@ -5643,7 +5932,8 @@
    "needs": [
     "api",
     "browser"
-   ]
+   ],
+   "decs_decided": []
   },
   "UC-041-S03": {
    "id": "UC-041-S03",
@@ -5651,7 +5941,7 @@
    "title": "L3 추정",
    "state": "TD-PRJ-2(WBS 없음, TD-CON-4 이슈 TD-ISS-N1~N7)",
    "input": "1·3",
-   "expected": "일정 줄 = 날짜 있는 이슈 6건(N6 제외), 줄마다 진척도(100·100·50·30·0·100). 대표 진척률 「추정(이슈 진척도)」 표시, 「L1 아님」 경고. **값은 DEC-17 결정 뒤**(제안 (a) 예시 54.3%, 결측 1건 표시)",
+   "expected": "일정 줄 = 날짜 있는 이슈 6건(N6 제외), 줄마다 진척도(100·100·50·30·0·100). 대표 진척률 「추정」 표시와 산출 근거 문장(「L1 아님」 포함, DEF-V037). **값은 DEC-17 결정 뒤**(제안 (a) 예시 54.3%, 결측 1건 표시)",
    "pass": "AC-041-5 · **DEC-17**",
    "verify": "API",
    "acs": [
@@ -5662,7 +5952,8 @@
    ],
    "needs": [
     "api"
-   ]
+   ],
+   "decs_decided": []
   },
   "UC-041-S04": {
    "id": "UC-041-S04",
@@ -5680,7 +5971,8 @@
    "decs": [],
    "needs": [
     "browser"
-   ]
+   ],
+   "decs_decided": []
   },
   "UC-041-S05": {
    "id": "UC-041-S05",
@@ -5697,7 +5989,8 @@
    "decs": [],
    "needs": [
     "api"
-   ]
+   ],
+   "decs_decided": []
   },
   "UC-041-S06": {
    "id": "UC-041-S06",
@@ -5712,7 +6005,8 @@
     "AC-041-8"
    ],
    "decs": [],
-   "needs": []
+   "needs": [],
+   "decs_decided": []
   },
   "UC-041-S07": {
    "id": "UC-041-S07",
@@ -5720,37 +6014,35 @@
    "title": "일정 준수율",
    "state": "S0, TD-MS-1~6",
    "input": "1",
-   "expected": "**DEC-01 결정 뒤 기대값**(제안 (a) 예시 33.3%, IM-009 7.7). 계획선 편차 카드와 별도 카드",
+   "expected": "1/3 = 33.3%(IM-009 7.1). 기준일 2026-04-15 는 산출 불가. 계획선 편차 카드와 별도 카드",
    "pass": "AC-041-9",
-   "verify": "API · **DEC-01**",
+   "verify": "API",
    "acs": [
     "AC-041-9"
    ],
-   "decs": [
-    "DEC-01"
-   ],
+   "decs": [],
    "needs": [
     "api"
-   ]
+   ],
+   "decs_decided": []
   },
   "UC-041-S08": {
    "id": "UC-041-S08",
    "uc": "UC-041",
    "title": "결함 처리율",
-   "state": "S0, 결함 트래커 매핑",
+   "state": "S0, 결함 트래커 매핑(TD-CON-2 「결함」)",
    "input": "1",
-   "expected": "**DEC-02 결정 뒤 기대값**(제안 (a) 예시 50.0%)",
+   "expected": "결함 처리율 50.0%(종료 R9 ÷ R9·R10). 전체 이슈(결함 포함) 11 = 일반 이슈(결함 제외) 9 + 결함 2, 셋을 더한 합계 없음. 매핑 없는 TD-PRJ-2 는 결함 처리율 「산출 불가」와 이유, 일반 이슈 = 전체",
    "pass": "AC-041-10",
-   "verify": "API · **DEC-02**",
+   "verify": "API",
    "acs": [
     "AC-041-10"
    ],
-   "decs": [
-    "DEC-02"
-   ],
+   "decs": [],
    "needs": [
     "api"
-   ]
+   ],
+   "decs_decided": []
   },
   "UC-041-S12": {
    "id": "UC-041-S12",
@@ -5758,7 +6050,7 @@
    "title": "WBS 변형",
    "state": "TD-PRJ-9 에 TD-WBS-L2 / TD-WBS-MISS / TD-WBS-SUM 각각 투입",
    "input": "1·3",
-   "expected": "L2: 11.7% 「추정(산출물 기준)」 / MISS: 3.4 판정 「해당 없음」, 진척 30.0% 그대로 / SUM: 경고·27.3%",
+   "expected": "L2: 30.3% 「추정(가중치 미지정, 기간 비례)」 / MISS: 3.4 판정 「해당 없음」, 진척 30.0% 그대로 / SUM: 경고·27.3%",
    "pass": "AC-041-3·5, AC-030-3 (IM-009 7.1)",
    "verify": "자동",
    "acs": [
@@ -5767,7 +6059,8 @@
     "AC-030-3"
    ],
    "decs": [],
-   "needs": []
+   "needs": [],
+   "decs_decided": []
   },
   "UC-041-S09": {
    "id": "UC-041-S09",
@@ -5784,7 +6077,8 @@
    "decs": [],
    "needs": [
     "api"
-   ]
+   ],
+   "decs_decided": []
   },
   "UC-041-S10": {
    "id": "UC-041-S10",
@@ -5801,7 +6095,8 @@
    "decs": [],
    "needs": [
     "browser"
-   ]
+   ],
+   "decs_decided": []
   },
   "UC-041-S11": {
    "id": "UC-041-S11",
@@ -5818,7 +6113,8 @@
    "decs": [],
    "needs": [
     "live-model"
-   ]
+   ],
+   "decs_decided": []
   },
   "UC-042-S01": {
    "id": "UC-042-S01",
@@ -5837,7 +6133,8 @@
    "needs": [
     "api",
     "browser"
-   ]
+   ],
+   "decs_decided": []
   },
   "UC-042-S02": {
    "id": "UC-042-S02",
@@ -5854,7 +6151,8 @@
    "decs": [],
    "needs": [
     "api"
-   ]
+   ],
+   "decs_decided": []
   },
   "UC-042-S03": {
    "id": "UC-042-S03",
@@ -5869,7 +6167,8 @@
     "AC-042-3"
    ],
    "decs": [],
-   "needs": []
+   "needs": [],
+   "decs_decided": []
   },
   "UC-042-S04": {
    "id": "UC-042-S04",
@@ -5886,7 +6185,8 @@
    "decs": [],
    "needs": [
     "api"
-   ]
+   ],
+   "decs_decided": []
   },
   "UC-043-S01": {
    "id": "UC-043-S01",
@@ -5894,7 +6194,7 @@
    "title": "목록·원천",
    "state": "TD-PRJ-1 S0. C1",
    "input": "1",
-   "expected": "일반 이슈 9, 열림 3, 해결 6(66.7%). 각 행 원천(GitHub·citizen-portal·#n / Redmine·citizen-portal·#20n), 링크",
+   "expected": "일반 이슈(결함 제외) 9, 열림 3, 해결 6(66.7%). 전체 이슈(결함 포함) 11 = 일반 9 + 결함 2. 각 행 원천(GitHub·citizen-portal·#n / Redmine·citizen-portal·#20n), 링크",
    "pass": "AC-043-1·4",
    "verify": "API·브라우저",
    "acs": [
@@ -5905,7 +6205,8 @@
    "needs": [
     "api",
     "browser"
-   ]
+   ],
+   "decs_decided": []
   },
   "UC-043-S02": {
    "id": "UC-043-S02",
@@ -5922,7 +6223,8 @@
    "decs": [],
    "needs": [
     "api"
-   ]
+   ],
+   "decs_decided": []
   },
   "UC-043-S03": {
    "id": "UC-043-S03",
@@ -5939,7 +6241,8 @@
    "decs": [],
    "needs": [
     "api"
-   ]
+   ],
+   "decs_decided": []
   },
   "UC-043-S04": {
    "id": "UC-043-S04",
@@ -5956,7 +6259,8 @@
    "decs": [],
    "needs": [
     "api"
-   ]
+   ],
+   "decs_decided": []
   },
   "UC-043-S05": {
    "id": "UC-043-S05",
@@ -5964,18 +6268,17 @@
    "title": "리스크·결함",
    "state": "S0",
    "input": "3·4",
-   "expected": "리스크 2(열림 1 높음), 위험 처리율 50.0%. 결함: DEC-02 뒤 2건·50.0%",
+   "expected": "리스크 2(열림 1 높음), 위험 처리율 50.0%. 결함 2건(R9 종료·R10 진행중), 결함 처리율 50.0%",
    "pass": "AC-043-6",
-   "verify": "API · **DEC-02**",
+   "verify": "API",
    "acs": [
     "AC-043-6"
    ],
-   "decs": [
-    "DEC-02"
-   ],
+   "decs": [],
    "needs": [
     "api"
-   ]
+   ],
+   "decs_decided": []
   },
   "UC-043-S06": {
    "id": "UC-043-S06",
@@ -5992,7 +6295,8 @@
    "decs": [],
    "needs": [
     "api"
-   ]
+   ],
+   "decs_decided": []
   },
   "UC-043-S07": {
    "id": "UC-043-S07",
@@ -6007,7 +6311,8 @@
    "decs": [],
    "needs": [
     "api"
-   ]
+   ],
+   "decs_decided": []
   },
   "UC-050-S01": {
    "id": "UC-050-S01",
@@ -6025,7 +6330,8 @@
    "decs": [],
    "needs": [
     "api"
-   ]
+   ],
+   "decs_decided": []
   },
   "UC-050-S02": {
    "id": "UC-050-S02",
@@ -6033,7 +6339,7 @@
    "title": "이슈·리스크·산출물 요청",
    "state": "S0",
    "input": "R4 / R7 / 요구사항정의서 각각",
-   "expected": "상태·우선순위·담당 + 일반 이슈 처리율 66.7% / 위험 처리율 50.0%·열린 리스크 1 / 승인률(DEC-12 결정 뒤)",
+   "expected": "상태·우선순위·담당 + 일반 이슈 처리율 66.7% / 위험 처리율 50.0%·열린 리스크 1 / 산출물 승인률 20.0%",
    "pass": "AC-050-1·2",
    "verify": "API",
    "acs": [
@@ -6043,7 +6349,8 @@
    "decs": [],
    "needs": [
     "api"
-   ]
+   ],
+   "decs_decided": []
   },
   "UC-050-S03": {
    "id": "UC-050-S03",
@@ -6060,7 +6367,8 @@
    "decs": [],
    "needs": [
     "api"
-   ]
+   ],
+   "decs_decided": []
   },
   "UC-050-S04": {
    "id": "UC-050-S04",
@@ -6077,7 +6385,8 @@
    "decs": [],
    "needs": [
     "api"
-   ]
+   ],
+   "decs_decided": []
   },
   "UC-050-S05": {
    "id": "UC-050-S05",
@@ -6094,7 +6403,8 @@
    "decs": [],
    "needs": [
     "live-tool"
-   ]
+   ],
+   "decs_decided": []
   },
   "UC-050-S06": {
    "id": "UC-050-S06",
@@ -6109,7 +6419,8 @@
     "AC-050-1"
    ],
    "decs": [],
-   "needs": []
+   "needs": [],
+   "decs_decided": []
   },
   "UC-051-S01": {
    "id": "UC-051-S01",
@@ -6128,7 +6439,8 @@
    "needs": [
     "api",
     "browser"
-   ]
+   ],
+   "decs_decided": []
   },
   "UC-051-S02": {
    "id": "UC-051-S02",
@@ -6143,7 +6455,8 @@
     "AC-051-2"
    ],
    "decs": [],
-   "needs": []
+   "needs": [],
+   "decs_decided": []
   },
   "UC-051-S03": {
    "id": "UC-051-S03",
@@ -6161,6 +6474,7 @@
    "needs": [
     "api"
    ],
+   "decs_decided": [],
    "subs": [
     "UC-051-S03a",
     "UC-051-S03b"
@@ -6181,7 +6495,8 @@
    "decs": [],
    "needs": [
     "api"
-   ]
+   ],
+   "decs_decided": []
   },
   "UC-051-S05": {
    "id": "UC-051-S05",
@@ -6198,7 +6513,8 @@
    "decs": [],
    "needs": [
     "live-tool"
-   ]
+   ],
+   "decs_decided": []
   },
   "UC-052-S01": {
    "id": "UC-052-S01",
@@ -6216,7 +6532,8 @@
    "needs": [
     "api",
     "browser"
-   ]
+   ],
+   "decs_decided": []
   },
   "UC-052-S02": {
    "id": "UC-052-S02",
@@ -6233,7 +6550,8 @@
    "decs": [],
    "needs": [
     "api"
-   ]
+   ],
+   "decs_decided": []
   },
   "UC-052-S03": {
    "id": "UC-052-S03",
@@ -6250,7 +6568,8 @@
    "decs": [],
    "needs": [
     "api"
-   ]
+   ],
+   "decs_decided": []
   },
   "UC-052-S04": {
    "id": "UC-052-S04",
@@ -6265,7 +6584,8 @@
     "AC-052-4"
    ],
    "decs": [],
-   "needs": []
+   "needs": [],
+   "decs_decided": []
   },
   "UC-052-S05": {
    "id": "UC-052-S05",
@@ -6281,7 +6601,8 @@
     "AC-052-3"
    ],
    "decs": [],
-   "needs": []
+   "needs": [],
+   "decs_decided": []
   },
   "UC-053-S01": {
    "id": "UC-053-S01",
@@ -6298,7 +6619,8 @@
    "decs": [],
    "needs": [
     "browser"
-   ]
+   ],
+   "decs_decided": []
   },
   "UC-053-S02": {
    "id": "UC-053-S02",
@@ -6316,7 +6638,8 @@
    "decs": [],
    "needs": [
     "api"
-   ]
+   ],
+   "decs_decided": []
   },
   "UC-053-S03": {
    "id": "UC-053-S03",
@@ -6333,7 +6656,8 @@
    "decs": [],
    "needs": [
     "api"
-   ]
+   ],
+   "decs_decided": []
   },
   "UC-053-S04": {
    "id": "UC-053-S04",
@@ -6350,7 +6674,8 @@
    "decs": [],
    "needs": [
     "browser"
-   ]
+   ],
+   "decs_decided": []
   },
   "UC-060-S01": {
    "id": "UC-060-S01",
@@ -6367,7 +6692,8 @@
    "decs": [],
    "needs": [
     "live-model"
-   ]
+   ],
+   "decs_decided": []
   },
   "UC-060-S02": {
    "id": "UC-060-S02",
@@ -6384,7 +6710,8 @@
    "decs": [],
    "needs": [
     "live-model"
-   ]
+   ],
+   "decs_decided": []
   },
   "UC-060-S03": {
    "id": "UC-060-S03",
@@ -6401,7 +6728,8 @@
    "decs": [],
    "needs": [
     "live-model"
-   ]
+   ],
+   "decs_decided": []
   },
   "UC-060-S04": {
    "id": "UC-060-S04",
@@ -6416,7 +6744,8 @@
     "AC-060-3"
    ],
    "decs": [],
-   "needs": []
+   "needs": [],
+   "decs_decided": []
   },
   "UC-060-S05a": {
    "id": "UC-060-S05a",
@@ -6431,7 +6760,8 @@
     "AC-060-4"
    ],
    "decs": [],
-   "needs": []
+   "needs": [],
+   "decs_decided": []
   },
   "UC-060-S05b": {
    "id": "UC-060-S05b",
@@ -6448,7 +6778,8 @@
    "decs": [],
    "needs": [
     "live-model"
-   ]
+   ],
+   "decs_decided": []
   },
   "UC-060-S06a": {
    "id": "UC-060-S06a",
@@ -6466,7 +6797,8 @@
    "needs": [
     "api",
     "browser"
-   ]
+   ],
+   "decs_decided": []
   },
   "UC-060-S06b": {
    "id": "UC-060-S06b",
@@ -6486,7 +6818,8 @@
    "needs": [
     "api",
     "browser"
-   ]
+   ],
+   "decs_decided": []
   },
   "UC-060-S07": {
    "id": "UC-060-S07",
@@ -6504,7 +6837,8 @@
    "decs": [],
    "needs": [
     "live-model"
-   ]
+   ],
+   "decs_decided": []
   },
   "UC-060-S08": {
    "id": "UC-060-S08",
@@ -6519,7 +6853,8 @@
     "AC-060-7"
    ],
    "decs": [],
-   "needs": []
+   "needs": [],
+   "decs_decided": []
   },
   "UC-060-S09": {
    "id": "UC-060-S09",
@@ -6537,7 +6872,8 @@
    "needs": [
     "airgap",
     "live-model"
-   ]
+   ],
+   "decs_decided": []
   },
   "UC-060-S10": {
    "id": "UC-060-S10",
@@ -6552,7 +6888,8 @@
     "AC-060-9"
    ],
    "decs": [],
-   "needs": []
+   "needs": [],
+   "decs_decided": []
   },
   "UC-060-S11": {
    "id": "UC-060-S11",
@@ -6564,10 +6901,11 @@
    "pass": "A5",
    "verify": "자동 · DEC-11",
    "acs": [],
-   "decs": [
+   "decs": [],
+   "needs": [],
+   "decs_decided": [
     "DEC-11"
-   ],
-   "needs": []
+   ]
   },
   "UC-060-S12": {
    "id": "UC-060-S12",
@@ -6580,7 +6918,8 @@
    "verify": "자동",
    "acs": [],
    "decs": [],
-   "needs": []
+   "needs": [],
+   "decs_decided": []
   },
   "UC-060-S13": {
    "id": "UC-060-S13",
@@ -6598,7 +6937,8 @@
    "decs": [],
    "needs": [
     "live-model"
-   ]
+   ],
+   "decs_decided": []
   },
   "UC-060-S14": {
    "id": "UC-060-S14",
@@ -6615,7 +6955,8 @@
    "decs": [],
    "needs": [
     "live-model"
-   ]
+   ],
+   "decs_decided": []
   },
   "UC-060-S15": {
    "id": "UC-060-S15",
@@ -6632,7 +6973,8 @@
    "decs": [],
    "needs": [
     "live-model"
-   ]
+   ],
+   "decs_decided": []
   },
   "UC-060-S16": {
    "id": "UC-060-S16",
@@ -6648,7 +6990,8 @@
     "AC-060-1"
    ],
    "decs": [],
-   "needs": []
+   "needs": [],
+   "decs_decided": []
   },
   "UC-060-S17": {
    "id": "UC-060-S17",
@@ -6663,10 +7006,11 @@
     "AC-060-12",
     "AC-060-4"
    ],
-   "decs": [
+   "decs": [],
+   "needs": [],
+   "decs_decided": [
     "DEC-13"
-   ],
-   "needs": []
+   ]
   },
   "UC-061-S01": {
    "id": "UC-061-S01",
@@ -6685,7 +7029,8 @@
    "needs": [
     "api",
     "browser"
-   ]
+   ],
+   "decs_decided": []
   },
   "UC-061-S02": {
    "id": "UC-061-S02",
@@ -6703,7 +7048,8 @@
    "decs": [],
    "needs": [
     "api"
-   ]
+   ],
+   "decs_decided": []
   },
   "UC-061-S03": {
    "id": "UC-061-S03",
@@ -6718,7 +7064,8 @@
     "AC-061-3"
    ],
    "decs": [],
-   "needs": []
+   "needs": [],
+   "decs_decided": []
   },
   "UC-061-S04": {
    "id": "UC-061-S04",
@@ -6735,7 +7082,8 @@
    "decs": [],
    "needs": [
     "api"
-   ]
+   ],
+   "decs_decided": []
   },
   "UC-070-S01": {
    "id": "UC-070-S01",
@@ -6755,7 +7103,8 @@
    "needs": [
     "api",
     "browser"
-   ]
+   ],
+   "decs_decided": []
   },
   "UC-070-S02": {
    "id": "UC-070-S02",
@@ -6771,7 +7120,8 @@
     "AC-070-8"
    ],
    "decs": [],
-   "needs": []
+   "needs": [],
+   "decs_decided": []
   },
   "UC-070-S09": {
    "id": "UC-070-S09",
@@ -6786,7 +7136,8 @@
     "AC-070-8"
    ],
    "decs": [],
-   "needs": []
+   "needs": [],
+   "decs_decided": []
   },
   "UC-070-S10": {
    "id": "UC-070-S10",
@@ -6794,14 +7145,15 @@
    "title": "HWP 5.0 표",
    "state": "TD-PRJ-9, TD-DOC-12",
    "input": "올리기 → 원문",
-   "expected": "표 3행×4열 보존(항목·검토자·결과·비고), 문단 3개, 2쪽",
+   "expected": "표 3행×4열 보존(항목·검토자·결과·비고), 문단 3개, 쪽 수 없음, 조각 출처 위치 「문단 1~5 / 표 1 · 1~3행」(머리 표기·제목 포함 문단 5개)",
    "pass": "AC-070-8",
    "verify": "자동",
    "acs": [
     "AC-070-8"
    ],
    "decs": [],
-   "needs": []
+   "needs": [],
+   "decs_decided": []
   },
   "UC-070-S11": {
    "id": "UC-070-S11",
@@ -6809,14 +7161,15 @@
    "title": "HWPX 표",
    "state": "TD-PRJ-9, TD-DOC-13",
    "input": "올리기 → 원문",
-   "expected": "TD-DOC-12 와 같은 표·문단",
+   "expected": "TD-DOC-12 와 같은 표·문단·출처 위치",
    "pass": "AC-070-8",
    "verify": "자동",
    "acs": [
     "AC-070-8"
    ],
    "decs": [],
-   "needs": []
+   "needs": [],
+   "decs_decided": []
   },
   "UC-070-S12": {
    "id": "UC-070-S12",
@@ -6831,7 +7184,8 @@
     "AC-070-9"
    ],
    "decs": [],
-   "needs": []
+   "needs": [],
+   "decs_decided": []
   },
   "UC-070-S13": {
    "id": "UC-070-S13",
@@ -6847,7 +7201,8 @@
     "AC-070-5"
    ],
    "decs": [],
-   "needs": []
+   "needs": [],
+   "decs_decided": []
   },
   "UC-070-S03": {
    "id": "UC-070-S03",
@@ -6864,7 +7219,8 @@
    "decs": [],
    "needs": [
     "api"
-   ]
+   ],
+   "decs_decided": []
   },
   "UC-070-S04": {
    "id": "UC-070-S04",
@@ -6879,7 +7235,8 @@
     "AC-070-5"
    ],
    "decs": [],
-   "needs": []
+   "needs": [],
+   "decs_decided": []
   },
   "UC-070-S05": {
    "id": "UC-070-S05",
@@ -6895,7 +7252,8 @@
     "AC-070-5"
    ],
    "decs": [],
-   "needs": []
+   "needs": [],
+   "decs_decided": []
   },
   "UC-070-S06": {
    "id": "UC-070-S06",
@@ -6910,7 +7268,8 @@
     "AC-070-6"
    ],
    "decs": [],
-   "needs": []
+   "needs": [],
+   "decs_decided": []
   },
   "UC-070-S07": {
    "id": "UC-070-S07",
@@ -6925,7 +7284,8 @@
     "AC-070-7"
    ],
    "decs": [],
-   "needs": []
+   "needs": [],
+   "decs_decided": []
   },
   "UC-070-S08": {
    "id": "UC-070-S08",
@@ -6940,7 +7300,8 @@
    "decs": [],
    "needs": [
     "api"
-   ]
+   ],
+   "decs_decided": []
   }
  },
  "commons": {
@@ -7089,7 +7450,7 @@
    "text": "**일정 준수율**(SWFR.PIP.007) 산식·원천. 분자·분모는 **같은 평가 대상 집합**(기한이 기준일 이전인 마일스톤)이어야 한다. 기한 없는 항목, 다시 열린 항목, 대상 0건 처리. WBS 계획선 편차와는 별개 지표",
    "ucs": "UC-040 · UC-041",
    "blocked": "마일스톤 수집·표시, 계획선 편차",
-   "status": "결정 필요(산식). 예시 계산 IM-009 7.4"
+   "status": "**결정 (a) 2026-11-12 사용자, 권장안 승인**: 기한이 기준일 이전인 마일스톤 중 기한 안에 닫힌 비율. 분자·분모 같은 집합"
   },
   "DEC-02": {
    "id": "DEC-02",
@@ -7097,7 +7458,7 @@
    "text": "**결함 판별 기준**(SWFR.PIP.008). 도구별 매핑(Redmine 트래커 이름 / GitHub 라벨 이름)을 **연결 설정(UC-012)으로** 두고 기본 예시만 제시. 특정 저장소 라벨을 보편 규칙으로 고정하지 않는다",
    "ucs": "UC-041 · UC-043 · UC-012",
    "blocked": "일반 이슈·리스크 집계, 리스크 트래커 매핑",
-   "status": "결정 필요(기준·설정 키)"
+   "status": "**결정 2026-11-12 사용자**: 전체 이슈·일반 이슈(결함 제외)·결함을 구분해 보이고 포함 관계(전체 = 일반 + 결함)를 표시한다. 세 값을 더해 합산하지 않는다. 판별 기준은 ①(a) 연결 설정의 결함 트래커·라벨 키. 매핑이 없으면 결함 처리율은 산출 불가와 이유"
   },
   "DEC-03": {
    "id": "DEC-03",
@@ -7105,7 +7466,7 @@
    "text": "**요구사항 이행률 분자**. IM-001 「시험 통과로 검증된 요구사항」 ↔ 시험 결과 원천이 없는 사업의 산정(발주기관의 검증·인수 지정)",
    "ucs": "UC-023 · UC-041",
    "blocked": "지정·되돌림·보존·권한 시험",
-   "status": "결정 필요(문구 개정 또는 산정 방식). 9절 변경 제안 1"
+   "status": "**결정 (a) 2026-11-12 사용자, 권장안 승인**: 분자는 발주기관이 검증·인수로 지정한 것. 구현 변경 없음, IM-001 PIP.008 문구만 맞춘다"
   },
   "DEC-04": {
    "id": "DEC-04",
@@ -7121,7 +7482,7 @@
    "text": "**관리자 대행 범위**. 플랫폼 관리자가 발주기관 고유 판단(확정·돌려보냄·상태 지정·승인·반려·확인 요청·확인완료·완료 확인)과 용역사 행위(명세서 등록·제출)를 운영 지원 목적으로 대행할 수 있게 둘지",
    "ucs": "UC-020·021·023·031·032·050·052",
    "blocked": "발주기관·용역사 역할의 모든 시험",
-   "status": "결정 필요(권한 정책). 요구 동작 초안은 「대행 불가」"
+   "status": "권장안 (a) 승인(2026-11-12 사용자). 단 확정 설계 ARC-028(기준선 확정은 관리자 허용)·ARC-029 와 충돌해 적용 보류, 사용자 확인 대기. 결정 필요(권한 정책)"
   },
   "DEC-06": {
    "id": "DEC-06",
@@ -7137,7 +7498,7 @@
    "text": "**공식성 표시**. 발주기관의 공식 확정·승인과 수행사 시험 계정 조작을 제품 안에서 구분(판정자 조직 표시)할지, 운영 규칙(검증용 사업 분리)으로만 다룰지",
    "ucs": "UC-021·023·031·032·052",
    "blocked": "판정자 이름·조직 기록(이미 요구 동작)",
-   "status": "결정 필요(표시 정책)"
+   "status": "**결정 (a) 2026-11-12 사용자, 권장안 승인**: 판정자 이름·조직 기록과 검증용 사업 분리로 구분. 공식/시험 표시 UI 는 넣지 않는다"
   },
   "DEC-08": {
    "id": "DEC-08",
@@ -7153,7 +7514,7 @@
    "text": "**매핑 변경 수단**. SWFR.CON.002 「설정으로」를 화면으로 볼지, 설정 파일·관리 API 로 충족으로 볼지",
    "ucs": "UC-012",
    "blocked": "API 로 변경 시험",
-   "status": "결정 필요(범위)"
+   "status": "**결정 (a) 2026-11-12 사용자, 권장안 승인**: 매핑 변경은 관리 API 와 설명서. 연결 화면 폼은 넣지 않는다"
   },
   "DEC-10": {
    "id": "DEC-10",
@@ -7161,7 +7522,7 @@
    "text": "**협의 범위의 코드 부여·계약 범위**. 공동 수급 관리(UC-003)와 WBS 작업별 산출물·양식 지정(UC-033)을 요구사항 코드 없이 「협의 범위」로 둔 채 검증할지, IM-001 개정으로 코드를 부여할지(협의 6절 확인 뒤)",
    "ucs": "UC-003 · UC-010 · UC-031 · UC-033",
    "blocked": "SER.SEC.003 범위 시험, 연결 소유 규칙(협의 1-1 확정)",
-   "status": "범위 확인"
+   "status": "**결정 (a) 2026-11-12 사용자, 권장안 승인**: 협의 범위(공동 수급·WBS 산출물 지정)는 요구사항 코드를 새로 매기지 않는다. UC-003 은 SER.SEC.003 부분만, UC-033 은 보류(분모에서 빼지 않고 미완료로 남긴다)"
   },
   "DEC-11": {
    "id": "DEC-11",
@@ -7169,7 +7530,7 @@
    "text": "**명세서에 없는 기존 요구사항의 범위**. 목록(별도 구분 표시: 확정) · 이행률 분모(포함/제외) · 추적관계(보존: 확정) · AI 목록·집계(구분/제외)",
    "ucs": "UC-021 · UC-023 · UC-041 · UC-060",
    "blocked": "보존·표시·추적 시험",
-   "status": "결정 필요(산정 범위)"
+   "status": "**결정 (a) 2026-11-12 사용자, 권장안 승인**: 명세서에 없는 기존 요구사항은 구분 표시, 이행률 분모에서 제외, AI 답에서도 구분"
   },
   "DEC-12": {
    "id": "DEC-12",
@@ -7177,7 +7538,7 @@
    "text": "**산출물 승인률 분모·분자**. 분모 (a) 제출본이 있는 항목 (b) WBS 가 정한 산출물(UC-033 지정 산출물이 있으면 그것) (c) 적용 대상 22종 항목. **분자 = 현행 버전이 승인 상태인 항목**(과거 승인 버전이 있어도 새 미승인 현행 버전은 세지 않는다). (a) 와 (b) 는 다른 질문에 답한다: 필요한 산출물 10개 중 1개만 제출·승인이면 (a) 100%(제출된 것은 다 승인) · (b) 10%(전체 준비 수준). (a) 값을 전체 준비·완료 수준처럼 설명하지 않는다",
    "ucs": "UC-031 · UC-040 · UC-041",
    "blocked": "승인·반려 흐름",
-   "status": "결정 필요(산식). 사용자 결정"
+   "status": "**결정 (b) 2026-11-12 사용자, 권장안 승인**: 산출물 승인률 분모는 WBS 가 정한 산출물"
   },
   "DEC-13": {
    "id": "DEC-13",
@@ -7185,7 +7546,7 @@
    "text": "**수치 정책 문구**. QUR.RAG.002 「수치는 집계 결과에서만」과 문서 질문의 원문 수치 인용(출처 각주 포함) 사이의 해석. 선택지 (a) 인용 허용 (b) 인용 금지. **어느 쪽이든** 근거에 같은 숫자가 있다는 것만으로 통과시키지 않는다: 지표·단위·대상·기준일이 답의 주장과 맞아야 한다(AC-060-12, UC-060-S17 부정 사례). IM-001 변경 여부는 결정 대기",
    "ucs": "UC-060",
    "blocked": "집계 질문 시험, 주입 차단, 잘못된 대상 결합 차단",
-   "status": "결정 필요(문구). 9절 변경 제안 2 는 제안일 뿐 적용 안 함"
+   "status": "**결정 (a) 2026-11-12 사용자, 권장안 승인**: 문서 질문의 원문 수치는 출처와 함께 인용 허용(ARC-010 5절·ARC-017 과 같음)"
   },
   "DEC-14": {
    "id": "DEC-14",
@@ -7193,7 +7554,7 @@
    "text": "**초안 확정과 제출의 관계**. 선택지 (a) 초안 확정이 곧 제출본 등록(상태 「제출」). 이 경우 사용자가 뜻을 알 수 있는 명칭·확인 절차가 필요하다: 버튼 「산출물로 제출」, 확인 문구 「이 문서를 SW설계서 v1 제출본으로 등록합니다. 발주기관 검토 대상이 됩니다」 (b) 임시 등록 유지: 확정 → 「등록」, 별도 「제출」 조작 → 「제출」. 어느 쪽이든 **단순 업로드·자료 보관(UC-070)은 제출이 아니다**",
    "ucs": "UC-031 · UC-032 · UC-033",
    "blocked": "승인·반려·판정 흐름, 자료 보관",
-   "status": "결정 필요(업무 절차). 사용자 결정"
+   "status": "**결정 (a) 2026-11-12 사용자, 권장안 승인**: 초안 확정이 곧 제출(「산출물로 제출」)"
   },
   "DEC-15": {
    "id": "DEC-15",
@@ -7209,7 +7570,7 @@
    "text": "**수집 중간 실패의 원자성**. 일부 항목을 적재한 뒤 실패하면 (a) 그 회차 적재를 전부 되돌린다(회차 = 트랜잭션) (b) 받은 항목까지 유지하고 재개 지점만 남긴다. 어느 쪽이든 변경분 기준 시각·지표는 전진하지 않고 재시도는 중복·누락 없이 수렴해야 한다(AC-011-9). 필수 대상 권한 없음(E4)에서 다른 대상의 적재 유지 여부도 같은 결정",
    "ucs": "UC-011",
    "blocked": "인증 실패·연결 실패·권한 결손·상한·삭제 판정 시험",
-   "status": "결정 필요(저장 정책)"
+   "status": "**결정 (b) 2026-11-12 사용자, 권장안 승인**: 수집 중간 실패 때 받은 것은 유지하고 재개 지점을 남긴다. 기준 시각·지표는 전진하지 않는다(AC-011-9)"
   },
   "DEC-18": {
    "id": "DEC-18",
@@ -7217,7 +7578,7 @@
    "text": "**원천 삭제 확인 방식**. HTTP 404 는 삭제·권한 부족·비공개를 구분하지 못한다(GitHub). 도구별로 (a) 도구가 제공하는 명확한 삭제 근거(삭제 사건·감사 기록, 삭제 상태 필드)를 조회(지원 도구·대상만) (b) 그런 근거가 없는 도구·대상은 항상 「원천 확인 불가」로 둠. **반복 404 나 「다른 자원은 조회되고 이 자원만 404」는 자원별 권한 차이일 수 있어 삭제 확정 근거로 쓰지 않는다.** 어느 경우든 근거 없이 「삭제됨」을 쓰지 않는다",
    "ucs": "UC-011 · UC-022 · UC-043",
    "blocked": "「원천 확인 불가」 표시, 데이터·추적관계 보존",
-   "status": "결정 필요(설계)"
+   "status": "**결정 (b) 2026-11-12 사용자, 권장안 승인**: 기본은 「원천 확인 불가」. git tree 처럼 명확한 삭제 근거를 조회할 수 있는 대상만 (a) 「원천에서 삭제됨」"
   },
   "DEC-17": {
    "id": "DEC-17",
@@ -7225,7 +7586,7 @@
    "text": "**L3(WBS 없음·이슈 일정) 대표 진척률 산식**. 진척률-산정체계 §4 는 「마일스톤별 이슈 진척도 평균의 가중 평균, 가중치는 이슈 수 또는 기간 비례」로 두 가지를 열어 두었고, 진척도 결측·버전 미배정 이슈 처리가 없다. (a) 이슈 수 비례, 결측 0 + 「결측 n건」 표시, 미배정은 별도 묶음 (b) 기간 비례 (c) 결측 제외. 이슈별 진척도 표시(일정 줄)는 결정과 무관하게 요구 동작",
    "ucs": "UC-041 · UC-030",
    "blocked": "일정 줄(이슈별 진척도)·「추정」 표시·L1 아님 경고",
-   "status": "결정 필요(산식)"
+   "status": "권장안 (a) 승인(2026-11-12 사용자). 단 확정 설계 ARC-016 §4(이슈·산출물 갈래는 대표값에서 뺀다)와 충돌해 적용 보류, 사용자 확인 대기. 결정 필요(산식)"
   },
   "DEC-19": {
    "id": "DEC-19",
@@ -7233,7 +7594,7 @@
    "text": "**가중치 없는 WBS(L2) 산식**. 진척률-산정체계 3.2 는 가중치를 기간 비례로, 실적을 산출물 제출 여부(이진)로 보완하고 IM-009 7.1 기대값(11.7%)도 그 기준이다. 같은 문서 10.2 표는 「항목 수 균등 가중」으로 다르게 적었다. 확정 설계 ARC-016(2026-09-21) 원칙 1은 「진척률은 WBS 실적으로만 낸다. 산출물로 추정하지 않는다」. 선택지 (a) 기간 비례 가중치 × 산출물 제출 여부(산정체계 3.2·IM-009 그대로) (b) 기간 비례 가중치 × 파일의 실적 열, 실적 열도 없으면 대표값 없음(ARC-016 과 맞춤) (c) 가중치가 없으면 대표값을 내지 않고 경고만",
    "ucs": "UC-030 · UC-041",
    "blocked": "머리글 인식·경고",
-   "status": "결정 필요(산식, 기존 설계 충돌)"
+   "status": "**결정 (b) 2026-11-12 사용자**: 명시 가중치가 없으면 작업 기간으로 가중치를 정하고 각 작업의 보고 실적을 반영한 추정 진척률. 산출물 제출 여부로 실적을 대신하지 않는다. 기간·실적이 부족하면 산출 불가 이유를 표시"
   },
   "DEC-20": {
    "id": "DEC-20",
@@ -7241,7 +7602,7 @@
    "text": "**작업 단위 격차 경고 기준**. AC-041-4·UC-041-S02 는 「실적 신고 + 산출물 미제출」이면 경고(3.2 40%·3.3 20% 도 경고)로 적었고, ARC-016 4절은 「항목 실적 80 이상인데 산출물 미제출이거나 열린 이슈」로 정했다. 선택지 (a) AC-041-4 대로 실적이 0 보다 크고 미제출이면 경고 (b) ARC-016 대로 실적 80 이상 (c) 문턱을 연결 설정으로",
    "ucs": "UC-041",
    "blocked": "일정 줄의 지연·계획 뒤짐·연결 이슈·산출물 판정",
-   "status": "결정 필요(기준, 기존 설계 충돌)"
+   "status": "**결정 (b) 2026-11-12 사용자, 권장안 승인**: 작업 단위 격차 경고는 실적 80 이상(ARC-016 4절)"
   },
   "DEC-21": {
    "id": "DEC-21",
@@ -7249,7 +7610,7 @@
    "text": "**HWP·HWPX 의 쪽 위치**. UC-070-S10·S11 기대값에 「2쪽」이 있다. HWP 5.0·HWPX 파일에는 쪽 나눔 정보가 없다(쪽은 한글이 배치할 때 정해진다. HWP 요약 정보의 쪽 수도 0). 서버 추출로는 쪽 수를 낼 수 없다. AC-070-8 문구는 쪽을 요구하지 않는다. 선택지 (a) HWP·HWPX 는 쪽 대신 문단 위치로 출처를 적고 시나리오의 「2쪽」을 뺀다 (b) 배치 엔진으로 쪽을 계산한다(폐쇄망 서버에서 쓸 수 있는 도구 없음)",
    "ucs": "UC-070",
    "blocked": "표 3행×4열·문단 3개 추출",
-   "status": "결정 필요(기대값과 제품 한계)"
+   "status": "**결정 2026-11-12 사용자**: HWP·HWPX 는 실제 확보한 절·문단·표·행 위치를 출처로 쓴다. 없는 쪽 번호는 만들지 않는다"
   },
   "DEC-22": {
    "id": "DEC-22",
@@ -7257,7 +7618,7 @@
    "text": "**중복 코드 건수 표기**. UC-020-S03 은 중복 코드 1쌍을 「1건」으로, UC-020 E6 「고쳐야 제출할 수 있는 항목이 n건」을 따르면 두 행이 모두 막혀 2건이다. 제품은 2건으로 안내한다. 선택지 (a) 막힌 행 수(2건) — S03 기대값을 고친다 (b) 문제 종류 수(1건) — E6 문구와 제품을 고친다",
    "ucs": "UC-020",
    "blocked": "제출 거절 자체, 형식 경고·명칭 없음(S04)",
-   "status": "결정 필요(명세끼리 충돌)"
+   "status": "**결정 2026-11-12 사용자**: 「중복 코드 1개 · 해당 행 2개」처럼 함께 표시"
   },
   "DEC-23": {
    "id": "DEC-23",
@@ -7265,7 +7626,7 @@
    "text": "**고정 응답 모드 경고의 확인 방식**. AC-061-5 「시험용 고정 응답 모드면 경고」는 서버 환경변수(llm_provider=fake)로만 켜진다. 프로세스 안 실행에서는 확인되고, 운영 모드인 5174 에서는 켤 수 없다. 선택지 (a) 5174 를 그 모드로 따로 띄워 화면에서 확인 (b) 프로세스 안 실행 근거로 갈음하고 5174 에서는 「쓰는 모델 표시」만 본다",
    "ucs": "UC-061",
    "blocked": "질의 화면의 쓰는 모델 표시",
-   "status": "결정 필요(검증 환경)"
+   "status": "**결정 2026-11-12 사용자**: 같은 배포 이미지의 격리 시험 인스턴스를 고정 응답 모드로 띄워 브라우저로 경고를 확인한다. 5174 의 모델 설정은 바꾸지 않는다"
   }
  },
  "sub_scenarios": {
@@ -7348,7 +7709,7 @@
    "data_expected": "리스크 트래커 「위험」 설정 → 재분류, 원시본 불변, 모르는 키 거절",
    "verify": "API",
    "link": "연결 완료",
-   "decision": "결정 대기(DEC-09 변경 수단 · DEC-02 결함 키)",
+   "decision": "결정 대기(DEC-09 변경 수단). DEC-02 결함 키는 결정(defectTracker·defectLabel)",
    "decs": [
     "DEC-02",
     "DEC-09"
@@ -8632,10 +8993,8 @@
    "data_expected": "R9·R10",
    "verify": "API",
    "link": "연결 완료",
-   "decision": "결정 대기(DEC-02)",
-   "decs": [
-    "DEC-02"
-   ],
+   "decision": "확정",
+   "decs": [],
    "execution": "미실행",
    "supplement": ""
   },
@@ -10383,32 +10742,6 @@
     "UC-040-S04"
    ],
    "scenarios_raw": "UC-041-S07, UC-040-S04"
-  },
-  "DEC-02": {
-   "dec": "DEC-02",
-   "title": "결함 기준",
-   "acs": [
-    "AC-041-1",
-    "AC-041-10",
-    "AC-041-3",
-    "AC-042-1",
-    "AC-042-4",
-    "AC-043-1",
-    "AC-043-4",
-    "AC-043-6",
-    "AC-060-2"
-   ],
-   "acs_raw": "AC-041-10, AC-043-6(결함 부분), AC-012 결함 매핑, AC-041-1, AC-041-3, AC-042-1, AC-042-4, AC-043-1, AC-043-4, AC-060-2(시나리오 기대값 일반 이슈 9건·처리율 66.7% 가 결함 제외를 전제)",
-   "scenarios": [
-    "UC-041-S08",
-    "UC-043-S05",
-    "UC-012-S01",
-    "UC-041-S01",
-    "UC-042-S01",
-    "UC-043-S01",
-    "UC-060-S02"
-   ],
-   "scenarios_raw": "UC-041-S08, UC-043-S05, UC-012-S01(결함), UC-041-S01, UC-042-S01, UC-043-S01, UC-060-S02"
   },
   "DEC-03": {
    "dec": "DEC-03",
