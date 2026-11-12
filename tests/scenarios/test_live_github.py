@@ -224,16 +224,22 @@ def _dt(value: Any) -> datetime | None:
 # ------------------------------------------------------------------ UC-010
 
 
-def test_UC_010_S01_GitHub_등록_확인_활성(target, live):
-    """TD-CON-1·3 등록 → 확인(저장소 이름·항목 종류) → 활성. 자격증명 응답은 끝 4자만 (AC-010-1·2·6)."""  # noqa: E501
+def test_UC_010_S01_GitHub_등록_확인_활성(target, live, screen):
+    """TD-CON-1·3 등록 → 확인(저장소 이름·항목 종류) → 활성. 자격증명 응답은 끝 4자만 (AC-010-1·2·6).
+
+    화면 단계(원격 + 브라우저): TD-CON-1 은 V1 이 연동 화면에서 등록·연결 테스트·활성화한다. 화면이
+    고를 수 없는 매핑 규칙(IM-009 TD-CON-1 연결 설정)은 등록 뒤 API 로 넣는다. TD-CON-3 은 API 로."""  # noqa: E501
     for con in OWNER:
-        made = live.create_connection(con)
+        sc = screen(OWNER[con]) if screen and con == "TD-CON-1" else None
+        made = _ui_register(sc, live, con) if sc else live.create_connection(con)
         leaked = TOKEN in str(made)
         assert not leaked, f"{con} 등록 응답에 토큰 원문이 있다"
         masked = made["credentialMasked"] or ""
         same = masked == "****" + TOKEN[-4:]
         assert same, f"{con} 자격증명 힌트가 끝 4자 형식이 아니다(길이 {len(masked)})"
         assert made["status"] == "DRAFT", made["status"]
+        if sc:
+            _ui_card_action(sc, con, "연결 테스트", "연결 테스트에 성공했습니다.", "확인됨")
 
         res = target.post(f"/api/connections/{live.ids[con]}/test", headers=live.h(OWNER[con]))
         assert res.status_code == 200, res.text[:300]
@@ -243,6 +249,15 @@ def test_UC_010_S01_GitHub_등록_확인_활성(target, live):
         assert set(GH_KINDS) <= set(probe["detectedItemTypes"]), probe
         assert probe["deniedItemTypes"] == [], f"읽기 권한이 빠진 항목: {probe['deniedItemTypes']}"
 
+        if sc:
+            _ui_card_action(sc, con, "활성화", "상태를 변경했습니다.", "활성")
+            rows = target.get(
+                f"/api/projects/{live.ids['TD-PRJ-1']}/connections", headers=live.h(OWNER[con])
+            ).json()
+            status = next(c["status"] for c in rows if c["id"] == live.ids[con])
+            assert status == "ACTIVE", status
+            sc.done()
+            continue
         res = target.patch(
             f"/api/connections/{live.ids[con]}/status",
             json={"status": "ACTIVE"},
@@ -250,6 +265,104 @@ def test_UC_010_S01_GitHub_등록_확인_활성(target, live):
         )
         assert res.status_code == 200 and res.json()["status"] == "ACTIVE", res.text[:200]
     assert _non_get(live.calls) == [], _non_get(live.calls)
+
+
+# 연결 테스트 결과의 항목 이름 (connection-form-dialog.tsx ITEM_LABELS)
+ITEM_WORDS = {
+    "issue": "이슈",
+    "pull_request": "풀 리퀘스트(PR)",
+    "commit": "커밋",
+    "milestone": "마일스톤",
+    "tree": "저장소 파일 목록",
+}
+
+
+def _secret_masked(box: Any) -> bool:
+    """입력칸이 값을 가리는가(password 형식). 화면 사진은 이것을 확인한 뒤에만 찍는다."""
+    return box.get_attribute("type") == "password"
+
+
+def _ui_register(sc: Any, live: LiveWorld, con: str) -> dict:
+    """화면: 연동 등록 창에서 권한 안내를 보고, 값을 넣어 연결 테스트(저장소 이름·읽을 수 있는
+    항목), 등록한다. 카드에 상태 「확인 전」과 인증 끝 4자. 등록된 연결(API 목록의 행)을 돌려준다.
+
+    토큰은 password 입력칸에만 넣는다. 화면 사진은 칸이 가려진 것을 확인한 뒤에만 찍고, 실패 메시지
+    에는 토큰이 섞일 수 있는 예외 문구를 싣지 않는다."""
+    from playwright.sync_api import expect
+
+    pid = live.ids["TD-PRJ-1"]
+    sc.open(f"/p/{pid}/connections").see("연동")
+    sc.page.get_by_role("button", name="연동 등록").click()
+    dlg = sc.page.get_by_role("dialog")
+    expect(dlg).to_contain_text("연동 등록")
+    # 권한 안내(AC-010-6): 읽기 전용, 하지 않는 것, 토큰에 줄 권한 (TOOL_GUIDE)
+    guide = dlg.get_by_test_id("tool-guide")
+    expect(guide).to_contain_text("읽기 전용으로 연결합니다")
+    expect(guide).to_contain_text("아무것도 쓰지 않습니다")
+    expect(guide).to_contain_text("Metadata · Issues · Pull requests · Contents")
+    expect(guide).to_contain_text("Read-only")
+    expect(dlg.locator("#connTool")).to_contain_text("GitHub")
+    expect(dlg.locator("#connBaseUrl")).to_have_value(lg.API)
+    dlg.locator("#connName").fill(con)
+    dlg.locator("#connResource").fill(live.repo(con))
+    box = dlg.locator("#connToken")
+    assert _secret_masked(box), "토큰 입력칸이 password 형식이 아니다"
+    try:
+        box.fill(TOKEN)
+    except Exception:  # noqa: BLE001  예외 문구에 입력값이 실릴 수 있어 버린다
+        raise AssertionError("토큰 입력칸에 값을 넣지 못했다") from None
+    assert _secret_masked(box), "토큰 입력칸이 값을 넣은 뒤 가려지지 않는다"
+
+    dlg.get_by_role("button", name="연결 테스트").click()
+    expect(dlg).to_contain_text("연결 성공", timeout=60000)
+    result = dlg.inner_text()
+    leaked = TOKEN in result
+    assert not leaked, "연결 테스트 결과에 토큰 원문이 있다"
+    assert live.repo(con).lower() in result.lower(), "연결 테스트 결과에 저장소 이름이 없다"
+    words = [ITEM_WORDS[k] for k in GH_KINDS if ITEM_WORDS[k] not in result]
+    assert not words, f"연결 테스트 결과에 없는 항목 종류: {words}"
+    assert "권한 없음" not in result, "읽기 권한이 빠진 항목이 있다고 나온다"
+    assert _secret_masked(box)
+    sc.shot("연결_테스트")  # 토큰 칸은 password 형식이라 점으로 가려진다
+
+    dlg.get_by_role("button", name="등록", exact=True).click()
+    expect(dlg).to_be_hidden(timeout=30000)
+    sc.see("연결을 등록했습니다.", selector="body")
+    rows = live.c.get(f"/api/projects/{pid}/connections", headers=live.h(OWNER[con])).json()
+    made = next(c for c in rows if c["name"] == con)
+    live.ids[con] = made["id"]
+    card = _ui_connection_card(sc, con)
+    expect(card.locator("[data-slot=card-title]")).to_contain_text("확인 전")
+    expect(card).to_contain_text(f"인증 {made['credentialMasked']}")
+    expect(card).to_contain_text(live.repo(con))
+    leaked = TOKEN in sc.text("body")
+    assert not leaked, "연동 화면에 토큰 원문이 보인다"
+    if con == "TD-CON-1":
+        # 연결 설정(UC-012)의 매핑 규칙. 화면 등록 창에는 이 칸이 없다
+        live._ok(
+            live.c.patch(
+                f"/api/connections/{made['id']}/mapping",
+                json={"mappingRules": lg.MAPPING_CON1},
+                headers=live.h(OWNER[con]),
+            )
+        )
+    return made
+
+
+def _ui_connection_card(sc: Any, con: str) -> Any:
+    title = sc.page.locator("[data-slot=card-title]", has_text=con)
+    return sc.page.locator("[data-slot=card]").filter(has=title).first
+
+
+def _ui_card_action(sc: Any, con: str, button: str, toast: str, status: str) -> None:
+    """연결 카드의 단추(연결 테스트·활성화)를 누르고 알림과 상태 딱지를 본다."""
+    from playwright.sync_api import expect
+
+    card = _ui_connection_card(sc, con)
+    card.get_by_role("button", name=button, exact=True).click()
+    sc.see(toast, selector="body", timeout=60000)
+    expect(card.locator("[data-slot=card-title]")).to_contain_text(status, timeout=15000)
+    sc.shot(button.replace(" ", "_"))
 
 
 def test_UC_010_S03_자격증명_비노출(target, live):

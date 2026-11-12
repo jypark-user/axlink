@@ -22,5 +22,6 @@ export function toScheduleTasks(items: WbsItemResponse[]): ScheduleTask[] {
     deliverableRef: item.deliverableRef ?? null,
     deliverableUrl: item.deliverableUrl ?? null,
     gapWarning: item.gapWarning ?? null,
+    linkedIssues: item.linkedIssues ?? [],
   }));
 }

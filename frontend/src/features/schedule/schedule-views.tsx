@@ -11,6 +11,7 @@ import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
 import { DataTable, SortableHeader } from '@/components/ui/data-table';
 import { cn } from '@/lib/utils';
+import { badgeVariantFor, label as labelOf } from '@/lib/labels';
 import { ServerLink } from '@/components/common/server-link';
 import { useThemeColors } from '@/lib/theme-color';
 import {
@@ -343,6 +344,38 @@ const DELIVERABLE_TONE: Record<ScheduleTask['deliverableStatus'], string> = {
 };
 
 /** 산출물 칸. 판정 결과를 알약으로, 근거(맞춘 파일)는 제목에, 링크가 있으면 원문으로. */
+/**
+ * 작업에 이어진 이슈와 그 최근 상태(AC-041-4). 서버가 이은 그대로 적고, 상태는 이슈 화면과 같은
+ * 말(열림·진행중·해결·종료)로 쓴다. 원문 주소가 있으면 원천의 그 이슈로 간다.
+ */
+function LinkedIssuesCell({ task }: { task: ScheduleTask }): ReactNode {
+  if (task.linkedIssues.length === 0) return <span className="text-muted-foreground text-sm">—</span>;
+  return (
+    <span className="flex flex-col gap-1">
+      {task.linkedIssues.map((issue, i) => {
+        const key = issue.key ?? issue.title;
+        return (
+          <span key={`${key}-${i}`} className="flex items-center gap-1.5 text-xs" title={issue.title}>
+            {issue.url ? (
+              <a
+                href={issue.url}
+                target="_blank"
+                rel="noreferrer"
+                className="text-primary font-mono whitespace-nowrap underline-offset-2 hover:underline"
+              >
+                {key}
+              </a>
+            ) : (
+              <span className="font-mono whitespace-nowrap">{key}</span>
+            )}
+            <Badge variant={badgeVariantFor(issue.status)}>{labelOf(issue.status)}</Badge>
+          </span>
+        );
+      })}
+    </span>
+  );
+}
+
 function DeliverableCell({ task }: { task: ScheduleTask }): ReactNode {
   if (!task.deliverable) return <span className="text-muted-foreground text-sm">—</span>;
   const label = DELIVERABLE_LABEL[task.deliverableStatus];
@@ -436,6 +469,11 @@ export function WbsView({ tasks }: { tasks: ScheduleTask[] }): ReactNode {
         accessorFn: (task) => task.deliverableStatus,
         header: '산출물',
         cell: ({ row }) => <DeliverableCell task={row.original} />,
+      },
+      {
+        id: 'linkedIssues',
+        header: '연결 이슈',
+        cell: ({ row }) => <LinkedIssuesCell task={row.original} />,
       },
       {
         accessorKey: 'planned',

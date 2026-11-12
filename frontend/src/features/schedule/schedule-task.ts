@@ -1,3 +1,5 @@
+import type { WbsLinkedIssue } from '@/types/api';
+
 /**
  * 일정 화면이 쓰는 작업 한 줄. 모양은 ax-pms ScheduleTask 를 그대로 따른다.
  * 날짜는 `YYYY-MM-DD`(예: `2026-03-02`), 진척은 0~100 정수다.
@@ -22,6 +24,8 @@ export interface ScheduleTask {
   deliverableUrl: string | null;
   /** 작업 단위 격차 경고(DEC-20). 서버가 판정한 문장 그대로다 */
   gapWarning: string | null;
+  /** 이 작업에 이어진 이슈와 그 상태(AC-041-4). 서버가 이은 그대로다 */
+  linkedIssues: WbsLinkedIssue[];
 }
 
 export type DeliverableStatus = 'NONE' | 'SUBMITTED' | 'MISSING' | 'OVERDUE';
