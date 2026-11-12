@@ -239,7 +239,7 @@ def test_UC_010_S01_GitHub_등록_확인_활성(target, live, screen):
         assert same, f"{con} 자격증명 힌트가 끝 4자 형식이 아니다(길이 {len(masked)})"
         assert made["status"] == "DRAFT", made["status"]
         if sc:
-            _ui_card_action(sc, con, "연결 테스트", "연결 테스트에 성공했습니다.", "검증")
+            _ui_card_action(sc, con, "연결 테스트", "연결 테스트에 성공했습니다.", "확인됨")
 
         res = target.post(f"/api/connections/{live.ids[con]}/test", headers=live.h(OWNER[con]))
         assert res.status_code == 200, res.text[:300]
@@ -250,7 +250,7 @@ def test_UC_010_S01_GitHub_등록_확인_활성(target, live, screen):
         assert probe["deniedItemTypes"] == [], f"읽기 권한이 빠진 항목: {probe['deniedItemTypes']}"
 
         if sc:
-            _ui_card_action(sc, con, "활성화", "상태를 변경했습니다.", "진행")
+            _ui_card_action(sc, con, "활성화", "상태를 변경했습니다.", "활성")
             rows = target.get(
                 f"/api/projects/{live.ids['TD-PRJ-1']}/connections", headers=live.h(OWNER[con])
             ).json()
@@ -284,7 +284,7 @@ def _secret_masked(box: Any) -> bool:
 
 def _ui_register(sc: Any, live: LiveWorld, con: str) -> dict:
     """화면: 연동 등록 창에서 권한 안내를 보고, 값을 넣어 연결 테스트(저장소 이름·읽을 수 있는
-    항목), 등록한다. 카드에 상태 「초안」과 인증 끝 4자. 등록된 연결(API 목록의 행)을 돌려준다.
+    항목), 등록한다. 카드에 상태 「확인 전」과 인증 끝 4자. 등록된 연결(API 목록의 행)을 돌려준다.
 
     토큰은 password 입력칸에만 넣는다. 화면 사진은 칸이 가려진 것을 확인한 뒤에만 찍고, 실패 메시지
     에는 토큰이 섞일 수 있는 예외 문구를 싣지 않는다."""
@@ -295,9 +295,12 @@ def _ui_register(sc: Any, live: LiveWorld, con: str) -> dict:
     sc.page.get_by_role("button", name="연동 등록").click()
     dlg = sc.page.get_by_role("dialog")
     expect(dlg).to_contain_text("연동 등록")
-    # 권한 안내(AC-010-6): 읽기 전용, 쓰지 않는다
-    expect(dlg).to_contain_text("읽기 전용으로 연결합니다")
-    expect(dlg).to_contain_text("아무것도 쓰지 않습니다")
+    # 권한 안내(AC-010-6): 읽기 전용, 하지 않는 것, 토큰에 줄 권한 (TOOL_GUIDE)
+    guide = dlg.get_by_test_id("tool-guide")
+    expect(guide).to_contain_text("읽기 전용으로 연결합니다")
+    expect(guide).to_contain_text("아무것도 쓰지 않습니다")
+    expect(guide).to_contain_text("Metadata · Issues · Pull requests · Contents")
+    expect(guide).to_contain_text("Read-only")
     expect(dlg.locator("#connTool")).to_contain_text("GitHub")
     expect(dlg.locator("#connBaseUrl")).to_have_value(lg.API)
     dlg.locator("#connName").fill(con)
@@ -329,7 +332,7 @@ def _ui_register(sc: Any, live: LiveWorld, con: str) -> dict:
     made = next(c for c in rows if c["name"] == con)
     live.ids[con] = made["id"]
     card = _ui_connection_card(sc, con)
-    expect(card).to_contain_text("초안")
+    expect(card.locator("[data-slot=card-title]")).to_contain_text("확인 전")
     expect(card).to_contain_text(f"인증 {made['credentialMasked']}")
     expect(card).to_contain_text(live.repo(con))
     leaked = TOKEN in sc.text("body")

@@ -16,6 +16,7 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { DataState } from '@/components/common/data-state';
 import { ConnectionFormDialog } from '@/features/connections/connection-form-dialog';
+import { connectionStatusLabel } from '@/features/connections/connection-status';
 import { useToast } from '@/components/common/toaster';
 import { PageHeader } from '@/components/layout/page-header';
 import { useProjectContext } from '@/components/layout/project-shell';
@@ -114,7 +115,7 @@ export function ConnectionsPage(): ReactNode {
                   <CardTitle className="flex items-center gap-2">
                     <span className="truncate">{c.name}</span>
                     <Badge variant="outline">{c.tool}</Badge>
-                    <Badge variant={badgeVariantFor(c.status)}>{label(c.status)}</Badge>
+                    <Badge variant={badgeVariantFor(c.status)}>{connectionStatusLabel(c.status)}</Badge>
                   </CardTitle>
                 </CardHeader>
                 <CardContent className="flex flex-col gap-2 text-sm">
