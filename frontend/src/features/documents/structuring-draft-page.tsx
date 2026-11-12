@@ -28,6 +28,7 @@ import { PageHeader } from '@/components/layout/page-header';
 import { api } from '@/lib/http';
 import { isApiError } from '@/lib/api-error';
 import { label } from '@/lib/labels';
+import { missingForSubmit } from './draft-submit';
 import { useAsync } from '@/lib/use-async';
 import {
   WORK_PRODUCT_TYPES,
@@ -70,8 +71,9 @@ export function StructuringDraftPage(): ReactNode {
 
   /** 확정 = 산출물 제출(DEC-14). 뜻을 알리는 확인을 한 번 거친다 */
   const ask = () => {
-    if (!type || !title.trim() || !version.trim() || requirements.length === 0) {
-      toast({ title: '유형·제목·버전·요구사항은 필수입니다.', variant: 'error' });
+    const missing = missingForSubmit({ type, title, version });
+    if (missing.length > 0) {
+      toast({ title: `${missing.join('·')}은 필수입니다.`, variant: 'error' });
       return;
     }
     setAsking(true);
@@ -172,6 +174,12 @@ export function StructuringDraftPage(): ReactNode {
 
             <div className="flex flex-col gap-3">
               <h2 className="text-sm font-medium">추출 요구사항 {requirements.length}건</h2>
+              {requirements.length === 0 && (
+                <p className="text-muted-foreground text-xs">
+                  이 문서에서 뽑은 요구사항이 없습니다. 산출물 제출에는 지장이 없습니다.
+                  요구사항은 요구사항 명세서 등록으로 들어갑니다.
+                </p>
+              )}
               {requirements.map((r, i) => (
                 <div key={r.index} className="flex flex-col gap-2 rounded-md border p-3">
                   <div className="flex gap-2">
