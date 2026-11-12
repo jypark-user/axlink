@@ -148,7 +148,9 @@ def latest_defects() -> dict[str, dict]:
         cur.update({k: v for k, v in d.items() if v not in (None, "", [])})
     return out
 # Goal 조건: 통과 근거는 5174(내부 검증 환경)에서 실행한 것이어야 한다. CI 실행은 보조 근거다.
-TARGET_ENV_PREFIXES = ("5174",)
+# 「iso」는 5174 와 같은 배포 이미지를 따로 띄운 격리 시험 인스턴스다. 5174 설정을 바꿀 수 없는
+# 시험(고정 응답 모드 경고 DEC-23, 폐쇄망 AC-060-8)만 여기서 돈다(2026-11-12 사용자 결정)
+TARGET_ENV_PREFIXES = ("5174", "iso")
 
 
 def sha256(path: Path) -> str:
