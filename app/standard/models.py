@@ -82,12 +82,32 @@ class IssueResponse(BaseModel):
     tracker: str | None = None
     requirementRefs: list[str] = []  # noqa: N815
     relations: list[IssueRelation] = []
+    # GENERAL(일반 이슈) | DEFECT(결함). 연결 설정의 결함 트래커·라벨로 가른다(DEC-02)
+    kind: str = "GENERAL"
+
+
+class IssueKindCounts(BaseModel):
+    """종류별 건수(DEC-02). 전체(결함 포함) = 일반(결함 제외) + 결함.
+
+    셋은 서버가 각각 센 값이다. 화면은 이를 더해 하나의 합계로 만들지 않는다.
+    결함 매핑이 없으면 결함은 0, 일반 = 전체, 결함 처리율은 산출 불가(defectRate None)다.
+    """
+
+    allTotal: int  # noqa: N815
+    generalTotal: int  # noqa: N815
+    defectTotal: int  # noqa: N815
+    defectOpen: int  # noqa: N815
+    defectClosed: int  # noqa: N815
+    defectMapped: bool  # noqa: N815
+    defectRate: float | None  # noqa: N815 — 0~1. 매핑이 없거나 결함이 0건이면 None
+    defectNote: str | None  # noqa: N815 — 산출 불가 이유 또는 범위
 
 
 class IssueSummaryResponse(BaseModel):
     """이슈 화면 카드. 목록 페이지와 상관없이 사업 전체를 서버에서 센다.
 
     issue 테이블만 센다. 명세서 전에 이슈로 만든 요구사항의 출처 이슈는 여기 없다.
+    total·open·closed 는 kind 로 고른 종류만 센다(기본 일반 이슈, 결함 제외).
     """
 
     total: int
@@ -97,6 +117,8 @@ class IssueSummaryResponse(BaseModel):
     unassignedOpen: int  # noqa: N815 — 열린 것 중 담당 없음
     unspecifiedOpen: int = 0  # noqa: N815 — 열린 것 중 심각도 미지정. 고위험에서 빼고 따로 센다
     sources: list["IssueSourceCount"] = []  # 연결 고르기. 연결을 골라 물어도 사업 전체를 낸다
+    kind: str = "GENERAL"  # 위 카드가 센 종류: GENERAL | DEFECT | ALL (DEC-02)
+    kinds: IssueKindCounts | None = None
 
 
 class IssueSourceCount(BaseModel):

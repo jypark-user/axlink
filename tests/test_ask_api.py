@@ -346,7 +346,8 @@ def test_판정_캐시가_있는_집계_질문은_모델_장애_때_집계_값�
     with tx() as cur:
         cur.execute("delete from route_cache where question = %s", (question,))
         expected = cur.execute(
-            "select count(*) as n from issue where project_id = %s", (PID,)
+            "select count(*) as n from issue where project_id = %s and issue_kind = 'GENERAL'",
+            (PID,),
         ).fetchone()["n"]
     monkeypatch.setattr(settings, "rag_min_similarity", 0.99)  # 문서 근거는 없는 셈 친다
     # 1) 모델이 살아 있을 때 한 번 답해 판정을 캐시에 남긴다
@@ -370,7 +371,7 @@ def test_판정_캐시가_있는_집계_질문은_모델_장애_때_집계_값�
     assert "error" not in names, events
     assert names[-1] == "done" and events[-1][1]["finishReason"] == "MODEL_DOWN"
     text = "".join(d["text"] for e, d in events if e == "delta")
-    assert "쓸 수 없" in text and f"이슈 건수: {expected}" in text, text
+    assert "쓸 수 없" in text and f"이슈 건수(결함 제외): {expected}" in text, text
     assert "Errno" not in text
 
 
@@ -383,7 +384,8 @@ def test_값이_하나인_집계는_그림_없이_글로만_답한다(client, co
     프롬프트와 수치 검문에 들어간다."""
     with tx() as cur:
         expected = cur.execute(
-            "select count(*) as n from issue where project_id = %s", (PID,)
+            "select count(*) as n from issue where project_id = %s and issue_kind = 'GENERAL'",
+            (PID,),
         ).fetchone()["n"]
     scripted = ScriptedLlm(
         {"route": "AGGREGATE", "measure": "issue_count", "dimensions": [],
@@ -404,7 +406,7 @@ def test_값이_하나인_집계는_그림_없이_글로만_답한다(client, co
     assert start["viz"] is None
 
     # 프롬프트에 집계 값이 들어갔고, 그 값만 인용한 답은 검문을 통과한다
-    assert f"이슈 건수: {expected}" in scripted.prompts[0]
+    assert f"이슈 건수(결함 제외): {expected}" in scripted.prompts[0]
     text = "".join(d["text"] for e, d in events if e == "delta")
     assert "※" not in text and "[그림" not in text
 
@@ -448,7 +450,8 @@ def test_집계에_없는_숫자는_화면에_나가기_전에_막는다(client,
     """QUR.RAG.002, ARC-017. 지어낸 숫자는 어떤 조각에도 실리지 않고 저장도 안 된다."""
     with tx() as cur:
         expected = cur.execute(
-            "select count(*) as n from issue where project_id = %s", (PID,)
+            "select count(*) as n from issue where project_id = %s and issue_kind = 'GENERAL'",
+            (PID,),
         ).fetchone()["n"]
     scripted = ScriptedLlm(
         {"route": "AGGREGATE", "measure": "issue_count", "template": "STAT_CARD"},
@@ -690,7 +693,8 @@ def test_집계와_문서_근거가_둘_다_있으면_한_답에_결합한다(
     것만 통과한다."""
     with tx() as cur:
         expected = cur.execute(
-            "select count(*) as n from issue where project_id = %s", (PID,)
+            "select count(*) as n from issue where project_id = %s and issue_kind = 'GENERAL'",
+            (PID,),
         ).fetchone()["n"]
     scripted = ScriptedLlm(
         {"route": "AGGREGATE", "measure": "issue_count", "dimensions": [],
@@ -711,7 +715,7 @@ def test_집계와_문서_근거가_둘_다_있으면_한_답에_결합한다(
 
     # 두 재료가 한 프롬프트에 있다
     prompt = scripted.prompts[0]
-    assert "## 집계 값" in prompt and f"이슈 건수: {expected}" in prompt
+    assert "## 집계 값" in prompt and f"이슈 건수(결함 제외): {expected}" in prompt
     assert "## 근거" in prompt and "[1] 과업지시서" in prompt
 
     # 답에는 집계 수치가 그대로, 문서 출처가 각주로 붙는다. 둘 다 지어낸 숫자가 아니다

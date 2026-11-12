@@ -36,6 +36,8 @@ class ProgressResponse(BaseModel):
 
     issue: ProgressMeasure
     workProduct: ProgressMeasure  # noqa: N815
+    # 결함 처리율(DEC-02). 품질 축의 값이고 대표 진척률·격차에는 쓰지 않는다
+    defect: ProgressMeasure | None = None
 
     behind: list[str]
     warnings: list[str]
@@ -150,7 +152,9 @@ class ProgressSnapshotResponse(BaseModel):
     wbsPlannedPct: float | None  # noqa: N815
     behindTaskCount: int  # noqa: N815
     issueResolvedCount: int  # noqa: N815
-    issueTotalCount: int  # noqa: N815
+    issueTotalCount: int  # noqa: N815 — 일반 이슈(V63 전 행은 결함을 가르지 않은 값)
+    defectResolvedCount: int | None = None  # noqa: N815 — 결함(DEC-02). null 이면 가르기 전
+    defectTotalCount: int | None = None  # noqa: N815
     requirementVerifiedCount: int  # noqa: N815
     requirementTotalCount: int  # noqa: N815
     riskClosedCount: int  # noqa: N815

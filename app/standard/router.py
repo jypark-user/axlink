@@ -131,18 +131,20 @@ def list_issues(
     q: str | None = None,
     status: str | None = None,
     connectionId: UUID | None = None,  # noqa: N803 — 화면 계약 이름
+    kind: str = "GENERAL",
     page: int = Query(default=0, ge=0),
     size: int = Query(default=20, ge=1, le=200),
 ) -> PageResponse[IssueResponse]:
-    """일반 이슈 화면. 도구에서 승격된 작업·결함이 여기로 나온다.
+    """이슈 화면. 도구에서 승격된 작업·결함이 여기로 나온다.
 
+    kind: GENERAL(일반 이슈, 결함 제외, 기본) | DEFECT(결함) | ALL(전체 이슈, 결함 포함).
     명세서 전에 이슈로 만든 요구사항의 출처 이슈는 requirements 쪽이라 여기 없다.
     connectionId 는 사업 안에서만 거른다. 사업 접근 검사는 그대로 먼저 한다.
     """
     with tx() as cur:
         return service.list_issues(
             cur, principal, project_id, q, status, PageQuery(page=page, size=size),
-            str(connectionId) if connectionId else None,
+            str(connectionId) if connectionId else None, kind,
         )
 
 
@@ -151,11 +153,12 @@ def issue_summary(
     project_id: str,
     principal: Principal,
     connectionId: UUID | None = None,  # noqa: N803
+    kind: str = "GENERAL",
 ) -> IssueSummaryResponse:
-    """일반 이슈 화면 카드. 목록 페이지와 상관없이 사업 전체를 센다."""
+    """이슈 화면 카드. 목록 페이지와 상관없이 사업 전체를 센다. 종류별 건수(kinds)를 같이 낸다."""
     with tx() as cur:
         return service.issue_summary(
-            cur, principal, project_id, str(connectionId) if connectionId else None
+            cur, principal, project_id, str(connectionId) if connectionId else None, kind
         )
 
 

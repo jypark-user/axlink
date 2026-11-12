@@ -2,7 +2,7 @@
 """E 그룹: 현황 조회 (UC-040 ~ UC-043) 예제 시나리오.
 
 S0 에서 시작해 UC-040-S01 이 S0r(TD-RR-1 등록)을 만들고, 다섯 축·일정 줄·이슈 조회를 T0 기준으로
-본다. 스냅샷 추이(UC-041-S06)는 S0a → S1 전이가 필요해 맨 뒤에 돈다. DEC-01·02·17 과
+본다. 스냅샷 추이(UC-041-S06)는 S0a → S1 전이가 필요해 맨 뒤에 돈다. DEC-01·17 과
 브라우저·실모델 시나리오는 보류한다. 값은 IM-009 7 절의 독립 계산값과 비교한다.
 """
 
@@ -315,9 +315,36 @@ def test_UC_041_S07_일정_준수율(target, s0):
     """일정 준수율 카드 (AC-041-9)."""
 
 
-@pytest.mark.skip(reason="DEC-02(결함 기준) 결정 전")
 def test_UC_041_S08_결함_처리율(target, s0):
-    """결함 처리율 카드 (AC-041-10)."""
+    """결함 처리율 50.0%(R9 종료 ÷ R9·R10). 결함 트래커 매핑으로 가른 이슈만. 전체 11 = 일반 9 + 결함 2 (AC-041-10, DEC-02)."""
+    pid = s0.ids["TD-PRJ-1"]
+    problems: list[str] = []
+    rate = _preview(target, s0, "defect_resolution_rate", [])
+    if round(_total(rate) or 0, 4) not in (0.5, 50.0):
+        problems.append(f"결함 처리율 {_total(rate)}")
+    if (rate["total"]["values"].get("numerator"), rate["total"]["values"].get("denominator")) != (1, 2):
+        problems.append(f"결함 처리율 분자·분모 {rate['total']['values']}")
+    if "결함 트래커" not in (rate.get("basis") or ""):
+        problems.append(f"산출 근거에 결함 기준이 없다: {rate.get('basis')}")
+    prog = _get(target, s0, f"/api/projects/{pid}/progress?at={T0}")
+    if not prog.get("defect") or (prog["defect"]["numerator"], prog["defect"]["denominator"]) != (1, 2):
+        problems.append(f"진척 응답의 결함 {prog.get('defect')}")
+    # 포함 관계: 전체 이슈(결함 포함)를 종류로 나누면 일반 9·결함 2, 전체는 따로 센 11
+    kinds = _preview(target, s0, "all_issue_count", ["issue_kind"], template="STAT_CARD")
+    by_kind = {r["values"]["d0"]: r["values"]["value"] for r in kinds["rows"]}
+    if by_kind != {"GENERAL": 9, "DEFECT": 2} or _total(kinds) != 11:
+        problems.append(f"종류별 {by_kind} 전체 {_total(kinds)} (기대 일반 9·결함 2·전체 11)")
+    if _total(_preview(target, s0, "issue_count", [])) != 9 or _total(_preview(target, s0, "defect_count", [])) != 2:
+        problems.append("일반 이슈 9·결함 2 가 따로 안 나온다")
+    # 매핑이 없는 사업(TD-PRJ-2, TD-CON-4 에 결함 트래커 없음): 산출 불가와 이유, 일반 이슈 = 전체
+    pid2 = s0.ids["TD-PRJ-2"]
+    prog2 = _get(target, s0, f"/api/projects/{pid2}/progress?at={T0}", acc="TD-ACC-C2")
+    if prog2["defect"]["value"] is not None or "산출 불가" not in (prog2["defect"]["note"] or ""):
+        problems.append(f"매핑 없는 사업의 결함 {prog2['defect']}")
+    summary2 = _get(target, s0, f"/api/projects/{pid2}/issues/summary", acc="TD-ACC-C2")["kinds"]
+    if summary2["defectMapped"] or summary2["generalTotal"] != summary2["allTotal"] or summary2["defectRate"] is not None:
+        problems.append(f"매핑 없는 사업의 종류별 건수 {summary2}")
+    assert not problems, problems
 
 
 def test_UC_041_S10_조회_실패(target, s0, screen):
@@ -389,8 +416,10 @@ def test_UC_042_S01_추천_구성(target, s0):
     boards = _get(target, s0, f"/api/dashboards?projectId={pid}")
     board = next(b for b in boards if b["isDefault"])
     made = []
-    for template, measure, dims in FIVE_AXES:
-        res = target.post(f"/api/dashboards/{board['id']}/widgets", json={"spec": _spec(measure, dims, [pid], template, f"TST {measure}")}, headers=c1)
+    for n, (template, measure, dims) in enumerate(FIVE_AXES):
+        # 화면처럼 자리(gridItem)를 같이 보낸다. 자리 없이 만든 위젯은 배치에 들지 않는다
+        grid = {"i": "new", "x": (n % 3) * 4, "y": (n // 3) * 4, "w": 4, "h": 4}
+        res = target.post(f"/api/dashboards/{board['id']}/widgets", json={"spec": _spec(measure, dims, [pid], template, f"TST {measure}"), "gridItem": grid}, headers=c1)
         assert res.status_code == 201, (measure, res.text[:200])
         made.append(res.json())
     for w in made:
@@ -458,7 +487,12 @@ def test_UC_043_S01_목록_원천(target, s0):
     rows = _get(target, s0, f"/api/projects/{pid}/issues?size=100")["content"]
     problems: list[str] = []
     if summary["total"] != 9 or summary["open"] != 3 or summary["closed"] != 6:
-        problems.append(f"요약 전체 {summary['total']}·열림 {summary['open']}·해결 {summary['closed']} (기대 9·3·6, 결함 2건 분리는 DEC-02)")
+        problems.append(f"요약 전체 {summary['total']}·열림 {summary['open']}·해결 {summary['closed']} (기대 9·3·6)")
+    kinds = summary.get("kinds") or {}
+    if (kinds.get("allTotal"), kinds.get("generalTotal"), kinds.get("defectTotal")) != (11, 9, 2):
+        problems.append(f"종류별 건수 {kinds} (기대 전체 11·일반 9·결함 2, DEC-02)")
+    if any(r.get("kind") != "GENERAL" for r in rows):
+        problems.append("일반 이슈 목록에 결함이 섞였다")
     if len(rows) != summary["total"]:
         problems.append(f"목록 {len(rows)} ≠ 요약 {summary['total']}")
     for r in rows:
@@ -515,9 +549,31 @@ def test_UC_043_S04_심각도_미지정(target, s0):
     assert summary["unspecifiedOpen"] == summary["open"], summary
 
 
-@pytest.mark.skip(reason="DEC-02(결함 기준) 결정 전. 리스크 목록 API 는 별도 확인")
 def test_UC_043_S05_리스크_결함(target, s0):
-    """리스크 2(열림 1 높음), 위험 처리율 50.0% (AC-043-6)."""
+    """리스크 2(열림 1 높음), 위험 처리율 50.0%. 결함 목록 2건(R9·R10)·결함 처리율 50.0% (AC-043-6, DEC-02).
+
+    리스크 목록 화면 API 는 따로 없어 리스크 쪽은 집계(시맨틱)로 본다."""
+    pid = s0.ids["TD-PRJ-1"]
+    problems: list[str] = []
+    risks = _preview(target, s0, "open_risk_count", ["risk_severity"], template="BAR_CHART")
+    sev = {r["values"]["d0"]: r["values"]["value"] for r in risks["rows"]}
+    if sev.get("HIGH", 0) + sev.get("CRITICAL", 0) != 1 or sum(sev.values()) != 1:
+        problems.append(f"열린 리스크 {sev}")
+    if round(_total(_preview(target, s0, "risk_resolution_rate", [])) or 0, 4) not in (0.5, 50.0):
+        problems.append("위험 처리율")
+    defects = _get(target, s0, f"/api/projects/{pid}/issues?size=100&kind=DEFECT")["content"]
+    if sorted(r["key"] for r in defects) != ["RM-209", "RM-210"] or any(r["kind"] != "DEFECT" for r in defects):
+        problems.append(f"결함 목록 {[(r['key'], r['kind']) for r in defects]}")
+    summary = _get(target, s0, f"/api/projects/{pid}/issues/summary?kind=DEFECT")
+    kinds = summary["kinds"]
+    if (summary["total"], summary["open"], summary["closed"]) != (2, 1, 1):
+        problems.append(f"결함 요약 {summary['total']}·{summary['open']}·{summary['closed']}")
+    if not kinds["defectMapped"] or kinds["defectRate"] != 0.5:
+        problems.append(f"결함 처리율 {kinds}")
+    all_rows = _get(target, s0, f"/api/projects/{pid}/issues?size=100&kind=ALL")["totalElements"]
+    if all_rows != kinds["allTotal"] or all_rows != 11:
+        problems.append(f"전체 이슈(결함 포함) 목록 {all_rows}")
+    assert not problems, problems
 
 
 def test_UC_043_S06_다른_사업_연결_필터(target, s0):

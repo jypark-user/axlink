@@ -74,6 +74,29 @@ def project_progress(
     return compute(cur, project_id, at or clock.today())
 
 
+def _issue_note(issue_total: int, defect_mapped: bool) -> str:
+    """일반 이슈 해결률의 범위. 결함 매핑이 없으면 결함을 가르지 못한 것까지 적는다(DEC-02)."""
+    if not issue_total:
+        return "연동된 일반 이슈가 없습니다"
+    if defect_mapped:
+        return "리스크·결함·예전에 요구사항으로 만든 이슈 제외"
+    return (
+        "리스크·예전에 요구사항으로 만든 이슈 제외. 결함 매핑이 없어 수집한 이슈 전부를 "
+        "일반 이슈로 셉니다"
+    )
+
+
+def _defect_note(defect_total: int, defect_mapped: bool) -> str | None:
+    if not defect_mapped:
+        return (
+            "산출 불가: 연결 설정에 결함 트래커(Redmine)·결함 라벨(GitHub)이 없어 결함을 "
+            "가를 수 없습니다"
+        )
+    if not defect_total:
+        return "산출 불가: 결함으로 분류된 이슈가 없습니다"
+    return "결함 트래커·결함 라벨로 분류한 이슈만 셉니다. 일반 이슈에는 들지 않습니다"
+
+
 def compute(cur: Any, project_id: str, at: date) -> ProgressResponse:
     """접근 검사 없는 산정. 화면(위)과 일별 스냅샷이 같은 함수를 쓴다."""
     warnings: list[str] = []
@@ -86,6 +109,8 @@ def compute(cur: Any, project_id: str, at: date) -> ProgressResponse:
         warnings.extend(wbs_progress.warnings)
 
     issue_done, issue_total = repository.issue_resolution(cur, project_id)
+    defect_mapped = repository.defect_mapped(cur, project_id)
+    defect_done, defect_total = repository.defect_resolution(cur, project_id)
     product_done, product_total = repository.work_product_submission(cur, project_id)
 
     wbs_measure = ProgressMeasure(
@@ -106,8 +131,17 @@ def compute(cur: Any, project_id: str, at: date) -> ProgressResponse:
         label="일반 이슈 해결률",
         unit="건",
         kind=OBSERVED,
-        # 명세서 전에 이슈로 만든 요구사항의 출처 이슈는 분모에 없다. 범위를 같이 보인다
-        note="예전에 요구사항으로 만든 이슈 제외" if issue_total else "연동된 일반 이슈가 없습니다",
+        # 출처 이슈(예전에 요구사항으로 만든 이슈)와 리스크·결함은 분모에 없다. 범위를 같이 보인다
+        note=_issue_note(issue_total, defect_mapped),
+    )
+    defect_measure = ProgressMeasure(
+        value=_ratio(defect_done, defect_total) if defect_mapped else None,
+        numerator=defect_done if defect_mapped else None,
+        denominator=defect_total if defect_mapped else None,
+        label="결함 처리율",
+        unit="건",
+        kind=OBSERVED,
+        note=_defect_note(defect_total, defect_mapped),
     )
     product_measure = ProgressMeasure(
         value=_ratio(product_done, product_total),
@@ -137,6 +171,7 @@ def compute(cur: Any, project_id: str, at: date) -> ProgressResponse:
         wbsDeclaredPlanned=None if wbs_progress is None else wbs_progress.declared_planned,
         issue=issue_measure,
         workProduct=product_measure,
+        defect=defect_measure,
         behind=[] if wbs_progress is None else wbs_progress.behind,
         warnings=warnings,
         planVersion=None if shown_row is None else shown_row["version"],

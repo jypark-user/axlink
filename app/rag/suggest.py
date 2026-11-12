@@ -6,6 +6,7 @@
 """
 
 import logging
+import re
 from typing import Any
 
 from app.auth.models import AuthPrincipal
@@ -47,6 +48,9 @@ FOLLOWS: dict[str, tuple[str, ...]] = {
 }
 
 
+_SCOPE_SUFFIX = re.compile(r"\s*\([^()]*\)$")
+
+
 def question_for(target: routing.Target) -> str:
     if target.key in _INTENT_QUESTIONS:
         return _INTENT_QUESTIONS[target.key]
@@ -59,8 +63,12 @@ def question_for(target: routing.Target) -> str:
 
 
 def measure_question(m: MeasureDef) -> str:
-    """단위에 맞는 물음. 건수는 "몇 건", 비율은 "몇 퍼센트". 조사는 라벨 끝소리로 고른다."""
-    subject = korean.attach(m.label, "은")
+    """단위에 맞는 물음. 건수는 "몇 건", 비율은 "몇 퍼센트". 조사는 라벨 끝소리로 고른다.
+
+    라벨 끝의 범위 표시 괄호(「(결함 제외)」 등)는 물음에서 뺀다. 범위는 답의 산출 근거가 말한다.
+    """
+    label = _SCOPE_SUFFIX.sub("", m.label) or m.label
+    subject = korean.attach(label, "은")
     if m.unit == "건":
         return f"{subject} 지금 몇 건인가요?"
     if m.unit == "%":
