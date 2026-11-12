@@ -124,9 +124,13 @@ def plan_vs_actual(cur: Any, projects: list[dict[str, Any]], at: date) -> Intent
             diff = round(actual - planned, 2)
             behind = len(progress.behind)
             leaves = progress.wbs.denominator or 0
+            # 가중치 없는 WBS(L2)는 기간 비례 가중치로 낸 추정이다(DEC-19)
+            kind = "WBS 실적"
+            if progress.estimated:
+                kind = "WBS 실적, 가중치 미지정이라 계획 기간 비례 추정"
             result.lines.append(
                 f"- {name} (기준일 {at.isoformat()}): 계획 진척률(추정) {format_value(planned)}%, "
-                f"보고 진척률(WBS 실적) {format_value(actual)}%, 차이 {_signed(diff)}%p "
+                f"보고 진척률({kind}) {format_value(actual)}%, 차이 {_signed(diff)}%p "
                 f"({_direction(diff)}), 말단 작업 {leaves}건 중 {behind}건이 계획선보다 늦음"
             )
             rows.append(
@@ -245,7 +249,7 @@ def behind_tasks(cur: Any, projects: list[dict[str, Any]], at: date) -> IntentRe
         leaves += len(plan_rows)
         for r in plan_rows:
             planned_ratio = r.planned_at(at)
-            if r.actual + 0.01 >= planned_ratio:
+            if r.actual is None or r.actual + 0.01 >= planned_ratio:
                 continue
             planned, actual = _pct(planned_ratio), _pct(r.actual)
             diff = round(actual - planned, 2)

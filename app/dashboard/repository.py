@@ -6,7 +6,7 @@
 
 from typing import Any
 
-from app.db import fetch_one
+from app.db import fetch_all, fetch_one
 
 
 def issue_resolution(cur: Any, project_id: str) -> tuple[int, int]:
@@ -58,3 +58,51 @@ def requirement_implementation(cur: Any, project_id: str) -> tuple[int, int]:
         (project_id,),
     )
     return int(row["done"]), int(row["total"])
+
+
+# 일정 준수율은 시맨틱 지표 schedule_compliance_rate(V64)와 같은 조건이다. 목록·현황(이 함수)과
+# 질의·위젯(카탈로그)이 같은 값을 내야 한다.
+
+_ACHIEVED = (
+    "m.state = 'CLOSED' and m.closed_at is not null "
+    "and (m.closed_at at time zone 'Asia/Seoul')::date <= m.due_on"
+)
+
+
+def schedule_compliance(cur: Any, project_ids: list[str], at: Any) -> dict[str, tuple[int, int]]:
+    """일정 준수율(DEC-01). 사업별 (기한 안에 닫힌 수, 기한이 기준일 이전인 수).
+
+    분자·분모가 같은 집합이다. 기한 없는 마일스톤은 빼고, 다시 열렸다 닫힌 것은 마지막
+    닫힌 날(closed_at)로 본다. 평가 대상이 없는 사업은 결과에 없다(산출 불가).
+    """
+    rows = fetch_all(
+        cur,
+        f"""
+        select m.project_id,
+               count(*) filter (where {_ACHIEVED}) as achieved,
+               count(*) as total
+          from milestone m
+         where m.project_id = any(%s::uuid[]) and m.due_on is not null and m.due_on < %s
+         group by m.project_id
+        """,
+        (project_ids, at),
+    )
+    return {str(r["project_id"]): (int(r["achieved"]), int(r["total"])) for r in rows}
+
+
+def current_status_by_product(cur: Any, product_ids: list[str]) -> dict[str, str | None]:
+    """산출물 항목(버전) id → 그 유형의 현행 버전 상태. 승인률 분자는 현행 버전만 본다."""
+    if not product_ids:
+        return {}
+    rows = fetch_all(
+        cur,
+        """
+        select wpm.id, wpc.status
+          from work_product wpm
+          left join work_product wpc
+            on wpc.project_id = wpm.project_id and wpc.type = wpm.type and wpc.is_current
+         where wpm.id = any(%s::uuid[])
+        """,
+        (product_ids,),
+    )
+    return {str(r["id"]): r["status"] for r in rows}

@@ -525,6 +525,17 @@ _REQUIREMENT_FROM = """
 """
 
 VERIFIED_STATUSES = ("VERIFIED", "ACCEPTED")
+
+
+def in_rate_scope(alias: str = "r") -> str:
+    """이행률 분모에 드는 요구사항(DEC-11 (a)). 요구사항 목록을 확정한 사업이면 확정 목록에 든 것만,
+    아직 확정 전이면 전부다. 시맨틱 지표 requirement_fulfillment_rate 의 row_filter(V64)와 같다."""
+    return (
+        f"({alias}.baseline_id is not null or not exists (select 1 from requirement_baseline rb "
+        f"where rb.project_id = {alias}.project_id and rb.status = 'CONFIRMED'))"
+    )
+
+
 REQUIREMENT_STATUSES = ("DEFINED", "DESIGNED", "IMPLEMENTED", "VERIFIED", "ACCEPTED", "REJECTED")
 
 
@@ -584,6 +595,9 @@ def requirement_summary(cur: Any, project_id: str) -> dict[str, Any]:
         f"""
         select count(*) as total,
                count(*) filter (where r.status in ('VERIFIED', 'ACCEPTED')) as verified,
+               count(*) filter (where {in_rate_scope()}) as rate_total,
+               count(*) filter (where r.status in ('VERIFIED', 'ACCEPTED')
+                                  and {in_rate_scope()}) as rate_verified,
                count(*) filter (where r.decided_status is not null) as decided,
                -- mapping.requirement_status_basis 와 같은 규칙. GitHub 닫힘이 만든 IMPLEMENTED
                count(*) filter (where r.status = 'IMPLEMENTED' and c.tool = 'GITHUB')
@@ -616,6 +630,8 @@ def requirement_summary(cur: Any, project_id: str) -> dict[str, Any]:
     return {
         "total": int(totals["total"]),
         "verified": int(totals["verified"]),
+        "rate_total": int(totals["rate_total"]),
+        "rate_verified": int(totals["rate_verified"]),
         "decided": int(totals["decided"]),
         "implemented_from_source_closed": int(totals["implemented_from_source_closed"]),
         "by_status": {r["status"]: int(r["n"]) for r in by_status},

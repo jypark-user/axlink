@@ -217,7 +217,12 @@ class RequirementSummaryResponse(BaseModel):
     notVerified: int  # noqa: N815 — total - verified. 미구현이라는 뜻이 아니다
     # IMPLEMENTED 중 출처 이슈가 닫혀서 붙은 것. 구현을 확인했다는 뜻이 아니다
     implementedFromSourceClosed: int  # noqa: N815
-    verifiedRate: float | None  # noqa: N815 — total 이 0 이면 None(산출 불가)
+    # 이행률 = rateVerified / rateTotal. 요구사항 목록을 확정한 사업은 확정 목록만 센다(DEC-11).
+    # rateTotal 이 0 이면 None(산출 불가)
+    verifiedRate: float | None  # noqa: N815
+    rateTotal: int = 0  # noqa: N815
+    rateVerified: int = 0  # noqa: N815
+    outsideBaseline: int = 0  # noqa: N815 — 확정 명세서에 없는 기존 요구사항(분모 제외)
     decided: int = 0  # 발주기관이 상태를 지정한 요구사항 수(ARC-025)
     byStatus: list[StatusCount]  # noqa: N815
     sources: list[SourceStateSummary]

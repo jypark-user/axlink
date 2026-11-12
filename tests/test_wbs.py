@@ -188,3 +188,58 @@ def test_인식_결과에_머리글_행과_열_매핑이_남는다() -> None:
     assert by["wbs_id"]["header"] is None and by["wbs_id"]["column"] is None
     labels = [c["label"] for c in plan.columns]
     assert labels == ["번호", "작업명", "산출물", "시작일", "종료일", "가중치", "계획", "실적"]
+
+
+# ---------------------------------------------------------------- L2 (DEC-19)
+
+L2_HEADERS = ["WBS ID", "업무분류", "산출물", "시작일", "종료일", "계획", "실적"]
+# IM-009 TD-WBS-L2: 5.1 의 WBS 에서 가중치 열만 뺀 것. 기간 44·106·136·60·29 = 375 일
+L2_ROWS = [
+    ["3", "수행", "", "2026-03-02", "2026-11-30", "", ""],
+    ["3.1", "요구사항 정의", "요구사항정의서", "2026-03-02", "2026-04-15", 1.00, 1.00],
+    ["3.2", "설계", "SW설계서", "2026-04-16", "2026-07-31", 1.00, 0.40],
+    ["3.3", "구현", "프로그램 목록", "2026-06-01", "2026-10-15", 0.80, 0.20],
+    ["3.4", "시험", "시험결과서", "2026-09-01", "2026-10-31", 0.30, 0.00],
+    ["3.5", "인도", "사용자매뉴얼", "2026-11-01", "2026-11-30", 0.00, 0.00],
+]
+
+
+def test_l2_weights_by_period_and_actual_from_file() -> None:
+    """가중치 열이 없으면 기간 비례 가중치 × 파일 실적. 산출물 제출로 실적을 대신하지 않는다."""
+    plan = wbs.parse(build(L2_ROWS, L2_HEADERS))
+    assert plan.estimated is True
+    assert [r.wbs_id for r in plan.rows] == ["3.1", "3.2", "3.3", "3.4", "3.5"]
+    assert [g.wbs_id for g in plan.groups] == ["3"]
+    assert [r.weight for r in plan.rows] == [0.117333, 0.282667, 0.362667, 0.16, 0.077333]
+    assert any("기간에 비례" in w for w in plan.warnings)
+
+    p = wbs.progress(plan, date(2026, 9, 15))
+    # (44×1 + 106×0.4 + 136×0.2) / 375 = 113.6 / 375 = 0.302933
+    assert p.actual == 0.3029
+    # 경과 일수 (44 + 106 + 106 + 14) / 375 = 0.72
+    assert p.planned == 0.72
+    assert p.estimated is True and p.unavailable == []
+
+
+def test_l2_missing_period_or_actual_is_unavailable_with_reason() -> None:
+    """기간이나 실적이 모자라면 0% 로 내지 않고 이유를 낸다."""
+    rows = [list(r) for r in L2_ROWS]
+    rows[4][3] = ""  # 3.4 시작일 없음
+    rows[5][6] = ""  # 3.5 실적 없음
+    p = wbs.progress(wbs.parse(build(rows, L2_HEADERS)), date(2026, 9, 15))
+    assert p.actual is None and p.planned is None and p.deviation is None
+    assert any("3.4 시험" in r and "시작일" in r for r in p.unavailable), p.unavailable
+    assert any("3.5 인도" in r and "실적" in r for r in p.unavailable), p.unavailable
+
+
+def test_l2_without_actual_column_is_unavailable() -> None:
+    """가중치도 실적 열도 없으면(시작일·종료일만) 계획선은 내고 진척률은 내지 않는다."""
+    headers = ["WBS ID", "업무분류", "산출물", "시작일", "종료일", "계획"]
+    rows = [r[:6] for r in L2_ROWS]
+    with pytest.raises(wbs.WbsParseError):
+        wbs.parse(build(rows, headers))  # 가중치·실적 둘 다 없으면 머리글이 아니다
+    headers = ["WBS ID", "업무분류", "산출물", "시작일", "종료일", "실적"]
+    rows = [r[:5] + [""] for r in L2_ROWS]
+    p = wbs.progress(wbs.parse(build(rows, headers)), date(2026, 9, 15))
+    assert p.actual is None and p.planned == 0.72
+    assert p.unavailable == ["WBS 에 실적이 없습니다(실적 열이 없거나 값이 비었습니다)"]

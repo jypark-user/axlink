@@ -91,7 +91,7 @@ def replace_plan(cur: Any, project_id: str, work_product_id: str | None, plan: w
             cur, project_id, work_product_id, line,
             wbs_id=group.wbs_id, name=group.name, deliverable=None,
             start=group.start, end=group.end, weight=None, declared_planned=None, actual=None,
-            task_key=key, key_reason=reason,
+            task_key=key, key_reason=reason, estimated=False,
         )
         seen.append(group.wbs_id)
     for row in plan.rows:
@@ -105,7 +105,7 @@ def replace_plan(cur: Any, project_id: str, work_product_id: str | None, plan: w
             wbs_id=row.wbs_id, name=row.name, deliverable=row.deliverable,
             start=row.start, end=row.end, weight=row.weight,
             declared_planned=row.declared_planned, actual=row.actual,
-            task_key=key, key_reason=reason,
+            task_key=key, key_reason=reason, estimated=plan.estimated,
         )
         seen.append(row.wbs_id)
     cur.execute(
@@ -125,15 +125,15 @@ def _parent_of(wbs_id: str) -> str | None:
 def _upsert(
     cur: Any, project_id: str, work_product_id: str | None, line: int, *, wbs_id: str,
     name: str, deliverable: str | None, start, end, weight, declared_planned, actual,
-    task_key: str | None, key_reason: str,
+    task_key: str | None, key_reason: str, estimated: bool,
 ) -> None:
     key = task_key or str(uuid.uuid4())
     cur.execute(
         """
         insert into wbs_item (project_id, wbs_id, parent_wbs_id, name, deliverable, start_on,
                               end_on, weight, declared_planned, actual, line_no,
-                              work_product_id, active, task_key, key_reason)
-        values (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, true, %s, %s)
+                              work_product_id, active, task_key, key_reason, weight_estimated)
+        values (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, true, %s, %s, %s)
         on conflict (project_id, wbs_id) do update set
           parent_wbs_id = excluded.parent_wbs_id, name = excluded.name,
           deliverable = excluded.deliverable, start_on = excluded.start_on,
@@ -141,11 +141,11 @@ def _upsert(
           declared_planned = excluded.declared_planned, actual = excluded.actual,
           line_no = excluded.line_no, work_product_id = excluded.work_product_id,
           active = true, task_key = excluded.task_key, key_reason = excluded.key_reason,
-          updated_at = now()
+          weight_estimated = excluded.weight_estimated, updated_at = now()
         """,
         (
             project_id, wbs_id, _parent_of(wbs_id), name[:500], deliverable, start, end,
-            weight, declared_planned, actual, line, work_product_id, key, key_reason,
+            weight, declared_planned, actual, line, work_product_id, key, key_reason, estimated,
         ),
     )
 
@@ -155,7 +155,8 @@ def load_plan(cur: Any, project_id: str) -> wbs.WbsPlan | None:
     rows = fetch_all(
         cur,
         """
-        select wbs_id, name, deliverable, start_on, end_on, weight, declared_planned, actual
+        select wbs_id, name, deliverable, start_on, end_on, weight, declared_planned, actual,
+               weight_estimated
           from wbs_item
          where project_id = %s and active
          order by line_no, wbs_id
@@ -164,6 +165,7 @@ def load_plan(cur: Any, project_id: str) -> wbs.WbsPlan | None:
     )
     leaves: list[wbs.WbsRow] = []
     groups: list[wbs.WbsGroup] = []
+    estimated = False
     for r in rows:
         if r["weight"] is None:
             groups.append(
@@ -173,6 +175,7 @@ def load_plan(cur: Any, project_id: str) -> wbs.WbsPlan | None:
             )
             continue
         declared = r["declared_planned"]
+        estimated = estimated or bool(r["weight_estimated"])
         leaves.append(
             wbs.WbsRow(
                 wbs_id=r["wbs_id"],
@@ -181,7 +184,8 @@ def load_plan(cur: Any, project_id: str) -> wbs.WbsPlan | None:
                 start=r["start_on"],
                 end=r["end_on"],
                 weight=float(r["weight"]),
-                actual=float(r["actual"] or 0),
+                # 비어 있으면 실적을 모른다. 0 으로 채우면 산출 불가가 0% 로 바뀐다(DEC-19)
+                actual=None if r["actual"] is None else float(r["actual"]),
                 declared_planned=None if declared is None else float(declared),
             )
         )
@@ -189,9 +193,16 @@ def load_plan(cur: Any, project_id: str) -> wbs.WbsPlan | None:
         return None
     total = round(sum(r.weight for r in leaves), 6)
     warnings: list[str] = []
-    if abs(total - 1.0) > 0.005:
+    if estimated:
+        warnings.append(
+            "가중치 열이 없어 계획 기간에 비례해 가중치를 산정했습니다(추정). "
+            "실적은 파일의 실적 열을 씁니다"
+        )
+    elif abs(total - 1.0) > 0.005:
         warnings.append(f"가중치 합이 1.00 이 아닙니다({total:.3f}). 합으로 나눠 맞췄습니다")
-    return wbs.WbsPlan(rows=leaves, weight_total=total, warnings=warnings, groups=groups)
+    return wbs.WbsPlan(
+        rows=leaves, weight_total=total, warnings=warnings, groups=groups, estimated=estimated
+    )
 
 
 def save_recognition(
@@ -259,17 +270,35 @@ def save_judgements(cur: Any, project_id: str, judgements: list) -> list[tuple[s
         """
         update wbs_item
            set deliverable_status = %s, deliverable_rule = %s, deliverable_ref = %s,
-               deliverable_url = %s, judged_at = now()
+               deliverable_url = %s, deliverable_product_id = %s, judged_at = now()
          where project_id = %s and wbs_id = %s
            and (deliverable_status is distinct from %s or deliverable_rule is distinct from %s
-                or deliverable_ref is distinct from %s or deliverable_url is distinct from %s)
+                or deliverable_ref is distinct from %s or deliverable_url is distinct from %s
+                or deliverable_product_id is distinct from %s::uuid)
         """,
         [
-            (j.status, j.rule, j.ref, j.url, project_id, j.wbs_id, j.status, j.rule, j.ref, j.url)
+            (j.status, j.rule, j.ref, j.url, j.product_id, project_id, j.wbs_id,
+             j.status, j.rule, j.ref, j.url, j.product_id)
             for j in judgements
         ],
     )
     return changed
+
+
+def save_product_links(
+    cur: Any, project_id: str, links: list[tuple[str, str | None]]
+) -> None:
+    """판정이 맞춘 산출물 항목만 행에 맞춘다(승인률 분자의 재료, DEC-12). 판정 상태는 그대로다."""
+    if not links:
+        return
+    cur.executemany(
+        """
+        update wbs_item set deliverable_product_id = %s::uuid
+         where project_id = %s and wbs_id = %s and active
+           and deliverable_product_id is distinct from %s::uuid
+        """,
+        [(product_id, project_id, wbs_id, product_id) for wbs_id, product_id in links],
+    )
 
 
 def project_documents(cur: Any, project_id: str) -> list[dict[str, Any]]:

@@ -79,7 +79,7 @@ def test_UC_050_S03_지표_요청(target, s0):
 
 
 def test_UC_050_S02_이슈_리스크_산출물_요청(target, s0):
-    """R4 / R7 / 요구사항정의서 요청 → 상태·우선순위·담당 + 관련 지표값 저장 (AC-050-1·2). 승인률은 DEC-12."""
+    """R4 / R7 / 요구사항정의서 요청 → 상태·우선순위·담당 + 관련 지표값 저장, 산출물은 승인률 20.0%(DEC-12 (b)) (AC-050-1·2)."""
     pid = s0.ids["TD-PRJ-1"]
     issues = {r["key"]: r for r in _get(target, s0, f"/api/projects/{pid}/issues?size=100")["content"]}
     with tx() as cur:
@@ -106,6 +106,8 @@ def test_UC_050_S02_이슈_리스크_산출물_요청(target, s0):
     snap = _detail(target, s0, res.json()["id"])["snapshot"]
     if snap.get("status") != "APPROVED" or snap.get("version") != "v1":
         problems.append(f"요구사항정의서 저장 상태 {snap}")
+    if round(snap.get("deliverable_approval_rate") or 0, 2) != 20.0:
+        problems.append(f"산출물 요청에 산출물 승인률(20.0%)이 함께 저장되지 않았다: {snap}")
     assert not problems, problems
 
 
