@@ -111,6 +111,13 @@ def scan_requirements() -> tuple[dict[str, str], dict[str, str]]:
     return titles, tasks
 
 
+# 이미 main 에 들어가 고칠 수 없는 규약 위반 커밋. 이력은 다시 쓰지 않는다(force push 금지).
+# 여기 올리는 것은 데이터 결함을 인정하는 기록이다. 새 위반을 덮는 데 쓰지 않는다.
+KNOWN_VIOLATIONS = {
+    "f9fdca66": "2026-11-12 GitHub 웹에서 main 에 직접 커밋(README 마일스톤 표 삭제). 추적 ID 없음",
+}
+
+
 def scan_commits(known: set[str]) -> tuple[dict[str, set], dict[str, set], list[str]]:
     """커밋을 훑어 요구사항별 커밋·이슈를 모으고 규약 위반을 수집한다."""
     raw = git("log", "--no-merges", "--pretty=format:%H%x1f%s%x1f%b%x1e")
@@ -123,6 +130,8 @@ def scan_commits(known: set[str]) -> tuple[dict[str, set], dict[str, set], list[
         if len(parts) < 2:
             continue
         sha, subject, body = parts[0], parts[1], parts[2] if len(parts) > 2 else ""
+        if sha[:8] in KNOWN_VIOLATIONS:
+            continue
 
         if not SUBJECT_RE.match(subject):
             violations.append(f"{sha[:8]} 커밋 제목 규약 위반: {subject}")
