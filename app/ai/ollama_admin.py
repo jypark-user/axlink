@@ -34,9 +34,10 @@ class DiscoveredModel:
 @dataclass(frozen=True)
 class MeasuredRate:
     model: str
-    tok_per_sec: float
+    # 서버가 생성 소요 시간을 주지 않으면(클라우드 위임 모델) 속도는 모른다. None
+    tok_per_sec: float | None
     eval_count: int
-    eval_duration_seconds: float
+    eval_duration_seconds: float | None
 
 
 def list_models(base_url: str) -> list[DiscoveredModel]:
@@ -99,8 +100,17 @@ def measure_rate(base_url: str, model: str) -> MeasuredRate:
 def rate_from_generate(model: str, body: dict[str, Any]) -> MeasuredRate:
     eval_count = _int(body.get("eval_count"))
     duration_ns = _int(body.get("eval_duration"))
-    if eval_count <= 0 or duration_ns <= 0:
+    if eval_count <= 0:
         raise errors.ApiError(503, "AI_UNAVAILABLE", "LLM 서버가 생성 통계를 주지 않았습니다.")
+    if duration_ns <= 0:
+        # 생성은 됐다(토큰 수가 있다). Ollama 클라우드 위임 모델은 소요 시간을 주지 않는다.
+        # 속도를 지어내지 않고 비운다(DEF-045)
+        return MeasuredRate(
+            model=str(body.get("model") or model),
+            tok_per_sec=None,
+            eval_count=eval_count,
+            eval_duration_seconds=None,
+        )
     seconds = duration_ns / 1e9
     return MeasuredRate(
         model=str(body.get("model") or model),

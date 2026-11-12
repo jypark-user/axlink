@@ -86,9 +86,9 @@ class LlmModelParamsUpdateRequest(BaseModel):
 
 class LlmMeasureResponse(BaseModel):
     model: str
-    tokPerSec: float  # noqa: N815
+    tokPerSec: float | None  # noqa: N815  서버가 소요 시간을 안 주면 None
     evalCount: int  # noqa: N815
-    evalDurationSeconds: float  # noqa: N815
+    evalDurationSeconds: float | None  # noqa: N815
     measuredAt: str  # noqa: N815
 
 

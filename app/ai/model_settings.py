@@ -174,14 +174,16 @@ def measure(cur: Any, principal: AuthPrincipal, base_url: str, model: str) -> Ll
         raise errors.not_found("llm model", model)
     rate = ollama_admin.measure_rate(base_url, model)
     now = datetime.now(UTC)
-    cur.execute(
-        """
-        update llm_model_cache
-           set tok_per_sec = %s, measured_at = %s, updated_at = %s
-         where base_url = %s and name = %s
-        """,
-        (rate.tok_per_sec, now, now, base_url, model),
-    )
+    if rate.tok_per_sec is not None:
+        # 속도를 못 쟀으면(소요 시간 없음) 앞서 잰 값을 지우지 않는다
+        cur.execute(
+            """
+            update llm_model_cache
+               set tok_per_sec = %s, measured_at = %s, updated_at = %s
+             where base_url = %s and name = %s
+            """,
+            (rate.tok_per_sec, now, now, base_url, model),
+        )
     return LlmMeasureResponse(
         model=model,
         tokPerSec=rate.tok_per_sec,
@@ -239,13 +241,16 @@ def save_setting(
             f"{req.model} 으로 짧은 생성을 해 보지 못해 저장하지 않았습니다. {exc.message}",
         ) from exc
     now = datetime.now(UTC)
+    # 생성 확인은 통과했다. 속도를 못 쟀으면(클라우드 위임 모델) 앞서 잰 값은 남긴다
     cur.execute(
         """
         update llm_model_cache
-           set tok_per_sec = %s, measured_at = %s, verified_at = %s, updated_at = %s
+           set tok_per_sec = coalesce(%s, tok_per_sec),
+               measured_at = case when %s::numeric is null then measured_at else %s end,
+               verified_at = %s, updated_at = %s
          where base_url = %s and name = %s
         """,
-        (rate.tok_per_sec, now, now, now, base_url, req.model),
+        (rate.tok_per_sec, rate.tok_per_sec, now, now, now, base_url, req.model),
     )
     cur.execute(
         """
