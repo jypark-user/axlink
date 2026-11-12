@@ -50,10 +50,17 @@ def test_s0_이슈_커밋_PR_마일스톤_건수(client, seeded):
     issues = client.get(f"/api/projects/{pid}/issues?size=100", headers=h).json()
     # 7.3: 전체 수집 이슈 16 가운데 리스크 2 는 risk 로 승격되고,
     # 출처 이슈 3 은 요구사항 상태만 바꾼다.
-    # 이슈 목록에는 일반 이슈 9 + 결함 2 = 11 이 보여야 한다(결함 분리는 DEC-02 결정 뒤).
-    assert issues["totalElements"] == 11, [i["key"] for i in issues["content"]]
+    # 일반 이슈 목록은 9 다. 결함 2(R9·R10)는 결함 트래커 매핑으로 갈라진다(DEC-02).
+    # 전체 이슈(결함 포함) 목록이 11 이다.
+    assert issues["totalElements"] == d.EXPECTED_S0["general_issues"], [
+        i["key"] for i in issues["content"]
+    ]
     keys = {i["key"] for i in issues["content"]}
-    assert {"RM-201", "RM-204", "GH-4", "GH-5", "RM-209"} <= keys
+    assert {"RM-201", "RM-204", "GH-4", "GH-5"} <= keys and "RM-209" not in keys
+    every = client.get(f"/api/projects/{pid}/issues?size=100&kind=ALL", headers=h).json()
+    assert every["totalElements"] == 11
+    defects = client.get(f"/api/projects/{pid}/issues?size=100&kind=DEFECT", headers=h).json()
+    assert defects["totalElements"] == d.EXPECTED_S0["defects"]
     assert "GH-1" not in keys and "RM-207" not in keys
 
     reqs = client.get(f"/api/projects/{pid}/requirements?size=50", headers=h).json()

@@ -733,6 +733,28 @@ export interface IssueSummaryResponse {
   unspecifiedOpen: number;
   /** 연결 고르기. 연결을 골라 물어도 사업 전체 연결을 낸다 */
   sources: IssueSourceCount[];
+  /** 위 카드가 센 종류 (DEC-02) */
+  kind?: IssueKind;
+  /** 종류별 건수. 서버가 각각 센 값이다. 화면에서 더해 합계를 만들지 않는다 */
+  kinds?: IssueKindCounts | null;
+}
+
+/** GENERAL 일반 이슈(결함 제외) · DEFECT 결함 · ALL 전체 이슈(결함 포함) */
+export type IssueKind = 'GENERAL' | 'DEFECT' | 'ALL';
+
+/** 전체 이슈(결함 포함) = 일반 이슈(결함 제외) + 결함 (DEC-02) */
+export interface IssueKindCounts {
+  allTotal: number;
+  generalTotal: number;
+  defectTotal: number;
+  defectOpen: number;
+  defectClosed: number;
+  /** 연결 설정에 결함 트래커·결함 라벨이 있는가 */
+  defectMapped: boolean;
+  /** 0~1. 매핑이 없거나 결함이 0건이면 null(산출 불가) */
+  defectRate: number | null;
+  /** 산출 불가 이유 또는 범위 */
+  defectNote: string | null;
 }
 
 /** connectionId 가 없으면 도구에서 오지 않은 이슈(업로드·수기)다. */
@@ -766,6 +788,8 @@ export interface IssueResponse {
   requirementRefs?: string[];
   /** 도구가 만든 이슈관계(출발점 쪽) */
   relations?: IssueRelation[];
+  /** GENERAL 일반 이슈 · DEFECT 결함 (DEC-02) */
+  kind?: 'GENERAL' | 'DEFECT';
 }
 
 export interface IssueRelation {
@@ -1449,6 +1473,9 @@ export interface ProgressSnapshotResponse {
   behindTaskCount: number;
   issueResolvedCount: number;
   issueTotalCount: number;
+  /** 결함(DEC-02). null 이면 그날은 결함을 가르기 전이거나 매핑이 없다 */
+  defectResolvedCount?: number | null;
+  defectTotalCount?: number | null;
   requirementVerifiedCount: number;
   requirementTotalCount: number;
   riskClosedCount: number;

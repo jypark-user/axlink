@@ -15,7 +15,13 @@ from app.common import errors
 from app.config import settings
 from app.standard.work_product_type import DISPLAY_NAMES
 
-_KNOWN = {"riskTracker", "reqIdField", "designDocPaths", "collectFiles"}
+_KNOWN = {
+    "riskTracker", "reqIdField", "designDocPaths", "collectFiles", "defectTracker", "defectLabel",
+}
+# 결함 매핑의 화면 예시(DEC-02). 기본값이 아니다. 업체마다 결함을 부르는 이름이 달라서
+# 특정 저장소의 라벨을 보편 규칙으로 고정하지 않는다. 비어 있으면 결함을 가르지 않는다
+DEFECT_TRACKER_EXAMPLE = "결함"
+DEFECT_LABEL_EXAMPLE = "유형: 결함"
 # 이슈로 요구사항을 만들 때 쓰던 키(ARC-030 전). 예전 설정에 남아 있어 받기만 하고 쓰지 않는다
 _RETIRED = {"requirementLabel"}
 
@@ -30,6 +36,10 @@ class MappingRules:
     # 함께 수집할 저장소 파일과 산출물 유형(「경로=유형」, 쉼표로 나눔). WBS 위치는 업체마다
     # 다르다. 비어 있으면 서버 기본값(AXLINK_COLLECT_FILES)을 쓴다(DEF-V012)
     collect_files: str = ""
+    # 결함 판별(DEC-02). Redmine 은 트래커 이름, GitHub 은 라벨 이름이다. 기본은 비어 있다.
+    # 비어 있으면 그 연결의 이슈는 모두 일반 이슈이고 결함 처리율은 산출하지 않는다
+    defect_tracker: str = ""
+    defect_label: str = ""
 
     @classmethod
     def from_json(cls, raw: Any) -> "MappingRules":
@@ -60,6 +70,8 @@ class MappingRules:
             req_id_field=cleaned.get("reqIdField", cls.req_id_field),
             design_doc_paths=cleaned.get("designDocPaths", cls.design_doc_paths),
             collect_files=cleaned.get("collectFiles", cls.collect_files),
+            defect_tracker=cleaned.get("defectTracker", cls.defect_tracker).strip(),
+            defect_label=cleaned.get("defectLabel", cls.defect_label).strip(),
         )
 
     @property
@@ -80,7 +92,13 @@ class MappingRules:
             # 비어 있으면 적지 않는다. 빈 문자열은 from_json 이 오타로 거른다
             **({"designDocPaths": self.design_doc_paths} if self.design_doc_paths else {}),
             **({"collectFiles": self.collect_files} if self.collect_files else {}),
+            **({"defectTracker": self.defect_tracker} if self.defect_tracker else {}),
+            **({"defectLabel": self.defect_label} if self.defect_label else {}),
         }
+
+    @property
+    def has_defect_mapping(self) -> bool:
+        return bool(self.defect_tracker or self.defect_label)
 
 
 def _parse_file_map(raw: str) -> dict[str, str]:

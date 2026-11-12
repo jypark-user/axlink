@@ -179,7 +179,7 @@ def test_UC_060_S02_집계_질문(target, s0, llm):
     scripted = llm({"route": "AGGREGATE", "measure": "issue_count", "template": "STAT_CARD"}, "일반 이슈는 모두 9건입니다.")
     events = _ask(target, s0, "TD-ACC-C1", "일반 이슈가 몇 건이야", [s0.ids["TD-PRJ-1"]])
     text, done = _text(events), _done(events)
-    assert done["finishReason"] != "NUMBER_GUARD", f"9건이 집계(현재 결함 포함 11건, DEC-02)와 어긋나 막혔다: {text}"
+    assert done["finishReason"] != "NUMBER_GUARD", f"9건이 집계(일반 이슈, 결함 제외)와 어긋나 막혔다: {text}"
     assert "9건" in text, text
     assert "infographic" not in [e for e, _ in events]
     assert scripted.stream_calls == 1
@@ -201,7 +201,7 @@ def test_UC_060_S04_근거_부족(target, s0, llm):
 def test_UC_060_S05a_주입_차단(target, s0, llm):
     """가짜 모델이 「이슈는 977건」 출력 → 그 문장 미출력·미저장, 종료 사유 수치 검문 (AC-060-4)."""
     with tx() as cur:
-        n = fetch_one(cur, "select count(*) as n from issue where project_id = %s", (s0.ids["TD-PRJ-1"],))["n"]
+        n = fetch_one(cur, "select count(*) as n from issue where project_id = %s and issue_kind = 'GENERAL'", (s0.ids["TD-PRJ-1"],))["n"]
     scripted = llm({"route": "AGGREGATE", "measure": "issue_count", "template": "STAT_CARD"}, f"현재 이슈는 모두 {n}건입니다. 그중 977건이 지연입니다. 확인해 보십시오.")
     conv = _conversation(target, s0, "TD-ACC-C1", [s0.ids["TD-PRJ-1"]]).json()
     with target.stream("POST", f"/api/conversations/{conv['id']}/messages", json={"question": "이슈 건수는?", "projectScope": []}, headers={**auth(s0.tokens["TD-ACC-C1"]), "Accept": "text/event-stream"}) as res:
@@ -285,7 +285,7 @@ def test_UC_060_S10_모델_장애(target, s0, llm, cached, kind):
     model_text = "모델이 지어낸 문장입니다." if kind == "aggregate" else "사업 기간은 9개월입니다[1]."
     with tx() as cur:
         cur.execute("delete from route_cache where question = %s", (question,))
-        expected = cur.execute("select count(*) as n from issue where project_id = %s", (s0.ids["TD-PRJ-1"],)).fetchone()["n"]
+        expected = cur.execute("select count(*) as n from issue where project_id = %s and issue_kind = 'GENERAL'", (s0.ids["TD-PRJ-1"],)).fetchone()["n"]
     if cached:
         # 모델이 살아 있을 때 한 번 답해 판정을 캐시에 남긴다(운영 상태)
         alive = llm(route, model_text if kind == "document" else "일반 이슈 건수를 알려 드립니다.")
@@ -390,7 +390,7 @@ def test_UC_060_S03_결합(target, s0, llm):
     text, done, start = _text(events), _done(events), events[0][1]
     assert start["routing"]["type"] == "MIXED", start["routing"]
     assert _sow_source(_sources(events), "22종") is not None
-    assert done["finishReason"] != "NUMBER_GUARD", f"9건이 집계(현재 결함 포함 11건, DEC-02)와 어긋나 막혔다: {text}"
+    assert done["finishReason"] != "NUMBER_GUARD", f"9건이 집계(일반 이슈, 결함 제외)와 어긋나 막혔다: {text}"
     assert "22종" in text and "9건" in text, text
 
 

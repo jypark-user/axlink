@@ -341,7 +341,7 @@ def full_metrics(cur: Any, project_id: str) -> dict[str, Any]:
     issue = fetch_one(
         cur,
         "select count(*) filter (where status in ('OPEN','IN_PROGRESS')) as open_count "
-        "from issue where project_id = %s",
+        "from issue where project_id = %s and issue_kind = 'GENERAL'",
         (project_id,),
     )
     wp = fetch_one(

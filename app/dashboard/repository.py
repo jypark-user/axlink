@@ -1,6 +1,6 @@
 """진척 집계 SQL. 세 갈래의 분자·분모를 각각 센다.
 
-분모가 셋 다 다르다. WBS 는 가중치 합, 이슈는 전체 이슈 수, 산출물은 적용 대상 항목 수다.
+분모가 셋 다 다르다. WBS 는 가중치 합, 이슈는 일반 이슈(결함 제외) 수, 산출물은 적용 대상 항목 수다.
 값만 나란히 두면 "왜 다르냐" 는 질문에 답할 수 없으므로 분모를 함께 돌려준다.
 """
 
@@ -10,18 +10,48 @@ from app.db import fetch_one
 
 
 def issue_resolution(cur: Any, project_id: str) -> tuple[int, int]:
-    """이슈 해결률. 닫힌 이슈 / 전체 이슈."""
+    """일반 이슈 해결률. 닫힌 일반 이슈 / 전체 일반 이슈. 결함은 빼고 센다(DEC-02)."""
+    return _resolution(cur, project_id, "GENERAL")
+
+
+def defect_resolution(cur: Any, project_id: str) -> tuple[int, int]:
+    """결함 처리율. 닫힌 결함 / 전체 결함(DEC-02)."""
+    return _resolution(cur, project_id, "DEFECT")
+
+
+def _resolution(cur: Any, project_id: str, kind: str) -> tuple[int, int]:
     row = fetch_one(
         cur,
         """
         select count(*) filter (where status in ('RESOLVED', 'CLOSED')) as resolved,
                count(*) as total
           from issue
-         where project_id = %s
+         where project_id = %s and issue_kind = %s
+        """,
+        (project_id, kind),
+    )
+    return int(row["resolved"]), int(row["total"])
+
+
+def defect_mapped(cur: Any, project_id: str) -> bool:
+    """사업의 연결 가운데 결함 매핑(결함 트래커·결함 라벨)을 둔 것이 있는가(DEC-02).
+
+    없으면 결함을 가를 수 없다. 결함 처리율은 산출하지 않고 일반 이슈 = 전체 이슈다.
+    """
+    row = fetch_one(
+        cur,
+        """
+        select exists (
+          select 1 from tool_connection
+           where project_id = %s
+             and jsonb_typeof(mapping_rules_json) = 'object'
+             and (coalesce(btrim(mapping_rules_json ->> 'defectTracker'), '') <> ''
+                  or coalesce(btrim(mapping_rules_json ->> 'defectLabel'), '') <> '')
+        ) as mapped
         """,
         (project_id,),
     )
-    return int(row["resolved"]), int(row["total"])
+    return bool(row["mapped"])
 
 
 def work_product_submission(cur: Any, project_id: str) -> tuple[int, int]:

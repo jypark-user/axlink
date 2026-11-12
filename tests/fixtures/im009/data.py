@@ -151,7 +151,8 @@ CONNECTIONS = {
         "https://redmine.example.test",
         "citizen-portal",
         "TD-ORG-V1",
-        {"riskTracker": "리스크", "reqIdField": "요구사항 ID"},
+        # 결함 트래커는 DEC-02 (a) 의 연결 설정이다(IM-009 3절 TD-CON-2)
+        {"riskTracker": "리스크", "reqIdField": "요구사항 ID", "defectTracker": "결함"},
     ),
     "TD-CON-3": Connection(
         "TD-CON-3",

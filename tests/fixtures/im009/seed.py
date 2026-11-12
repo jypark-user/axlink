@@ -39,6 +39,9 @@ ADMIN_USER = os.environ.get("IM009_ADMIN_USER", "r1")
 ADMIN_PASS = os.environ.get("IM009_ADMIN_PASS", "admin")
 FILES_DIR = Path(os.environ.get("IM009_FILES_DIR", "var/verify/im009-files"))
 
+# 연결 설정으로 그대로 넘기는 매핑 키. 결함 트래커·라벨은 DEC-02
+_RULE_KEYS = ("riskTracker", "reqIdField", "defectTracker", "defectLabel")
+
 DESIGN_DOC_PATH = "docs/20-design/설계-민원조회.md"
 WBS_PATH = "docs/00-management/WBS.xlsx"
 DESIGN_FILE_PATH = "docs/20-design/SW설계서_v0.9.docx"
@@ -238,7 +241,7 @@ class Seeder:
         # 대상 서버가 컨테이너면 재생 서버를 시험 프로세스와 다른 주소로 본다
         base = (os.environ.get("AXLINK_REPLAY_TARGET_URL") or REPLAY_URL).rstrip("/")
         for tid, con in d.CONNECTIONS.items():
-            mapping = {k: v for k, v in con.mapping.items() if k in ("riskTracker", "reqIdField")}
+            mapping = {k: v for k, v in con.mapping.items() if k in _RULE_KEYS}
             if "designDocPaths" in con.mapping:
                 mapping["designDocPaths"] = ",".join(con.mapping["designDocPaths"])
             body = {
@@ -292,7 +295,7 @@ class Seeder:
     def _connections(self, cur: Any) -> None:
         now = datetime.now(UTC)
         for tid, con in d.CONNECTIONS.items():
-            mapping = {k: v for k, v in con.mapping.items() if k in ("riskTracker", "reqIdField")}
+            mapping = {k: v for k, v in con.mapping.items() if k in _RULE_KEYS}
             if "designDocPaths" in con.mapping:
                 mapping["designDocPaths"] = ",".join(con.mapping["designDocPaths"])
             row = integ_repo.insert(
