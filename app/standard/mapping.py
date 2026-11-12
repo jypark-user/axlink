@@ -1,6 +1,7 @@
 """GitHub 원본 → 표준 모델 매핑. 순수 함수만 둔다(DB·네트워크 없음).
 
-이슈는 모두 일반 이슈(issue)로 간다. 요구사항은 명세서로만 만든다(ARC-030).
+이슈는 모두 issue 로 간다. 연결 설정의 결함 라벨(DEC-02)이 붙은 것은 종류가 DEFECT,
+나머지는 일반 이슈(GENERAL)다. 요구사항은 명세서로만 만든다(ARC-030).
 to_requirement 는 예전에 이슈로 만든 요구사항의 열림·닫힘을 이슈에서 읽을 때만 쓴다.
 """
 
@@ -30,6 +31,13 @@ def issue_type(payload: dict[str, Any]) -> str | None:
         if matched:
             return matched.group(1).strip()
     return None
+
+
+def is_defect(payload: dict[str, Any], rules: MappingRules = _DEFAULT_RULES) -> bool:
+    """결함 라벨은 연결별 설정이다(DEC-02). 설정이 없으면 결함으로 가르지 않는다."""
+    if not rules.defect_label:
+        return False
+    return any(label.strip() == rules.defect_label for label in labels(payload))
 
 
 def to_requirement(payload: dict[str, Any]) -> dict[str, Any]:
@@ -66,9 +74,10 @@ def requirement_status_basis(status: str, tool: str | None) -> str | None:
     return None
 
 
-def to_issue(payload: dict[str, Any]) -> dict[str, Any]:
+def to_issue(payload: dict[str, Any], rules: MappingRules = _DEFAULT_RULES) -> dict[str, Any]:
     closed = payload.get("state") == "closed"
     return {
+        "issue_kind": "DEFECT" if is_defect(payload, rules) else "GENERAL",
         "issue_key": f"GH-{payload.get('number')}",
         "title": (payload.get("title") or "").strip()[:500],
         "body": payload.get("body") or "",

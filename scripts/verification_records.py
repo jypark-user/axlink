@@ -306,6 +306,11 @@ def parse_im007a(text: str) -> dict[str, dict]:
     return obligations
 
 
+def decided_status(status: str) -> bool:
+    """IM-007 6절 상태 칸이 사용자 결정을 적은 것인가. 「**결정 (b) 2026-11-10 사용자**: …」 꼴."""
+    return status.strip().startswith("**결정")
+
+
 def parse_dec_impacts(text: str) -> dict[str, dict]:
     """IM-007A 부록 A.2 「결정 대기에 걸린 수용 기준」 → DEC 별 영향 AC·시나리오."""
     out: dict[str, dict] = {}
@@ -419,6 +424,15 @@ def build_catalog() -> dict:
             if ac in im007["acs"] and dec not in im007["acs"][ac]["decs"]:
                 im007["acs"][ac]["decs"].append(dec)
                 im007["acs"][ac]["decs"].sort()
+    # 6절 상태 칸이 「**결정 …」인 DEC 는 더 이상 AC 를 잡아 두지 않는다. 어떤 결정이 걸렸었는지는
+    # decs_decided 로 남긴다. 결정 때문에 기대값이 바뀐 시나리오의 이전 실행은
+    # impacts.jsonl 로 무효화한다
+    decided = {d for d, row in im007["decs"].items() if decided_status(row.get("status", ""))}
+    for bag in (im007["acs"].values(), im007["scenarios"].values()):
+        for item in bag:
+            done = [d for d in item["decs"] if d in decided]
+            item["decs_decided"] = done
+            item["decs"] = [d for d in item["decs"] if d not in decided]
     for ob in obligations.values():
         for ac in ob["acs"]:
             if ac in im007["acs"]:

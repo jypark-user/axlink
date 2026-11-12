@@ -17,7 +17,8 @@ def test_client_sees_own_org_projects(client, client_token):
     assert set(body) >= {"content", "page", "size", "totalElements", "totalPages", "hasNext"}
     for row in body["content"]:
         # 요약 지표는 전부 SQL 집계 결과다 — 절대 규칙 1.
-        assert row["requiredWorkProductTotal"] == 22
+        # 산출물 승인 수의 분모는 WBS 가 정한 산출물이다(DEC-12). 22종 고정값이 아니다
+        assert 0 <= row["requiredWorkProductApproved"] <= row["requiredWorkProductTotal"]
         assert row["openRiskCount"] >= 0
 
 
@@ -45,7 +46,9 @@ def test_project_detail_returns_metrics(client, client_token):
     assert res.status_code == 200
     body = res.json()
     assert body["id"] == pid
-    assert body["metrics"]["workProductTotal"] == 22  # 29110 산출물 22종
+    # 산출물 승인 수의 분모는 WBS 가 정한 산출물이다(DEC-12)
+    m = body["metrics"]
+    assert 0 <= m["workProductApproved"] <= m["workProductTotal"]
     assert set(body["metrics"]) >= {
         "requirementTotal", "issueOpen", "riskOpen", "traceabilityCoverage", "lastSyncedAt"
     }

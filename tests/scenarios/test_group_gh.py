@@ -25,7 +25,9 @@ from app.ai.port import LlmResult
 from app.common import errors
 from app.config import settings
 from app.db import fetch_all, fetch_one, tx
+from app.rag import answer as ask_answer
 from app.rag import number_guard
+from app.rag import search as ask_search
 from app.rag import service as ask_service
 from tests.fixtures.im009 import replay_ollama
 from tests.scenarios.conftest import TARGET_URL, auth
@@ -179,7 +181,7 @@ def test_UC_060_S02_집계_질문(target, s0, llm):
     scripted = llm({"route": "AGGREGATE", "measure": "issue_count", "template": "STAT_CARD"}, "일반 이슈는 모두 9건입니다.")
     events = _ask(target, s0, "TD-ACC-C1", "일반 이슈가 몇 건이야", [s0.ids["TD-PRJ-1"]])
     text, done = _text(events), _done(events)
-    assert done["finishReason"] != "NUMBER_GUARD", f"9건이 집계(현재 결함 포함 11건, DEC-02)와 어긋나 막혔다: {text}"
+    assert done["finishReason"] != "NUMBER_GUARD", f"9건이 집계(일반 이슈, 결함 제외)와 어긋나 막혔다: {text}"
     assert "9건" in text, text
     assert "infographic" not in [e for e, _ in events]
     assert scripted.stream_calls == 1
@@ -201,7 +203,7 @@ def test_UC_060_S04_근거_부족(target, s0, llm):
 def test_UC_060_S05a_주입_차단(target, s0, llm):
     """가짜 모델이 「이슈는 977건」 출력 → 그 문장 미출력·미저장, 종료 사유 수치 검문 (AC-060-4)."""
     with tx() as cur:
-        n = fetch_one(cur, "select count(*) as n from issue where project_id = %s", (s0.ids["TD-PRJ-1"],))["n"]
+        n = fetch_one(cur, "select count(*) as n from issue where project_id = %s and issue_kind = 'GENERAL'", (s0.ids["TD-PRJ-1"],))["n"]
     scripted = llm({"route": "AGGREGATE", "measure": "issue_count", "template": "STAT_CARD"}, f"현재 이슈는 모두 {n}건입니다. 그중 977건이 지연입니다. 확인해 보십시오.")
     conv = _conversation(target, s0, "TD-ACC-C1", [s0.ids["TD-PRJ-1"]]).json()
     with target.stream("POST", f"/api/conversations/{conv['id']}/messages", json={"question": "이슈 건수는?", "projectScope": []}, headers={**auth(s0.tokens["TD-ACC-C1"]), "Accept": "text/event-stream"}) as res:
@@ -285,7 +287,7 @@ def test_UC_060_S10_모델_장애(target, s0, llm, cached, kind):
     model_text = "모델이 지어낸 문장입니다." if kind == "aggregate" else "사업 기간은 9개월입니다[1]."
     with tx() as cur:
         cur.execute("delete from route_cache where question = %s", (question,))
-        expected = cur.execute("select count(*) as n from issue where project_id = %s", (s0.ids["TD-PRJ-1"],)).fetchone()["n"]
+        expected = cur.execute("select count(*) as n from issue where project_id = %s and issue_kind = 'GENERAL'", (s0.ids["TD-PRJ-1"],)).fetchone()["n"]
     if cached:
         # 모델이 살아 있을 때 한 번 답해 판정을 캐시에 남긴다(운영 상태)
         alive = llm(route, model_text if kind == "document" else "일반 이슈 건수를 알려 드립니다.")
@@ -368,9 +370,17 @@ def _sow_source(sources: list[dict], phrase: str) -> dict | None:
     )
 
 
-def test_UC_060_S01_문서_질문과_출처(target, s0, llm):
+def _all_evidence(monkeypatch) -> None:
+    """프로세스 안 실행은 가짜 임베딩(글자 해시)이라 근거 순서가 내용과 무관하게 정해진다. 조각
+    본문이 조금만 바뀌어도 답이 든 조각이 상위 20개 밖으로 밀린다. 출처 위치를 보는 시나리오는
+    사업 조각을 모두 근거로 넣어 순위 운에서 떼어 낸다. 원격 실행(실임베딩)에는 닿지 않는다."""
+    monkeypatch.setattr(settings, "rag_top_k", 100)
+
+
+def test_UC_060_S01_문서_질문과_출처(target, s0, llm, monkeypatch):
     """「납품 산출물은 몇 종인가」 → 22종·각주, 출처 과업지시서 2쪽, 원문 연결 (AC-060-1, IM-009 7.5)."""
     llm({"route": "DOCUMENT", "query": "납품 산출물 종"}, "납품 산출물은 22종입니다[1].")
+    _all_evidence(monkeypatch)
     events = _ask(target, s0, "TD-ACC-C1", "납품 산출물은 몇 종인가", [s0.ids["TD-PRJ-1"]])
     text, sources = _text(events), _sources(events)
     assert "22종" in text and "[1]" in text, text
@@ -390,13 +400,14 @@ def test_UC_060_S03_결합(target, s0, llm):
     text, done, start = _text(events), _done(events), events[0][1]
     assert start["routing"]["type"] == "MIXED", start["routing"]
     assert _sow_source(_sources(events), "22종") is not None
-    assert done["finishReason"] != "NUMBER_GUARD", f"9건이 집계(현재 결함 포함 11건, DEC-02)와 어긋나 막혔다: {text}"
+    assert done["finishReason"] != "NUMBER_GUARD", f"9건이 집계(일반 이슈, 결함 제외)와 어긋나 막혔다: {text}"
     assert "22종" in text and "9건" in text, text
 
 
-def test_UC_060_S13_PDF_쪽_위치(target, s0, llm):
+def test_UC_060_S13_PDF_쪽_위치(target, s0, llm, monkeypatch):
     """「사업 기간은 몇 개월인가」 → 9개월, 출처 3쪽(2쪽 아님), 연결이 TD-DOC-4 (AC-060-11·1)."""
     llm({"route": "DOCUMENT", "query": "사업 기간 개월"}, "사업 기간은 9개월입니다[1].")
+    _all_evidence(monkeypatch)
     events = _ask(target, s0, "TD-ACC-C1", "사업 기간은 몇 개월인가", [s0.ids["TD-PRJ-1"]])
     text, sources = _text(events), _sources(events)
     assert "9개월" in text, text
@@ -692,7 +703,10 @@ HWP_PARAGRAPHS = (
 
 
 def _hwp_case(target, s0, tid: str, name: str, mime: str) -> None:
-    """표 3행×4열 보존(항목·검토자·결과·비고), 문단 3개, 2쪽 (UC-070-S10·S11)."""
+    """표 3행×4열 보존(항목·검토자·결과·비고), 문단 3개, 출처 위치는 문단·표·행 (UC-070-S10·S11).
+
+    HWP·HWPX 파일에는 쪽 나눔 정보가 없다. 쪽 수·쪽 위치를 만들지 않고 실제 확보한 문단·표·행
+    위치를 출처로 낸다(DEC-21)."""
     res = _upload(target, s0, "TD-PRJ-9", s0.files[tid].read_bytes(), name, mime)
     assert res.status_code in (200, 201, 202), res.text
     did = res.json()["id"]
@@ -704,11 +718,27 @@ def _hwp_case(target, s0, tid: str, name: str, mime: str) -> None:
     assert [tuple(r) for r in rows] == list(HWP_TABLE_ROWS), rows
     missing = [p for p in HWP_PARAGRAPHS if p not in text]
     assert not missing, (missing, text[:400])
-    assert doc["pageCount"] == 2, f"쪽 수 {doc['pageCount']} (기대 2쪽)"
+    assert doc["pageCount"] is None, f"없는 쪽 수를 냈다: {doc['pageCount']}"
+    with tx() as cur:
+        rows = fetch_all(
+            cur,
+            "select c.id::text as id, c.project_id::text as project_id, p.name as project_name, "
+            "c.source_type, c.source_id::text as source_id, c.source_title, c.source_uri, "
+            "c.chunk_index, c.content, c.meta_json, 1.0 as similarity "
+            "from doc_chunk c join project p on p.id = c.project_id "
+            "where c.source_id = %s order by c.chunk_index",
+            (did,),
+        )
+    assert rows, "색인 조각이 없다"
+    # 문서 질의 출처 카드에 붙는 위치 문구를 제품 함수 그대로 만든다
+    locations = [ask_answer.location_text(ask_search._chunk(r, 0.0)) for r in rows]
+    assert not any("p." in (loc or "") for loc in locations), locations
+    # 문단 5개(머리 표기·제목·본문 3) 와 표 1개 3행이 한 조각에 든다
+    assert locations == ["문단 1~5 / 표 1 · 1~3행"], locations
 
 
 def test_UC_070_S10_HWP_표(target, s0):
-    """TD-DOC-12(HWP 5.0) → 표 3행×4열(항목·검토자·결과·비고), 문단 3개, 2쪽 (AC-070-8)."""
+    """TD-DOC-12(HWP 5.0) → 표 3행×4열(항목·검토자·결과·비고), 문단 3개, 출처 「문단 1~5 / 표 1 · 1~3행」 (AC-070-8)."""
     _hwp_case(target, s0, "TD-DOC-12", "설계검토회의록.hwp", HWP)
 
 

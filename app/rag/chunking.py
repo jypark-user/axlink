@@ -41,6 +41,12 @@ _PAGE_MARK_EMPTY = "텍스트 없음"
 # 쪽 표식을 본문 흐름 안에 잠시 끼워 두는 꼴. 조각을 나눈 뒤 읽어 내고 지운다.
 # 제어 문자는 strip 이 공백으로 보고 잘라 내서 못 쓴다. 문서에 나올 일 없는 괄호를 쓴다
 _PAGE_TOKEN = re.compile(r"⟦쪽(\d+)⟧")
+# 쪽이 없는 형식(HWP·HWPX)의 원문 위치. 추출한 문단 순번과 표 번호·표 안 행 번호를 같은
+# 방식으로 본문 흐름에 끼웠다가 위치로 옮긴다(DEC-21). 행은 머리글 행을 1행으로 센다
+_PARA_TOKEN = re.compile(r"⟦문단(\d+)⟧")
+_CELL_TOKEN = re.compile(r"⟦표(\d+)·(\d+)⟧")
+_BLOCK_TOKEN = re.compile(r"⟦(?:문단\d+|표\d+·\d+)⟧")
+_TABLE_RULE = re.compile(r"^\|(?:\s*:?-{3,}:?\s*\|)+$")
 # XLSX 추출기가 첫 열에 두는 엑셀 행 번호. 머리글이 이 이름이면 그 표의 첫 칸은 행 번호다
 _ROW_COLUMN = "행"
 _TABLE_ROW = re.compile(r"^\|\s*([^|]*?)\s*\|")
@@ -75,8 +81,14 @@ def estimate_tokens(text: str) -> int:
     return math.ceil(len(text) / _CHARS_PER_TOKEN)
 
 
-def chunk(source_type: str, title: str, body: str | None) -> list[ChunkDraft]:
-    """소스 하나를 청크 목록으로 만든다. 빈 본문이면 제목만으로 1청크."""
+def chunk(
+    source_type: str, title: str, body: str | None, *, block_positions: bool = False
+) -> list[ChunkDraft]:
+    """소스 하나를 청크 목록으로 만든다. 빈 본문이면 제목만으로 1청크.
+
+    block_positions 면 쪽 대신 문단 순번과 표·행 번호를 위치로 남긴다. 파일에 쪽 나눔 정보가
+    없는 HWP·HWPX 용이다. 없는 쪽 번호는 만들지 않는다(DEC-21).
+    """
     text = (body or "").strip()
     title = (title or "").strip()
 
@@ -92,7 +104,7 @@ def chunk(source_type: str, title: str, body: str | None) -> list[ChunkDraft]:
             if not title:
                 return []
             return [ChunkDraft(0, title, estimate_tokens(title), {"headingPath": []})]
-        sections = _split_sections(text)
+        sections = _split_sections(text, block_positions)
 
     drafts: list[ChunkDraft] = []
     page: int | None = None  # 지금까지 읽은 마지막 쪽. 다음 조각의 시작 쪽이다
@@ -120,7 +132,7 @@ def _locate(packed: str, page: int | None, numbered_rows: bool) -> tuple[str, in
     """
     where: dict = {}
     marks = [int(m) for m in _PAGE_TOKEN.findall(packed)]
-    content = _PAGE_TOKEN.sub("", packed)
+    content = _BLOCK_TOKEN.sub("", _PAGE_TOKEN.sub("", packed))
     content = "\n".join(line.rstrip() for line in content.split("\n") if line.strip())
     if marks:
         starts_on_mark = _PAGE_TOKEN.match(packed.lstrip()) is not None
@@ -131,11 +143,30 @@ def _locate(packed: str, page: int | None, numbered_rows: bool) -> tuple[str, in
         page = marks[-1]
     elif page is not None:
         where["page"] = page
+    where.update(_block_location(packed))
     if numbered_rows:
         rows = [int(n) for n in (_first_cell(line) for line in content.split("\n")) if n]
         if rows:
             where["rowStart"], where["rowEnd"] = min(rows), max(rows)
     return content, page, where
+
+
+def _block_location(packed: str) -> dict:
+    """조각에 든 문단 순번 범위와 표·행 범위. 표가 둘 이상 걸치면 행은 남기지 않는다."""
+    where: dict = {}
+    paras = [int(n) for n in _PARA_TOKEN.findall(packed)]
+    if paras:
+        where["paraStart"], where["paraEnd"] = min(paras), max(paras)
+    cells = [(int(t), int(r)) for t, r in _CELL_TOKEN.findall(packed)]
+    if cells:
+        tables = sorted({t for t, _ in cells})
+        where["table"] = tables[0]
+        if len(tables) > 1:
+            where["tableEnd"] = tables[-1]
+        else:
+            rows = [r for _, r in cells]
+            where["tableRowStart"], where["tableRowEnd"] = min(rows), max(rows)
+    return where
 
 
 def _first_cell(line: str) -> str | None:
@@ -153,11 +184,21 @@ def _has_row_numbers(section_text: str) -> bool:
     return False
 
 
-def _split_sections(text: str) -> list[tuple[list[str], str]]:
-    """표제 기준 1단계 분할. 표제를 만나면 경로를 갱신하고 새 구획을 연다."""
+def _split_sections(text: str, block_positions: bool = False) -> list[tuple[list[str], str]]:
+    """표제 기준 1단계 분할. 표제를 만나면 경로를 갱신하고 새 구획을 연다.
+
+    쪽 표식은 바로 붙이지 않고 잠시 들고 있다가, 다음 본문 줄이 표제면 새 구획 앞에, 아니면
+    지금 구획에 붙인다. 쪽 머리말에서 새 절이 시작하는 PDF 에서 표식이 앞 절 끝에 붙으면 앞 절
+    조각의 쪽이 두 쪽에 걸친다(DEF-V045). 쪽마다 되풀이되는 머리글 줄은 조각에서 뺀다.
+    """
     sections: list[tuple[list[str], str]] = []
     path: list[str] = []
     buffer: list[str] = []
+    carry: list[str] = []  # 쪽 표식과 그 뒤 머리글·빈 줄. 어느 구획에 붙일지 아직 모른다
+    lines = list(_with_page_tokens(text))
+    if block_positions:
+        lines = _with_block_tokens(lines)
+    running = _running_headers(lines)
 
     def flush(current_path: list[str]) -> None:
         content = "\n".join(buffer).strip()
@@ -165,27 +206,99 @@ def _split_sections(text: str) -> list[tuple[list[str], str]]:
             sections.append((list(current_path), content))
         buffer.clear()
 
-    for line in text.splitlines():
-        mark = _PAGE_MARK.match(line.strip())
-        if mark:
-            # 쪽 표식은 본문 흐름 안에 잠시 끼워 둔다. 조각을 나눈 뒤 위치로 옮긴다
-            rest = mark.group(2).strip()
-            buffer.append(f"⟦쪽{mark.group(1)}⟧")
-            if rest and rest != _PAGE_MARK_EMPTY:
-                buffer.append(rest)
+    for line in lines:
+        stripped = line.strip()
+        if _PAGE_TOKEN.fullmatch(stripped):
+            buffer.extend(carry)
+            carry = [stripped]
             continue
-        parsed = _parse_heading(line)
+        if carry and stripped in running:
+            # 쪽 머리글은 본문이 아니다. 조각마다 같은 줄이 붙으면 검색 점수만 흐린다
+            continue
+        if carry and not stripped:
+            carry.append(line)
+            continue
+        tag = _PARA_TOKEN.match(stripped)
+        mark = tag.group(0) if tag else ""
+        parsed = _parse_heading(stripped[len(mark):] if tag else line)
         if parsed is None:
+            buffer.extend(carry)
+            carry = []
             buffer.append(line)
             continue
         level, heading = parsed
         flush(path)
         path = path[: level - 1] + [heading]
         path = path[:_MAX_HEADING_DEPTH]
-        buffer.append(heading)  # 표제도 본문에 남긴다 — 청크만 봐도 무엇에 관한 글인지 알게
+        buffer.extend(carry)
+        carry = []
+        # 표제도 본문에 남긴다 — 청크만 봐도 무엇에 관한 글인지 알게
+        buffer.append(mark + heading)
 
+    buffer.extend(carry)
     flush(path)
     return sections or [([], text)]
+
+
+def _with_block_tokens(lines: list[str]) -> list[str]:
+    """문단 줄 앞에 문단 순번을, 표 행 끝에 표 번호·행 번호를 붙인다.
+
+    문단은 비지 않은 표 밖 줄을 추출 순서대로 센다(표제 줄도 한글에서는 문단이다). 표는 이어진
+    표 행 묶음 하나가 표 하나다. 구분선(| --- |)은 행으로 세지 않는다.
+    """
+    out: list[str] = []
+    para = table = row = 0
+    in_table = False
+    for line in lines:
+        stripped = line.strip()
+        if not stripped or _PAGE_TOKEN.fullmatch(stripped):
+            in_table = False
+            out.append(line)
+            continue
+        if stripped.startswith("|"):
+            if not in_table:
+                table, row, in_table = table + 1, 0, True
+            if _TABLE_RULE.match(stripped):
+                out.append(line)
+                continue
+            row += 1
+            out.append(f"{line.rstrip()}⟦표{table}·{row}⟧")
+            continue
+        in_table = False
+        para += 1
+        out.append(f"⟦문단{para}⟧{line}")
+    return out
+
+
+def _with_page_tokens(text: str):
+    """줄을 내되 쪽 표식 줄은 ⟦쪽N⟧ 한 줄과 같은 줄 뒤 본문으로 나눈다.
+
+    쪽 표식은 본문 흐름 안에 잠시 끼워 둔다. 조각을 나눈 뒤 위치로 옮긴다.
+    """
+    for line in text.splitlines():
+        mark = _PAGE_MARK.match(line.strip())
+        if not mark:
+            yield line
+            continue
+        yield f"⟦쪽{mark.group(1)}⟧"
+        rest = mark.group(2).strip()
+        if rest and rest != _PAGE_MARK_EMPTY:
+            yield rest
+
+
+def _running_headers(lines: list[str]) -> set[str]:
+    """쪽마다 되풀이되는 머리글. 쪽 표식 바로 뒤 첫 줄이 두 쪽 이상에서 같으면 머리글로 본다."""
+    counts: dict[str, int] = {}
+    after_mark = False
+    for line in lines:
+        stripped = line.strip()
+        if _PAGE_TOKEN.fullmatch(stripped):
+            after_mark = True
+            continue
+        if after_mark and stripped:
+            counts[stripped] = counts.get(stripped, 0) + 1
+            after_mark = False
+    return {line for line, n in counts.items() if n >= 2}
 
 
 def _parse_heading(line: str) -> tuple[int, str] | None:
@@ -217,8 +330,8 @@ def _pack(text: str) -> list[str]:
     minimum = settings.chunk_min_tokens
     overlap = int(target * settings.chunk_overlap_ratio)
 
-    sentences = _rejoin_labels(
-        [s.strip() for s in _SENTENCE_BREAK.split(text) if s and s.strip()]
+    sentences = _carry_block_tokens(
+        _rejoin_labels([s.strip() for s in _SENTENCE_BREAK.split(text) if s and s.strip()])
     )
     if not sentences:
         return []
@@ -251,6 +364,24 @@ def _pack(text: str) -> list[str]:
         chunks.append(current)
 
     return _merge_short_tail(chunks, minimum, maximum)
+
+
+def _carry_block_tokens(sentences: list[str]) -> list[str]:
+    """문단 위치 표식이 없는 문장에 앞 문장의 마지막 표식을 붙인다.
+
+    문단 하나가 여러 문장으로 갈리면 표식은 첫 문장에만 있다. 조각이 문단 가운데서 시작해도
+    그 문단 순번을 잃지 않게 한다. 표식이 없는 문서에서는 아무것도 하지 않는다.
+    """
+    out: list[str] = []
+    last = ""
+    for sentence in sentences:
+        found = _BLOCK_TOKEN.findall(sentence)
+        if found:
+            last = found[-1]
+            out.append(sentence)
+        else:
+            out.append(f"{last}{sentence}" if last else sentence)
+    return out
 
 
 def _rejoin_labels(sentences: list[str]) -> list[str]:

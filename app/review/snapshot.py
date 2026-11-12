@@ -59,6 +59,7 @@ FIELD_LABELS = {
     "issue_resolution_rate": "일반 이슈 처리율",
     "risk_resolution_rate": "위험 처리율",
     "open_risk_count": "열린 리스크",
+    "deliverable_approval_rate": "산출물 승인률",
 }
 
 METRIC_KEYS = {
@@ -90,6 +91,11 @@ def _measure(cur: Any, principal: AuthPrincipal, project_id: str, key: str) -> A
     return float(value) if value is not None else None
 
 
+def _approval_rate(cur: Any, principal: AuthPrincipal, project_id: str) -> Any:
+    dashboard_service.deliverable_approval_now(cur, project_id, clock.today())
+    return _measure(cur, principal, project_id, "deliverable_approval_rate")
+
+
 def capture(
     cur: Any, principal: AuthPrincipal, project_id: str, target_type: str, target_key: str
 ) -> tuple[str, dict[str, Any]]:
@@ -114,6 +120,9 @@ def capture(
             "submitted_at": _iso(row["submitted_at"]),
             "approved_at": _iso(row["approved_at"]),
             "file_uri": row["file_uri"],
+            # 관련 지표: 사업의 산출물 승인률(WBS 가 정한 산출물 기준, DEC-12). 지표가 읽는 산출물
+            # 연결을 먼저 지금 판정에 맞춘다(판정 상태·활동은 남기지 않는다)
+            "deliverable_approval_rate": _approval_rate(cur, principal, project_id),
         }
 
     if target_type == "ISSUE":

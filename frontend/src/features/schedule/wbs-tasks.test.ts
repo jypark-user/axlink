@@ -35,6 +35,7 @@ describe('toScheduleTasks', () => {
       deliverableStatus: 'NONE',
       deliverableRef: null,
       deliverableUrl: null,
+      gapWarning: null,
     });
     expect(scheduleStatusOf(task)).toBe('late');
   });

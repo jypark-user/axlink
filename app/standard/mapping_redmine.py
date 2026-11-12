@@ -1,7 +1,8 @@
 """Redmine 원본 → 표준 모델 매핑. 순수 함수만 둔다(DB·네트워크 없음).
 
 트래커가 갈림길이다 — 「리스크」 트래커는 risk 로, 나머지(작업·결함·지원)는 issue 로
-승격한다. 요구사항은 만들지 않는다 — 요구사항은 명세서(기준선)로만 만든다(ARC-030).
+승격한다. issue 안에서 결함 트래커(연결 설정, DEC-02)는 종류를 DEFECT 로 둔다.
+요구사항은 만들지 않는다 — 요구사항은 명세서(기준선)로만 만든다(ARC-030).
 
 상태·우선순위 이름은 인스턴스마다 다르다. is_closed 플래그를 1차 근거로 쓰고 이름은
 보조로 본다. 이름 규칙의 설정화는 SWFR.CON.002 가 mapping_rules_json 으로 뺀다.
@@ -28,6 +29,11 @@ def is_risk(payload: dict[str, Any], rules: MappingRules = _DEFAULT_RULES) -> bo
     return tracker_name(payload) == rules.risk_tracker
 
 
+def is_defect(payload: dict[str, Any], rules: MappingRules = _DEFAULT_RULES) -> bool:
+    """결함 트래커도 연결별 설정이다(DEC-02). 설정이 없으면 결함으로 가르지 않는다."""
+    return bool(rules.defect_tracker) and tracker_name(payload) == rules.defect_tracker
+
+
 def req_id(payload: dict[str, Any], rules: MappingRules = _DEFAULT_RULES) -> str | None:
     """커스텀 필드 REQ ID — 도구를 가로지르는 접착제(작업 규약 §2). 추적관계의 재료다.
     업체가 필드를 뭐라 부르는지는 연결별 설정이다(SWFR.CON.002)."""
@@ -52,9 +58,12 @@ def _url(base_url: str, payload: dict[str, Any]) -> str:
     return f"{(base_url or '').rstrip('/')}/issues/{payload.get('id')}"
 
 
-def to_issue(payload: dict[str, Any], base_url: str) -> dict[str, Any]:
+def to_issue(
+    payload: dict[str, Any], base_url: str, rules: MappingRules = _DEFAULT_RULES
+) -> dict[str, Any]:
     status = _status(payload)
     return {
+        "issue_kind": "DEFECT" if is_defect(payload, rules) else "GENERAL",
         "issue_key": f"RM-{payload.get('id')}",
         "title": (payload.get("subject") or "").strip()[:500],
         "body": payload.get("description") or "",

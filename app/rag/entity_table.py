@@ -42,6 +42,12 @@ class EntitySpec:
     order_note: str | None = None
 
 
+# 이행률 범위(DEC-11). app.standard.repository.in_rate_scope 와 같은 조건이다. 확정 전이면 전부 든다
+_IN_SCOPE = (
+    "(e.baseline_id is not null or not exists (select 1 from requirement_baseline rb "
+    "where rb.project_id = e.project_id and rb.status = 'CONFIRMED'))"
+)
+
 ENTITIES: dict[str, EntitySpec] = {
     "ISSUE": EntitySpec(
         key="ISSUE",
@@ -95,8 +101,12 @@ ENTITIES: dict[str, EntitySpec] = {
                 "and c.tool = 'GITHUB') "
                 "then '출처 이슈 닫힘(구현 확인 아님)' else e.status end",
             ),
+            # 확정 명세서에 없는 기존 요구사항은 지우지 않고 구분해 보인다(DEC-11 (a)).
+            # 이행률 분모에도 들지 않는다
+            ("scope", "범위", f"case when {_IN_SCOPE} then '확정 목록' "
+                             "else '확정 명세서에 없음(이행률 제외)' end"),
         ),
-        order_by="e.code nulls last, e.created_at",
+        order_by=f"({_IN_SCOPE}) desc, e.code nulls last, e.created_at",
         open_clause="e.status not in ('VERIFIED', 'ACCEPTED')",
         closed_clause="e.status in ('VERIFIED', 'ACCEPTED')",
         url_expr="e.external_url",

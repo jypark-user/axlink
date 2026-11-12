@@ -74,6 +74,29 @@ def project_progress(
     return compute(cur, project_id, at or clock.today())
 
 
+def _issue_note(issue_total: int, defect_mapped: bool) -> str:
+    """일반 이슈 해결률의 범위. 결함 매핑이 없으면 결함을 가르지 못한 것까지 적는다(DEC-02)."""
+    if not issue_total:
+        return "연동된 일반 이슈가 없습니다"
+    if defect_mapped:
+        return "리스크·결함·예전에 요구사항으로 만든 이슈 제외"
+    return (
+        "리스크·예전에 요구사항으로 만든 이슈 제외. 결함 매핑이 없어 수집한 이슈 전부를 "
+        "일반 이슈로 셉니다"
+    )
+
+
+def _defect_note(defect_total: int, defect_mapped: bool) -> str | None:
+    if not defect_mapped:
+        return (
+            "산출 불가: 연결 설정에 결함 트래커(Redmine)·결함 라벨(GitHub)이 없어 결함을 "
+            "가를 수 없습니다"
+        )
+    if not defect_total:
+        return "산출 불가: 결함으로 분류된 이슈가 없습니다"
+    return "결함 트래커·결함 라벨로 분류한 이슈만 셉니다. 일반 이슈에는 들지 않습니다"
+
+
 def compute(cur: Any, project_id: str, at: date) -> ProgressResponse:
     """접근 검사 없는 산정. 화면(위)과 일별 스냅샷이 같은 함수를 쓴다."""
     warnings: list[str] = []
@@ -86,18 +109,18 @@ def compute(cur: Any, project_id: str, at: date) -> ProgressResponse:
         warnings.extend(wbs_progress.warnings)
 
     issue_done, issue_total = repository.issue_resolution(cur, project_id)
+    defect_mapped = repository.defect_mapped(cur, project_id)
+    defect_done, defect_total = repository.defect_resolution(cur, project_id)
     product_done, product_total = repository.work_product_submission(cur, project_id)
 
     wbs_measure = ProgressMeasure(
         value=None if wbs_progress is None else wbs_progress.actual,
         numerator=None,
         denominator=None if wbs_progress is None else wbs_progress.leaf_count,
-        label="WBS 기반 진척률",
+        label="WBS 기반 진척률" + (" (추정)" if wbs_progress and wbs_progress.estimated else ""),
         unit="말단 작업 가중합",
         kind=SELF_REPORTED,
-        note=None
-        if wbs_progress is not None
-        else "WBS 파일이 수집되지 않았다. 저장소에 커밋하면 자동으로 잡힌다",
+        note=_wbs_note(wbs_progress),
     )
     issue_measure = ProgressMeasure(
         value=_ratio(issue_done, issue_total),
@@ -106,8 +129,17 @@ def compute(cur: Any, project_id: str, at: date) -> ProgressResponse:
         label="일반 이슈 해결률",
         unit="건",
         kind=OBSERVED,
-        # 명세서 전에 이슈로 만든 요구사항의 출처 이슈는 분모에 없다. 범위를 같이 보인다
-        note="예전에 요구사항으로 만든 이슈 제외" if issue_total else "연동된 일반 이슈가 없습니다",
+        # 출처 이슈(예전에 요구사항으로 만든 이슈)와 리스크·결함은 분모에 없다. 범위를 같이 보인다
+        note=_issue_note(issue_total, defect_mapped),
+    )
+    defect_measure = ProgressMeasure(
+        value=_ratio(defect_done, defect_total) if defect_mapped else None,
+        numerator=defect_done if defect_mapped else None,
+        denominator=defect_total if defect_mapped else None,
+        label="결함 처리율",
+        unit="건",
+        kind=OBSERVED,
+        note=_defect_note(defect_total, defect_mapped),
     )
     product_measure = ProgressMeasure(
         value=_ratio(product_done, product_total),
@@ -122,8 +154,16 @@ def compute(cur: Any, project_id: str, at: date) -> ProgressResponse:
     level, basis, representative = _representative(
         wbs_progress, issue_measure, product_measure
     )
+    note = _basis_note(level, wbs_progress, issue_measure, product_measure)
+    if level != "L1" or representative is None:
+        # 대표값이 WBS 실적이 아니거나 산출 불가다. 경고 줄에도 같은 문장을 둔다(DEF-V037)
+        warnings.append(note)
     shown_row = _shown_plan_row(cur, project_id, plan_row) if wbs_progress else plan_row
     warnings.extend(_gap_warnings(wbs_progress, issue_measure, product_measure))
+    achieved, evaluated = repository.schedule_compliance(cur, [project_id], at).get(
+        project_id, (0, 0)
+    )
+    approved, defined = deliverable_approval_now(cur, project_id, at)
 
     return ProgressResponse(
         baseDate=at.isoformat(),
@@ -137,11 +177,129 @@ def compute(cur: Any, project_id: str, at: date) -> ProgressResponse:
         wbsDeclaredPlanned=None if wbs_progress is None else wbs_progress.declared_planned,
         issue=issue_measure,
         workProduct=product_measure,
+        defect=defect_measure,
         behind=[] if wbs_progress is None else wbs_progress.behind,
         warnings=warnings,
         planVersion=None if shown_row is None else shown_row["version"],
         planUpdatedAt=None if shown_row is None else shown_row["updated_at"].isoformat(),
+        estimated=level != "L1" and representative is not None,
+        basisNote=note,
+        scheduleCompliance=schedule_compliance_measure(achieved, evaluated),
+        deliverableApproval=deliverable_approval_measure(approved, defined),
     )
+
+
+SCHEDULE_COMPLIANCE_BASIS = (
+    "기한이 기준일보다 앞선 마일스톤 중 기한 안에 닫힌 비율. 기한 없는 마일스톤과 기한 전 "
+    "마일스톤은 세지 않는다"
+)
+DELIVERABLE_APPROVAL_BASIS = "WBS 가 정한 산출물 중 현행 버전이 승인된 비율"
+
+
+def schedule_compliance_measure(achieved: int, evaluated: int) -> ProgressMeasure:
+    """일정 준수율(DEC-01). 계획선 편차와 다른 지표다. 평가 대상이 없으면 산출 불가."""
+    return ProgressMeasure(
+        value=_ratio(achieved, evaluated),
+        numerator=achieved,
+        denominator=evaluated,
+        label="일정 준수율",
+        unit="마일스톤",
+        kind=OBSERVED,
+        note=SCHEDULE_COMPLIANCE_BASIS
+        if evaluated
+        else "산출 불가: 기한이 지난 마일스톤이 없습니다",
+    )
+
+
+def deliverable_approval_measure(approved: int, defined: int) -> ProgressMeasure:
+    """산출물 승인률(DEC-12). 분모는 WBS 가 정한 산출물이다. WBS 가 없으면 산출 불가."""
+    return ProgressMeasure(
+        value=_ratio(approved, defined),
+        numerator=approved,
+        denominator=defined,
+        label="산출물 승인률",
+        unit="건",
+        kind=OBSERVED,
+        note=DELIVERABLE_APPROVAL_BASIS
+        if defined
+        else "산출 불가: WBS 가 정한 산출물이 없습니다",
+    )
+
+
+def deliverable_approval_now(cur: Any, project_id: str, at: date) -> tuple[int, int]:
+    """산출물 승인 수(DEC-12): (현행 버전이 승인된 수, WBS 가 정한 산출물 수). 읽기만 한다.
+
+    판정을 지금 다시 해서(저장하지 않음) 문서를 붙이거나 산출물을 확정한 직후에도 맞는다.
+    진척 산정은 스냅샷·확인 요청 상태 뜨기에도 쓰이므로 판정 저장·활동 기록을 남기면 안 된다.
+    분모·분자 조건은 시맨틱 지표 deliverable_approval_rate(V64)와 같다. 지표는 일정·산출물 화면이
+    남긴 판정(wbs_item.deliverable_product_id)을 읽는다.
+    """
+    check = judge_deliverables(cur, project_id, at)
+    leaves = {
+        i["wbs_id"] for i in check.items
+        if i.get("weight") is not None and (i.get("deliverable") or "").strip()
+    }
+    judged = [j for j in check.judgements if j.wbs_id in leaves]
+    status = repository.current_status_by_product(
+        cur, [j.product_id for j in judged if j.product_id]
+    )
+    approved = sum(1 for j in judged if j.product_id and status.get(j.product_id) == "APPROVED")
+    # 시맨틱 지표가 같은 값을 내도록 맞춘 산출물 항목만 행에 맞춰 둔다. 판정 상태·판정 시각·활동
+    # 기록은 건드리지 않는다(그것은 일정·산출물 화면이 남긴다). 바뀐 것이 없으면 쓰지 않는다
+    wbs_repository.save_product_links(cur, project_id, [(j.wbs_id, j.product_id) for j in judged])
+    return approved, len(leaves)
+
+
+def _wbs_note(wbs_progress: wbs.WbsProgress | None) -> str | None:
+    if wbs_progress is None:
+        return "WBS 파일이 수집되지 않았다. 저장소에 커밋하면 자동으로 잡힌다"
+    if wbs_progress.unavailable:
+        return "산출 불가: " + " / ".join(wbs_progress.unavailable)
+    if wbs_progress.estimated:
+        return "추정: 가중치 미지정, 계획 기간 비례 가중치 × 파일 실적"
+    return None
+
+
+def _basis_note(
+    level: str,
+    wbs_progress: wbs.WbsProgress | None,
+    issue: ProgressMeasure,
+    product: ProgressMeasure,
+) -> str:
+    """대표값의 산출 근거 한 문장. 값은 넣지 않는다(분자·분모 건수만). 수치는 응답 필드가 낸다."""
+    if level == "L1":
+        assert wbs_progress is not None
+        if wbs_progress.unavailable:
+            return "산출 불가: " + " / ".join(wbs_progress.unavailable)
+        return (
+            f"WBS 말단 작업 {wbs_progress.leaf_count}건의 가중치 × 실적 합입니다. "
+            "실적은 용역사가 계획서에 적은 값입니다."
+        )
+    if level == "L2":
+        assert wbs_progress is not None
+        if wbs_progress.unavailable:
+            return (
+                "산출 불가: WBS 에 가중치가 없어 계획 기간 비례로 추정해야 하는데 재료가 "
+                "모자랍니다. " + " / ".join(wbs_progress.unavailable)
+            )
+        return (
+            f"추정: WBS 에 가중치가 없어 말단 작업 {wbs_progress.leaf_count}건의 계획 기간"
+            "(시작일~종료일)에 비례한 가중치 × 파일의 실적으로 산정했습니다. 산출물 제출 여부로 "
+            "실적을 대신하지 않습니다."
+        )
+    if level == "L3":
+        return (
+            f"추정: WBS 가 없어 일반 이슈 해결률(해결 {issue.numerator} / 전체 "
+            f"{issue.denominator}건)로 산정했습니다. WBS 실적 기준(L1)이 아닙니다. WBS 를 "
+            "등록하면 작업 단위 진척률과 실적 대조가 됩니다."
+        )
+    if level == "L4":
+        return (
+            f"추정: WBS 와 이슈가 없어 산출물 제출률(제출 {product.numerator} / 적용 대상 "
+            f"{product.denominator}건)로 산정했습니다. WBS 실적 기준(L1)이 아닙니다. WBS 를 "
+            "등록하면 산출됩니다."
+        )
+    return "산출 불가: WBS·이슈 진척·산출물 제출본이 없어 진척률을 산정할 근거가 없습니다."
 
 
 # ---------------------------------------------------------------- 일정 (WBS)
@@ -177,6 +335,8 @@ def schedule(cur: Any, project_id: str, at: date) -> WbsScheduleResponse:
         plan_row = _shown_plan_row(cur, project_id, plan_row) or plan_row
         judged = refresh_deliverables(cur, project_id, at)
         counts = deliverable.summarize(list(judged.values()))
+        items = _items_from_plan(plan, at, judged, linked_issues(cur, project_id, plan))
+        gaps = [f"격차 경고: {i.wbsId} {i.name} — {i.gapWarning}" for i in items if i.gapWarning]
         return WbsScheduleResponse(
             source=WBS_SOURCE_FILE,
             sourceLabel=f"용역사 WBS ({plan_row.get('file_uri') or '사업수행계획서'})",
@@ -184,8 +344,8 @@ def schedule(cur: Any, project_id: str, at: date) -> WbsScheduleResponse:
             baseDate=at.isoformat(),
             planVersion=plan_row["version"],
             planUpdatedAt=plan_row["updated_at"].isoformat(),
-            items=_items_from_plan(plan, at, judged, linked_issues(cur, project_id, plan)),
-            warnings=[*warnings, *plan.warnings],
+            items=items,
+            warnings=[*warnings, *plan.warnings, *gaps],
             notice=None,
             deliverables=DeliverableSummary(
                 submitted=counts[deliverable.SUBMITTED],
@@ -585,7 +745,7 @@ def _items_from_plan(
         prefix = group.wbs_id.rstrip(".") + "."
         under = [r for r in leaves if r.wbs_id.startswith(prefix)]
         total = sum(r.weight for r in under)
-        actual = sum(r.weight * r.actual for r in under) / total if total else 0.0
+        actual = sum(r.weight * (r.actual or 0.0) for r in under) / total if total else 0.0
         planned = sum(r.weight * r.planned_at(at) for r in under) / total if total else 0.0
         start = group.start or min((r.start for r in under if r.start), default=None)
         end = group.end or max((r.end for r in under if r.end), default=None)
@@ -606,6 +766,7 @@ def _items_from_plan(
         )
     for row in leaves:
         j = judged.get(row.wbs_id)
+        issues = (linked or {}).get(row.wbs_id, [])
         items.append(
             WbsItemResponse(
                 wbsId=row.wbs_id,
@@ -616,18 +777,39 @@ def _items_from_plan(
                 startDate=row.start.isoformat() if row.start else None,
                 endDate=row.end.isoformat() if row.end else None,
                 weight=row.weight,
-                progress=_pct(row.actual),
+                progress=_pct(row.actual or 0.0),
                 planned=_pct(row.planned_at(at)),
                 externalUrl=None,
                 deliverableStatus=j.status if j else deliverable.NONE,
                 deliverableRule=j.rule if j else None,
                 deliverableRef=j.ref if j else None,
                 deliverableUrl=j.url if j else None,
-                linkedIssues=(linked or {}).get(row.wbs_id, []),
+                linkedIssues=issues,
+                gapWarning=gap_warning(row.actual, j.status if j else deliverable.NONE, issues),
             )
         )
     items.sort(key=lambda i: _sort_key(i.wbsId))
     return items
+
+
+# 작업 단위 격차 경고 문턱(DEC-20 = ARC-016 4절). 진행 중 작업마다 경고가 뜨면 소음이 된다
+GAP_ACTUAL_THRESHOLD = 0.8
+_OPEN_ISSUE = ("OPEN", "IN_PROGRESS")
+
+
+def gap_warning(actual: float | None, status: str, issues: list[LinkedIssue]) -> str | None:
+    """실적이 80 이상인데 산출물이 미제출(지연 포함)이거나 열린 연결 이슈가 있으면 한 줄."""
+    if actual is None or actual + 1e-9 < GAP_ACTUAL_THRESHOLD:
+        return None
+    reasons: list[str] = []
+    if status in (deliverable.MISSING, deliverable.OVERDUE):
+        reasons.append("산출물 미제출")
+    still_open = [i.key or i.title for i in issues if i.status in _OPEN_ISSUE]
+    if still_open:
+        reasons.append(f"열린 연결 이슈 {', '.join(still_open)}")
+    if not reasons:
+        return None
+    return f"실적 {_pct(actual)}% 신고, " + " · ".join(reasons)
 
 
 def _items_from_redmine(issues: list[dict[str, Any]], at: date) -> list[WbsItemResponse]:
@@ -733,8 +915,14 @@ def _representative(
     issue: ProgressMeasure,
     product: ProgressMeasure,
 ) -> tuple[str, str, float | None]:
-    """L1~L4 저하. 위에서부터 성립하는 첫 수준을 쓴다 (진척률-산정체계 §1)."""
+    """L1~L4 저하. 위에서부터 성립하는 첫 수준을 쓴다 (진척률-산정체계 §1).
+
+    WBS 가 있으면 값을 못 내도 아래로 내려가지 않는다. 가중치가 없으면 기간 비례 추정(L2)이고,
+    기간·실적이 모자라면 대표값 없음이다(DEC-19). 이슈·산출물로 WBS 실적을 대신하지 않는다.
+    """
     if wbs_progress is not None:
+        if wbs_progress.estimated:
+            return "L2", "WBS_ESTIMATED", wbs_progress.actual
         return "L1", "WBS", wbs_progress.actual
     if issue.denominator:
         return "L3", "ISSUE", issue.value
@@ -759,7 +947,7 @@ def _gap_warnings(
     product: ProgressMeasure,
 ) -> list[str]:
     """자기신고가 관측을 크게 앞서면 짚는다. 판정하지 않고 확인할 지점만 알린다."""
-    if wbs_progress is None:
+    if wbs_progress is None or wbs_progress.actual is None:
         return []
     out: list[str] = []
     for measure in (issue, product):

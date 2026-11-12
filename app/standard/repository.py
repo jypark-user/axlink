@@ -62,11 +62,13 @@ def upsert_issue(
         insert into issue
           (project_id, issue_key, title, body, status, severity, assignee,
            source_created_at, source_updated_at, resolved_at,
-           tool_connection_id, external_id, external_url, source_kind, source_priority)
-        values (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, 'TOOL', %s)
+           tool_connection_id, external_id, external_url, source_kind, source_priority,
+           issue_kind)
+        values (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, 'TOOL', %s, %s)
         {_SOURCE_CONFLICT}
         do update set
            issue_key = excluded.issue_key, title = excluded.title, body = excluded.body,
+           issue_kind = excluded.issue_kind,
            status = excluded.status, severity = excluded.severity,
            source_priority = excluded.source_priority,
            assignee = excluded.assignee,
@@ -81,6 +83,7 @@ def upsert_issue(
             rec["severity"], rec["assignee"], rec["source_created_at"],
             rec["source_updated_at"], rec["resolved_at"],
             connection_id, external_id, rec["external_url"], rec.get("source_priority"),
+            rec.get("issue_kind", "GENERAL"),
         ),
     )
     return str(row["id"])
@@ -525,6 +528,17 @@ _REQUIREMENT_FROM = """
 """
 
 VERIFIED_STATUSES = ("VERIFIED", "ACCEPTED")
+
+
+def in_rate_scope(alias: str = "r") -> str:
+    """이행률 분모에 드는 요구사항(DEC-11 (a)). 요구사항 목록을 확정한 사업이면 확정 목록에 든 것만,
+    아직 확정 전이면 전부다. 시맨틱 지표 requirement_fulfillment_rate 의 row_filter(V64)와 같다."""
+    return (
+        f"({alias}.baseline_id is not null or not exists (select 1 from requirement_baseline rb "
+        f"where rb.project_id = {alias}.project_id and rb.status = 'CONFIRMED'))"
+    )
+
+
 REQUIREMENT_STATUSES = ("DEFINED", "DESIGNED", "IMPLEMENTED", "VERIFIED", "ACCEPTED", "REJECTED")
 
 
@@ -584,6 +598,9 @@ def requirement_summary(cur: Any, project_id: str) -> dict[str, Any]:
         f"""
         select count(*) as total,
                count(*) filter (where r.status in ('VERIFIED', 'ACCEPTED')) as verified,
+               count(*) filter (where {in_rate_scope()}) as rate_total,
+               count(*) filter (where r.status in ('VERIFIED', 'ACCEPTED')
+                                  and {in_rate_scope()}) as rate_verified,
                count(*) filter (where r.decided_status is not null) as decided,
                -- mapping.requirement_status_basis 와 같은 규칙. GitHub 닫힘이 만든 IMPLEMENTED
                count(*) filter (where r.status = 'IMPLEMENTED' and c.tool = 'GITHUB')
@@ -616,6 +633,8 @@ def requirement_summary(cur: Any, project_id: str) -> dict[str, Any]:
     return {
         "total": int(totals["total"]),
         "verified": int(totals["verified"]),
+        "rate_total": int(totals["rate_total"]),
+        "rate_verified": int(totals["rate_verified"]),
         "decided": int(totals["decided"]),
         "implemented_from_source_closed": int(totals["implemented_from_source_closed"]),
         "by_status": {r["status"]: int(r["n"]) for r in by_status},
@@ -662,7 +681,7 @@ def create_checklist(cur: Any, project_id: str) -> int:
 
 
 _ISSUE_COLUMNS = """
-    i.id, i.project_id, i.issue_key, i.title, i.status, i.severity, i.assignee,
+    i.id, i.project_id, i.issue_key, i.title, i.status, i.severity, i.assignee, i.issue_kind,
     i.resolved_at, i.source_updated_at, i.updated_at, i.source_priority,
     i.tool_connection_id, i.external_id, i.external_url, i.source_kind,
     c.tool as tool_name, c.name as connection_name, c.target_resource,
@@ -679,10 +698,18 @@ _ISSUE_FROM = """
 """
 
 
+# 이슈 화면의 종류 고르기(DEC-02). 전체 이슈(결함 포함) = 일반 이슈(결함 제외) + 결함
+ISSUE_KINDS = ("GENERAL", "DEFECT", "ALL")
+
+
 def _issue_filter(
-    q: str | None, status: str | None, connection_id: str | None = None
+    q: str | None, status: str | None, connection_id: str | None = None,
+    kind: str = "GENERAL",
 ) -> tuple[str, list[Any]]:
     where, params = "", []
+    if kind != "ALL":
+        where += " and i.issue_kind = %s"
+        params.append(kind)
     if q and q.strip():
         like = f"%{q.strip()}%"
         where += " and (i.issue_key ilike %s or i.title ilike %s)"
@@ -699,9 +726,9 @@ def _issue_filter(
 
 def count_issues(
     cur: Any, project_id: str, q: str | None, status: str | None,
-    connection_id: str | None = None,
+    connection_id: str | None = None, kind: str = "GENERAL",
 ) -> int:
-    where, params = _issue_filter(q, status, connection_id)
+    where, params = _issue_filter(q, status, connection_id, kind)
     row = fetch_one(
         cur,
         f"select count(*) as n from issue i where i.project_id = %s {where}",
@@ -715,9 +742,12 @@ HEAVY_SEVERITIES = ("BLOCKER", "CRITICAL", "MAJOR")
 
 
 def issue_summary(
-    cur: Any, project_id: str, connection_id: str | None = None
+    cur: Any, project_id: str, connection_id: str | None = None, kind: str = "GENERAL"
 ) -> dict[str, int]:
-    """이슈 화면 카드 숫자. 목록과 같은 테이블·같은 사업 조건이고 페이지와 무관하다."""
+    """이슈 화면 카드 숫자. 목록과 같은 테이블·같은 사업 조건이고 페이지와 무관하다.
+
+    kind 로 일반 이슈·결함·전체 가운데 하나를 센다. 셋을 한 번에 더하지 않는다.
+    """
     row = fetch_one(
         cur,
         """
@@ -733,14 +763,41 @@ def issue_summary(
           from issue
          where project_id = %s
            and (%s::uuid is null or tool_connection_id = %s::uuid)
+           and (%s = 'ALL' or issue_kind = %s)
         """,
-        (list(HEAVY_SEVERITIES), project_id, connection_id, connection_id),
+        (list(HEAVY_SEVERITIES), project_id, connection_id, connection_id, kind, kind),
     )
     keys = ("total", "open", "closed", "heavy_open", "unassigned_open", "unspecified_open")
     return {k: int(row[k]) for k in keys}
 
 
-def issue_sources(cur: Any, project_id: str) -> list[dict[str, Any]]:
+def issue_kind_counts(
+    cur: Any, project_id: str, connection_id: str | None = None
+) -> dict[str, int]:
+    """종류별 건수(DEC-02). 전체(결함 포함)·일반(결함 제외)·결함을 각각 센다.
+
+    전체는 따로 센 값이다. 화면이 일반 + 결함을 더해 만들지 않게 서버가 낸다.
+    """
+    row = fetch_one(
+        cur,
+        """
+        select count(*) as all_total,
+               count(*) filter (where issue_kind = 'GENERAL') as general_total,
+               count(*) filter (where issue_kind = 'DEFECT') as defect_total,
+               count(*) filter (where issue_kind = 'DEFECT'
+                                  and status in ('OPEN', 'IN_PROGRESS')) as defect_open,
+               count(*) filter (where issue_kind = 'DEFECT'
+                                  and status in ('RESOLVED', 'CLOSED')) as defect_closed
+          from issue
+         where project_id = %s
+           and (%s::uuid is null or tool_connection_id = %s::uuid)
+        """,
+        (project_id, connection_id, connection_id),
+    )
+    return {k: int(v) for k, v in row.items()}
+
+
+def issue_sources(cur: Any, project_id: str, kind: str = "GENERAL") -> list[dict[str, Any]]:
     """이슈 화면의 연결 고르기. 사업에 붙은 연결과 연결별 이슈 수다.
 
     이슈가 없는 연결도 낸다. 고를 수 있어야 "이 연결에서는 0건" 을 확인한다.
@@ -753,29 +810,31 @@ def issue_sources(cur: Any, project_id: str) -> list[dict[str, Any]]:
                count(i.id) as n
           from tool_connection c
           left join issue i on i.tool_connection_id = c.id and i.project_id = c.project_id
+                           and (%s = 'ALL' or i.issue_kind = %s)
          where c.project_id = %s
          group by c.id
         union all
         select null, null, null, null, count(*)
           from issue
          where project_id = %s and tool_connection_id is null
+           and (%s = 'ALL' or issue_kind = %s)
         having count(*) > 0
          order by 2 nulls last, 3
         """,
-        (project_id, project_id),
+        (kind, kind, project_id, project_id, kind, kind),
     )
 
 
 def search_issues(
     cur: Any, project_id: str, q: str | None, status: str | None, page: PageQuery,
-    connection_id: str | None = None,
+    connection_id: str | None = None, kind: str = "GENERAL",
 ) -> list[dict[str, Any]]:
     """열린 것이 위로, 그 안에서는 원천에서 최근 움직인 순서다. 감독이 볼 순서가 그렇다.
 
     끝의 id 는 동점 정리다. 한 번에 승격된 행은 시각이 같아서, 이게 없으면 쪽을 넘길 때
     같은 행이 두 번 나오고 어떤 행은 한 번도 안 나온다.
     """
-    where, params = _issue_filter(q, status, connection_id)
+    where, params = _issue_filter(q, status, connection_id, kind)
     return fetch_all(
         cur,
         f"""

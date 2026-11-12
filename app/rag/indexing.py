@@ -27,6 +27,8 @@ class IndexSource:
     title: str
     body: str | None = None
     uri: str | None = None
+    # 쪽 대신 문단·표·행 번호를 원문 위치로 남긴다(HWP·HWPX, DEC-21)
+    block_positions: bool = False
 
 
 def verify_dimension(cur: Any, port: EmbeddingPort) -> None:
@@ -77,7 +79,9 @@ def prepare(
     result = IndexResult()
     plan: list[tuple[IndexSource, list[chunking.ChunkDraft]]] = []
     for source in sources:
-        drafts = chunking.chunk(source.source_type, source.title, source.body)
+        drafts = chunking.chunk(
+            source.source_type, source.title, source.body, block_positions=source.block_positions
+        )
         if drafts:
             plan.append((source, drafts))
     if plan:

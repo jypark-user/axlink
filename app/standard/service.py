@@ -32,6 +32,7 @@ from app.standard import (
 )
 from app.standard.mapping_rules import MappingRules
 from app.standard.models import (
+    IssueKindCounts,
     IssueMilestone,
     IssueRelation,
     IssueResponse,
@@ -84,7 +85,7 @@ def promote_connection(cur: Any, connection: dict[str, Any], port: EmbeddingPort
                 )
                 target = "REQUIREMENT"
             else:
-                rec = mapping.to_issue(payload)
+                rec = mapping.to_issue(payload, rules)
                 row_id = repository.upsert_issue(cur, project_id, connection_id, external_id, rec)
                 milestone_links.append((row_id, mapping.milestone_number(payload)))
                 target = "ISSUE"
@@ -175,7 +176,7 @@ def _promote_redmine(
             target = "RISK"
             # 리스크는 색인하지 않는다 — 색인 대상은 requirement 와 issue 다(모듈 머리말)
         else:
-            rec = mapping_redmine.to_issue(payload, base_url)
+            rec = mapping_redmine.to_issue(payload, base_url, rules)
             row_id = repository.upsert_issue(cur, project_id, connection_id, external_id, rec)
             milestone_links.append((row_id, mapping_redmine.version_number(payload)))
             target = "ISSUE"
@@ -332,12 +333,48 @@ def _check_project(cur: Any, principal: AuthPrincipal, project_id: str) -> None:
         raise errors.project_access_denied()
 
 
+def _issue_kind(kind: str | None) -> str:
+    kind = (kind or "GENERAL").upper()
+    if kind not in repository.ISSUE_KINDS:
+        raise errors.validation_failed("kind 는 GENERAL·DEFECT·ALL 중 하나여야 합니다.")
+    return kind
+
+
+def _kind_counts(cur: Any, project_id: str, connection_id: str | None) -> IssueKindCounts:
+    from app.dashboard import repository as dashboard_repo  # 순환 import 를 피한다
+
+    n = repository.issue_kind_counts(cur, project_id, connection_id)
+    mapped = dashboard_repo.defect_mapped(cur, project_id)
+    if not mapped:
+        rate, note = None, (
+            "산출 불가: 연결 설정에 결함 트래커(Redmine)·결함 라벨(GitHub)이 없어 결함을 가를 수 "
+            "없습니다. 수집한 이슈 전부를 일반 이슈로 셉니다"
+        )
+    elif not n["defect_total"]:
+        rate, note = None, "산출 불가: 결함으로 분류된 이슈가 없습니다"
+    else:
+        rate = round(n["defect_closed"] / n["defect_total"], 4)
+        note = "결함 처리율 = 해결·종료 결함 ÷ 전체 결함"
+    return IssueKindCounts(
+        allTotal=n["all_total"],
+        generalTotal=n["general_total"],
+        defectTotal=n["defect_total"],
+        defectOpen=n["defect_open"],
+        defectClosed=n["defect_closed"],
+        defectMapped=mapped,
+        defectRate=rate,
+        defectNote=note,
+    )
+
+
 def issue_summary(
-    cur: Any, principal: AuthPrincipal, project_id: str, connection_id: str | None = None
+    cur: Any, principal: AuthPrincipal, project_id: str, connection_id: str | None = None,
+    kind: str | None = None,
 ) -> IssueSummaryResponse:
     """이슈 화면 카드. 목록(list_issues)과 같은 권한 검사, 같은 사업 범위다."""
     _check_project(cur, principal, project_id)
-    n = repository.issue_summary(cur, project_id, connection_id)
+    kind = _issue_kind(kind)
+    n = repository.issue_summary(cur, project_id, connection_id, kind)
     return IssueSummaryResponse(
         total=n["total"],
         open=n["open"],
@@ -353,8 +390,10 @@ def issue_summary(
                 target=r["target_resource"],
                 count=int(r["n"]),
             )
-            for r in repository.issue_sources(cur, project_id)
+            for r in repository.issue_sources(cur, project_id, kind)
         ],
+        kind=kind,
+        kinds=_kind_counts(cur, project_id, connection_id),
     )
 
 
@@ -366,11 +405,13 @@ def list_issues(
     status: str | None,
     page: PageQuery,
     connection_id: str | None = None,
+    kind: str | None = None,
 ) -> PageResponse[IssueResponse]:
     _check_project(cur, principal, project_id)
+    kind = _issue_kind(kind)
 
-    total = repository.count_issues(cur, project_id, q, status, connection_id)
-    rows = repository.search_issues(cur, project_id, q, status, page, connection_id)
+    total = repository.count_issues(cur, project_id, q, status, connection_id, kind)
+    rows = repository.search_issues(cur, project_id, q, status, page, connection_id, kind)
     content = [
         IssueResponse(
             id=str(r["id"]),
@@ -385,6 +426,7 @@ def list_issues(
             source=_source_ref(r),
             updatedAt=(r["source_updated_at"] or r["updated_at"]).isoformat(),
             milestone=_milestone(r),
+            kind=r["issue_kind"],
             **_source_details(r),
         )
         for r in rows
@@ -443,7 +485,8 @@ def _file_source(
     if not stored.exists():
         return None
     try:
-        text = extractor.extract(stored, extractor.ext_of(path)).text
+        ext = extractor.ext_of(path)
+        text = extractor.extract(stored, ext).text
     except Exception:  # noqa: BLE001 — 파일 하나를 못 읽어도 승격은 이어간다
         return None
     if not text.strip():
@@ -451,6 +494,7 @@ def _file_source(
     return indexing.IndexSource(
         source_type="WORK_PRODUCT", source_id=row_id, project_id=project_id,
         title=rec["title"], body=text, uri=rec["external_url"],
+        block_positions=ext in extractor.BLOCK_POSITION_EXTS,
     )
 
 

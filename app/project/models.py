@@ -131,6 +131,8 @@ class ProjectSummaryResponse(BaseModel):
     clientOrgId: str  # noqa: N815
     clientOrgName: str  # noqa: N815
     contractorName: str | None  # noqa: N815
+    # 산출물 승인 수(DEC-12): WBS 가 정한 산출물 중 현행 버전이 승인된 수 / WBS 가 정한 산출물 수.
+    # 현황 화면 산출물 승인률과 같은 집계다. WBS 가 없으면 0/0(산출 불가)
     requiredWorkProductApproved: int  # noqa: N815
     requiredWorkProductTotal: int  # noqa: N815
     openCorrectionActionCount: int  # noqa: N815
@@ -142,4 +144,9 @@ class ProjectSummaryResponse(BaseModel):
     progressDeviation: float | None = None  # noqa: N815 — WBS 실적 − 계획선. WBS 가 없으면 None
     # 진척 집계 자체가 실패했다. 산출 불가(None)와 다르다. 목록은 그대로 내고 이 칸만 실패로 보인다
     progressError: bool = False  # noqa: N815
+    # 일정 준수(DEC-01): 기한이 오늘 이전인 마일스톤 중 기한 안에 닫힌 수 / 평가 대상 수.
+    # 평가 대상이 없으면 비율은 None(산출 불가)
+    scheduleCompliance: float | None = None  # noqa: N815
+    scheduleComplianceAchieved: int = 0  # noqa: N815
+    scheduleComplianceTotal: int = 0  # noqa: N815
     updatedAt: str  # noqa: N815

@@ -284,12 +284,17 @@ def requirement_summary(
     _check_access(cur, principal, project_id)
     n = repository.requirement_summary(cur, project_id)
     total, verified = n["total"], n["verified"]
+    rate_total, rate_verified = n["rate_total"], n["rate_verified"]
     return RequirementSummaryResponse(
         total=total,
         verified=verified,
         notVerified=total - verified,
         implementedFromSourceClosed=n["implemented_from_source_closed"],
-        verifiedRate=verified / total if total else None,
+        # 이행률은 확정 목록 기준(DEC-11). 명세서에 없는 기존 요구사항은 분모에서 뺀다
+        verifiedRate=rate_verified / rate_total if rate_total else None,
+        rateTotal=rate_total,
+        rateVerified=rate_verified,
+        outsideBaseline=total - rate_total,
         decided=n["decided"],
         byStatus=[
             StatusCount(status=s, count=n["by_status"].get(s, 0))

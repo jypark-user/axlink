@@ -207,7 +207,10 @@ def location_label(chunk: RetrievedChunk) -> str:
 
 
 def location_text(chunk: RetrievedChunk) -> str | None:
-    """원문 위치(SWFR.RAG.003). 표제 경로, 쪽(걸치면 범위), XLSX 행 범위 순으로 잇는다."""
+    """원문 위치(SWFR.RAG.003). 표제 경로, 쪽(걸치면 범위), XLSX 행 범위 순으로 잇는다.
+
+    HWP·HWPX 는 쪽이 없어 문단 순번과 표·행 번호를 잇는다(DEC-21). 예: 「문단 3~4 / 표 1 · 2행」.
+    """
     bits = []
     if chunk.heading_path:
         bits.append(" > ".join(chunk.heading_path))
@@ -215,6 +218,13 @@ def location_text(chunk: RetrievedChunk) -> str | None:
         bits.append(_span("p.", chunk.page_no, chunk.page_end, ""))
     if chunk.row_start is not None:
         bits.append(_span("", chunk.row_start, chunk.row_end, "행"))
+    if chunk.para_start is not None:
+        bits.append(_span("문단 ", chunk.para_start, chunk.para_end, ""))
+    if chunk.table_no is not None:
+        table = _span("표 ", chunk.table_no, chunk.table_end, "")
+        if chunk.table_row_start is not None:
+            table += " · " + _span("", chunk.table_row_start, chunk.table_row_end, "행")
+        bits.append(table)
     return " / ".join(bits) if bits else None
 
 

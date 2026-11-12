@@ -6,11 +6,10 @@
 from datetime import datetime
 from typing import Any
 
+from app.common import clock
 from app.common.paging import PageQuery
 from app.db import fetch_all, fetch_one
-
-# 파일럿 ProjectMetricsReader.REQUIRED_WORK_PRODUCT_TOTAL 과 같은 값이다 (29110 산출물 22종).
-REQUIRED_WORK_PRODUCT_TOTAL = 22
+from app.standard.repository import in_rate_scope
 
 _SORT_WHITELIST = {
     "name": "p.name",
@@ -329,28 +328,27 @@ def find_by_id(cur: Any, project_id: str) -> dict[str, Any] | None:
 
 def full_metrics(cur: Any, project_id: str) -> dict[str, Any]:
     """단일 사업의 전체 지표. 전부 SQL 집계다 — 절대 규칙 1."""
+    # 이행률 재료. 요구사항 목록을 확정했으면 확정 목록만 센다(DEC-11)
     req = fetch_one(
         cur,
-        """
+        f"""
         select count(*) as total,
-               count(*) filter (where status in ('VERIFIED','ACCEPTED')) as accepted
-          from requirement where project_id = %s
+               count(*) filter (where r.status in ('VERIFIED','ACCEPTED')) as accepted
+          from requirement r where r.project_id = %s and {in_rate_scope("r")}
         """,
         (project_id,),
     )
     issue = fetch_one(
         cur,
         "select count(*) filter (where status in ('OPEN','IN_PROGRESS')) as open_count "
-        "from issue where project_id = %s",
+        "from issue where project_id = %s and issue_kind = 'GENERAL'",
         (project_id,),
     )
-    wp = fetch_one(
-        cur,
-        """
-        select count(*) filter (where status = 'APPROVED') as approved, count(*) as total
-          from work_product where project_id = %s
-        """,
-        (project_id,),
+    # 산출물 승인 수: WBS 가 정한 산출물 기준(DEC-12). 목록·현황과 같은 산정
+    from app.dashboard import service as dashboard_service  # 순환 import 회피
+
+    wp_approved, wp_total = dashboard_service.deliverable_approval_now(
+        cur, project_id, clock.today()
     )
     risk = fetch_one(
         cur,
@@ -386,8 +384,8 @@ def full_metrics(cur: Any, project_id: str) -> dict[str, Any]:
         "requirementAccepted": int(req["accepted"]),
         "issueOpen": int(issue["open_count"]),
         "riskOpen": int(risk["cnt"]),
-        "workProductApproved": int(wp["approved"]),
-        "workProductTotal": int(wp["total"]),
+        "workProductApproved": wp_approved,
+        "workProductTotal": wp_total,
         "traceabilityCoverage": int(coverage["coverage"]),
         "lastSyncedAt": synced["last_synced"],
     }
@@ -418,20 +416,6 @@ def default_dashboard_id(cur: Any, project_id: str) -> str | None:
         (project_id,),
     )
     return str(row["id"]) if row else None
-
-
-def approved_work_products(cur: Any, project_ids: list[str]) -> dict[str, int]:
-    rows = fetch_all(
-        cur,
-        """
-        select project_id, count(*) filter (where status = 'APPROVED') as approved
-          from work_product
-         where project_id = any(%s)
-         group by project_id
-        """,
-        (project_ids,),
-    )
-    return {str(r["project_id"]): int(r["approved"]) for r in rows}
 
 
 def open_risks(cur: Any, project_ids: list[str]) -> dict[str, int]:

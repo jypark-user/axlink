@@ -2,7 +2,7 @@
 """E 그룹: 현황 조회 (UC-040 ~ UC-043) 예제 시나리오.
 
 S0 에서 시작해 UC-040-S01 이 S0r(TD-RR-1 등록)을 만들고, 다섯 축·일정 줄·이슈 조회를 T0 기준으로
-본다. 스냅샷 추이(UC-041-S06)는 S0a → S1 전이가 필요해 맨 뒤에 돈다. DEC-01·02·17 과
+본다. 스냅샷 추이(UC-041-S06)는 S0a → S1 전이가 필요해 맨 뒤에 돈다. DEC-01·17 과
 브라우저·실모델 시나리오는 보류한다. 값은 IM-009 7 절의 독립 계산값과 비교한다.
 """
 
@@ -24,6 +24,16 @@ T0 = d.T0.isoformat()
 @pytest.fixture
 def replay(monkeypatch, s0) -> ReplaySource:
     return install(monkeypatch, ReplaySource(state="S0", files=s0.files))
+
+
+def _at_t0(monkeypatch) -> None:
+    """사업 시계를 T0 09:00(KST) 로 돌린다. 시험 프로세스 안 실행에서만 서버에 닿는다."""
+    from datetime import datetime
+    from zoneinfo import ZoneInfo
+
+    from app.common import clock
+
+    monkeypatch.setattr(clock, "now", lambda: datetime(2026, 9, 15, 9, 0, tzinfo=ZoneInfo("Asia/Seoul")))
 
 
 def _get(target, s0, path: str, acc="TD-ACC-C1"):
@@ -76,7 +86,7 @@ def test_UC_053_S01_미처리_건수(target, s0, screen):
 
 
 def test_UC_040_S01_세_사업_목록(target, s0, screen):
-    """S0r: PRJ-1 진척 30.0%·편차 −36.9%p·미처리 1·리스크 1·승인 1/22. PRJ-3 지표 「—」·미처리 0 (AC-040-1·2·3·4)."""
+    """S0r: PRJ-1 진척 30.0%·편차 −36.9%p·미처리 1·리스크 1·승인 1/5(DEC-12, WBS 산출물 기준). PRJ-3 지표 「—」·미처리 0 (AC-040-1·2·3·4)."""
     if "TD-RR-1" not in s0.ids:  # 화면 실행에서는 UC-053-S01 이 S0r 을 만든다
         s0.s0r()
     rows = {p["id"]: p for p in _get(target, s0, "/api/projects?size=100")["content"]}
@@ -87,8 +97,8 @@ def test_UC_040_S01_세_사업_목록(target, s0, screen):
         problems.append(f"미처리 요청 {p1['openReviewRequestCount']} (기대 1)")
     if p1["openRiskCount"] != 1:
         problems.append(f"열린 리스크 {p1['openRiskCount']} (기대 1)")
-    if (p1["requiredWorkProductApproved"], p1["requiredWorkProductTotal"]) != (1, 22):
-        problems.append(f"승인 {p1['requiredWorkProductApproved']}/{p1['requiredWorkProductTotal']} (기대 1/22)")
+    if (p1["requiredWorkProductApproved"], p1["requiredWorkProductTotal"]) != (1, 5):
+        problems.append(f"승인 {p1['requiredWorkProductApproved']}/{p1['requiredWorkProductTotal']} (기대 1/5)")
     rep_key = next((k for k in p1 if "progress" in k.lower() or "representative" in k.lower()), None)
     if rep_key is None:
         problems.append(f"목록에 대표 진척률·편차 칸이 없다: {sorted(p1)}")
@@ -119,9 +129,19 @@ def test_UC_040_S03_현황과_일치(target, s0):
     assert round(p1[rep_key], 4) == round(prog["representative"], 4)
 
 
-@pytest.mark.skip(reason="DEC-01(일정 준수율 산식) 결정 전")
-def test_UC_040_S04_일정_준수_칸(target, s0):
-    """목록의 일정 준수 칸 (AC-040-5)."""
+def test_UC_040_S04_일정_준수_칸(target, s0, monkeypatch):
+    """T0 목록의 일정 준수 칸 1/3 (33.3%). 대상 MS-1·MS-2·MS-5, 달성 MS-1 (AC-040-5, DEC-01 (a), IM-009 7.1).
+
+    목록은 오늘 날짜로 센다. 시험 프로세스 안에서는 사업 시계를 T0 로 돌려 본다(원격은 날짜를 못 바꾼다)."""
+    if TARGET_URL:
+        pytest.skip("목록은 서버의 오늘로 센다. 원격 대상은 시계를 T0 로 돌릴 수 없다")
+    _at_t0(monkeypatch)
+    rows = {p["id"]: p for p in _get(target, s0, "/api/projects?size=100")["content"]}
+    p1, p3 = rows[s0.ids["TD-PRJ-1"]], rows[s0.ids["TD-PRJ-3"]]
+    assert (p1["scheduleComplianceAchieved"], p1["scheduleComplianceTotal"]) == (1, 3), p1
+    assert round(p1["scheduleCompliance"], 4) == 0.3333
+    # 마일스톤이 없는 사업은 산출 불가(0% 가 아니다)
+    assert p3["scheduleCompliance"] is None and p3["scheduleComplianceTotal"] == 0
 
 
 def test_UC_040_S05_조회_실패_구분(target, s0, screen, monkeypatch):
@@ -207,7 +227,8 @@ def test_UC_041_S01_다섯_축_한_화면(target, s0):
 
 
 def test_UC_041_S02_진척률에서_작업까지(target, s0):
-    """3.2 지연·격차 경고(40%, 미제출), 계획선 100%, 연결 이슈 #204 진행중, 완료 확인 없음. 3.1 확인됨. 3.3 격차 경고 (AC-041-4)."""
+    """3.2 지연(40%, 미제출·지연 판정), 계획선 100%, 연결 이슈 #204 진행중, 완료 확인 없음. 3.1 확인됨.
+    격차 경고는 실적 80 이상만이라(DEC-20 (b)) 3.2(40)·3.3(20) 에는 없다 (AC-041-4)."""
     pid = s0.ids["TD-PRJ-1"]
     wbs = _get(target, s0, f"/api/projects/{pid}/wbs?at={T0}")
     prog = _get(target, s0, f"/api/projects/{pid}/progress?at={T0}")
@@ -219,9 +240,11 @@ def test_UC_041_S02_진척률에서_작업까지(target, s0):
         problems.append(f"3.2 판정 {by['3.2']['deliverableStatus']}")
     if by["3.2"]["planned"] != 100 or by["3.2"]["progress"] != 40:
         problems.append(f"3.2 계획선·실적 {by['3.2']['planned']}/{by['3.2']['progress']}")
-    gap_text = " ".join(prog["warnings"] + wbs["warnings"])
-    if "3.2" not in gap_text or "3.3" not in gap_text:
-        problems.append(f"격차 경고에 3.2·3.3 이 없다: {prog['warnings']}")
+    gapped = {i["wbsId"]: i["gapWarning"] for i in wbs["items"] if i.get("gapWarning")}
+    if gapped:
+        problems.append(f"실적 80 미만 작업에 격차 경고가 붙었다: {gapped}")
+    if any(w.startswith("격차 경고") for w in wbs["warnings"]):
+        problems.append(f"일정 경고 줄에 격차 경고가 있다: {wbs['warnings']}")
     if not any(str(x).startswith("3.2") for x in prog["behind"]):
         problems.append(f"계획 뒤짐에 3.2 가 없다: {prog['behind']}")
     if citems["3.1"]["completionStatus"] != "CONFIRMED" or citems["3.2"]["completionStatus"] != "NONE":
@@ -241,7 +264,10 @@ def test_UC_041_S03_L3_추정(target, s0):
     assert len(rows) == 6, [i["name"] for i in wbs["items"]]
     assert sorted(i["progress"] for i in rows) == [0, 30, 50, 100, 100, 100]
     assert prog["level"] == "L3" and prog["representative"] is not None, prog
-    assert "추정" in str(prog) or "L1" in str(prog["warnings"]), "추정 표시·L1 아님 경고가 없다"
+    # 추정 표시와 산출 근거 문장(DEF-V037). 대표값 산식 자체는 DEC-17 결정 대기라 값은 보지 않는다
+    assert prog["estimated"] is True, prog
+    assert prog["basisNote"].startswith("추정") and "L1" in prog["basisNote"], prog["basisNote"]
+    assert prog["basisNote"] in prog["warnings"], prog["warnings"]
 
 
 def test_UC_041_S04_재료_없음(target, s0, screen):
@@ -277,7 +303,7 @@ def test_UC_041_S09_분모_0(target, s0):
 
 
 def test_UC_041_S12_WBS_변형(target, s0, replay):
-    """TD-PRJ-9: L2 11.7% 추정 / MISS 3.4 해당 없음·30.0% / SUM 경고·27.3% (AC-041-3·5, AC-030-3)."""
+    """TD-PRJ-9: L2 30.3% 추정(기간 비례 × 실적, DEC-19) / MISS 3.4 해당 없음·30.0% / SUM 경고·27.3% (AC-041-3·5, AC-030-3)."""
     v1 = auth(s0.tokens["TD-ACC-V1"])
     pid = s0.ids["TD-PRJ-9"]
     replay.faults = Faults(wbs_targets={"daon/prj9"}, wbs_variant="TD-WBS-SUM", wbs_sha="5a5a5a5a" + "9" * 32)
@@ -305,19 +331,63 @@ def test_UC_041_S12_WBS_변형(target, s0, replay):
     if deliv["3.4"]["status"] != "NONE":
         problems.append(f"MISS 3.4 판정 {deliv['3.4']['status']}")
     prog = sync_with("TD-WBS-L2", "2c2c2c2c" + "9" * 32)
-    if prog["representative"] is None or round(prog["representative"], 4) != 0.1173 or "추정" not in str(prog):
-        problems.append(f"L2: {prog['representative']} level={prog['level']}")
+    if (
+        prog["level"] != "L2" or prog["representative"] is None or round(prog["representative"], 4) != 0.3029
+        or not prog["estimated"] or not prog["basisNote"].startswith("추정")
+    ):
+        problems.append(f"L2: {prog['representative']} level={prog['level']} {prog.get('basisNote')}")
     assert not problems, problems
 
 
-@pytest.mark.skip(reason="DEC-01(일정 준수율) 결정 전")
-def test_UC_041_S07_일정_준수율(target, s0):
-    """일정 준수율 카드 (AC-041-9)."""
+def test_UC_041_S07_일정_준수율(target, s0, monkeypatch):
+    """T0 일정 준수율 1/3 = 33.3%, 계획선 편차와 별도 지표·별도 카드 (AC-041-9, DEC-01 (a), IM-009 7.1)."""
+    pid = s0.ids["TD-PRJ-1"]
+    prog = _get(target, s0, f"/api/projects/{pid}/progress?at={T0}")
+    sc = prog["scheduleCompliance"]
+    assert (sc["numerator"], sc["denominator"]) == (1, 3), sc
+    assert round(sc["value"], 4) == 0.3333 and sc["note"], sc
+    # 기준일 2026-04-15: 기한이 지난 마일스톤이 없어 산출 불가
+    early = _get(target, s0, f"/api/projects/{pid}/progress?at=2026-04-15")["scheduleCompliance"]
+    assert early["value"] is None and early["denominator"] == 0 and "산출 불가" in early["note"], early
+    if TARGET_URL:
+        return  # 카드는 서버의 오늘로 센다. 시계를 T0 로 돌릴 수 있는 프로세스 안에서만 값을 본다
+    _at_t0(monkeypatch)
+    card = _preview(target, s0, "schedule_compliance_rate", [])
+    assert round(_total(card) or 0, 2) == 33.33, _total(card)
+    variance = _preview(target, s0, "schedule_variance_pct", [])
+    assert variance["measure"] != card["measure"]
 
 
-@pytest.mark.skip(reason="DEC-02(결함 기준) 결정 전")
 def test_UC_041_S08_결함_처리율(target, s0):
-    """결함 처리율 카드 (AC-041-10)."""
+    """결함 처리율 50.0%(R9 종료 ÷ R9·R10). 결함 트래커 매핑으로 가른 이슈만. 전체 11 = 일반 9 + 결함 2 (AC-041-10, DEC-02)."""
+    pid = s0.ids["TD-PRJ-1"]
+    problems: list[str] = []
+    rate = _preview(target, s0, "defect_resolution_rate", [])
+    if round(_total(rate) or 0, 4) not in (0.5, 50.0):
+        problems.append(f"결함 처리율 {_total(rate)}")
+    if (rate["total"]["values"].get("numerator"), rate["total"]["values"].get("denominator")) != (1, 2):
+        problems.append(f"결함 처리율 분자·분모 {rate['total']['values']}")
+    if "결함 트래커" not in (rate.get("basis") or ""):
+        problems.append(f"산출 근거에 결함 기준이 없다: {rate.get('basis')}")
+    prog = _get(target, s0, f"/api/projects/{pid}/progress?at={T0}")
+    if not prog.get("defect") or (prog["defect"]["numerator"], prog["defect"]["denominator"]) != (1, 2):
+        problems.append(f"진척 응답의 결함 {prog.get('defect')}")
+    # 포함 관계: 전체 이슈(결함 포함)를 종류로 나누면 일반 9·결함 2, 전체는 따로 센 11
+    kinds = _preview(target, s0, "all_issue_count", ["issue_kind"], template="STAT_CARD")
+    by_kind = {r["values"]["d0"]: r["values"]["value"] for r in kinds["rows"]}
+    if by_kind != {"GENERAL": 9, "DEFECT": 2} or _total(kinds) != 11:
+        problems.append(f"종류별 {by_kind} 전체 {_total(kinds)} (기대 일반 9·결함 2·전체 11)")
+    if _total(_preview(target, s0, "issue_count", [])) != 9 or _total(_preview(target, s0, "defect_count", [])) != 2:
+        problems.append("일반 이슈 9·결함 2 가 따로 안 나온다")
+    # 매핑이 없는 사업(TD-PRJ-2, TD-CON-4 에 결함 트래커 없음): 산출 불가와 이유, 일반 이슈 = 전체
+    pid2 = s0.ids["TD-PRJ-2"]
+    prog2 = _get(target, s0, f"/api/projects/{pid2}/progress?at={T0}", acc="TD-ACC-C2")
+    if prog2["defect"]["value"] is not None or "산출 불가" not in (prog2["defect"]["note"] or ""):
+        problems.append(f"매핑 없는 사업의 결함 {prog2['defect']}")
+    summary2 = _get(target, s0, f"/api/projects/{pid2}/issues/summary", acc="TD-ACC-C2")["kinds"]
+    if summary2["defectMapped"] or summary2["generalTotal"] != summary2["allTotal"] or summary2["defectRate"] is not None:
+        problems.append(f"매핑 없는 사업의 종류별 건수 {summary2}")
+    assert not problems, problems
 
 
 def test_UC_041_S10_조회_실패(target, s0, screen):
@@ -378,7 +448,7 @@ FIVE_AXES = [
     ("STAT_CARD", "schedule_variance_pct", []),
     ("STAT_CARD", "issue_resolution_rate", []),
     ("BAR_CHART", "open_risk_count", ["risk_severity"]),
-    ("STAT_CARD", "work_product_approval_rate", []),
+    ("STAT_CARD", "deliverable_approval_rate", []),
 ]
 
 
@@ -389,8 +459,10 @@ def test_UC_042_S01_추천_구성(target, s0):
     boards = _get(target, s0, f"/api/dashboards?projectId={pid}")
     board = next(b for b in boards if b["isDefault"])
     made = []
-    for template, measure, dims in FIVE_AXES:
-        res = target.post(f"/api/dashboards/{board['id']}/widgets", json={"spec": _spec(measure, dims, [pid], template, f"TST {measure}")}, headers=c1)
+    for n, (template, measure, dims) in enumerate(FIVE_AXES):
+        # 화면처럼 자리(gridItem)를 같이 보낸다. 자리 없이 만든 위젯은 배치에 들지 않는다
+        grid = {"i": "new", "x": (n % 3) * 4, "y": (n // 3) * 4, "w": 4, "h": 4}
+        res = target.post(f"/api/dashboards/{board['id']}/widgets", json={"spec": _spec(measure, dims, [pid], template, f"TST {measure}"), "gridItem": grid}, headers=c1)
         assert res.status_code == 201, (measure, res.text[:200])
         made.append(res.json())
     for w in made:
@@ -458,7 +530,12 @@ def test_UC_043_S01_목록_원천(target, s0):
     rows = _get(target, s0, f"/api/projects/{pid}/issues?size=100")["content"]
     problems: list[str] = []
     if summary["total"] != 9 or summary["open"] != 3 or summary["closed"] != 6:
-        problems.append(f"요약 전체 {summary['total']}·열림 {summary['open']}·해결 {summary['closed']} (기대 9·3·6, 결함 2건 분리는 DEC-02)")
+        problems.append(f"요약 전체 {summary['total']}·열림 {summary['open']}·해결 {summary['closed']} (기대 9·3·6)")
+    kinds = summary.get("kinds") or {}
+    if (kinds.get("allTotal"), kinds.get("generalTotal"), kinds.get("defectTotal")) != (11, 9, 2):
+        problems.append(f"종류별 건수 {kinds} (기대 전체 11·일반 9·결함 2, DEC-02)")
+    if any(r.get("kind") != "GENERAL" for r in rows):
+        problems.append("일반 이슈 목록에 결함이 섞였다")
     if len(rows) != summary["total"]:
         problems.append(f"목록 {len(rows)} ≠ 요약 {summary['total']}")
     for r in rows:
@@ -515,9 +592,31 @@ def test_UC_043_S04_심각도_미지정(target, s0):
     assert summary["unspecifiedOpen"] == summary["open"], summary
 
 
-@pytest.mark.skip(reason="DEC-02(결함 기준) 결정 전. 리스크 목록 API 는 별도 확인")
 def test_UC_043_S05_리스크_결함(target, s0):
-    """리스크 2(열림 1 높음), 위험 처리율 50.0% (AC-043-6)."""
+    """리스크 2(열림 1 높음), 위험 처리율 50.0%. 결함 목록 2건(R9·R10)·결함 처리율 50.0% (AC-043-6, DEC-02).
+
+    리스크 목록 화면 API 는 따로 없어 리스크 쪽은 집계(시맨틱)로 본다."""
+    pid = s0.ids["TD-PRJ-1"]
+    problems: list[str] = []
+    risks = _preview(target, s0, "open_risk_count", ["risk_severity"], template="BAR_CHART")
+    sev = {r["values"]["d0"]: r["values"]["value"] for r in risks["rows"]}
+    if sev.get("HIGH", 0) + sev.get("CRITICAL", 0) != 1 or sum(sev.values()) != 1:
+        problems.append(f"열린 리스크 {sev}")
+    if round(_total(_preview(target, s0, "risk_resolution_rate", [])) or 0, 4) not in (0.5, 50.0):
+        problems.append("위험 처리율")
+    defects = _get(target, s0, f"/api/projects/{pid}/issues?size=100&kind=DEFECT")["content"]
+    if sorted(r["key"] for r in defects) != ["RM-209", "RM-210"] or any(r["kind"] != "DEFECT" for r in defects):
+        problems.append(f"결함 목록 {[(r['key'], r['kind']) for r in defects]}")
+    summary = _get(target, s0, f"/api/projects/{pid}/issues/summary?kind=DEFECT")
+    kinds = summary["kinds"]
+    if (summary["total"], summary["open"], summary["closed"]) != (2, 1, 1):
+        problems.append(f"결함 요약 {summary['total']}·{summary['open']}·{summary['closed']}")
+    if not kinds["defectMapped"] or kinds["defectRate"] != 0.5:
+        problems.append(f"결함 처리율 {kinds}")
+    all_rows = _get(target, s0, f"/api/projects/{pid}/issues?size=100&kind=ALL")["totalElements"]
+    if all_rows != kinds["allTotal"] or all_rows != 11:
+        problems.append(f"전체 이슈(결함 포함) 목록 {all_rows}")
+    assert not problems, problems
 
 
 def test_UC_043_S06_다른_사업_연결_필터(target, s0):

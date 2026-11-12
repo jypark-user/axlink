@@ -36,11 +36,22 @@ class ProgressResponse(BaseModel):
 
     issue: ProgressMeasure
     workProduct: ProgressMeasure  # noqa: N815
+    # 결함 처리율(DEC-02). 품질 축의 값이고 대표 진척률·격차에는 쓰지 않는다
+    defect: ProgressMeasure | None = None
 
     behind: list[str]
     warnings: list[str]
     planVersion: str | None  # noqa: N815
     planUpdatedAt: str | None  # noqa: N815
+
+    # 대표값이 WBS 실적(L1)이 아니면 True. 화면·답변이 「추정」을 붙인다(DEC-19, DEF-V037)
+    estimated: bool = False
+    # 대표값의 산출 근거 한 문장. 산출 불가면 그 이유다
+    basisNote: str | None = None  # noqa: N815
+    # 일정 준수율(DEC-01): 기한이 기준일 이전인 마일스톤 중 기한 안에 닫힌 것
+    scheduleCompliance: ProgressMeasure | None = None  # noqa: N815
+    # 산출물 승인률(DEC-12): WBS 가 정한 산출물 중 현행 버전이 승인된 것
+    deliverableApproval: ProgressMeasure | None = None  # noqa: N815
 
 
 # ---------------------------------------------------------------- 대시보드 · 위젯
@@ -150,7 +161,9 @@ class ProgressSnapshotResponse(BaseModel):
     wbsPlannedPct: float | None  # noqa: N815
     behindTaskCount: int  # noqa: N815
     issueResolvedCount: int  # noqa: N815
-    issueTotalCount: int  # noqa: N815
+    issueTotalCount: int  # noqa: N815 — 일반 이슈(V63 전 행은 결함을 가르지 않은 값)
+    defectResolvedCount: int | None = None  # noqa: N815 — 결함(DEC-02). null 이면 가르기 전
+    defectTotalCount: int | None = None  # noqa: N815
     requirementVerifiedCount: int  # noqa: N815
     requirementTotalCount: int  # noqa: N815
     riskClosedCount: int  # noqa: N815
@@ -199,6 +212,9 @@ class WbsItemResponse(BaseModel):
     deliverableUrl: str | None = None  # noqa: N815
     # 번호 토큰이 정확히 맞은 이슈. 이어지지 않은 이슈는 사업 이슈 목록에 그대로 있다
     linkedIssues: list[LinkedIssue] = []  # noqa: N815
+    # 작업 단위 격차 경고(DEC-20, ARC-016 4절): 실적 80 이상인데 산출물 미제출이거나 열린 연결
+    # 이슈가 있다. 경고일 뿐 진척률을 깎지 않는다
+    gapWarning: str | None = None  # noqa: N815
 
 
 class WbsDeliverableDocument(BaseModel):

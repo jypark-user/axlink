@@ -20,6 +20,8 @@ export interface ScheduleTask {
   deliverableStatus: DeliverableStatus;
   deliverableRef: string | null;
   deliverableUrl: string | null;
+  /** 작업 단위 격차 경고(DEC-20). 서버가 판정한 문장 그대로다 */
+  gapWarning: string | null;
 }
 
 export type DeliverableStatus = 'NONE' | 'SUBMITTED' | 'MISSING' | 'OVERDUE';

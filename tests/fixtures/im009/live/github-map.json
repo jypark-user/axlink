@@ -1,0 +1,52 @@
+{
+ "repos": {
+  "TD-CON-1": "jypark-user/axlink-verify",
+  "TD-CON-3": "jypark-user/axlink-verify-web"
+ },
+ "tag_s0": "td-s0",
+ "TD-CON-1": {
+  "s0_head": "625b38689c4117d9901fbd16c8ec06f88ade2d0b",
+  "commits": {
+   "TD-CMT-1": "5fe471addc01eac50d8ef4d95f845cf79b0541d6",
+   "TD-CMT-3": "cf51b3304a5f914a5e619dec39e311055b8446fa",
+   "TD-CMT-4": "6957e6f38f9a7cb06d96d04de9ddc72d86fe1c87",
+   "TD-SETUP-1": "8ee6ea7fd0990034b200a4cde540e09341f87387",
+   "TD-PR-2-HEAD": "634730b5609ff28aeebb35a3113d0ea42af7bf3f",
+   "TD-PR-3-HEAD": "625b38689c4117d9901fbd16c8ec06f88ade2d0b"
+  },
+  "issues": {
+   "TD-ISS-G1": 1,
+   "TD-ISS-G2": 2,
+   "TD-ISS-G3": 3,
+   "TD-ISS-G4": 4,
+   "TD-ISS-G5": 5
+  },
+  "pulls": {
+   "TD-PR-1": 6,
+   "TD-PR-2": 7,
+   "TD-PR-3": 8
+  },
+  "milestones": {
+   "TD-MS-5": 1,
+   "TD-MS-6": 2
+  },
+  "wbs_blob_s0": "d1147c4fe58718844be207959f27ca75e6d99131",
+  "files_s0": [
+   "docs/00-management/WBS.xlsx",
+   "docs/20-design/설계-민원조회.md",
+   "src/auth/login.py",
+   "src/portal/list.py",
+   "src/stats/batch.py",
+   "src/ui/button.css"
+  ]
+ },
+ "TD-CON-3": {
+  "s0_head": "57ead0927322def3c0151b2f544d13a51f99f877",
+  "commits": {
+   "TD-CMT-W1": "57ead0927322def3c0151b2f544d13a51f99f877"
+  },
+  "issues": {
+   "TD-ISS-W4": 4
+  }
+ }
+}
