@@ -704,6 +704,7 @@ _NUMERIC = {"number", "percent", "COUNT", "RATE_PCT", "DAYS", "PCT_POINT"}
 _DELIVERABLE_WORD = {"SUBMITTED": "제출", "MISSING": "미제출", "OVERDUE": "지연", "NONE": ""}
 _COMPLETION_WORD = {"CONFIRMED": "완료 확인됨", "RECONFIRM": "재확인 필요(범위 변경)", "WITHDRAWN": "확인 철회됨", "NONE": "완료 확인 없음"}
 _TOOL_NAME = {"GITHUB": "GitHub", "REDMINE": "Redmine", "UPLOAD": "업로드", "MANUAL": "수기"}
+_ISSUE_STATUS = {"OPEN": "열림", "IN_PROGRESS": "진행중", "RESOLVED": "해결", "CLOSED": "종료"}  # lib/labels.ts
 
 
 def _js_number(v) -> str:
@@ -845,11 +846,8 @@ def _ui_UC_041_S01(screen, target, s0):
 
 
 def _ui_UC_041_S02(screen, target, s0):
-    """화면: 일정(WBS)에서 작업 단위로 계획·실적·산출물 판정·격차 경고, 완료 확인 상태 (AC-041-4).
-
-    값은 화면과 같은 API(기준일 없이 = 서버의 오늘)에서 받는다. 연결 이슈 상태는 일정 화면에 칸이
-    없어(프런트 WbsItemResponse 에 linkedIssues 가 없다) 화면에서 보지 못한다. junit 속성
-    screen_gap 으로 남긴다."""
+    """화면: 일정(WBS)에서 작업 단위로 계획·실적·산출물 판정·격차 경고·연결 이슈와 그 상태, 완료 확인
+    상태 (AC-041-4). 값은 화면과 같은 API(기준일 없이 = 서버의 오늘)에서 받는다."""
     if not screen:
         return
     from playwright.sync_api import expect
@@ -904,9 +902,16 @@ def _ui_UC_041_S02(screen, target, s0):
             expect(row).to_contain_text("격차 경고")
         else:
             expect(row).not_to_contain_text("격차 경고")
+        # 연결 이슈 칸: 이슈 번호(원문 링크)와 상태를 이슈 화면과 같은 말로
+        for li in item.get("linkedIssues") or []:
+            expect(row).to_contain_text(li["key"] or li["title"])
+            expect(row).to_contain_text(_ISSUE_STATUS.get(li["status"], li["status"]))
+            if li.get("url"):
+                expect(row.locator(f'a[href="{li["url"]}"]')).to_have_count(1)
+    linked = by["3.2"].get("linkedIssues") or []
+    assert any("204" in (li["key"] or "") for li in linked), f"3.2 의 연결 이슈 {linked}"
     if not any(i.get("gapWarning") for i in wbs["items"]):
         sc.not_see("격차 경고")
-    sc.record_property("screen_gap", "AC-041-4 연결 이슈 상태(3.2 의 RM-204 진행중)가 일정 화면에 없다")
     sc.done()
 
 
@@ -977,8 +982,6 @@ def _ui_UC_042_S01(screen, target, s0, board_id: str):
     second = boxes(other)
     assert second == first, {t: (first[t], second.get(t)) for t in first if first[t] != second.get(t)}
     assert not any(w["id"] in stored(other) for w in widgets), "브라우저 저장소에 위젯 id 가 있다"
-    if "risk_resolution_rate" not in measures:
-        other.record_property("screen_gap", "UC-042-S01 추천 구성 「전체 진행 현황」에 위험 처리율 카드가 없다")
     other.done()
 
 

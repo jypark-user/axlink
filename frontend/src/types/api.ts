@@ -1654,6 +1654,17 @@ export interface WbsItemResponse {
   deliverableUrl?: string | null;
   /** 작업 단위 격차 경고(DEC-20): 실적 80 이상인데 산출물 미제출이거나 열린 연결 이슈가 있다 */
   gapWarning?: string | null;
+  /** 이 작업에 이어진 이슈(ARC-016 3-4). 번호 토큰이 정확히 맞은 것만 온다 */
+  linkedIssues?: WbsLinkedIssue[];
+}
+
+/** WBS 작업에 이어진 이슈 한 건. 상태는 표준 이슈 상태다 */
+export interface WbsLinkedIssue {
+  key: string | null;
+  title: string;
+  /** OPEN | IN_PROGRESS | RESOLVED | CLOSED */
+  status: string;
+  url: string | null;
 }
 
 export type DeliverableStatus = 'NONE' | 'SUBMITTED' | 'MISSING' | 'OVERDUE';
