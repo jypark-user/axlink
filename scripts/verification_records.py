@@ -425,7 +425,8 @@ def build_catalog() -> dict:
                 im007["acs"][ac]["decs"].append(dec)
                 im007["acs"][ac]["decs"].sort()
     # 6절 상태 칸이 「**결정 …」인 DEC 는 더 이상 AC 를 잡아 두지 않는다. 어떤 결정이 걸렸었는지는
-    # decs_decided 로 남긴다. 결정 때문에 기대값이 바뀐 시나리오의 이전 실행은 impacts.jsonl 로 무효화한다
+    # decs_decided 로 남긴다. 결정 때문에 기대값이 바뀐 시나리오의 이전 실행은
+    # impacts.jsonl 로 무효화한다
     decided = {d for d, row in im007["decs"].items() if decided_status(row.get("status", ""))}
     for bag in (im007["acs"].values(), im007["scenarios"].values()):
         for item in bag:

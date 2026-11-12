@@ -101,7 +101,8 @@ def take_unchecked(
           behind_task_count, issue_resolved_count, issue_total_count,
           requirement_verified_count, requirement_total_count, risk_closed_count, risk_total_count,
           work_product_submitted_count, work_product_approved_count, work_product_total_count,
-          defect_resolved_count, defect_total_count, deliverable_approved_count, deliverable_total_count)
+          defect_resolved_count, defect_total_count,
+          deliverable_approved_count, deliverable_total_count)
         values (%(project_id)s, %(snapshot_date)s, %(level)s, %(representative)s, %(wbs_actual)s,
                 %(wbs_planned)s, %(behind)s, %(issue_resolved)s, %(issue_total)s,
                 %(req_verified)s, %(req_total)s, %(risk_closed)s, %(risk_total)s,
