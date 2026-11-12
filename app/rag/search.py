@@ -8,7 +8,7 @@
 순위만 남기고 "얼마나 가까운가" 를 버리기 때문에 문턱을 세울 수 없다.
 """
 
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from typing import Any
 
 from app.ai import embedding_guard
@@ -16,7 +16,7 @@ from app.ai.embedding import embedding_port
 from app.ai.port import EmbeddingPort
 from app.config import settings
 from app.db import fetch_all
-from app.rag import vector
+from app.rag import vector, vocab
 
 
 @dataclass
@@ -45,6 +45,8 @@ class RetrievedChunk:
     table_row_start: int | None = None
     table_row_end: int | None = None
     score: float = 0.0  # RRF 융합 점수. 순위 결정에만 쓴다
+    # 이슈 조각의 지금 상태(발주기관 어휘). 본문은 등록 때 글이라 상태가 없거나 낡았다
+    status: str | None = None
 
 
 @dataclass
@@ -222,3 +224,21 @@ def _chunk(row: dict, score: float) -> RetrievedChunk:
 
 def _int(value: object) -> int | None:
     return int(value) if isinstance(value, int) and not isinstance(value, bool) else None
+
+
+def attach_status(cur: Any, chunks: list[RetrievedChunk]) -> list[RetrievedChunk]:
+    """이슈 조각에 표준 모델의 지금 상태를 붙인다. 이슈 본문에는 상태가 없어서 "외부 연계 규격
+    협의 이슈 상태" 에 모델이 본문의 계획 문장으로 상태를 지어 말했다(UC-060-S16 실모델)."""
+    ids = [c.source_id for c in chunks if c.source_type == "ISSUE"]
+    if not ids:
+        return chunks
+    rows = fetch_all(
+        cur, "select id::text as id, status from issue where id = any(%s::uuid[])", (ids,)
+    )
+    status = {r["id"]: str(vocab.word(r["status"])) for r in rows if r["status"]}
+    return [
+        replace(c, status=status[c.source_id])
+        if c.source_type == "ISSUE" and c.source_id in status
+        else c
+        for c in chunks
+    ]

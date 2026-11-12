@@ -9,11 +9,13 @@
 들어간 화면과 자연어 질의가 같은 데이터를 보는 것도 이 경로에서 성립한다.
 """
 
+import re
 from dataclasses import dataclass
 from datetime import UTC, datetime
 from typing import Any
 
 from app.db import fetch_all, fetch_one
+from app.rag import vocab
 from app.semantic.models import WidgetColumn, WidgetDataResponse, WidgetRow
 
 # 상태 필터. 모델은 이 셋 중 하나만 고른다.
@@ -221,6 +223,8 @@ def build(
         (project_ids, limit),
     )
 
+    # 상태·심각도 코드는 화면과 같은 발주기관 어휘로 바꿔 표와 답 재료에 넣는다(UC-060-S16)
+    rows = [{k: _word(k, v) for k, v in r.items()} for r in rows]
     columns = [WidgetColumn(key=key, label=label, type="string") for key, label, _ in spec.columns]
     data = WidgetDataResponse(
         measure=f"entity_{spec.key.lower()}",
@@ -240,3 +244,17 @@ def build(
         "- " + " · ".join(f"{label} {r.get(key)}" for key, label, _ in spec.columns) for r in rows
     ]
     return EntityTable(spec=spec, status=status, total=total, data=data, lines=lines)
+
+
+_CODE_HEAD = re.compile(r"^([A-Z_]+)(?=\()")
+
+
+def _word(key: str, value: Any) -> Any:
+    """상태·심각도 열의 코드만 바꾼다. "IMPLEMENTED(발주기관 지정)" 처럼 코드 뒤에 설명이 붙은
+    값은 앞 코드만 바꾼다."""
+    if key not in ("status", "severity") or not isinstance(value, str):
+        return value
+    head = _CODE_HEAD.match(value)
+    if head:
+        return str(vocab.word(head.group(1))) + value[head.end() :]
+    return vocab.word(value)

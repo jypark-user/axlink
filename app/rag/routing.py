@@ -10,7 +10,7 @@ from typing import Any
 
 from app.ai.port import LlmPort
 from app.dashboard import generation
-from app.dashboard.widget_template import prompt_guide
+from app.dashboard.widget_template import TIME_TEMPLATES, prompt_guide
 from app.rag import entity_table, intents
 from app.semantic.catalog import Catalog, MeasureDef
 
@@ -91,6 +91,8 @@ class RouteDecision:
     period: str | None = None  # 기간 변화의 비교 단위 WEEK | MONTH
     options: list[str] = field(default_factory=list)  # CLARIFY 의 선택지 키
     related: list[str] = field(default_factory=list)  # 이어서 볼 만한 질문 키. 권장 질문 재료
+    # 집계 질문이 나눠 보기(차원·추이)를 물었는가. 아니면 값이 여럿이어도 그림을 붙이지 않는다
+    breakdown: bool = True
 
 
 # 권장 질문·선택지·누른 질문의 키. 모델이 고르고 서버가 다시 검증한다. 문장은 서버가 만든다.
@@ -279,6 +281,12 @@ def from_choice(catalog: Catalog, choice: dict[str, Any] | None) -> RouteDecisio
         )
 
     template = generation._template_of(choice)
+    # 질문이 나눠 보기를 물었는가(차원을 골랐거나 추이 템플릿). 안 물었는데 모델이 막대 템플릿만
+    # 적으면 지표의 기본 차원으로 나눠 센다. 그 값은 프롬프트·검문 재료로 쓰고 그림은 붙이지
+    # 않는다("일반 이슈가 몇 건이야", UC-060-S02 「그림 없음」). 빈 건수의 수집 상태 판정
+    # (GH-127)은 나눈 값으로 하므로 차원은 그대로 둔다
+    asked = choice.get("dimensions")
+    breakdown = bool(isinstance(asked, list) and asked) or template in TIME_TEMPLATES
     dimensions = generation._dimensions_of(choice, measure, catalog, template)
     if template is None or not generation._fits(template, measure, dimensions, catalog):
         template = generation._default_template(dimensions, catalog)
@@ -294,6 +302,7 @@ def from_choice(catalog: Catalog, choice: dict[str, Any] | None) -> RouteDecisio
         listing_status=listing_status,
         follow_up=follow_up,
         related=[k for k in related if k != f"measure:{measure.key}"],
+        breakdown=breakdown,
     )
 
 
@@ -325,18 +334,27 @@ def system_prompt(catalog: Catalog) -> str:
         "- PLAN_VS_ACTUAL: 계획(예정) 대비 실제 진척. \"계획보다 늦고 있어?\", \"일정대로 "
         "가고 있어?\", \"일정 지연되고 있나?\", \"예정보다 앞서 있어?\", \"계획 대비 몇 퍼센트 "
         "차이야?\", \"예상 일정 대비 진척률 어때?\"\n"
-        "- BEHIND_TASKS: 계획보다 늦은 작업이 무엇인지·있는지. \"늦은 작업 뭐야?\", "
-        "\"지연된 작업 있어?\", \"지연된 작업 "
-        "목록\"\n"
+        "- BEHIND_TASKS: 계획선(기간 안분)보다 뒤처진 작업이 무엇인지·있는지. 종료일이 남은 "
+        "작업도 든다. \"늦은 작업 뭐야?\", \"계획보다 뒤처진 작업 있어?\"\n"
         "- PROGRESS_CHANGE: 지난주·지난달보다 얼마나 진행됐는지. period 는 WEEK 또는 MONTH. "
         "\"지난주보다 얼마나 진행됐어?\"\n"
-        "- DELAY_CAUSE: 왜 늦어졌는지, 지연 사유·원인\n"
+        "- DELAY_CAUSE: 지연 작업(종료일이 지났는데 끝나지 않은 작업)이 무엇인지와 그 사유·원인. "
+        "\"지연된 작업 있어?\", \"지연된 작업 목록\", \"이번 달 지연된 작업과 사유\", "
+        "\"지연 사유가 뭐야?\". 특정 작업 하나가 왜 늦었는지 묻는 질문(\"설계 완료가 왜 "
+        "늦어졌어?\")은 그 내용을 문서·회의록·이슈에서 찾는 DOCUMENT 다\n"
         "진척률 값 하나나 추이 그림을 묻는 것(\"진척률 몇 퍼센트야?\", \"이번 달 진척 추세\")은 "
         "AGGREGATE 다.\n"
         "산출물 지표는 셋이 다르다. 파일이 올라왔는가는 제출률(progress_work_product_pct, "
         "wbs_deliverable_submitted_rate), 발주기관이 작업 완료를 확인·인정했는가는 완료 확인율"
         "(wbs_completion_rate)이다. \"산출물까지 확인된 진척\", \"완료가 확인된 작업\" 은 완료 "
-        "확인율이다.\n"
+        "확인율이다. 산출물 지표는 WBS 작업별 산출물의 제출·확인 상태를 센 것이다. 과업지시서·"
+        "계약서에 적힌 납품 산출물의 종류·개수(\"납품 산출물은 몇 종인가\")나 사업 기간처럼 "
+        "문서에 적힌 내용은 지표가 아니라 DOCUMENT 다.\n"
+        "## 문서와 지표를 함께 묻는 질문\n"
+        "한 질문이 문서에 적힌 내용과 카탈로그 지표를 함께 물으면(\"납품 산출물은 몇 종이고 "
+        "일반 이슈는 몇 건이야\") 되묻지 않는다. 지표 쪽을 AGGREGATE 의 measure 로 고르고, "
+        "query 에는 문서 쪽 핵심어(\"납품 산출물 종류\")를 적는다. 문서 쪽은 검색한 근거가 같은 "
+        "답에 붙는다.\n"
         "## 되묻기\n"
         "질문이 두 가지 이상으로 읽히고 앞 대화로도 정할 수 없을 때만 CLARIFY 로 하고 options 에 "
         "후보 키 2~3개를 적는다(\"진도 괜찮아?\" 는 계획 대비 진척인지 전체 현황인지 갈린다). "
@@ -370,7 +388,10 @@ def system_prompt(catalog: Catalog) -> str:
         "질문도 목록이다. 열린 이슈(list ISSUE, listFilter OPEN)를 심각도 순으로 받아 답한다. "
         "종류는 "
         + ", ".join(f"{k}({v})" for k, v in LISTABLE.items())
-        + " 중 하나다. 특정 항목의 내용을 묻는 질문에는 list 를 붙이지 않는다.\n"
+        + " 중 하나다. 특정 항목의 내용을 묻는 질문에는 list 를 붙이지 않는다. 이름을 댄 항목 "
+        "하나의 상태·내용을 묻는 질문(\"외부 연계 규격 협의 이슈 상태\", \"로그인 API 이슈 어떻게 "
+        "됐어?\")은 건수 집계가 아니라 DOCUMENT 이고 query 에 그 항목 이름을 적는다. 그 항목의 "
+        "지금 상태는 근거에 붙어 온다.\n"
         "listFilter 는 OPEN(아직 안 끝난 것), CLOSED(끝난 것), ALL(전부) 중 하나다. "
         '"아직 작업이 안 된", "처리 중인", "남은", "미해결" 은 OPEN 이고 '
         '"완료된", "닫힌", "처리된" 은 CLOSED 다. 조건이 없으면 ALL 이다.\n'

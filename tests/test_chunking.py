@@ -241,3 +241,17 @@ def test_두_표에_걸친_조각은_표_범위만_남긴다():
     [draft] = chunking.chunk("DOCUMENT_UPLOAD", "표.hwp", body, block_positions=True)
     assert (draft.meta["table"], draft.meta["tableEnd"]) == (1, 2)
     assert "tableRowStart" not in draft.meta
+
+
+def test_엑셀_표_조각은_칸마다_머리글을_붙이고_행_몇_개씩_나눈다():
+    """시트 하나를 한 조각에 넣으면 행 하나를 묻는 질문과의 유사도가 근거 문턱 아래였다
+    (UC-060-S15 실모델 0.52). 칸에 머리글을 붙이고 조각을 행 몇 개로 줄인다."""
+    body = (
+        "## 시트: WBS\n\n| 행 | WBS ID | 업무분류 | 산출물 |\n| --- | --- | --- | --- |\n"
+        + "\n".join(f"| {n} | 3.{n - 2} | 작업{n} | 산출물{n} |" for n in range(3, 9))
+    )
+    drafts = chunking.chunk("REPO_DOCUMENT", "WBS.xlsx", body)
+    assert len(drafts) == 2
+    assert [(d.meta["rowStart"], d.meta["rowEnd"]) for d in drafts] == [(3, 5), (6, 8)]
+    assert all(d.content.startswith("시트: WBS\n") for d in drafts)
+    assert "| 5 | WBS ID 3.3 | 업무분류 작업5 | 산출물 산출물5 |" in drafts[0].content

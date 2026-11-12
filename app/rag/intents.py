@@ -97,11 +97,10 @@ def run(
     projects = _projects(cur, project_ids)
     if intent == PLAN_VS_ACTUAL:
         return plan_vs_actual(cur, projects, at)
-    if intent in (BEHIND_TASKS, DELAY_CAUSE):
-        result = behind_tasks(cur, projects, at)
-        if intent == DELAY_CAUSE:
-            result.intent = DELAY_CAUSE
-        return result
+    if intent == BEHIND_TASKS:
+        return behind_tasks(cur, projects, at)
+    if intent == DELAY_CAUSE:
+        return delayed_tasks(cur, projects, at)
     if intent == PROGRESS_CHANGE:
         return progress_change(cur, projects, period if period in PERIODS else WEEK)
     raise ValueError(f"모르는 질문 묶음: {intent}")
@@ -311,6 +310,84 @@ def behind_tasks(cur: Any, projects: list[dict[str, Any]], at: date) -> IntentRe
     shown_rows = min(total, TABLE_ROWS)
     scope = f"총 {total}건" if shown_rows >= total else f"총 {total}건 중 앞 {shown_rows}건"
     result.note = f"기준일 {at.isoformat()} {scope}. 계획선은 추정이다. {PLAN_FORMULA}"
+    return result
+
+
+# ---------------------------------------------------------------- 지연 작업
+
+
+def delayed_tasks(cur: Any, projects: list[dict[str, Any]], at: date) -> IntentResult:
+    """지연 작업과 그 사유를 묻는 질문의 재료. 지연은 종료일이 기준일 전에 지났는데 실적이
+    100% 가 아닌 말단 작업이다(IM-009 5.1). 계획선보다 뒤처졌을 뿐 종료일이 남은 작업(계획
+    뒤짐)은 지연이 아니다. 계획 뒤짐 목록은 behind_tasks 가 따로 낸다."""
+    result = IntentResult(DELAY_CAUSE, ANSWER, "지연 작업")
+    items: list[tuple[date, dict[str, str]]] = []
+    with_plan = 0
+    leaves = 0
+    for project in projects[:MAX_PROJECTS]:
+        plan_rows = progress_service.current_wbs_rows(cur, project["id"])
+        if not plan_rows:
+            continue
+        with_plan += 1
+        leaves += len(plan_rows)
+        for r in plan_rows:
+            if r.end is None or r.end >= at or r.actual is None or r.actual + 0.0001 >= 1.0:
+                continue
+            items.append(
+                (
+                    r.end,
+                    {
+                        "project": project["name"],
+                        "task": f"{r.wbs_id} {r.name}".strip(),
+                        "end": r.end.isoformat(),
+                        "actual": f"{format_value(_pct(r.actual))}%",
+                    },
+                )
+            )
+    if not with_plan:
+        result.status = NO_DATA
+        result.notice = (
+            "WBS 파일이 없어 어떤 작업이 지연됐는지 알 수 없습니다. 용역사가 작업별 "
+            "시작일·종료일·실적이 있는 WBS 파일을 저장소에 커밋하면 답할 수 있습니다."
+        )
+        return result
+
+    items.sort(key=lambda t: t[0])
+    result.dates.append(at)
+    total = len(items)
+    if total == 0:
+        result.lines.append(
+            f"- 기준일 {at.isoformat()}: 종료일이 지났는데 끝나지 않은 지연 작업 없음 "
+            f"(말단 작업 {leaves}건 중)"
+        )
+        return result
+    shown = items[:PROMPT_ROWS]
+    head = (
+        f"- 기준일 {at.isoformat()}: 말단 작업 {leaves}건 중 지연 작업 {total}건"
+        " (종료일이 지났는데 실적이 100%가 아님)"
+    )
+    if total > len(shown):
+        head += f". 아래는 종료일이 이른 앞 {len(shown)}건"
+    result.lines.append(head)
+    for _, v in shown:
+        result.lines.append(
+            f"- 지연 작업 {v['task']} ({v['project']}): 종료 예정 {v['end']}, 실적 {v['actual']}"
+        )
+    result.table = _table(
+        "progress_delayed_tasks",
+        "지연 작업",
+        None,
+        [("task", "작업"), ("project", "사업"), ("end", "종료 예정"), ("actual", "실적")],
+        [WidgetRow(values=v) for _, v in items[:TABLE_ROWS]],
+        [p["id"] for p in projects],
+        truncated=total > TABLE_ROWS,
+    )
+    shown_rows = min(total, TABLE_ROWS)
+    scope = f"총 {total}건" if shown_rows >= total else f"총 {total}건 중 앞 {shown_rows}건"
+    result.note = (
+        f"기준일 {at.isoformat()} {scope}. 지연은 종료일이 기준일 전에 지났는데 실적이 100%가 "
+        "아닌 작업이다. 계획선보다 뒤처졌지만 종료일이 남은 작업은 들지 않는다."
+    )
     return result
 
 

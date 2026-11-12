@@ -13,7 +13,7 @@ from typing import Any
 from app.common.korean import attach
 from app.config import settings
 from app.rag import blocks as blocks_mod
-from app.rag import collection
+from app.rag import collection, vocab
 from app.rag.routing import PreviousTurn, render_previous
 from app.rag.search import RetrievedChunk
 from app.semantic.models import WidgetDataResponse
@@ -27,6 +27,10 @@ SYSTEM_PROMPT = (
     "괄호의 분자·분모(예: 0건 / 41건)가 있으면 함께 말한다. 값이 0 이거나 없을 때는 그 이유가 "
     "근거에 있으면 반드시 말한다.\n"
     "2. 사실은 '근거' 절의 내용에서만 가져온다. 근거에 없는 내용은 모른다고 말한다.\n"
+    "2-0. 항목의 지금 상태(진행중·종료 등)는 근거 머리의 '지금 상태'나 그림·목록의 상태 열을 "
+    "따른다. 근거 원문(이슈 본문·"
+    "회의록)에 적힌 계획·논의 문장으로 지금 상태를 말하지 않는다. 상태를 물으면 그 상태를 먼저 "
+    "말한다.\n"
     "2-1. 근거가 예상·가정('~하면 ~할 수 있다', 리스크·대응 계획)이면 일어난 일로 쓰지 않는다. "
     "'리스크로 적힌 내용' 처럼 그 성격을 밝힌다.\n"
     "3. 근거를 인용한 문장 끝에 해당 근거 번호를 [1] 처럼 붙인다. 번호는 근거 절의 번호만 쓴다.\n"
@@ -86,7 +90,8 @@ def aggregate_lines(data: WidgetDataResponse) -> list[str]:
         for col in dim_cols:
             if col.key.endswith("_label"):
                 continue
-            value = row.values.get(f"{col.key}_label") or row.values.get(col.key)
+            # 상태·심각도 코드는 화면과 같은 발주기관 어휘로(IN_PROGRESS → 진행중)
+            value = row.values.get(f"{col.key}_label") or vocab.word(row.values.get(col.key))
             if value is not None:
                 labels.append(f"{col.label} {value}")
         head = ", ".join(labels) if labels else data.measureLabel
@@ -95,14 +100,17 @@ def aggregate_lines(data: WidgetDataResponse) -> list[str]:
         if num is not None and den is not None:
             line += f" ({format_value(num)}건 / {format_value(den)}건)"
         lines.append(line)
+    # 전체 줄에도 지표 이름을 붙인다. "전체" 만 있으면 수치 검문의 라벨 짝짓기에서 "일반 이슈는
+    # 9건" 의 9 가 지표 이름을 가진 범주 줄(일반 이슈 상태 …)에 밀려 막혔다(UC-060-S02 실모델)
     if data.total is not None and data.dimensions:
-        lines.append(f"- 전체: {format_value(data.total.values.get('value'))}{unit}")
+        total = format_value(data.total.values.get("value"))
+        lines.append(f"- {data.measureLabel} 전체: {total}{unit}")
     elif data.dimensions and unit == "건" and not data.truncated:
         # 건수는 나눈 값을 더하면 전체다. 서버가 더해 준다. 모델이 더하면 수치 검문에 막힌다
         # (10-07 "이슈가 몇 건이야?" 가 상태별 7·5 를 받아 12 를 만들어 막혔다)
         values = [row.values.get("value") for row in data.rows]
         if values and all(isinstance(v, int | float) for v in values):
-            lines.append(f"- 전체(항목 합): {format_value(sum(values))}{unit}")
+            lines.append(f"- {data.measureLabel} 전체(항목 합): {format_value(sum(values))}{unit}")
     if data.previousTotal is not None:
         previous = format_value(data.previousTotal.values.get("value"))
         lines.append(f"- 직전 구간 전체: {previous}{unit}")
@@ -163,7 +171,9 @@ def user_prompt(
 
 def _evidence(no: int, chunk: RetrievedChunk) -> str:
     where = location_label(chunk)
-    return f"[{no}] {chunk.source_title}{where}\n{chunk.content.strip()}"
+    # 이슈는 지금 상태를 머리에 둔다. 본문의 계획 문장을 지금 상태로 읽지 않게(UC-060-S16)
+    state = f" · 지금 상태 {chunk.status}" if chunk.status else ""
+    return f"[{no}] {chunk.source_title}{where}{state}\n{chunk.content.strip()}"
 
 
 def focus_rows(chunk: RetrievedChunk, query: str) -> RetrievedChunk:

@@ -86,3 +86,44 @@ def test_활용형이_다른_말은_같은_말로_보지_못한다():
 ])
 def test_일정_근거의_제자리_값은_통과한다(sentence):
     assert _schedule().check(sentence) == []
+
+
+# UC-060-S02 실모델: 상태별로 나뉜 일반 이슈 건수. 전체 줄에 지표 이름이 없을 때 "일반 이슈는 총
+# 9건" 의 9 가 "일반 이슈 상태 …" 범주 줄에 밀려 지표 불일치로 막혔다
+_GENERAL = g.Checker(
+    g.facts_from_lines(
+        [
+            "- 일반 이슈 상태 종료: 6건",
+            "- 일반 이슈 상태 진행중: 2건",
+            "- 일반 이슈 상태 열림: 1건",
+            "- 일반 이슈 건수(결함 제외) 전체(항목 합): 9건",
+        ],
+        "집계",
+        subject="일반 이슈 건수",
+    ),
+    question="일반 이슈가 몇 건이야",
+)
+
+
+@pytest.mark.parametrize(
+    "sentence",
+    [
+        "2026-11-12 기준 일반 이슈는 총 9건입니다.",
+        "일반 이슈 건수는 9건입니다.",
+        "일반 이슈 중 진행중은 2건입니다.",
+    ],
+)
+def test_전체_줄에_지표_이름이_있으면_맞는_합계는_통과한다(sentence):
+    assert _GENERAL.check(sentence) == []
+
+
+@pytest.mark.parametrize(
+    "sentence",
+    [
+        "일반 이슈는 15건입니다.",
+        "일반 이슈 중 진행중은 9건입니다.",
+        "일반 이슈 상태 종료는 2건입니다.",
+    ],
+)
+def test_틀린_수치와_다른_범주의_값은_계속_막는다(sentence):
+    assert _GENERAL.check(sentence) != []

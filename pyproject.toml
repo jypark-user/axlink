@@ -60,6 +60,7 @@ markers = [
   "live: 실모델·실원천을 부른다. AXLINK_LIVE=1 일 때만 돈다",
   "live_tool: 실제 도구(GitHub) 저장소를 원천으로 수집한다. live 와 함께 붙인다(tests/fixtures/im009/live/README.md)",
   "remote_llm: 원격 대상에서도 재생 서버의 대본 모델(tests/fixtures/im009/replay_ollama.py)로 돈다",
+  "live_model: 대상 서버의 실제 생성 모델로 AI 질의를 돈다. AXLINK_LIVE_MODEL=1 일 때만 돈다(tests/scenarios/test_live_model.py)",
 ]
 filterwarnings = [
   "error::DeprecationWarning",
