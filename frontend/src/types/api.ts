@@ -314,6 +314,7 @@ export interface ProjectSummaryResponse {
   clientOrgId: string;
   clientOrgName: string;
   contractorName: string | null;
+  /** 산출물 승인 수 / WBS 가 정한 산출물 수(DEC-12). WBS 가 없으면 0/0 */
   requiredWorkProductApproved: number;
   requiredWorkProductTotal: number;
   openCorrectionActionCount: number;
@@ -327,6 +328,10 @@ export interface ProjectSummaryResponse {
   progressDeviation: number | null;
   /** 진척 집계 자체가 실패했다. 산출 불가(null)와 다르다 */
   progressError?: boolean;
+  /** 일정 준수율(0~1, DEC-01). 기한이 지난 마일스톤이 없으면 null(산출 불가) */
+  scheduleCompliance?: number | null;
+  scheduleComplianceAchieved?: number;
+  scheduleComplianceTotal?: number;
   updatedAt: string;
 }
 
@@ -1619,6 +1624,8 @@ export interface WbsItemResponse {
   deliverableRule?: 'REPO_PATH' | 'FILE_NAME' | 'PRODUCT_TYPE' | null;
   deliverableRef?: string | null;
   deliverableUrl?: string | null;
+  /** 작업 단위 격차 경고(DEC-20): 실적 80 이상인데 산출물 미제출이거나 열린 연결 이슈가 있다 */
+  gapWarning?: string | null;
 }
 
 export type DeliverableStatus = 'NONE' | 'SUBMITTED' | 'MISSING' | 'OVERDUE';
