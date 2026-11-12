@@ -104,3 +104,37 @@ def test_junit_의_경우와_모의_모델_표시를_적는다(tmp_path, monkeyp
     assert row["variant"] == "캐시있음-문서"
     assert row["model_kind"] == "mock"
     assert "모의 모델" in row["env"]["model"] and "실모델 증거 아님" in row["env"]["model"]
+
+
+def test_junit_의_실모델_이름은_모의_모델로_읽지_않는다(tmp_path, monkeypatch):
+    """실모델 시험은 대상이 쓴 모델 이름과 proves=live-model 을 남긴다. 그 실행은 실모델 증거다."""
+    junit = tmp_path / "j.xml"
+    junit.write_text(
+        '<testsuite><testcase classname="tests.scenarios.test_live_model" '
+        'name="test_UC_060_S10_모델_장애[\uc2e4\ubaa8\ub378]"><properties>'
+        '<property name="model" value="gemma4:31b-cloud"/>'
+        '<property name="proves" value="live-model"/></properties></testcase></testsuite>',
+        encoding="utf-8",
+    )
+    recs = tmp_path / "rec"
+    recs.mkdir()
+    (recs / "catalog.json").write_text(json.dumps({
+        "sources": {k: {"version": "v0"} for k in (
+            "IM-007-유스케이스명세서.md",
+            "IM-007A-요구사항-세부의무-대응표.md",
+            "IM-009-공통시험자료.md",
+        )},
+        "scenarios": {"UC-060-S10": {"acs": ["AC-060-9"], "state": "S0", "expected": "x"}},
+        "acs": {"AC-060-9": {"obligations": []}},
+    }, ensure_ascii=False), encoding="utf-8")
+    monkeypatch.setattr(vr, "RECORDS", recs)
+    args = vr.argparse.Namespace(
+        junit=str(junit), cycle="C", only="", evidence="e.xml", url="", proves="api", ts="",
+        operator="t", baseline="b", code="c", db="d", env=_ENV, tools="", model="",
+        mode="api", defects="", rerun_of="", notes="",
+    )
+    vr.record_junit(args)
+    row = json.loads((recs / "runs.jsonl").read_text(encoding="utf-8").splitlines()[0])
+    assert row["variant"] == "실모델"
+    assert "model_kind" not in row and row["env"]["model"] == "gemma4:31b-cloud"
+    assert vr.proves(row) == {"api", "live-model"}
