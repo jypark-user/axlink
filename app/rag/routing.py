@@ -386,7 +386,10 @@ def system_prompt(catalog: Catalog) -> str:
         "질문도 목록이다. 열린 이슈(list ISSUE, listFilter OPEN)를 심각도 순으로 받아 답한다. "
         "종류는 "
         + ", ".join(f"{k}({v})" for k, v in LISTABLE.items())
-        + " 중 하나다. 특정 항목의 내용을 묻는 질문에는 list 를 붙이지 않는다.\n"
+        + " 중 하나다. 특정 항목의 내용을 묻는 질문에는 list 를 붙이지 않는다. 이름을 댄 항목 "
+        "하나의 상태·내용을 묻는 질문(\"외부 연계 규격 협의 이슈 상태\", \"로그인 API 이슈 어떻게 "
+        "됐어?\")은 건수 집계가 아니라 DOCUMENT 이고 query 에 그 항목 이름을 적는다. 그 항목의 "
+        "지금 상태는 근거에 붙어 온다.\n"
         "listFilter 는 OPEN(아직 안 끝난 것), CLOSED(끝난 것), ALL(전부) 중 하나다. "
         '"아직 작업이 안 된", "처리 중인", "남은", "미해결" 은 OPEN 이고 '
         '"완료된", "닫힌", "처리된" 은 CLOSED 다. 조건이 없으면 ALL 이다.\n'

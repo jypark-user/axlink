@@ -223,4 +223,4 @@ def test_지정한_상태가_요약_이행률_AI_표에_같이_쓰인다(client,
         table = entity_table.build(cur, "REQUIREMENT", entity_table.ALL, [PID], 500)
     assert counts["v"] == after["verified"]
     status = {r.values["title"]: r.values["status"] for r in table.data.rows}
-    assert status["지정 시험 요구사항"] == "VERIFIED(발주기관 지정)"
+    assert status["지정 시험 요구사항"] == "검증(발주기관 지정)"  # 상태 코드는 발주기관 어휘로

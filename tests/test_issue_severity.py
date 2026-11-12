@@ -160,7 +160,8 @@ def test_AI_목록은_미지정을_등급_사이에_끼우지_않고_별도_묶�
     specified = [i for i, s in enumerate(order) if s != "미지정"]
     # 지정된 것이 모두 먼저, 미지정은 그 뒤 한 묶음이다
     assert max(specified) < min(unspecified)
-    ranks = ["BLOCKER", "CRITICAL", "MAJOR", "MINOR", "TRIVIAL"]
+    # 표에는 화면과 같은 발주기관 어휘로 나간다(app/rag/vocab.py)
+    ranks = ["치명", "심각", "중대", "경미", "사소"]
     seen = [ranks.index(order[i]) for i in specified]
     assert seen == sorted(seen)
     assert any("심각도 미지정" in line for line in table.lines)

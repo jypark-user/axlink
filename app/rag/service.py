@@ -619,7 +619,9 @@ def _search(
         return
     turn.gate_ok = found.passes_gate()
     turn.chunks = (
-        [answer.focus_rows(c, query_text) for c in found.chunks] if turn.gate_ok else []
+        search.attach_status(cur, [answer.focus_rows(c, query_text) for c in found.chunks])
+        if turn.gate_ok
+        else []
     )
     turn.found_count = found.candidate_count
     turn.max_similarity = found.max_similarity
