@@ -368,9 +368,17 @@ def _sow_source(sources: list[dict], phrase: str) -> dict | None:
     )
 
 
-def test_UC_060_S01_문서_질문과_출처(target, s0, llm):
+def _all_evidence(monkeypatch) -> None:
+    """프로세스 안 실행은 가짜 임베딩(글자 해시)이라 근거 순서가 내용과 무관하게 정해진다. 조각
+    본문이 조금만 바뀌어도 답이 든 조각이 상위 20개 밖으로 밀린다. 출처 위치를 보는 시나리오는
+    사업 조각을 모두 근거로 넣어 순위 운에서 떼어 낸다. 원격 실행(실임베딩)에는 닿지 않는다."""
+    monkeypatch.setattr(settings, "rag_top_k", 100)
+
+
+def test_UC_060_S01_문서_질문과_출처(target, s0, llm, monkeypatch):
     """「납품 산출물은 몇 종인가」 → 22종·각주, 출처 과업지시서 2쪽, 원문 연결 (AC-060-1, IM-009 7.5)."""
     llm({"route": "DOCUMENT", "query": "납품 산출물 종"}, "납품 산출물은 22종입니다[1].")
+    _all_evidence(monkeypatch)
     events = _ask(target, s0, "TD-ACC-C1", "납품 산출물은 몇 종인가", [s0.ids["TD-PRJ-1"]])
     text, sources = _text(events), _sources(events)
     assert "22종" in text and "[1]" in text, text
@@ -394,9 +402,10 @@ def test_UC_060_S03_결합(target, s0, llm):
     assert "22종" in text and "9건" in text, text
 
 
-def test_UC_060_S13_PDF_쪽_위치(target, s0, llm):
+def test_UC_060_S13_PDF_쪽_위치(target, s0, llm, monkeypatch):
     """「사업 기간은 몇 개월인가」 → 9개월, 출처 3쪽(2쪽 아님), 연결이 TD-DOC-4 (AC-060-11·1)."""
     llm({"route": "DOCUMENT", "query": "사업 기간 개월"}, "사업 기간은 9개월입니다[1].")
+    _all_evidence(monkeypatch)
     events = _ask(target, s0, "TD-ACC-C1", "사업 기간은 몇 개월인가", [s0.ids["TD-PRJ-1"]])
     text, sources = _text(events), _sources(events)
     assert "9개월" in text, text

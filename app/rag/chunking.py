@@ -154,10 +154,18 @@ def _has_row_numbers(section_text: str) -> bool:
 
 
 def _split_sections(text: str) -> list[tuple[list[str], str]]:
-    """표제 기준 1단계 분할. 표제를 만나면 경로를 갱신하고 새 구획을 연다."""
+    """표제 기준 1단계 분할. 표제를 만나면 경로를 갱신하고 새 구획을 연다.
+
+    쪽 표식은 바로 붙이지 않고 잠시 들고 있다가, 다음 본문 줄이 표제면 새 구획 앞에, 아니면
+    지금 구획에 붙인다. 쪽 머리말에서 새 절이 시작하는 PDF 에서 표식이 앞 절 끝에 붙으면 앞 절
+    조각의 쪽이 두 쪽에 걸친다(DEF-V045). 쪽마다 되풀이되는 머리글 줄은 조각에서 뺀다.
+    """
     sections: list[tuple[list[str], str]] = []
     path: list[str] = []
     buffer: list[str] = []
+    carry: list[str] = []  # 쪽 표식과 그 뒤 머리글·빈 줄. 어느 구획에 붙일지 아직 모른다
+    lines = list(_with_page_tokens(text))
+    running = _running_headers(lines)
 
     def flush(current_path: list[str]) -> None:
         content = "\n".join(buffer).strip()
@@ -165,27 +173,66 @@ def _split_sections(text: str) -> list[tuple[list[str], str]]:
             sections.append((list(current_path), content))
         buffer.clear()
 
-    for line in text.splitlines():
-        mark = _PAGE_MARK.match(line.strip())
-        if mark:
-            # 쪽 표식은 본문 흐름 안에 잠시 끼워 둔다. 조각을 나눈 뒤 위치로 옮긴다
-            rest = mark.group(2).strip()
-            buffer.append(f"⟦쪽{mark.group(1)}⟧")
-            if rest and rest != _PAGE_MARK_EMPTY:
-                buffer.append(rest)
+    for line in lines:
+        stripped = line.strip()
+        if _PAGE_TOKEN.fullmatch(stripped):
+            buffer.extend(carry)
+            carry = [stripped]
+            continue
+        if carry and stripped in running:
+            # 쪽 머리글은 본문이 아니다. 조각마다 같은 줄이 붙으면 검색 점수만 흐린다
+            continue
+        if carry and not stripped:
+            carry.append(line)
             continue
         parsed = _parse_heading(line)
         if parsed is None:
+            buffer.extend(carry)
+            carry = []
             buffer.append(line)
             continue
         level, heading = parsed
         flush(path)
         path = path[: level - 1] + [heading]
         path = path[:_MAX_HEADING_DEPTH]
+        buffer.extend(carry)
+        carry = []
         buffer.append(heading)  # 표제도 본문에 남긴다 — 청크만 봐도 무엇에 관한 글인지 알게
 
+    buffer.extend(carry)
     flush(path)
     return sections or [([], text)]
+
+
+def _with_page_tokens(text: str):
+    """줄을 내되 쪽 표식 줄은 ⟦쪽N⟧ 한 줄과 같은 줄 뒤 본문으로 나눈다.
+
+    쪽 표식은 본문 흐름 안에 잠시 끼워 둔다. 조각을 나눈 뒤 위치로 옮긴다.
+    """
+    for line in text.splitlines():
+        mark = _PAGE_MARK.match(line.strip())
+        if not mark:
+            yield line
+            continue
+        yield f"⟦쪽{mark.group(1)}⟧"
+        rest = mark.group(2).strip()
+        if rest and rest != _PAGE_MARK_EMPTY:
+            yield rest
+
+
+def _running_headers(lines: list[str]) -> set[str]:
+    """쪽마다 되풀이되는 머리글. 쪽 표식 바로 뒤 첫 줄이 두 쪽 이상에서 같으면 머리글로 본다."""
+    counts: dict[str, int] = {}
+    after_mark = False
+    for line in lines:
+        stripped = line.strip()
+        if _PAGE_TOKEN.fullmatch(stripped):
+            after_mark = True
+            continue
+        if after_mark and stripped:
+            counts[stripped] = counts.get(stripped, 0) + 1
+            after_mark = False
+    return {line for line, n in counts.items() if n >= 2}
 
 
 def _parse_heading(line: str) -> tuple[int, str] | None:

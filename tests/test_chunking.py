@@ -162,3 +162,32 @@ def test_행_번호_열이_없는_표에는_행_범위를_붙이지_않는다():
     body = "## 시트: 일정\n\n| 1 | 착수 |\n| --- | --- |\n| 2 | 분석 |\n| 3 | 설계 |"
     [draft] = chunking.chunk("DOCUMENT_UPLOAD", "일정.xlsx", body)
     assert "rowStart" not in draft.meta and "page" not in draft.meta
+
+
+def test_쪽_머리글_뒤에서_새_절이_시작하면_앞_절_조각은_앞_쪽에서_끝난다():
+    """DEF-V045. 쪽마다 같은 머리글이 있고 새 쪽 첫 본문이 표제면 쪽 표식은 새 절에 붙는다."""
+    head = "가상 시험자료 · 검증용"
+    body = "\n".join(
+        [
+            "<!-- 1쪽 -->", head, "1. 소개", "소개 문단이다.", "- 1 / 2 -", "",
+            "<!-- 2쪽 -->", head, "2. 납품 산출물", "납품 산출물은 22종이다.", "- 2 / 2 -",
+        ]
+    )
+    drafts = chunking.chunk("DOCUMENT_UPLOAD", "과업지시서.pdf", body)
+    by_heading = {tuple(d.meta["headingPath"]): d for d in drafts}
+    first = by_heading[("1. 소개",)]
+    assert first.meta["page"] == 1 and "pageEnd" not in first.meta
+    assert all(head not in d.content for d in drafts)  # 쪽 머리글은 조각에서 뺀다
+    second = by_heading[("2. 납품 산출물",)]
+    assert second.meta["page"] == 2 and "pageEnd" not in second.meta
+
+
+def test_쪽을_넘어_이어지는_본문은_여전히_두_쪽에_걸친다():
+    head = "머리글"
+    body = "\n".join(
+        ["<!-- 1쪽 -->", head, "1. 소개", "앞 쪽 문장이다.",
+         "<!-- 2쪽 -->", head, "이어지는 문장이다."]
+    )
+    [draft] = chunking.chunk("DOCUMENT_UPLOAD", "보고서.pdf", body)
+    assert draft.meta["page"] == 1 and draft.meta["pageEnd"] == 2
+
