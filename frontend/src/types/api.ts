@@ -1780,9 +1780,10 @@ export interface LlmSettingUpdateRequest {
 
 export interface LlmMeasureResponse {
   model: string;
-  tokPerSec: number;
+  /** 서버가 생성 소요 시간을 주지 않으면(클라우드 위임 모델) null */
+  tokPerSec: number | null;
   evalCount: number;
-  evalDurationSeconds: number;
+  evalDurationSeconds: number | null;
   measuredAt: string;
 }
 

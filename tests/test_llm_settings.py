@@ -406,3 +406,47 @@ def test_목록에서_클라우드_위임_모델을_구분한다(client, admin_h
     assert by_name["gemma4:31b-cloud"]["cloud"] is True
     assert by_name["gemma4:31b-cloud"]["remoteHost"] == "https://ollama.com"
     assert by_name["qwen3:4b"]["cloud"] is False and by_name["qwen3:4b"]["remoteHost"] is None
+
+
+def test_소요_시간을_안_주는_클라우드_모델도_생성은_확인된다():
+    """DEF-045: Ollama 클라우드 모델은 eval_count 는 주지만 eval_duration 은 안 준다(11-12 실측).
+    생성이 된 것은 확인으로 보고, 속도는 지어내지 않고 비운다."""
+    rate = ollama_admin.rate_from_generate(
+        "gemma4:31b-cloud", {"model": "gemma4:31b", "response": "1 + 1 = 2", "eval_count": 8}
+    )
+    assert rate.eval_count == 8
+    assert rate.tok_per_sec is None and rate.eval_duration_seconds is None
+
+
+@requires_db
+def test_속도를_못_재는_모델도_저장되고_이전_실측은_남는다(
+    client, admin_headers, fake_ollama, monkeypatch
+):
+    """DEF-045: 생성 확인은 통과하고 속도만 비면 저장한다. 앞서 잰 속도를 비우지 않는다."""
+    client.post("/api/ai/models/refresh", params={"baseUrl": _BASE}, headers=admin_headers)
+    client.post(
+        "/api/ai/models/measure", params={"baseUrl": _BASE, "model": "qwen3:4b"},
+        headers=admin_headers,
+    )
+    monkeypatch.setattr(
+        model_settings.ollama_admin,
+        "measure_rate",
+        lambda base, model: ollama_admin.MeasuredRate(model, None, 8, None),
+    )
+    measured = client.post(
+        "/api/ai/models/measure", params={"baseUrl": _BASE, "model": "qwen3:4b"},
+        headers=admin_headers,
+    )
+    assert measured.status_code == 200, measured.text
+    assert measured.json()["tokPerSec"] is None and measured.json()["evalCount"] == 8
+    saved = client.put(
+        "/api/ai/settings",
+        json={"baseUrl": _BASE, "model": "qwen3:4b", "numCtx": None, "numPredict": 2000},
+        headers=admin_headers,
+    )
+    assert saved.status_code == 200, saved.text
+    me = next(
+        m for m in client.get("/api/ai/settings", headers=admin_headers).json()["models"]
+        if m["name"] == "qwen3:4b"
+    )
+    assert me["tokPerSec"] == 18.6

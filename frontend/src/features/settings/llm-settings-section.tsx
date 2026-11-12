@@ -230,15 +230,25 @@ function LlmSettingsForm({
         `/ai/models/measure?baseUrl=${encodeURIComponent(baseUrl.trim())}&model=${encodeURIComponent(selected.name)}`,
       );
       // 폼 필드에만 쓰면 화면이 안 바뀌던 사고가 있었다. 알림으로 돌려주고 캐시를 다시 읽는다.
+      if (res.tokPerSec === null || res.evalDurationSeconds === null) {
+        // 클라우드 위임 모델은 생성 소요 시간을 주지 않는다. 생성 확인만 알리고 앞선 실측은 그대로 둔다
+        toast({
+          title: `${res.model} · 속도 측정 불가`,
+          description: `${res.evalCount}토큰 생성은 확인했지만 서버가 생성 소요 시간을 주지 않아 속도는 잴 수 없습니다.`,
+          variant: 'success',
+        });
+        return;
+      }
+      const rate = res.tokPerSec;
       toast({
-        title: `${res.model} · ${res.tokPerSec.toFixed(1)} tok/s`,
+        title: `${res.model} · ${rate.toFixed(1)} tok/s`,
         description: `${res.evalCount}토큰을 ${res.evalDurationSeconds.toFixed(2)}초에 생성했습니다. 적재 시간은 뺀 순수 생성 속도입니다.`,
         variant: 'success',
       });
       setModels((prev) =>
         prev.map((m) =>
           m.name === res.model && m.baseUrl === selected.baseUrl
-            ? { ...m, tokPerSec: res.tokPerSec, measuredAt: res.measuredAt }
+            ? { ...m, tokPerSec: rate, measuredAt: res.measuredAt }
             : m,
         ),
       );
