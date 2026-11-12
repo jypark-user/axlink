@@ -78,7 +78,7 @@ _SUGGESTED_MEASURES = (
     "progress_representative_pct",
     "requirement_fulfillment_rate",
     "open_issue_count",
-    "work_product_approval_rate",
+    "deliverable_approval_rate",
 )
 _SUGGESTED_DOCUMENT_QUESTIONS = (
     "과업지시서에 정한 납품 산출물은 무엇인가요?",

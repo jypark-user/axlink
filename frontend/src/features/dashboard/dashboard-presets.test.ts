@@ -31,7 +31,7 @@ describe('dashboard-presets', () => {
       일정: 'schedule_variance_pct',
       품질: 'issue_resolution_rate',
       리스크: 'open_risk_count',
-      산출물: 'work_product_approval_rate',
+      산출물: 'deliverable_approval_rate',
     };
     for (const [axis, measure] of Object.entries(axes)) {
       expect(measures.has(measure), `${axis} 축(${measure})이 없다`).toBe(true);

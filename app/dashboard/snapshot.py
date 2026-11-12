@@ -21,6 +21,7 @@ from app.common import clock, errors
 from app.dashboard import service as progress_service
 from app.dashboard.models import ProgressSnapshotResponse
 from app.db import fetch_all, fetch_one
+from app.standard import repository as standard_repo
 
 
 def take(
@@ -73,13 +74,16 @@ def take_unchecked(
     이력이고, "지난 보고 이후" 를 셀 때 이 줄이 기준점이 된다.
     """
     progress = progress_service.compute(cur, project_id, at)
+    # 요구사항은 이행률 범위(DEC-11), 산출물 승인은 WBS 가 정한 산출물 기준(DEC-12)
+    scope = standard_repo.in_rate_scope("r")
     counts = fetch_one(
         cur,
-        """
+        f"""
         select
-          (select count(*) from requirement where project_id = %(p)s
-             and status in ('VERIFIED', 'ACCEPTED'))             as requirement_verified,
-          (select count(*) from requirement where project_id = %(p)s) as requirement_total,
+          (select count(*) from requirement r where r.project_id = %(p)s
+             and r.status in ('VERIFIED', 'ACCEPTED') and {scope}) as requirement_verified,
+          (select count(*) from requirement r where r.project_id = %(p)s
+             and {scope})                                          as requirement_total,
           (select count(*) from risk where project_id = %(p)s
              and status = 'CLOSED')                               as risk_closed,
           (select count(*) from risk where project_id = %(p)s)    as risk_total,
@@ -88,6 +92,7 @@ def take_unchecked(
         """,
         {"p": project_id},
     )
+    approval = progress.deliverableApproval
     row = fetch_one(
         cur,
         """
@@ -96,12 +101,12 @@ def take_unchecked(
           behind_task_count, issue_resolved_count, issue_total_count,
           requirement_verified_count, requirement_total_count, risk_closed_count, risk_total_count,
           work_product_submitted_count, work_product_approved_count, work_product_total_count,
-          defect_resolved_count, defect_total_count)
+          defect_resolved_count, defect_total_count, deliverable_approved_count, deliverable_total_count)
         values (%(project_id)s, %(snapshot_date)s, %(level)s, %(representative)s, %(wbs_actual)s,
                 %(wbs_planned)s, %(behind)s, %(issue_resolved)s, %(issue_total)s,
                 %(req_verified)s, %(req_total)s, %(risk_closed)s, %(risk_total)s,
                 %(wp_submitted)s, %(wp_approved)s, %(wp_total)s,
-                %(defect_resolved)s, %(defect_total)s)
+                %(defect_resolved)s, %(defect_total)s, %(deliv_approved)s, %(deliv_total)s)
         on conflict (project_id, snapshot_date) do update set
           level = excluded.level,
           representative_pct = excluded.representative_pct,
@@ -119,6 +124,8 @@ def take_unchecked(
           work_product_total_count = excluded.work_product_total_count,
           defect_resolved_count = excluded.defect_resolved_count,
           defect_total_count = excluded.defect_total_count,
+          deliverable_approved_count = excluded.deliverable_approved_count,
+          deliverable_total_count = excluded.deliverable_total_count,
           created_at = now()
         returning *
         """,
@@ -142,6 +149,8 @@ def take_unchecked(
             # 결함 매핑이 없으면 비운다. 0 으로 두면 「결함 0건」과 구분되지 않는다(DEC-02)
             "defect_resolved": None if progress.defect is None else progress.defect.numerator,
             "defect_total": None if progress.defect is None else progress.defect.denominator,
+            "deliv_approved": approval.numerator if approval else None,
+            "deliv_total": approval.denominator if approval else None,
         },
     )
     _record(cur, project_id, row, actor)

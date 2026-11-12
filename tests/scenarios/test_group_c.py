@@ -448,9 +448,30 @@ def test_UC_021_S08_없는_코드_참조_상위_코드(target, s0, replay):
     assert "SR.PORT.001" in parents, refs.json()
 
 
-@pytest.mark.skip(reason="DEC-11(이행률 분모) 결정 전. 결정 뒤 7.7 → 7.x 로 옮긴 값으로 단언한다")
 def test_UC_021_S10_분모_AI_범위(target, s0):
-    """DEC-11 제안 기준 분모 3, 이행률 33.3% (AC-021-10)."""
+    """확정 뒤 이행률 분모 3(A·B·D), 1/3 = 33.3%. C 는 목록에 남되 구분 표시·분모 제외. AI 목록 표도
+    A·B·D 를 확정 목록으로, C 를 「확정 명세서에 없음」으로 가른다 (AC-021-10, DEC-11 (a), IM-009 7.4)."""
+    pid = s0.ids["TD-PRJ-1"]
+    c1 = auth(s0.tokens["TD-ACC-C1"])
+    summary = target.get(f"/api/projects/{pid}/requirements/summary", headers=c1).json()
+    assert summary["total"] == 4, summary
+    assert (summary["rateVerified"], summary["rateTotal"], summary["outsideBaseline"]) == (1, 3, 1), summary
+    assert round(summary["verifiedRate"], 4) == 0.3333
+    spec = {
+        "template": "STAT_CARD", "title": "TST 이행률",
+        "query": {"measure": "requirement_fulfillment_rate", "dimensions": [], "filters": [], "projectScope": [pid], "limit": None},
+        "options": {"unit": None, "sort": "desc", "threshold": None, "stacked": None, "showLegend": None, "compareWithPrevious": None, "columns": None},
+    }
+    card = target.post("/api/widgets/preview", json={"spec": spec}, headers=c1).json()
+    assert round(card["total"]["values"]["value"], 2) == 33.33, card["total"]
+    # AI 목록 질문이 쓰는 표(같은 표준 모델 조회). 모델 호출 없이 표만 본다
+    from app.rag import entity_table
+
+    with tx() as cur:
+        table = entity_table.build(cur, "REQUIREMENT", entity_table.ALL, [pid], 50)
+    scope = {r.values["code"]: r.values["scope"] for r in table.data.rows}
+    assert scope["UR.PORT.003"] == "확정 명세서에 없음(이행률 제외)", scope
+    assert {c for c, v in scope.items() if v == "확정 목록"} == {"UR.PORT.001", "UR.PORT.002", "UR.PORT.004"}, scope
 
 
 # ------------------------------------------------------------------ UC-022
@@ -705,9 +726,38 @@ def test_UC_023_S03_되돌림(target, s0):
     assert again.status_code == 409, again.text
 
 
-@pytest.mark.skip(reason="AI 「요구사항 이행률」 답은 실모델이 필요하다. DEC-03·11 결정 뒤 5174 에서 본다")
 def test_UC_023_S06_일관성(target, s0):
-    """목록·추적표·스냅샷·AI 답이 같은 이행률 (AC-023-4)."""
+    """D 검증 지정 → 요구사항 요약·지표 카드·수동 스냅샷이 모두 2/3 = 66.7%(분모 3, DEC-11) (AC-023-4).
+
+    AI 「요구사항 이행률」 답은 같은 지표(requirement_fulfillment_rate)를 읽는다. 실모델 답은 5174 에서 본다.
+    S03 에서 되돌린 D 를 다시 지정하고 끝에 되돌린다."""
+    pid = s0.ids["TD-PRJ-1"]
+    c1 = auth(s0.tokens["TD-ACC-C1"])
+    rid = s0.ids["REQ-D"]
+    res = target.put(f"/api/projects/{pid}/requirements/{rid}/status", json={"status": "VERIFIED", "reason": "시험 결과서 확인"}, headers=c1)
+    assert res.status_code == 200, res.text
+    try:
+        summary = target.get(f"/api/projects/{pid}/requirements/summary", headers=c1).json()
+        assert (summary["rateVerified"], summary["rateTotal"]) == (2, 3), summary
+        spec = {
+            "template": "STAT_CARD", "title": "TST 이행률",
+            "query": {"measure": "requirement_fulfillment_rate", "dimensions": [], "filters": [], "projectScope": [pid], "limit": None},
+            "options": {"unit": None, "sort": "desc", "threshold": None, "stacked": None, "showLegend": None, "compareWithPrevious": None, "columns": None},
+        }
+        card = target.post("/api/widgets/preview", json={"spec": spec}, headers=c1).json()
+        assert round(card["total"]["values"]["value"], 2) == 66.67, card["total"]
+        snap = target.post(f"/api/projects/{pid}/snapshots", headers=c1)
+        assert snap.status_code == 200, snap.text
+        with tx() as cur:
+            row = fetch_one(
+                cur,
+                "select requirement_verified_count, requirement_total_count from progress_snapshot "
+                "where project_id = %s order by snapshot_date desc limit 1",
+                (pid,),
+            )
+        assert (row["requirement_verified_count"], row["requirement_total_count"]) == (2, 3), row
+    finally:
+        target.post(f"/api/projects/{pid}/requirements/{rid}/status/revert", json={"reason": "시험 정리(UC-023-S06)"}, headers=c1)
 
 
 # 삭제가 막히지 않으면 S0 가 깨지므로 가장 마지막에 돈다(AC-020-8 미구현 시 뒤 시나리오 보호)

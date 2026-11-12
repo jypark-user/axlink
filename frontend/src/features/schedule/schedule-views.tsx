@@ -379,6 +379,14 @@ function DeliverableCell({ task }: { task: ScheduleTask }): ReactNode {
       >
         {task.deliverable}
       </span>
+      {task.gapWarning && (
+        <span
+          className="inline-block rounded bg-amber-500/15 px-1.5 py-0.5 text-xs font-medium whitespace-nowrap text-amber-700 dark:text-amber-300"
+          title={task.gapWarning}
+        >
+          격차 경고
+        </span>
+      )}
     </span>
   );
 }

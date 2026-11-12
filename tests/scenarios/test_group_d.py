@@ -461,14 +461,17 @@ def test_UC_030_S04_머리글_없음(target, s0, replay):
 
 
 def test_UC_030_S06_가중치_없는_WBS_L2(target, s0, replay):
-    """가중치 열 없음 → 기간 비례 가중치, 산출물 기준 실적, 「추정」 표시, 11.7% (A3, IM-009 7.1)."""
+    """가중치 열 없음 → 기간 비례 가중치 × 파일 실적, 「추정」 표시, 30.3% (A3, DEC-19 (b), IM-009 7.1)."""
     replay.faults = Faults(wbs_variant="TD-WBS-L2", wbs_sha="2c2c2c2c" + "0" * 32)
     _sync(target, s0)
     prog = _progress(target, s0)
     try:
-        assert prog["level"] in ("L2", "L1") and prog["representative"] is not None, prog
-        assert round(prog["representative"], 4) == 0.1173, prog["representative"]
-        assert "추정" in str(prog), "추정 표시가 없다"
+        assert prog["level"] == "L2" and prog["representative"] is not None, prog
+        assert round(prog["representative"], 4) == 0.3029, prog["representative"]
+        # 계획선도 같은 가중치로: (44 + 106 + 106 + 14) / 375 = 0.72
+        assert round(prog["wbsPlanned"], 4) == 0.72, prog["wbsPlanned"]
+        assert prog["estimated"] is True and prog["basisNote"].startswith("추정"), prog
+        assert any("기간에 비례" in w for w in prog["warnings"]), prog["warnings"]
     finally:
         _restore_wbs(target, s0, replay)
 
@@ -588,9 +591,25 @@ def test_UC_032_S10_가중치_기준_확인(target, s0, replay):
 # ------------------------------------------------------------------ 보류
 
 
-@pytest.mark.skip(reason="DEC-12(승인률 분모·분자) 결정 전")
 def test_UC_031_S10_승인률(target, s0):
-    """승인률 (AC-031-9)."""
+    """S0 산출물 승인률 1/5 = 20.0%: 분모 = WBS 가 정한 산출물 5, 분자 = 현행 버전 승인(요구사항정의서 v1).
+    사업수행계획서는 WBS 산출물 열에 없어 세지 않는다. 산출 근거 문장 (AC-031-9, DEC-12 (b), IM-009 7.2)."""
+    pid = s0.ids["TD-PRJ-1"]
+    c1 = auth(s0.tokens["TD-ACC-C1"])
+    prog = target.get(f"/api/projects/{pid}/progress?at={d.T0.isoformat()}", headers=c1).json()
+    ap = prog["deliverableApproval"]
+    assert (ap["numerator"], ap["denominator"]) == (1, 5), ap
+    assert round(ap["value"], 4) == 0.2 and "WBS" in ap["note"], ap
+    spec = {
+        "template": "STAT_CARD", "title": "TST 승인률",
+        "query": {"measure": "deliverable_approval_rate", "dimensions": [], "filters": [], "projectScope": [pid], "limit": None},
+        "options": {"unit": None, "sort": "desc", "threshold": None, "stacked": None, "showLegend": None, "compareWithPrevious": None, "columns": None},
+    }
+    res = target.post("/api/widgets/preview", json={"spec": spec}, headers=c1)
+    assert res.status_code == 200, res.text[:200]
+    body = res.json()
+    assert round(body["total"]["values"]["value"], 2) == 20.0, body["total"]
+    assert "WBS" in (body.get("basis") or ""), body.get("basis")
 
 
 @pytest.mark.skip(reason="DEC-10(협의 범위 코드·계약 범위) 결정 전. 지정 API 미구현")

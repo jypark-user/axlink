@@ -235,8 +235,14 @@ export const DASHBOARD_PRESETS: DashboardPreset[] = [
       {
         template: 'STAT_CARD',
         title: '산출물 승인률',
-        intent: '산출물 승인률 현재 값',
-        measure: 'work_product_approval_rate',
+        intent: 'WBS 가 정한 산출물 중 현행 버전이 승인된 비율',
+        measure: 'deliverable_approval_rate',
+      },
+      {
+        template: 'STAT_CARD',
+        title: '일정 준수율',
+        intent: '기한이 지난 마일스톤 중 기한 안에 닫힌 비율. 계획 대비 편차와 다른 카드',
+        measure: 'schedule_compliance_rate',
       },
       {
         template: 'STAT_CARD',

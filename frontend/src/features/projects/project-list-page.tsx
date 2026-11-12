@@ -180,6 +180,40 @@ function projectColumns(role: Role | undefined): ColumnDef<ProjectSummaryRespons
   });
 
   columns.push({
+    id: 'schedule',
+    // 일정 준수율(마일스톤, DEC-01)과 산출물 승인 수(WBS 가 정한 산출물, DEC-12). 서버 집계 그대로다
+    header: '일정 준수·산출물 승인',
+    cell: ({ row }) => {
+      const {
+        scheduleCompliance: rate,
+        scheduleComplianceAchieved: achieved,
+        scheduleComplianceTotal: total,
+        requiredWorkProductApproved: approved,
+        requiredWorkProductTotal: defined,
+      } = row.original;
+      return (
+        <span className="flex flex-col text-xs tnum">
+          <span title="기한이 지난 마일스톤 중 기한 안에 닫힌 비율">
+            {rate == null ? (
+              <span className="text-muted-foreground">일정 준수 -</span>
+            ) : (
+              <>
+                일정 준수 {(rate * 100).toFixed(1)}% ({achieved}/{total})
+              </>
+            )}
+          </span>
+          <span
+            className="text-muted-foreground"
+            title="WBS 가 정한 산출물 중 현행 버전이 승인된 수"
+          >
+            {defined ? `산출물 승인 ${approved}/${defined}` : '산출물 승인 -'}
+          </span>
+        </span>
+      );
+    },
+  });
+
+  columns.push({
     id: 'alerts',
     // 요청·시정·리스크 건수다. 수집한 이슈 수가 아니다
     header: '요청·시정·리스크',

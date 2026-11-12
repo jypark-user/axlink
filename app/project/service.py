@@ -16,6 +16,7 @@ from app.auth.models import AuthPrincipal
 from app.common import clock, errors
 from app.common.hashes import random_token, sha256_hex
 from app.common.paging import PageQuery, PageResponse
+from app.dashboard import repository as dashboard_repository
 from app.project import participants, repository
 from app.project.models import (
     AssignmentCreateRequest,
@@ -477,7 +478,7 @@ def list_projects(
         return PageResponse.of([], page, total)
 
     ids = [str(r["id"]) for r in rows]
-    approved = repository.approved_work_products(cur, ids)
+    compliance = dashboard_repository.schedule_compliance(cur, ids, clock.today())
     risks = repository.open_risks(cur, ids)
     corrections = repository.open_correction_actions(cur, ids)
     reviews = review_repository.open_counts(cur, ids)
@@ -494,8 +495,9 @@ def list_projects(
             clientOrgId=str(r["client_org_id"]),
             clientOrgName=r["client_org_name"],
             contractorName=r["contractor_name"],
-            requiredWorkProductApproved=approved.get(str(r["id"]), 0),
-            requiredWorkProductTotal=repository.REQUIRED_WORK_PRODUCT_TOTAL,
+            # 현황 화면과 같은 산정(compute)의 산출물 승인 수(DEC-12, AC-040-2)
+            requiredWorkProductApproved=_approval(progress[str(r["id"])])[0],
+            requiredWorkProductTotal=_approval(progress[str(r["id"])])[1],
             openCorrectionActionCount=corrections.get(str(r["id"]), 0),
             openRiskCount=risks.get(str(r["id"]), 0),
             openReviewRequestCount=reviews.get(str(r["id"]), 0),
@@ -503,11 +505,27 @@ def list_projects(
             progressLevel=_attr(progress[str(r["id"])], "level"),
             progressDeviation=_attr(progress[str(r["id"])], "wbsDeviation"),
             progressError=progress[str(r["id"])] is None,
+            scheduleCompliance=_rate(compliance.get(str(r["id"]))),
+            scheduleComplianceAchieved=compliance.get(str(r["id"]), (0, 0))[0],
+            scheduleComplianceTotal=compliance.get(str(r["id"]), (0, 0))[1],
             updatedAt=r["updated_at"].isoformat(),
         )
         for r in rows
     ]
     return PageResponse.of(content, page, total)
+
+
+def _approval(progress: Any) -> tuple[int, int]:
+    measure = getattr(progress, "deliverableApproval", None)
+    if measure is None:
+        return 0, 0
+    return measure.numerator or 0, measure.denominator or 0
+
+
+def _rate(pair: tuple[int, int] | None) -> float | None:
+    if not pair or not pair[1]:
+        return None
+    return round(pair[0] / pair[1], 4)
 
 
 def _list_progress(cur: Any, ids: list[str]) -> dict[str, Any]:

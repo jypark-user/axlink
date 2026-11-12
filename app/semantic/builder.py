@@ -35,9 +35,13 @@ TIME_COLUMNS: dict[str, str] = {
     "wbs_item": "coalesce(e.end_on::timestamptz, e.updated_at)",
     # 완료 확인 뷰(V46). 확인된 작업은 확인 시각, 아니면 작업 종료일
     "v_wbs_completion": "coalesce(e.decided_at, e.end_on::timestamptz)",
+    # 마일스톤(V58). 기한 기준
+    "milestone": "e.due_on::timestamptz",
 }
 
 _TIME_COL = "<TIME_COL>"
+# 사업 기준일. 「기한이 지난」 같은 조건이 DB 세션 시간대가 아니라 사업 날짜를 쓰게 한다(TIME-01)
+_TODAY = "<TODAY>"
 MAX_DIMENSIONS = 2
 MAX_FILTERS = 5
 
@@ -271,8 +275,11 @@ def build(spec: ValidatedSpec, dimensions: list[DimensionDef] | None = None) -> 
 
 
 def _sql(fragment: str, time_col: str) -> str:
-    """카탈로그 조각을 넣을 때 자리표시자만 바꾼다. % 는 psycopg 형식 문자라 이스케이프한다."""
-    return fragment.replace(_TIME_COL, time_col).replace("%", "%%")
+    """카탈로그 조각을 넣을 때 자리표시자만 바꾼다. % 는 psycopg 형식 문자라 이스케이프한다.
+
+    기준일은 날짜 문자열 하나라 그대로 넣어도 된다(사용자 입력이 아니다)."""
+    today = f"'{clock.today().isoformat()}'::date"
+    return fragment.replace(_TIME_COL, time_col).replace(_TODAY, today).replace("%", "%%")
 
 
 def _filter_fragment(bound: BoundFilter, time_col: str, index: int) -> tuple[str, dict[str, Any]]:

@@ -88,11 +88,7 @@ KNOWN_FAILURES: dict[str, str] = {
     # B
     # C
     # D
-    "test_UC_030_S06_가중치_없는_WBS_L2": "DEF-V023 L2 산식이 ARC-016 원칙 1과 충돌(DEC-19)",
     # E
-    "test_UC_041_S02_진척률에서_작업까지": "DEF-V036 격차 경고 기준 DEC-20 대기. 연결 이슈 고침",
-    "test_UC_041_S03_L3_추정": "DEF-V037 L3 추정 표시 없음",
-    "test_UC_041_S12_WBS_변형": "DEF-V023 L2 산식이 ARC-016 원칙 1과 충돌(DEC-19)",
     # F
     # G·H
 }
