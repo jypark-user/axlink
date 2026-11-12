@@ -485,7 +485,8 @@ def _file_source(
     if not stored.exists():
         return None
     try:
-        text = extractor.extract(stored, extractor.ext_of(path)).text
+        ext = extractor.ext_of(path)
+        text = extractor.extract(stored, ext).text
     except Exception:  # noqa: BLE001 — 파일 하나를 못 읽어도 승격은 이어간다
         return None
     if not text.strip():
@@ -493,6 +494,7 @@ def _file_source(
     return indexing.IndexSource(
         source_type="WORK_PRODUCT", source_id=row_id, project_id=project_id,
         title=rec["title"], body=text, uri=rec["external_url"],
+        block_positions=ext in extractor.BLOCK_POSITION_EXTS,
     )
 
 

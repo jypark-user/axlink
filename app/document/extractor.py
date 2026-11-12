@@ -17,6 +17,10 @@ from pathlib import Path
 # DB ck_document_upload__file_ext 와 같은 집합이어야 한다.
 SUPPORTED_EXTS = ("HWP", "HWPX", "DOCX", "XLSX", "PPTX", "PDF", "MD", "TXT")
 
+# 파일에 쪽 나눔 정보가 없는 형식. 쪽은 한글이 배치할 때 정해지고 요약 정보의 쪽 수도 0 이다.
+# 이 형식은 쪽 대신 추출한 문단·표·행 위치를 출처로 쓴다. 없는 쪽 번호는 만들지 않는다(DEC-21)
+BLOCK_POSITION_EXTS = frozenset({"HWP", "HWPX"})
+
 MIME_BY_EXT = {
     "HWP": "application/x-hwp",
     "HWPX": "application/hwp+zip",

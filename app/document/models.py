@@ -106,7 +106,8 @@ class StructuringConfirmRequest(BaseModel):
     authoredDate: str | None = None  # noqa: N815
     # 활동 구분(PM·SI)은 받지 않는다. 산출물 유형이 정한다. 예전 화면이 보내면 무시된다
     requirements: list[DraftRequirement] = []
-    workProductStatus: str = "DRAFT"  # noqa: N815
+    # 확정이 곧 제출이다(DEC-14). 예전 화면·스크립트가 SUBMITTED 를 보내도 받는다. 다른 값은 거절
+    workProductStatus: str | None = None  # noqa: N815
 
 
 class StructuringConfirmResponse(BaseModel):

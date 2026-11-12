@@ -444,8 +444,8 @@ class Seeder:
         type_code: str,
         title: str,
         version: str,
-        status: str = "SUBMITTED",
     ) -> str:
+        """초안 확정 = 산출물 제출본 등록(DEC-14). 상태는 보내지 않는다."""
         body = self._ok(
             self.c.post(
                 f"/api/documents/{self.ids[doc_tid]}/draft/confirm",
@@ -454,7 +454,6 @@ class Seeder:
                     "title": title,
                     "version": version,
                     "requirements": [],
-                    "workProductStatus": status,
                 },
                 headers=self._h(acc),
             )

@@ -245,6 +245,8 @@ def test_신규_사업은_등록_정리_제출_확정을_거쳐서만_요구사�
     # 고칠 것이 남아 있으면 제출되지 않는다
     blocked = client.post(f"{_base()}/{bid}/submit", headers=pm)
     assert blocked.status_code == 400 and "3건" in blocked.json()["message"]
+    # 중복 1쌍은 코드 수와 해당 행 수를 함께 적는다(DEC-22)
+    assert "중복 코드 1개 · 해당 행 2개" in blocked.json()["message"]
 
     by_loc = {i["location"]: i["id"] for i in b["items"]}
     client.delete(f"{_base()}/{bid}/items/{by_loc['표 1 · 4행']}", headers=pm)

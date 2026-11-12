@@ -162,3 +162,82 @@ def test_행_번호_열이_없는_표에는_행_범위를_붙이지_않는다():
     body = "## 시트: 일정\n\n| 1 | 착수 |\n| --- | --- |\n| 2 | 분석 |\n| 3 | 설계 |"
     [draft] = chunking.chunk("DOCUMENT_UPLOAD", "일정.xlsx", body)
     assert "rowStart" not in draft.meta and "page" not in draft.meta
+
+
+def test_쪽_머리글_뒤에서_새_절이_시작하면_앞_절_조각은_앞_쪽에서_끝난다():
+    """DEF-V045. 쪽마다 같은 머리글이 있고 새 쪽 첫 본문이 표제면 쪽 표식은 새 절에 붙는다."""
+    head = "가상 시험자료 · 검증용"
+    body = "\n".join(
+        [
+            "<!-- 1쪽 -->", head, "1. 소개", "소개 문단이다.", "- 1 / 2 -", "",
+            "<!-- 2쪽 -->", head, "2. 납품 산출물", "납품 산출물은 22종이다.", "- 2 / 2 -",
+        ]
+    )
+    drafts = chunking.chunk("DOCUMENT_UPLOAD", "과업지시서.pdf", body)
+    by_heading = {tuple(d.meta["headingPath"]): d for d in drafts}
+    first = by_heading[("1. 소개",)]
+    assert first.meta["page"] == 1 and "pageEnd" not in first.meta
+    assert all(head not in d.content for d in drafts)  # 쪽 머리글은 조각에서 뺀다
+    second = by_heading[("2. 납품 산출물",)]
+    assert second.meta["page"] == 2 and "pageEnd" not in second.meta
+
+
+def test_쪽을_넘어_이어지는_본문은_여전히_두_쪽에_걸친다():
+    head = "머리글"
+    body = "\n".join(
+        ["<!-- 1쪽 -->", head, "1. 소개", "앞 쪽 문장이다.",
+         "<!-- 2쪽 -->", head, "이어지는 문장이다."]
+    )
+    [draft] = chunking.chunk("DOCUMENT_UPLOAD", "보고서.pdf", body)
+    assert draft.meta["page"] == 1 and draft.meta["pageEnd"] == 2
+
+
+_HWP_TEXT = "\n".join(
+    [
+        "설계검토회의록",
+        "회의 일시는 8월 25일이다.",
+        "",
+        "| 항목 | 검토자 |",
+        "| --- | --- |",
+        "| 외부 연계 | 김주무관 |",
+        "| 화면 설계 | 박피엠 |",
+        "",
+        "결론: 다시 제출한다.",
+    ]
+)
+
+
+def test_문단_위치_모드는_문단_순번과_표_행을_남기고_쪽은_만들지_않는다():
+    """DEC-21. HWP·HWPX 는 쪽 대신 추출한 문단·표·행 위치를 출처로 쓴다."""
+    [draft] = chunking.chunk("DOCUMENT_UPLOAD", "회의록.hwp", _HWP_TEXT, block_positions=True)
+    assert draft.meta["paraStart"] == 1 and draft.meta["paraEnd"] == 3
+    assert draft.meta["table"] == 1
+    assert (draft.meta["tableRowStart"], draft.meta["tableRowEnd"]) == (1, 3)
+    assert "page" not in draft.meta and "pageEnd" not in draft.meta
+    assert "⟦" not in draft.content
+    assert "| 외부 연계 | 김주무관 |" in draft.content.split("\n")
+
+
+def test_문단_위치_모드가_아니면_위치를_붙이지_않는다():
+    [draft] = chunking.chunk("DOCUMENT_UPLOAD", "회의록.docx", _HWP_TEXT)
+    assert set(draft.meta) == {"headingPath"}
+
+
+def test_문단_가운데서_시작한_조각도_그_문단_순번을_잇는다():
+    long_para = " ".join(f"긴 문단의 {i}번째 문장이다." for i in range(400))
+    body = "\n".join(["1. 개관", "첫 문단이다.", long_para, "마지막 문단이다."])
+    drafts = chunking.chunk("DOCUMENT_UPLOAD", "보고서.hwpx", body, block_positions=True)
+    assert len(drafts) >= 3
+    assert drafts[0].meta["headingPath"] == ["1. 개관"]
+    assert drafts[0].meta["paraStart"] == 1  # 표제도 한글에서는 문단이다
+    middle = drafts[1]
+    assert (middle.meta["paraStart"], middle.meta["paraEnd"]) == (3, 3)
+    assert drafts[-1].meta["paraEnd"] == 4
+    assert all("⟦" not in d.content for d in drafts)
+
+
+def test_두_표에_걸친_조각은_표_범위만_남긴다():
+    body = "| a | b |\n| --- | --- |\n| 1 | 2 |\n\n| c | d |\n| --- | --- |\n| 3 | 4 |"
+    [draft] = chunking.chunk("DOCUMENT_UPLOAD", "표.hwp", body, block_positions=True)
+    assert (draft.meta["table"], draft.meta["tableEnd"]) == (1, 2)
+    assert "tableRowStart" not in draft.meta

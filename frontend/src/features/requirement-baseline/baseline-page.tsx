@@ -62,6 +62,14 @@ const PROBLEM_WORD: Record<BaselineProblem, string> = {
   UNTRACEABLE_CODE: '추적에 쓸 수 없는 ID 형식',
 };
 const BLOCKING: BaselineProblem[] = ['DUPLICATE_CODE', 'INVALID_CODE', 'MISSING_TITLE'];
+
+/** 중복 코드는 코드 수와 해당 행 수를 함께 적는다(DEC-22). 서버 제출 거절 문구와 같은 꼴 */
+function duplicateNote(items: BaselineItem[]): string {
+  const rows = items.filter((i) => i.problems.includes('DUPLICATE_CODE'));
+  if (rows.length === 0) return '';
+  const codes = new Set(rows.map((i) => i.code));
+  return `중복 코드 ${codes.size}개 · 해당 행 ${rows.length}개.`;
+}
 const MATCH_WORD: Record<BaselineMatch, string> = {
   NEW: '새 요구사항',
   SAME: '기존과 같음',
@@ -365,7 +373,8 @@ function Working({
         )}
         {b.blockingCount > 0 && (
           <p className="text-destructive mb-3 text-sm">
-            고쳐야 제출할 수 있는 항목이 {b.blockingCount}건 있습니다. 빨간 표시를 확인하세요.
+            고쳐야 제출할 수 있는 항목이 {b.blockingCount}건 있습니다.
+            {duplicateNote(b.items)} 빨간 표시를 확인하세요.
           </p>
         )}
         <Summary b={b} />

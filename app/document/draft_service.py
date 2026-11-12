@@ -30,9 +30,10 @@ from app.standard.work_product_type import DISPLAY_NAMES
 
 LLM_CONFIDENCE = 0.5  # 모델이 고른 유형은 규칙이 정한 것보다 낮게 본다. 사람이 다시 본다
 _PRIORITIES = ("MUST", "SHOULD", "COULD", "WONT")
-# 확정은 문서를 산출물 한 버전으로 등록하는 일이다. 승인은 발주기관이 그 버전을 받아들이는
-# 다른 행위라 여기서 하지 않는다(work-products/{id}/approve).
-_CONFIRMABLE_STATUSES = ("DRAFT", "SUBMITTED")
+# 확정은 문서를 산출물 제출본 한 버전으로 등록하는 일이다(DEC-14 (a), 화면 「산출물로 제출」).
+# 확정할 때 임시·제출을 고르던 방식은 없앴다. 임시 등록본은 발주기관 검토 대상인지 알 수 없었다.
+# 승인은 발주기관이 그 버전을 받아들이는 다른 행위라 여기서 하지 않는다(work-products/{id}/approve).
+_CONFIRM_STATUS = "SUBMITTED"
 _MAX_REJECTED_RAW = 200
 
 _TYPE_SYSTEM = (
@@ -170,9 +171,10 @@ def _validate(req: StructuringConfirmRequest) -> dict[str, Any]:
         raise errors.validation_failed(
             "확정은 산출물 등록입니다. 승인은 발주기관이 산출물 화면에서 따로 합니다."
         )
-    if req.workProductStatus not in _CONFIRMABLE_STATUSES:
+    if req.workProductStatus not in (None, _CONFIRM_STATUS):
         raise errors.validation_failed(
-            "확정 상태는 " + " · ".join(_CONFIRMABLE_STATUSES) + " 중 하나여야 합니다."
+            "확정하면 산출물 제출본으로 등록됩니다. 임시 등록은 없습니다. "
+            "제출하지 않을 문서는 확정하지 말고 자료로만 두세요."
         )
     authored_at = None
     if req.authoredDate:
@@ -204,7 +206,7 @@ def _validate(req: StructuringConfirmRequest) -> dict[str, Any]:
         "type": req.type,
         "title": title,
         "version": version,
-        "status": req.workProductStatus,
+        "status": _CONFIRM_STATUS,
         "authored_at": authored_at,
         "requirements": requirements,
     }
@@ -213,7 +215,7 @@ def _validate(req: StructuringConfirmRequest) -> dict[str, Any]:
 def confirm(
     cur: Any, principal: AuthPrincipal, document_id: str, req: StructuringConfirmRequest
 ) -> StructuringConfirmResponse:
-    """사람이 고친 초안을 산출물 한 버전으로 올린다.
+    """사람이 고친 초안을 산출물 제출본 한 버전으로 올린다. 확정이 곧 제출이다(DEC-14).
 
     요구사항은 여기서 만들지 않는다(GH-139). 용역사가 확정한 초안이 곧바로 사업의 요구사항이
     되면 발주기관 확정 전 목록이 확정 요구사항처럼 보이고, 기준선을 확정한 뒤에는 새 파일이

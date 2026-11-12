@@ -382,14 +382,16 @@ def submit(
         raise errors.validation_failed(
             "명세서에서 요구사항을 찾지 못했습니다. 항목을 더하거나 다른 파일을 올리세요."
         )
+    problems = structuring.problems_of(items)
     blocking = []
-    for i, found in zip(items, structuring.problems_of(items), strict=True):
-        hard = [p for p in found if p in structuring.BLOCKING_PROBLEMS]
+    for i, found in zip(items, problems, strict=True):
+        hard = [structuring.PROBLEM_WORDS[p] for p in found if p in structuring.BLOCKING_PROBLEMS]
         if hard:
-            blocking.append(f"{i['code'] or '(코드 없음)'}: {', '.join(hard)}")
+            where = f"({i['source_location']})" if i.get("source_location") else ""
+            blocking.append(f"{i['code'] or '(코드 없음)'}{where}: {', '.join(hard)}")
     if blocking:
         raise errors.validation_failed(
-            f"고쳐야 할 항목이 {len(blocking)}건 있습니다. " + "; ".join(blocking[:5])
+            f"{structuring.blocking_summary(items, problems)} " + "; ".join(blocking[:5])
         )
     repo.set_submitted(cur, baseline_id, principal.user_id)
     row = repo.find(cur, project_id, baseline_id)
