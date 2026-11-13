@@ -137,7 +137,8 @@ def take_unchecked(
             "representative": _pct(progress.representative),
             "wbs_actual": _pct(progress.wbs.value),
             "wbs_planned": _pct(progress.wbsPlanned),
-            "behind": len(progress.behind),
+            # 「지연 작업 수」는 명세 정의(종료일 지남·실적 100% 미만). 계획 뒤짐과 다르다
+            "behind": len(progress.delayed),
             "issue_resolved": progress.issue.numerator or 0,
             "issue_total": progress.issue.denominator or 0,
             "req_verified": int(counts["requirement_verified"]),

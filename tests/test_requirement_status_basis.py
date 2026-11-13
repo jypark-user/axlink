@@ -103,5 +103,6 @@ def test_AI_요구사항_표도_GitHub_닫힘만_그렇게_부른다(mixed_requi
     assert table is not None
     status = {r.values["title"]: r.values["status"] for r in table.data.rows}
     assert status["출처 시험 gh_closed"] == "출처 이슈 닫힘(구현 확인 아님)"
-    assert status["출처 시험 manual"] == "IMPLEMENTED"
-    assert status["출처 시험 gh_open"] == "DEFINED"
+    # 상태 코드는 화면과 같은 발주기관 어휘로 나간다(app/rag/vocab.py)
+    assert status["출처 시험 manual"] == "구현"
+    assert status["출처 시험 gh_open"] == "정의"

@@ -72,6 +72,27 @@ const TOOL_HINTS: Record<ToolKind, { name: string; baseUrl: string; resource: st
   },
 };
 
+/**
+ * 도구를 고르면 보이는 권한 안내(AC-010-6). 무엇을 읽고 무엇을 하지 않는지, 토큰·키에 어떤 권한을
+ * 주는지를 도구별로 적는다. 문구 근거는 docs/40-manual/도구-연동-가이드.md 1·4.1·5.1절.
+ */
+export const TOOL_GUIDE: Record<ToolKind, { readOnly: string; permission: string; reads: string }> = {
+  GITHUB: {
+    readOnly:
+      '읽기 전용으로 연결합니다. AX Link는 저장소에 아무것도 쓰지 않습니다 — 이슈·PR을 만들거나 바꾸지 않고 웹훅도 설치하지 않습니다.',
+    permission:
+      '필요 권한: Fine-grained 토큰으로 대상 저장소만 고르고 Metadata · Issues · Pull requests · Contents 를 읽기 전용(Read-only)으로 줍니다.',
+    reads: '읽는 것: 이슈 · 마일스톤 · 풀 리퀘스트 · 커밋 · 저장소 파일 목록(WBS 파일 포함)',
+  },
+  REDMINE: {
+    readOnly:
+      '읽기 전용으로 연결합니다. AX Link는 Redmine에 아무것도 쓰지 않습니다 — 일감을 만들거나 바꾸지 않고 플러그인도 설치하지 않습니다.',
+    permission:
+      '필요 권한: 관리 → 설정 → API 에서 REST 웹 서비스를 켜고, 「일감 보기」만 준 수집 전용 역할(일감 가시성 「모든 일감」)의 계정 API 키를 넣습니다.',
+    reads: '읽는 것: 일감(관계 포함) · 버전 · 트래커',
+  },
+};
+
 /** GitHub(Personal Access Token) · Redmine(API Key) 둘 다 토큰 하나만 쓴다. */
 export function buildCredential(token: string): ToolCredentialRequest | null {
   const trimmed = token.trim();
@@ -105,6 +126,7 @@ export function ConnectionFormDialog({
 
   const credential = buildCredential(token);
   const hint = TOOL_HINTS[tool];
+  const guide = TOOL_GUIDE[tool];
   const canTest =
     credential !== null && baseUrl.trim() !== '' && targetResource.trim() !== '' && !testing;
 
@@ -211,10 +233,12 @@ export function ConnectionFormDialog({
                 ))}
               </SelectContent>
             </Select>
-            <p className="text-xs text-muted-foreground">
-              읽기 전용으로 연결합니다. AX Link는 저장소에 아무것도 쓰지 않습니다 — 커밋·이슈·PR 조회만 합니다.
-              수집(동기화)은 다음 단계에서 열립니다.
-            </p>
+            <div className="text-xs text-muted-foreground flex flex-col gap-1" data-testid="tool-guide">
+              <p>{guide.readOnly}</p>
+              <p>{guide.permission}</p>
+              <p>{guide.reads}</p>
+              <p>수집(동기화)은 다음 단계에서 열립니다.</p>
+            </div>
           </div>
           <div className={FIELD}>
             <Label htmlFor="connName">이름</Label>

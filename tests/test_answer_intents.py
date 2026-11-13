@@ -515,7 +515,7 @@ def test_건수를_나눠_받으면_서버가_전체를_더해_준다():
 
     data = _data("건", [("OPEN", 7), ("CLOSED", 5)])
     lines = answer.aggregate_lines(data)
-    assert "- 전체(항목 합): 12건" in lines
+    assert "- 일반 이슈 건수 전체(항목 합): 12건" in lines
     checker = number_guard.Checker(
         number_guard.facts_from_lines(lines, "집계", subject="일반 이슈 건수"),
         question="이슈가 몇 건이야?",
@@ -576,3 +576,25 @@ def test_검색이_멈춰도_집계_질문은_값으로_답한다(ask, monkeypat
     finally:
         with tx() as cur:
             cur.execute("delete from issue where issue_key = any(%s)", (list(keys),))
+
+
+@requires_db
+@pytest.mark.usefixtures("plan_file")
+def test_지연_사유_질문의_지연은_종료일이_지나고_실적이_100이_아닌_작업이다(ask, monkeypatch):
+    """IM-009 5.1: 지연 = 종료일 < 기준일 and 실적 < 100%. 계획선보다 뒤처졌지만 종료일이 남은
+    작업(계획 뒤짐)은 지연이 아니다. 09-29 기준 1.2(종료 09-30, 실적 50%, 계획선 87.5%)는
+    계획 뒤짐이지만 지연이 아니고, 2.1(종료 09-12, 실적 0%)만 지연이다(UC-060-S07 실모델)."""
+    from datetime import datetime
+    from zoneinfo import ZoneInfo
+
+    from app.common import clock
+
+    at = datetime(2026, 9, 29, 9, 0, tzinfo=ZoneInfo("Asia/Seoul"))
+    monkeypatch.setattr(clock, "now", lambda: at)
+    ev, _ = ask({"route": "INTENT", "intent": "DELAY_CAUSE"}, "지연 작업은 [그림 1] 입니다.")
+    table = ev["infographic"][0]
+    assert table["title"] == "지연 작업"
+    assert [r["values"]["task"] for r in table["data"]["rows"]] == ["2.1 연계 수집"]
+    behind, _ = ask({"route": "INTENT", "intent": "BEHIND_TASKS"}, "[그림 1]")
+    tasks = {r["values"]["task"] for r in behind["infographic"][0]["data"]["rows"]}
+    assert {"1.2 중간보고", "2.1 연계 수집"} <= tasks

@@ -14,6 +14,7 @@ import pytest
 
 from tests.fixtures.im009 import data as d
 from tests.fixtures.im009.replay import Faults, ReplaySource, install, tool_base
+from tests.fixtures.im009.seed import PASSWORD
 from tests.scenarios.conftest import TARGET_URL, auth
 
 pytestmark = pytest.mark.db
@@ -192,7 +193,7 @@ def test_UC_040_S05_조회_실패_구분(target, s0, screen, monkeypatch):
 # ------------------------------------------------------------------ UC-041
 
 
-def test_UC_041_S01_다섯_축_한_화면(target, s0):
+def test_UC_041_S01_다섯_축_한_화면(target, s0, screen):
     """진척 30.0·계획 66.9·편차 −36.9 · 위험 처리율 50.0 · 열린 리스크 높음 1 · 제출 1/미제출 3/지연 1 · 일반 이슈 처리율 66.7 · 완료 확인율 15.0 (AC-041-1·2·3)."""
     pid = s0.ids["TD-PRJ-1"]
     prog = _get(target, s0, f"/api/projects/{pid}/progress?at={T0}")
@@ -224,9 +225,10 @@ def test_UC_041_S01_다섯_축_한_화면(target, s0):
     except AssertionError as exc:
         problems.append(f"위험 처리율 지표 없음: {str(exc)[:120]}")
     assert not problems, problems
+    _ui_UC_041_S01(screen, target, s0)
 
 
-def test_UC_041_S02_진척률에서_작업까지(target, s0):
+def test_UC_041_S02_진척률에서_작업까지(target, s0, screen):
     """3.2 지연(40%, 미제출·지연 판정), 계획선 100%, 연결 이슈 #204 진행중, 완료 확인 없음. 3.1 확인됨.
     격차 경고는 실적 80 이상만이라(DEC-20 (b)) 3.2(40)·3.3(20) 에는 없다 (AC-041-4)."""
     pid = s0.ids["TD-PRJ-1"]
@@ -252,6 +254,7 @@ def test_UC_041_S02_진척률에서_작업까지(target, s0):
     if not any("204" in str(v) for v in by["3.2"].values()):
         problems.append("3.2 줄에 연결 이슈 #204(진행중)가 없다")
     assert not problems, problems
+    _ui_UC_041_S02(screen, target, s0)
 
 
 def test_UC_041_S03_L3_추정(target, s0):
@@ -452,7 +455,7 @@ FIVE_AXES = [
 ]
 
 
-def test_UC_042_S01_추천_구성(target, s0):
+def test_UC_042_S01_추천_구성(target, s0, screen):
     """다섯 축 카드가 서버에 저장되고 값이 집계와 같으며 다른 세션에서도 같다 (AC-042-1·4)."""
     pid = s0.ids["TD-PRJ-1"]
     c1 = auth(s0.tokens["TD-ACC-C1"])
@@ -473,10 +476,11 @@ def test_UC_042_S01_추천_구성(target, s0):
         if data["measure"] == "issue_resolution_rate":
             assert round(_total(data) or 0, 4) in (0.6667, 66.67, 66.7), _total(data)
     # 다른 세션(새 로그인)에서 같은 구성
-    other = s0.login(d.ACCOUNTS["TD-ACC-C1"].username, __import__("tests.fixtures.im009.seed", fromlist=["PASSWORD"]).PASSWORD)
+    other = s0.login(d.ACCOUNTS["TD-ACC-C1"].username, PASSWORD)
     detail = target.get(f"/api/dashboards/{board['id']}", headers={"Authorization": f"Bearer {other}"}).json()
     assert {w["id"] for w in detail["widgets"]} >= {w["id"] for w in made}
     assert [g["i"] for g in detail["layout"]["lg"]] and len(detail["layout"]["lg"]) >= len(made)
+    _ui_UC_042_S01(screen, target, s0, board["id"])
 
 
 def test_UC_042_S02_없는_짝(target, s0):
@@ -523,7 +527,7 @@ def test_UC_042_S04_용역사(target, s0):
 # ------------------------------------------------------------------ UC-043
 
 
-def test_UC_043_S01_목록_원천(target, s0):
+def test_UC_043_S01_목록_원천(target, s0, screen):
     """일반 이슈 9, 열림 3, 해결 6(66.7%). 각 행 원천(도구·연결·번호)·링크 (AC-043-1·4)."""
     pid = s0.ids["TD-PRJ-1"]
     summary = _get(target, s0, f"/api/projects/{pid}/issues/summary")
@@ -544,6 +548,7 @@ def test_UC_043_S01_목록_원천(target, s0):
             problems.append(f"원천 표기 부족: {r['key']} {src}")
             break
     assert not problems, problems
+    _ui_UC_043_S01(screen, target, s0, summary, rows)
 
 
 def test_UC_043_S02_트래커_버전(target, s0):
@@ -686,4 +691,361 @@ def _ui_UC_041_S04(screen, s0):
     assert res.status_code == 200, res.text
     sc.open(f"/p/{pid}/snapshots").see("산정 불가")
     sc.not_see(re.compile(r"(?<![\d.])0(\.0)?%"))
+    sc.done()
+
+
+# ------------------------------------------------------------------ 화면 값 맞추기
+# 화면의 숫자는 화면이 받은 API 값을 프런트가 그대로 적은 것이어야 한다. 아래는 프런트의 표기
+# 규칙(frontend/src/features/widgets/widget-data.ts·renderers.tsx, lib/format.ts)을 옮긴 것이다.
+# 일정·위젯 화면은 서버의 오늘로 센다. 계획선·편차처럼 날짜에 따라 바뀌는 값은 IM-009 의 T0 값이
+# 아니라 같은 화면이 부르는 API(기준일 없이)의 값과 비교한다.
+
+_NUMERIC = {"number", "percent", "COUNT", "RATE_PCT", "DAYS", "PCT_POINT"}
+_DELIVERABLE_WORD = {"SUBMITTED": "제출", "MISSING": "미제출", "OVERDUE": "지연", "NONE": ""}
+_COMPLETION_WORD = {"CONFIRMED": "완료 확인됨", "RECONFIRM": "재확인 필요(범위 변경)", "WITHDRAWN": "확인 철회됨", "NONE": "완료 확인 없음"}
+_TOOL_NAME = {"GITHUB": "GitHub", "REDMINE": "Redmine", "UPLOAD": "업로드", "MANUAL": "수기"}
+_ISSUE_STATUS = {"OPEN": "열림", "IN_PROGRESS": "진행중", "RESOLVED": "해결", "CLOSED": "종료"}  # lib/labels.ts
+
+
+def _js_number(v) -> str:
+    """JS `n.toLocaleString('ko-KR')`: 소수 셋째 자리까지(반올림), 천 단위 쉼표."""
+    from decimal import ROUND_HALF_UP, Decimal
+
+    q = Decimal(str(v)).quantize(Decimal("0.001"), rounding=ROUND_HALF_UP)
+    text = f"{q:,f}"
+    if "." in text:
+        text = text.rstrip("0").rstrip(".")
+    return "0" if text in ("-0", "") else text
+
+
+def _js_round(x: float) -> int:
+    """JS Math.round (0.5 는 올린다)."""
+    import math
+
+    return math.floor(x + 0.5)
+
+
+def _flat(text: str) -> str:
+    return re.sub(r"\s+", "", text)
+
+
+def _stat_text(data: dict) -> str:
+    """STAT_CARD 의 큰 숫자 칸(값 + 단위). 자료가 없으면 그 문구 (widget-host.tsx·StatCardWidget)."""
+    if not data["rows"] and data.get("total") is None:
+        return "조건에 맞는 데이터가 없습니다."
+    col = next((c for c in data["columns"] if c.get("type") in _NUMERIC), None)
+    if col is None:
+        return "-"
+
+    def at(row):
+        raw = ((row or {}).get("values") or {}).get(col["key"])
+        if isinstance(raw, bool):
+            return None
+        if isinstance(raw, int | float):
+            return raw
+        try:
+            return float(raw) if isinstance(raw, str) and raw.strip() else None
+        except ValueError:
+            return None
+
+    value = at(data.get("total"))
+    if value is None:
+        value = at(data["rows"][0] if data["rows"] else None)
+    if value is None:
+        return "-"
+    return _js_number(value) + (data.get("unit") or "")
+
+
+def _cell_text(value) -> str:
+    """widget-data.ts formatCell."""
+    if value is None:
+        return "-"
+    if isinstance(value, bool):
+        return "예" if value else "아니오"
+    if isinstance(value, int | float):
+        return _js_number(value)
+    return str(value)
+
+
+def _card(sc, title: str):
+    """제목이 꼭 그것인 위젯 카드(「요구사항 이행률」과 「월별 요구사항 이행률 추이」를 가른다)."""
+    exact = sc.page.locator("[data-slot=card-title]", has_text=re.compile(rf"^\s*{re.escape(title)}\s*$"))
+    return sc.page.locator(".react-grid-layout [data-slot=card]").filter(has=exact).first
+
+
+def _check_widget_cards(sc, target, c1: dict, widgets: list[dict]) -> None:
+    """위젯 카드마다: 오류 없음, STAT_CARD 숫자 = 위젯 값 API, DATA_TABLE 줄 = API 행, 산출 근거 문장 = API."""
+    from playwright.sync_api import expect
+
+    for w in widgets:
+        spec = w["spec"]
+        res = target.post(f"/api/widgets/{w['id']}/data", json={}, headers=c1)
+        assert res.status_code == 200, (spec["title"], res.text[:200])
+        data = res.json()
+        card = _card(sc, spec["title"])
+        # 카드 설명 줄(지표 이름 · 프로젝트 n개)은 값을 받은 뒤에 찬다
+        expect(card).to_contain_text(data["measureLabel"], timeout=20000)
+        expect(card).not_to_contain_text("위젯을 불러오지 못했습니다")
+        if spec["template"] == "STAT_CARD":
+            want = _stat_text(data)
+            got = _flat(card.inner_text())
+            assert _flat(want) in got, f"{spec['title']}: 화면 {got!r} / API {want!r}"
+        elif spec["template"] == "DATA_TABLE":
+            labelled = {c["key"] for c in data["columns"] if any(o["key"] == f"{c['key']}_label" for o in data["columns"])}
+            keys = [c["key"] for c in data["columns"] if c["key"] not in labelled]
+            for row in data["rows"]:
+                cells = [_cell_text((row.get("values") or {}).get(k)) for k in keys]
+                line = card.locator("tbody tr", has_text=cells[0]).first
+                for cell in cells:
+                    expect(line).to_contain_text(cell)
+        if data.get("basis"):
+            card.get_by_role("button", name="산출 근거").click()
+            expect(card.get_by_test_id("widget-basis")).to_have_text(data["basis"].strip())
+
+
+def _ui_UC_041_S01(screen, target, s0):
+    """화면: 다섯 축(진척·일정·품질·리스크·산출물) 카드를 사업 대시보드 한 화면에 놓고, 카드 숫자 =
+    위젯 값 API, 카드마다 산출 근거 문장 = API (AC-041-1·3).
+
+    시험이 카드를 API 로 놓고(화면이 쓰는 것과 같은 위젯 명세) 끝나면 지운다. 진척 30.0%·일반 이슈
+    처리율 66.7% 처럼 날짜와 무관한 값은 위 API 단언이 IM-009 와 이미 맞췄다."""
+    if not screen:
+        return
+    pid = s0.ids["TD-PRJ-1"]
+    c1 = auth(s0.tokens["TD-ACC-C1"])
+    board = next(b for b in _get(target, s0, f"/api/dashboards?projectId={pid}") if b["isDefault"])
+    axes = [  # (축, 지표, 차원, 템플릿)
+        ("진척", "progress_representative_pct", [], "STAT_CARD"),
+        ("진척", "schedule_variance_pct", [], "STAT_CARD"),
+        ("일정", "schedule_compliance_rate", [], "STAT_CARD"),
+        ("품질", "issue_resolution_rate", [], "STAT_CARD"),
+        ("품질", "defect_resolution_rate", [], "STAT_CARD"),
+        ("품질", "risk_resolution_rate", [], "STAT_CARD"),
+        ("품질", "requirement_fulfillment_rate", [], "STAT_CARD"),
+        ("리스크", "open_risk_count", ["risk_severity"], "DATA_TABLE"),
+        ("산출물", "deliverable_approval_rate", [], "STAT_CARD"),
+    ]
+    made: list[dict] = []
+    try:
+        for n, (axis, measure, dims, template) in enumerate(axes):
+            grid = {"i": "new", "x": (n % 3) * 4, "y": (n // 3) * 4, "w": 4, "h": 4}
+            spec = _spec(measure, dims, [pid], template, f"TST {axis} {measure}")
+            res = target.post(f"/api/dashboards/{board['id']}/widgets", json={"spec": spec, "gridItem": grid}, headers=c1)
+            assert res.status_code == 201, (measure, res.text[:200])
+            made.append(res.json())
+        sc = screen("TD-ACC-C1")
+        sc.open(f"/p/{pid}/dashboard").see("대시보드")
+        _check_widget_cards(sc, target, c1, made)
+        # 다섯 축이 한 화면(같은 대시보드)에 다 있다
+        for w in made:
+            assert _card(sc, w["spec"]["title"]).is_visible(), w["spec"]["title"]
+        sc.done()
+    finally:
+        for w in made:
+            target.delete(f"/api/widgets/{w['id']}", headers=c1)
+
+
+def _ui_UC_041_S02(screen, target, s0):
+    """화면: 일정(WBS)에서 작업 단위로 계획·실적·산출물 판정·격차 경고·연결 이슈와 그 상태, 완료 확인
+    상태 (AC-041-4). 값은 화면과 같은 API(기준일 없이 = 서버의 오늘)에서 받는다."""
+    if not screen:
+        return
+    from playwright.sync_api import expect
+
+    pid = s0.ids["TD-PRJ-1"]
+    wbs = _get(target, s0, f"/api/projects/{pid}/wbs")
+    comp = _get(target, s0, f"/api/projects/{pid}/wbs/completion")
+    by = {i["wbsId"]: i for i in wbs["items"]}
+    citems = {i["wbsId"]: i for i in comp["items"]}
+    sc = screen("TD-ACC-C1")
+    sc.open(f"/p/{pid}/schedule").see("일정(WBS)", "보고 진척률", "완료 확인율", "작업 일정")
+
+    # 보고 진척률·완료 확인율 카드와 작업별 완료 확인 (completion-panel.tsx)
+    panel = sc.page.locator('section[aria-label="작업 완료 확인"]')
+    reported = "산출 불가" if comp["reportedPct"] is None else f"{comp['reportedPct'] * 100:.1f}%"
+    rate = "산출 불가" if comp["completionRate"] is None else f"{_js_number(_js_round(comp['completionRate'] * 1000) / 10)}%"
+    expect(panel).to_contain_text(reported)
+    expect(panel).to_contain_text(rate)
+    for wid in ("3.1", "3.2"):
+        ci = citems[wid]
+        word = _COMPLETION_WORD[ci["completionStatus"]]
+        if ci["completionStatus"] == "NONE" and ci.get("predecessorConfirmed"):
+            word = "재확인 필요"
+        row = panel.locator("tr").filter(has_text=ci["name"]).filter(has_text=wid).first
+        expect(row).to_contain_text(word)
+    sc.shot("완료_확인")
+
+    # 작업 일정 머리줄: 계획보다 늦은 작업 수, 산출물 대조 (schedule-page.tsx)
+    leaves = [i for i in wbs["items"] if i["level"] > 0 or len(wbs["items"]) == 1]
+    late = sum(1 for i in leaves if i["progress"] < 100 and i["progress"] < i["planned"])
+    head = _flat(sc.text("main"))
+    assert (f"계획보다늦은작업{late}개" if late else "모두계획대로진행중") in head, head[:400]
+    dl = wbs.get("deliverables") or {}
+    expected = dl.get("submitted", 0) + dl.get("missing", 0) + dl.get("overdue", 0)
+    if expected:
+        assert f"산출물파일대조{dl['submitted']}/{expected}개" in head, head[:400]
+    for w in wbs["warnings"]:
+        sc.see(w)
+
+    # WBS 표: 3.2 지연(40%), 계획선, 산출물 판정. 격차 경고는 API 가 붙인 줄에만 (DEC-20 (b))
+    sc.page.get_by_role("tab", name="WBS").click()
+    table = sc.page.get_by_role("tabpanel")
+    for wid in ("3.2", "3.3"):
+        item = by[wid]
+        row = table.locator("tbody tr").filter(has_text=item["name"]).first
+        expect(row).to_contain_text(f"{item['planned']}%")
+        expect(row).to_contain_text(f"{item['progress']}%")
+        word = _DELIVERABLE_WORD.get(item.get("deliverableStatus") or "NONE", "")
+        if word:
+            expect(row).to_contain_text(word)
+        if item.get("gapWarning"):
+            expect(row).to_contain_text("격차 경고")
+        else:
+            expect(row).not_to_contain_text("격차 경고")
+        # 연결 이슈 칸: 이슈 번호(원문 링크)와 상태를 이슈 화면과 같은 말로
+        for li in item.get("linkedIssues") or []:
+            expect(row).to_contain_text(li["key"] or li["title"])
+            expect(row).to_contain_text(_ISSUE_STATUS.get(li["status"], li["status"]))
+            if li.get("url"):
+                expect(row.locator(f'a[href="{li["url"]}"]')).to_have_count(1)
+    linked = by["3.2"].get("linkedIssues") or []
+    assert any("204" in (li["key"] or "") for li in linked), f"3.2 의 연결 이슈 {linked}"
+    if not any(i.get("gapWarning") for i in wbs["items"]):
+        sc.not_see("격차 경고")
+    sc.done()
+
+
+def _ui_UC_042_S01(screen, target, s0, board_id: str):
+    """화면: 편집 모드 → 추천 구성 「전체 진행 현황」 → 바꾸기. 다섯 축 카드가 생기고 숫자 = 위젯 값
+    API, 레이아웃은 서버에 저장돼 새 브라우저 문맥(화면으로 다시 로그인)에서도 자리가 같다. 브라우저
+    저장소에는 위젯·배치가 없다 (AC-042-1·4)."""
+    if not screen:
+        return
+    from playwright.sync_api import expect
+
+    pid = s0.ids["TD-PRJ-1"]
+    c1 = auth(s0.tokens["TD-ACC-C1"])
+    sc = screen("TD-ACC-C1")
+    sc.open(f"/p/{pid}/dashboard").see("대시보드")
+    sc.page.get_by_role("button", name="편집 모드").first.click()
+    sc.page.get_by_role("button", name="추천 구성").click()
+    sc.page.get_by_role("dialog").locator("button", has_text="전체 진행 현황").click()
+    confirm = sc.page.get_by_role("alertdialog")
+    expect(confirm).to_contain_text("이 구성으로 바꿀까요?")
+    confirm.get_by_role("button", name="바꾸기").click()
+    expect(confirm).to_be_hidden(timeout=60000)
+    sc.page.get_by_role("button", name="편집 모드 닫기").click()
+
+    detail = _get(target, s0, f"/api/dashboards/{board_id}")
+    widgets = detail["widgets"]
+    measures = {w["spec"]["query"]["measure"] for w in widgets}
+    axes = {
+        "진척": {"progress_representative_pct"},
+        "일정": {"schedule_variance_pct", "schedule_compliance_rate"},
+        "품질": {"issue_resolution_rate", "requirement_fulfillment_rate", "defect_resolution_rate", "risk_resolution_rate"},
+        "리스크": {"open_risk_count"},
+        "산출물": {"deliverable_approval_rate"},
+    }
+    missing = [axis for axis, ms in axes.items() if not ms & measures]
+    assert not missing, f"추천 구성에 빠진 축: {missing} (지표 {sorted(measures)})"
+    placed = {g["i"] for g in detail["layout"]["lg"]}
+    assert {w["id"] for w in widgets} <= placed, "레이아웃에 자리가 없는 위젯이 있다"
+
+    sc.open(f"/p/{pid}/dashboard").see("대시보드")
+    expect(sc.page.locator(".react-grid-layout [data-slot=card]")).to_have_count(len(widgets), timeout=20000)
+    _check_widget_cards(sc, target, c1, [w for w in widgets if w["spec"]["template"] == "STAT_CARD"])
+    sc.shot("추천_구성")
+
+    def boxes(screen_) -> dict[str, tuple[int, ...]]:
+        out = {}
+        for w in widgets:
+            box = _card(screen_, w["spec"]["title"]).bounding_box()
+            assert box, w["spec"]["title"]
+            out[w["spec"]["title"]] = tuple(round(box[k]) for k in ("x", "y", "width", "height"))
+        return out
+
+    def stored(screen_) -> str:
+        return screen_.page.evaluate("() => JSON.stringify(Object.assign({}, window.localStorage))")
+
+    sc.page.evaluate("() => document.querySelector('main')?.scrollTo(0, 0)")
+    first = boxes(sc)
+    assert not any(w["id"] in stored(sc) for w in widgets), "브라우저 저장소에 위젯 id 가 있다"
+    sc.done()
+
+    # 다른 브라우저: 새 문맥에서 화면으로 다시 로그인해 같은 대시보드를 연다
+    other = screen("TD-ACC-C1", fresh_password=PASSWORD)
+    other.open(f"/p/{pid}/dashboard").see("대시보드")
+    expect(other.page.locator(".react-grid-layout [data-slot=card]")).to_have_count(len(widgets), timeout=20000)
+    for w in widgets:
+        expect(_card(other, w["spec"]["title"])).not_to_contain_text("위젯을 불러오지 못했습니다")
+    other.page.evaluate("() => document.querySelector('main')?.scrollTo(0, 0)")
+    second = boxes(other)
+    assert second == first, {t: (first[t], second.get(t)) for t in first if first[t] != second.get(t)}
+    assert not any(w["id"] in stored(other) for w in widgets), "브라우저 저장소에 위젯 id 가 있다"
+    other.done()
+
+
+def _ui_UC_043_S01(screen, target, s0, summary: dict, rows: list[dict]):
+    """화면: 일반 이슈·결함·전체 탭의 건수와 「전체 N = 일반 n + 결함 m」 줄, 요약 카드, 행마다 원천
+    (도구 · 연결 · 저장소/프로젝트 #번호 → 원문 링크) (AC-043-1·4, DEC-02·ARC-031)."""
+    if not screen:
+        return
+    from playwright.sync_api import expect
+
+    pid = s0.ids["TD-PRJ-1"]
+    kinds = summary["kinds"]
+    sc = screen("TD-ACC-C1")
+    sc.open(f"/p/{pid}/issues").see("일반 이슈")
+
+    relation = sc.page.get_by_test_id("issue-kind-relation")
+    expect(relation).to_contain_text(f"전체 이슈(결함 포함) {kinds['allTotal']}건")
+    expect(relation).to_contain_text(f"= 일반 이슈(결함 제외) {kinds['generalTotal']}건 + 결함 {kinds['defectTotal']}건")
+    if kinds["defectRate"] is None:
+        expect(relation).to_contain_text(kinds.get("defectNote") or "산출 불가")
+    else:
+        expect(relation).to_contain_text(
+            f"결함 처리율: {kinds['defectRate'] * 100:.1f}% (해결·종료 {kinds['defectClosed']}건 / 결함 {kinds['defectTotal']}건)"
+        )
+
+    def tab(name: str):
+        return sc.page.get_by_role("tab").filter(has_text=re.compile(rf"^{re.escape(name)}\s*\d*$"))
+
+    tabs = {
+        "GENERAL": ("일반 이슈(결함 제외)", kinds["generalTotal"]),
+        "DEFECT": ("결함", kinds["defectTotal"]),
+        "ALL": ("전체 이슈(결함 포함)", kinds["allTotal"]),
+    }
+    for name, count in tabs.values():
+        expect(tab(name)).to_have_text(re.compile(rf"^{re.escape(name)}\s*{count}$"))
+
+    # 요약 카드: 열린 일반 이슈 n (일반 이슈 N건 중), 해결·닫힘 m (비율) (issues-page.tsx MetricCard)
+    opened = sc.page.locator("[data-slot=card]", has_text="열린 일반 이슈").first
+    expect(opened).to_contain_text(f"일반 이슈 {summary['total']}건 중")
+    assert _flat(opened.inner_text()).startswith(f"열린일반이슈{summary['open']}"), opened.inner_text()
+    closed = sc.page.locator("[data-slot=card]", has_text="해결·닫힘").first
+    share = f"{_js_round(summary['closed'] / summary['total'] * 100)}%" if summary["total"] else "0%"
+    assert _flat(closed.inner_text()) == f"해결·닫힘{summary['closed']}{share}", closed.inner_text()
+
+    def check_rows(want: list[dict]) -> None:
+        expect(sc.page.locator("tbody tr")).to_have_count(len(want), timeout=20000)
+        for r in want:
+            src = r["source"]
+            number = f"{src['target']} #{src['number']}" if src.get("target") else f"#{src['number']}"
+            link = sc.page.locator(f'tbody a[href="{src["externalUrl"]}"]').first
+            expect(link).to_contain_text(number)
+            assert str(src["number"]) in (link.get_attribute("href") or ""), src
+            line = sc.page.locator("tbody tr", has=link).first
+            kind = "결함" if r["kind"] == "DEFECT" else "일반 이슈"
+            for text in (r["key"], _TOOL_NAME.get(src["tool"], src["tool"]), src["connectionName"], kind):
+                expect(line).to_contain_text(text)
+
+    check_rows(rows)
+    sc.shot("일반_이슈")
+    defects = _get(target, s0, f"/api/projects/{pid}/issues?size=100&kind=DEFECT")["content"]
+    tab(tabs["DEFECT"][0]).click()
+    check_rows(defects)
+    sc.shot("결함")
+    everything = _get(target, s0, f"/api/projects/{pid}/issues?size=100&kind=ALL")["content"]
+    tab(tabs["ALL"][0]).click()
+    check_rows(everything)
     sc.done()

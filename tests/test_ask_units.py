@@ -67,7 +67,7 @@ def test_집계_줄은_차원_라벨과_값을_같이_적는다():
         total=WidgetRow(values={"value": 19}),
     )
     lines = answer.aggregate_lines(data)
-    assert lines == ["- 이슈 상태 OPEN: 7건", "- 이슈 상태 CLOSED: 12건", "- 전체: 19건"]
+    assert lines == ["- 이슈 상태 열림: 7건", "- 이슈 상태 종료: 12건", "- 이슈 건수 전체: 19건"]
     # 검문은 이 줄을 근거로 삼는다. 줄을 베낀 답은 통과한다.
     ck = number_guard.Checker(number_guard.facts_from_lines(lines, "집계", subject="이슈 건수"))
     assert ck.check("열린 이슈 7건, 닫힌 이슈 12건, 모두 19건") == []
@@ -531,3 +531,46 @@ def test_목록_프롬프트는_범위_절을_근거_앞에_둔다():
     scope = "사업 범위 안의 이슈 전체 0건이 아래 근거다."
     prompt = answer.user_prompt("이슈 목록", [], None, scope)
     assert prompt.index("## 목록 범위") < prompt.index("## 근거")
+
+
+def test_차원_없이_막대만_고르면_나눠_세되_그림은_안_붙인다():
+    """「일반 이슈가 몇 건이야」에 모델이 막대 템플릿만 적었다. 기본 차원(상태)으로 나눠 센
+    값은 프롬프트에 들어가지만 나눠 보기를 묻지 않았으니 그림은 없다(UC-060-S02, 실모델)."""
+    choice = {
+        "route": "AGGREGATE", "measure": "issue_count", "dimensions": [], "template": "BAR_CHART",
+    }
+    decision = routing.from_choice(_catalog(), choice)
+    assert decision.dimensions == ["issue_status"] and decision.breakdown is False
+    # 나눠 보기를 물으면 그림까지
+    choice["dimensions"] = ["issue_status"]
+    assert routing.from_choice(_catalog(), choice).breakdown is True
+    # 추이 템플릿은 그 자체가 나눠 보기다
+    trend = {"route": "AGGREGATE", "measure": "issue_count", "template": "LINE_CHART"}
+    assert routing.from_choice(_catalog(), trend).breakdown is True
+
+
+def test_집계_줄의_상태_코드는_발주기관_어휘로_적는다():
+    data = _data(
+        dimensions=["issue_status"],
+        columns=[
+            WidgetColumn(key="d0", label="일반 이슈 상태", type="string"),
+            WidgetColumn(key="value", label="이슈 건수", type="number"),
+        ],
+        rows=[
+            WidgetRow(values={"d0": "IN_PROGRESS", "value": 2}),
+            WidgetRow(values={"d0": "CLOSED", "value": 6}),
+        ],
+        total=None,
+    )
+    lines = answer.aggregate_lines(data)
+    assert lines[:2] == ["- 일반 이슈 상태 진행중: 2건", "- 일반 이슈 상태 종료: 6건"]
+    assert "IN_PROGRESS" not in "\n".join(lines)
+
+
+def test_이슈_근거는_지금_상태를_머리에_싣는다():
+    """이슈 본문에는 상태가 없어 모델이 본문의 계획 문장으로 상태를 말했다(UC-060-S16 실모델)."""
+    prompt = answer.user_prompt(
+        "외부 연계 규격 협의 이슈 상태", [_chunk("c1", content="규격을 확정한다", status="진행중")],
+        None,
+    )
+    assert "[1] 과업지시서 · 지금 상태 진행중\n규격을 확정한다" in prompt

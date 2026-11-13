@@ -310,3 +310,14 @@ def test_값이_하나뿐인_집계는_그림을_안_그린다():
     assert blocks.worth_drawing(two) is True
     trend = data([{"d0": "2026-08", "value": 3}, {"d0": "2026-09", "value": 4}], ["period_month"])
     assert blocks.worth_drawing(trend) is True
+
+
+def test_목록_표의_상태_코드는_발주기관_어휘로_바꾼다():
+    """「외부 연계 규격 협의 이슈 상태」에 답이 「IN_PROGRESS 상태」라고 했다(UC-060-S16 실모델).
+    화면(labels.ts)과 같은 말로 바꾸고, 코드 뒤 설명은 남긴다. 상태 열이 아닌 값은 그대로다."""
+    assert entity_table._word("status", "IN_PROGRESS") == "진행중"
+    assert entity_table._word("severity", "MAJOR") == "중대"
+    assert entity_table._word("status", "IMPLEMENTED(발주기관 지정)") == "구현(발주기관 지정)"
+    assert entity_table._word("title", "CLOSED") == "CLOSED"
+    note = "출처 이슈 닫힘(구현 확인 아님)"
+    assert entity_table._word("status", note) == note

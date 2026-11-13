@@ -110,7 +110,8 @@ def chunk(
     page: int | None = None  # 지금까지 읽은 마지막 쪽. 다음 조각의 시작 쪽이다
     for heading_path, section_text in sections:
         numbered_rows = _has_row_numbers(section_text)
-        for packed in _pack(section_text):
+        packs = _row_packs(section_text) if numbered_rows else _pack(section_text)
+        for packed in packs:
             content, page, where = _locate(packed, page, numbered_rows)
             drafts.append(
                 ChunkDraft(
@@ -173,6 +174,53 @@ def _first_cell(line: str) -> str | None:
     """표 행이면 첫 칸. 숫자(엑셀 행 번호)일 때만 돌려준다."""
     m = _TABLE_ROW.match(line)
     return m.group(1) if m and m.group(1).isdigit() else None
+
+
+# XLSX 표 조각 하나에 넣는 행 수. 시트 하나를 통째로 한 조각에 넣으면 행 하나를 묻는 질문
+# ("WBS 3.3 의 산출물은 뭐야")과의 유사도가 근거 문턱 아래로 떨어지고(bge-m3 실측 0.52)
+# 출처도 「2~7행」이 된다. 머리글을 칸마다 붙인 행 세 개까지는 문턱을 넘었다(0.57)
+ROWS_PER_CHUNK = 3
+
+
+def _row_packs(text: str) -> list[str]:
+    """엑셀 행 번호가 있는 표를 행 몇 개씩 나눈다. 칸마다 머리글을 붙여 행만 떼어 읽어도 무슨
+    값인지 알게 한다("| 5 | WBS ID 3.3 | 산출물 프로그램 목록 |"). 표가 아닌 줄(시트 표제)은
+    조각마다 앞에 둔다. 값은 원문 그대로이고 첫 칸 행 번호도 그대로라 위치가 남는다."""
+    head: list[str] = []
+    header: list[str] | None = None
+    rows: list[str] = []
+    for line in text.split("\n"):
+        stripped = line.strip()
+        if not stripped:
+            continue
+        if _TABLE_RULE.match(stripped):
+            continue
+        if not stripped.startswith("|"):
+            head.append(stripped)
+            continue
+        cells = [c.strip() for c in stripped.strip("|").split("|")]
+        if header is None:
+            header = cells
+            continue
+        if not cells or not cells[0].isdigit():
+            head.append(stripped)
+            continue
+        labelled = [
+            f"{name} {value}".strip() if name else value
+            for name, value in zip(header[1:], cells[1:], strict=False)
+            if value
+        ]
+        rows.append("| " + " | ".join([cells[0], *labelled]) + " |")
+    if not rows:
+        return _pack(text)
+    packs: list[str] = []
+    for i in range(0, len(rows), ROWS_PER_CHUNK):
+        piece = "\n".join([*head, *rows[i : i + ROWS_PER_CHUNK]])
+        if estimate_tokens(piece) > settings.chunk_max_tokens:
+            packs.extend(_pack(piece))
+        else:
+            packs.append(piece)
+    return packs
 
 
 def _has_row_numbers(section_text: str) -> bool:

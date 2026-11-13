@@ -179,6 +179,7 @@ def compute(cur: Any, project_id: str, at: date) -> ProgressResponse:
         workProduct=product_measure,
         defect=defect_measure,
         behind=[] if wbs_progress is None else wbs_progress.behind,
+        delayed=[] if wbs_progress is None else wbs_progress.delayed,
         warnings=warnings,
         planVersion=None if shown_row is None else shown_row["version"],
         planUpdatedAt=None if shown_row is None else shown_row["updated_at"].isoformat(),
@@ -244,10 +245,21 @@ def deliverable_approval_now(cur: Any, project_id: str, at: date) -> tuple[int, 
         cur, [j.product_id for j in judged if j.product_id]
     )
     approved = sum(1 for j in judged if j.product_id and status.get(j.product_id) == "APPROVED")
-    # 시맨틱 지표가 같은 값을 내도록 맞춘 산출물 항목만 행에 맞춰 둔다. 판정 상태·판정 시각·활동
-    # 기록은 건드리지 않는다(그것은 일정·산출물 화면이 남긴다). 바뀐 것이 없으면 쓰지 않는다
-    wbs_repository.save_product_links(cur, project_id, [(j.wbs_id, j.product_id) for j in judged])
     return approved, len(leaves)
+
+
+def sync_product_links(cur: Any, project_id: str, at: date | None = None) -> None:
+    """판정이 맞춘 산출물 항목만 wbs_item 에 맞춘다(시맨틱 지표 deliverable_approval_rate 의 재료).
+
+    산출물 항목이 생기거나 문서가 작업에 붙는 쓰기 요청(문서 올리기·초안 확정·수집)이 부른다.
+    진척 산정(compute)·상태 뜨기 같은 읽기 경로에서는 부르지 않는다. 읽기 경로가 wbs_item 에
+    쓰면 그 트랜잭션이 끝날 때까지 행 잠금이 남아, 같은 행을 갱신하는 일정 화면 요청이 기다린다
+    (5174 원격 시험의 GET /wbs 시간 초과). 판정 상태·판정 시각·활동 기록은 건드리지 않는다.
+    """
+    check = judge_deliverables(cur, project_id, at or clock.today())
+    wbs_repository.save_product_links(
+        cur, project_id, [(j.wbs_id, j.product_id) for j in check.judgements]
+    )
 
 
 def _wbs_note(wbs_progress: wbs.WbsProgress | None) -> str | None:

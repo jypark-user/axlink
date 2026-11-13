@@ -141,6 +141,21 @@ def test_behind_lists_leaves_under_the_plan_line() -> None:
     assert result.behind == ["1.1 늦은 작업"]
 
 
+def test_delayed_counts_only_overdue_unfinished_leaves() -> None:
+    """지연 = 종료일이 기준일 전에 지났는데 실적 100% 미만(IM-009 7.1). 계획 뒤짐과 다르다."""
+    data = build(
+        [
+            ["1.1", "기한 지난 미완료", "", "2026-01-01", "2026-02-01", 0.3, None, 0.4],
+            ["1.2", "기한 전 뒤짐", "", "2026-02-01", "2026-04-01", 0.4, None, 0.0],
+            ["1.3", "기한 지난 완료", "", "2026-01-01", "2026-02-01", 0.3, None, 1.0],
+        ]
+    )
+    result = wbs.progress(wbs.parse(data), at=date(2026, 3, 1))
+
+    assert result.delayed == ["1.1 기한 지난 미완료"]
+    assert result.behind == ["1.1 기한 지난 미완료", "1.2 기한 전 뒤짐"]
+
+
 def test_missing_header_raises() -> None:
     data = build([["아무", "값"]], headers=["갑", "을"])
     with pytest.raises(wbs.WbsParseError, match="머리글"):
