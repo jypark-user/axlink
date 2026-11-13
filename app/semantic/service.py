@@ -12,6 +12,7 @@ from app.auth import repository as auth_repo
 from app.auth.models import AuthPrincipal
 from app.common import clock
 from app.db import fetch_all
+from app.rag import vocab
 from app.semantic import builder
 from app.semantic import catalog as catalog_module
 from app.semantic.builder import BoundFilter, ValidatedSpec
@@ -74,7 +75,7 @@ def run_validated(cur: Any, validated: ValidatedSpec) -> WidgetDataResponse:
         target=measure.target_value,
         appliedProjectIds=list(validated.project_ids),
         truncated=truncated,
-        basis=validated.measure.basis,
+        basis=vocab.plain(validated.measure.basis),
         generatedAt=datetime.now(UTC).isoformat().replace("+00:00", "Z"),
     )
 

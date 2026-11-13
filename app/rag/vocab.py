@@ -5,6 +5,8 @@
 답했다(UC-060-S16 실모델). 화면과 같은 말을 쓰도록 같은 표를 둔다. 바꾸면 labels.ts 도 같이.
 """
 
+import re
+
 WORDS: dict[str, str] = {
     # 이슈·리스크
     "OPEN": "열림",
@@ -33,6 +35,19 @@ WORDS: dict[str, str] = {
     "MEDIUM": "보통",
     "LOW": "낮음",
 }
+
+
+# 지표 산출 근거 문구에 괄호로 붙은 코드. 「검증완료(VERIFIED)」의 (VERIFIED) 처럼 앞말이 이미
+# 발주기관 어휘라 코드만 뺀다. (WBS)·(L1) 처럼 화면에서도 쓰는 말은 남긴다
+_BASIS_CODES = frozenset(WORDS) | {"TESTS", "NONE"}
+_PAREN_CODE = re.compile(r"\(([A-Z_]+)\)")
+
+
+def plain(text: str | None) -> str | None:
+    """산출 근거 문구에서 상태 코드 괄호를 뺀다(DEF-V061). 화면 설명과 AI 답이 같은 문구를 쓴다."""
+    if not text:
+        return text
+    return _PAREN_CODE.sub(lambda m: "" if m.group(1) in _BASIS_CODES else m.group(0), text)
 
 
 def word(value: object) -> object:

@@ -409,12 +409,16 @@ def test_값이_하나인_집계는_그림_없이_글로만_답한다(client, co
     assert f"이슈 건수(결함 제외): {expected}" in scripted.prompts[0]
     text = "".join(d["text"] for e, d in events if e == "delta")
     assert "※" not in text and "[그림" not in text
+    # 그림이 없으니 산출 근거는 서버 문안으로 답 끝에 붙는다(DEF-V061). 상태 코드는 빼고 적는다
+    assert "\n\n산출 근거: " in text, text
+    assert "(RESOLVED)" not in text and "(CLOSED)" not in text
 
     messages = client.get(
         f"/api/conversations/{conversation_id}/messages", headers=_auth(token)
     ).json()
     assert messages[1]["infographics"] == []
     assert messages[1]["routing"]["viz"] is None
+    assert "산출 근거: " in messages[1]["content"]
 
 
 @requires_db
@@ -721,7 +725,10 @@ def test_집계와_문서_근거가_둘_다_있으면_한_답에_결합한다(
     # 답에는 집계 수치가 그대로, 문서 출처가 각주로 붙는다. 둘 다 지어낸 숫자가 아니다
     assert names[-1] == "done" and events[-1][1]["finishReason"] == "STOP"
     text = "".join(d["text"] for e, d in events if e == "delta")
-    assert text == f"이슈는 {expected}건이고, 납품 산출물은 22종이다[1]."
+    # 그림 없는 집계 값의 산출 근거는 서버 문안으로 끝에 붙는다(DEF-V061)
+    body, _, basis = text.partition("\n\n산출 근거: ")
+    assert body == f"이슈는 {expected}건이고, 납품 산출물은 22종이다[1]."
+    assert "결함" in basis, text
     sources = next(d for e, d in events if e == "sources")["sources"]
     assert sources and sources[0]["sourceType"] == "DOCUMENT_UPLOAD"
     assert sources[0]["sourceLabel"] == "과업지시서"
