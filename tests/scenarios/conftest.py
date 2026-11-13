@@ -25,6 +25,9 @@ from tests.fixtures.im009.seed import PASSWORD, Seeder
 from tests.scenarios.ui import CHROME, open_ui
 
 TARGET_URL = os.environ.get("AXLINK_TARGET_URL")
+# 원격 대상 응답을 기다리는 시간(초). CPU 로 도는 온프레미스 모델은 판정·답 생성에 각각 수십 초가
+# 걸려(서버의 모델 호출 상한은 llm_timeout 120초) 60초로는 끊긴다. 폐쇄망 시험에서 늘려 준다
+TARGET_TIMEOUT = float(os.environ.get("AXLINK_TARGET_TIMEOUT", "60"))
 
 pytestmark = requires_db
 
@@ -33,7 +36,7 @@ pytestmark = requires_db
 def target(client):
     """TestClient 또는 실제 서버 클라이언트. 둘 다 `.get/.post/...` 와 `/api/...` 경로를 쓴다."""
     if TARGET_URL:
-        with httpx.Client(base_url=TARGET_URL.rstrip("/"), timeout=60) as c:
+        with httpx.Client(base_url=TARGET_URL.rstrip("/"), timeout=TARGET_TIMEOUT) as c:
             yield c
     else:
         yield client
