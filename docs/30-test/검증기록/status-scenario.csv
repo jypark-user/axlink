@@ -70,7 +70,7 @@ UC-021-S06,UC-021,pass,C03-R0334,C03-R0334,api,,,,6
 UC-021-S07,UC-021,pass,C03-R0312,C03-R0312,api,,,,15
 UC-021-S08,UC-021,pass,C03-R0313,C03-R0313,api,,,,15
 UC-021-S09,UC-021,not-run,C01-R0310,,mock,,,,2
-UC-021-S10,UC-021,pass-needs-evidence,C03-R0314,C03-R0314,api,,api·live-model,live-model,4
+UC-021-S10,UC-021,pass,C03-R0511,C03-R0511,api,,api·live-model,,5
 UC-022-S01,UC-022,pass,C03-R0315,C03-R0315,api,,api·browser,,14
 UC-022-S02,UC-022,pass,C03-R0325,C03-R0325,api,,,,14
 UC-022-S03,UC-022,pass,C03-R0316,C03-R0316,api,,,,14
@@ -88,7 +88,7 @@ UC-023-S02,UC-023,pass,C03-R0330,C03-R0330,api,,,,14
 UC-023-S03,UC-023,pass,C03-R0331,C03-R0331,api,,api,,14
 UC-023-S04,UC-023,pass,C03-R0327,C03-R0327,api,,api,,14
 UC-023-S05,UC-023,pass,C03-R0328,C03-R0328,api,,api,,14
-UC-023-S06,UC-023,pass-needs-evidence,C03-R0332,C03-R0332,api,,api·live-model,live-model,4
+UC-023-S06,UC-023,fail,C03-R0512,C03-R0512,api,,api·live-model,,5
 UC-030-S01,UC-030,pass,C03-R0336,C03-R0336,api,,,,16
 UC-030-S02,UC-030,pass,C03-R0337,C03-R0337,api,,api,,16
 UC-030-S03,UC-030,pass,C03-R0358,C03-R0358,api,,,,16
