@@ -189,6 +189,9 @@ class Fact:
     as_of: frozenset[DateKey] = frozenset()
     chunk_no: int | None = None
     label: frozenset[str] | None = None  # 값을 부르는 말. 근거 원문·설명 줄의 값은 None
+    # 같은 줄에 적힌 날짜(행의 속성: 종료 예정일 등). 문장이 그 날짜를 같이 말해도
+    # 기준 시점이 아니다
+    line_dates: frozenset[DateKey] = frozenset()
 
 
 def facts_from_lines(
@@ -201,7 +204,10 @@ def facts_from_lines(
     lines = list(lines)
     words = keywords(" ".join([subject, *lines]))
     return [
-        Fact(value, unit, words, source, _row_dates(line) or as_of, label=label)
+        Fact(
+            value, unit, words, source, _row_dates(line) or as_of, label=label,
+            line_dates=frozenset(dates_in(line)),
+        )
         for line in lines
         for value, unit, label in _labelled(line)
     ]
@@ -291,6 +297,19 @@ def _canon(words: Iterable[str]) -> set[str]:
     return {_SYNONYMS.get(w, w) for w in words}
 
 
+# DEC-02(ARC-031): 일반 이슈는 결함을 뺀 값, 전체 이슈는 결함을 포함한 값이다. 「일반」이라고 부른
+# 값이 「결함 포함」 라벨의 값이면 다른 지표다. 값이 하나뿐인 집계는 같은 묶음에 견줄 값이 없어
+# 라벨 짝짓기로는 못 막는다(UC-060-S09 폐쇄망 모델: 「일반 이슈는 11건」, 11 = 전체 이슈)
+_SCOPE_CONFLICTS = (("일반", "포함"),)
+
+
+def _scope_conflict(label: frozenset[str], clause: set[str]) -> bool:
+    return any(
+        _overlap([said], clause) and not _overlap([said], label) and _overlap([other], label)
+        for said, other in _SCOPE_CONFLICTS
+    )
+
+
 def _overlap(a: Iterable[str], b: Iterable[str]) -> bool:
     """낱말이 같거나 한쪽이 다른 쪽을 품으면 겹친 것으로 본다(사업비 · 총사업비)."""
     b = list(b)
@@ -331,7 +350,11 @@ class Checker:
         for (start, _, value, unit), clause in zip(spans, clauses, strict=True):
             if start < len(context):
                 continue
-            reason = self._why_not(value, unit, subject, cited, when, clause)
+            # 그 숫자를 가리키는 구절이 대상을 말했으면 그 대상으로 본다. 한 문장에 대상이 둘이면
+            # ("산출물은 22종이고, 일반 이슈는 0건") 다른 대상의 근거로 숫자가 통과하지 않게 한다
+            reason = self._why_not(
+                value, unit, self._clause_subject(clause) or subject, cited, when, clause
+            )
             if reason:
                 bad.append(Violation(value, unit, reason))
         return bad
@@ -359,6 +382,8 @@ class Checker:
         """구절이 말한 구분 낱말이 같은 묶음의 다른 값(같은 단위) 라벨과 더 많이 맞는가."""
         if fact.label is None:
             return False
+        if _scope_conflict(fact.label, clause):
+            return True
         distinct = self._distinct.get(fact.source, frozenset())
         named = [w for w in clause if _overlap([w], distinct)]
         if not named:
@@ -374,6 +399,10 @@ class Checker:
             if other.value != fact.value
             and (not other.unit or not fact.unit or other.unit == fact.unit)
         )
+
+    def _clause_subject(self, clause: set[str]) -> set[str]:
+        vocab = _canon(self.subjects)
+        return {w for w in clause if _overlap([w], vocab)}
 
     def _subjects_in(self, text: str) -> set[str]:
         vocab = _canon(self.subjects)
@@ -400,7 +429,8 @@ class Checker:
         if when:
             same = [
                 f for f in same
-                if not f.as_of or any(_compatible(a, b) for a in when for b in f.as_of)
+                if not f.as_of
+                or any(_compatible(a, b) for a in when for b in f.as_of | f.line_dates)
             ]
             if not same:
                 return "기준 시점 불일치"
