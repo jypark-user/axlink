@@ -1,13 +1,13 @@
 {
- "generated": "2026-11-12",
+ "generated": "2026-11-13",
  "sources": {
   "IM-001-요구사항정의서.md": {
    "version": "v0.4",
    "sha256": "deb83121a42d0c00068c90ddd92fefc133a95cb3c8303a29b7b4b505ae7c7364"
   },
   "IM-007-유스케이스명세서.md": {
-   "version": "v0.2.13",
-   "sha256": "496e00193d8a0473226d2aba152989981260560f0f00604933eb711d6d60ff84"
+   "version": "v0.2.14",
+   "sha256": "bf03ab6d4af4e3024f3196bc3e46408fb2dfcaba17e0be7549063ff5e5ba74f4"
   },
   "IM-007A-요구사항-세부의무-대응표.md": {
    "version": "v0.1.7",
@@ -3251,14 +3251,14 @@
     "UC-060-S06a",
     "UC-060-S06b"
    ],
-   "decs": [
-    "DEC-15"
-   ],
+   "decs": [],
    "needs": [
     "api",
     "browser"
    ],
-   "decs_decided": [],
+   "decs_decided": [
+    "DEC-15"
+   ],
    "obligations": [
     "SWFR.RAG.001-o2"
    ]
@@ -6812,14 +6812,14 @@
    "acs": [
     "AC-060-6"
    ],
-   "decs": [
-    "DEC-15"
-   ],
+   "decs": [],
    "needs": [
     "api",
     "browser"
    ],
-   "decs_decided": []
+   "decs_decided": [
+    "DEC-15"
+   ]
   },
   "UC-060-S07": {
    "id": "UC-060-S07",
@@ -7562,7 +7562,7 @@
    "text": "**용역사의 AI 질의 허용**. IM-001 은 질의 주체를 제한하지 않고 E2E 는 발주기관만 그린다",
    "ucs": "UC-060",
    "blocked": "발주기관 질의 전부",
-   "status": "결정 필요(범위)"
+   "status": "**결정 (a) 2026-11-13 사용자**: 용역사는 배정된 사업 범위에서 질의할 수 있다. 배정되지 않은 사업은 서버가 거절한다(UC-060-S06a). UC-060-S06b 는 정상 답(9건)과 질의 화면 노출을 본다"
   },
   "DEC-16": {
    "id": "DEC-16",

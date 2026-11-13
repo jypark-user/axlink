@@ -178,7 +178,7 @@ UC-060-S04,UC-060,pass,C03-R0412,C03-R0412,api,,,,10
 UC-060-S05a,UC-060,pass-ci-only,C02-R0786,,auto,,,,6
 UC-060-S05b,UC-060,pass,C03-R0487,C03-R0487,api,,live-model,,4
 UC-060-S06a,UC-060,pass,C03-R0413,C03-R0413,api,,api·browser,,19
-UC-060-S06b,UC-060,not-run,C01-R0422,,mock,DEC-15,api·browser,,2
+UC-060-S06b,UC-060,not-run,C01-R0422,,mock,,api·browser,,2
 UC-060-S07,UC-060,fail,C03-R0508,C03-R0508,api,,live-model,,5
 UC-060-S08,UC-060,pass,C03-R0414,C03-R0414,api,,,,10
 UC-060-S09,UC-060,fail,C03-R0509,C03-R0509,api,,airgap·live-model,,5
