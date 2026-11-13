@@ -148,7 +148,9 @@ def latest_defects() -> dict[str, dict]:
         cur.update({k: v for k, v in d.items() if v not in (None, "", [])})
     return out
 # Goal 조건: 통과 근거는 5174(내부 검증 환경)에서 실행한 것이어야 한다. CI 실행은 보조 근거다.
-TARGET_ENV_PREFIXES = ("5174",)
+# 「iso」는 5174 와 같은 배포 이미지를 따로 띄운 격리 시험 인스턴스다. 5174 설정을 바꿀 수 없는
+# 시험(고정 응답 모드 경고 DEC-23, 폐쇄망 AC-060-8)만 여기서 돈다(2026-11-12 사용자 결정)
+TARGET_ENV_PREFIXES = ("5174", "iso")
 
 
 def sha256(path: Path) -> str:
@@ -889,8 +891,11 @@ def record_junit(a: argparse.Namespace) -> int:
                 for pr in tc.iter("property")
                 if pr.get("name") in ("proves", "screenshots", "model")
             }
-            # 모의 모델(재생 서버 대본)로 돈 시험은 시험이 model 속성을 남긴다. 실모델 증거가 아니다
-            mock_model = next((v for k, v in props if k == "model"), None)
+            # 모의 모델(재생 서버 대본)로 돈 시험은 시험이 model 속성 mock-replay 를 남긴다. 실모델
+            # 증거가 아니다. 실모델 시험(test_live_model.py)은 대상이 실제로 쓴 모델 이름을 남긴다
+            models = sorted(v for k, v in props if k == "model")
+            mock_model = next((v for v in models if v.startswith("mock")), None)
+            live_model = next((v for v in models if not v.startswith("mock")), None)
             variant = re.search(r"\[(.+)\]$", tc.get("name", ""))
             run_proves = [x for x in a.proves.split(",") if x] if a.proves else []
             run_proves += sorted({v for k, v in props if k == "proves"} - set(run_proves))
@@ -923,7 +928,7 @@ def record_junit(a: argparse.Namespace) -> int:
                     "model": (
                         f"모의 모델({mock_model}, 재생 서버 대본 응답). 실모델 증거 아님"
                         if mock_model
-                        else a.model
+                        else live_model or a.model
                     ),
                 },
                 **({"model_kind": "mock"} if mock_model else {}),
