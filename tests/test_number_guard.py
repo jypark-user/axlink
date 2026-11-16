@@ -230,3 +230,56 @@ def test_지어낸_숫자는_한_글자씩_와도_한_번도_나가지_않는다
     shown = [gate.feed(ch) for ch in "열린 이슈는 977건입니다. "] + [gate.finish()]
     assert all("9" not in s and "7" not in s for s in shown)
     assert gate.blocked == 1
+
+
+# ------------------------------------------------ 폐쇄망 모델 실측(2026-11-13, DEF-V058~V060)
+
+
+def test_문장이_행의_종료일을_말해도_기준_시점_불일치로_막지_않는다():
+    """UC-060-S07: 지연 작업 줄의 종료 예정일은 그 행의 속성이다. 기준일(T0)의 실적 40% 를
+    말하면서 종료 예정일을 같이 적어도 통과한다(DEF-V058)."""
+    t0 = frozenset({(2026, 9, 15)})
+    facts = g.facts_from_lines(
+        [
+            "- 기준일 2026-09-15: 말단 작업 10건 중 지연 작업 1건",
+            "- 지연 작업 3.2 설계 (시민포털 고도화): 종료 예정 2026-07-31, 실적 40%",
+        ],
+        "집계",
+        subject="지연 작업",
+        as_of=t0,
+    )
+    checker = g.Checker(facts, question="이번 달 지연된 작업과 사유")
+    assert _reasons(checker, "3.2 설계는 종료 예정일 2026-07-31 이 지났고 실적은 40% 입니다.") == []
+    # 그 행에 없는 날짜를 기준으로 말하면 여전히 막는다
+    assert _reasons(checker, "2026-10-31 기준 실적은 40% 입니다.") == ["40%:기준 시점 불일치"]
+
+
+def test_한_문장의_두_대상은_숫자마다_자기_대상의_근거가_있어야_한다():
+    """UC-060-S03 실측: 「산출물은 22종이고, 일반 이슈는 0건」. 0 은 산출물을 말한 WBS 원문에만
+    있었다. 문장 전체의 대상으로 보면 통과했다(DEF-V059)."""
+    facts = g.facts_from_chunk(1, "납품 산출물은 22종이다.")
+    facts += g.facts_from_chunk(2, "시트: WBS | 5 | WBS ID 3.3 | 산출물 프로그램 목록 | 가중치 0")
+    checker = g.Checker(facts, question="납품 산출물은 몇 종이고 일반 이슈는 몇 건이야")
+    said = "납품 산출물은 22종이고, 일반 이슈는 0건입니다. [1]"
+    assert _reasons(checker, said) == ["0건:대상 불일치"]
+    assert _reasons(checker, "납품 산출물은 22종입니다. [1]") == []
+
+
+def test_결함_포함_값을_일반_이슈라고_부르면_막는다():
+    """UC-060-S09 실측: 판정이 전체 이슈(결함 포함)를 골랐는데 답이 「일반 이슈는 11건」.
+    견줄 값이 하나뿐이라 라벨 짝짓기로 못 막았다(DEF-V060, DEC-02)."""
+    facts = g.facts_from_lines(
+        ["- 전체 이슈 건수(결함 포함), 사업 시민포털 고도화: 11건"],
+        "집계",
+        subject="전체 이슈 건수(결함 포함)",
+    )
+    checker = g.Checker(facts, question="일반 이슈는 몇 건이야")
+    assert _reasons(checker, "일반 이슈는 11건이다.") == ["11건:지표 불일치"]
+    assert _reasons(checker, "결함을 포함한 전체 이슈는 11건이다.") == []
+    general = g.Checker(
+        g.facts_from_lines(
+            ["- 일반 이슈 건수(결함 제외) 전체: 9건"], "집계", subject="일반 이슈 건수(결함 제외)"
+        ),
+        question="일반 이슈는 몇 건이야",
+    )
+    assert _reasons(general, "일반 이슈는 9건이다.") == []

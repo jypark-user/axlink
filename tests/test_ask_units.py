@@ -574,3 +574,12 @@ def test_이슈_근거는_지금_상태를_머리에_싣는다():
         None,
     )
     assert "[1] 과업지시서 · 지금 상태 진행중\n규격을 확정한다" in prompt
+
+
+def test_산출_근거의_상태_코드_괄호는_빼고_화면_용어는_남긴다():
+    """DEF-V061: 「검증완료(VERIFIED)」 → 「검증완료」. (WBS)·(L1) 같은 말은 남긴다."""
+    from app.rag import vocab
+
+    text = "검증완료(VERIFIED) 또는 인수완료(ACCEPTED) 수를 일정(WBS) 대표(L1)로. 시험(TESTS) 링크"
+    assert vocab.plain(text) == "검증완료 또는 인수완료 수를 일정(WBS) 대표(L1)로. 시험 링크"
+    assert vocab.plain(None) is None

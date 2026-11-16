@@ -1031,10 +1031,12 @@ def _ui_UC_043_S01(screen, target, s0, summary: dict, rows: list[dict]):
         for r in want:
             src = r["source"]
             number = f"{src['target']} #{src['number']}" if src.get("target") else f"#{src['number']}"
-            link = sc.page.locator(f'tbody a[href="{src["externalUrl"]}"]').first
+            href = f'a[href="{src["externalUrl"]}"]'
+            link = sc.page.locator(f"tbody {href}").first
             expect(link).to_contain_text(number)
             assert str(src["number"]) in (link.get_attribute("href") or ""), src
-            line = sc.page.locator("tbody tr", has=link).first
+            # has= 는 행 안에서 찾는다. 「tbody a」로 주면 행 안에 tbody 가 없어 아무 행도 맞지 않는다
+            line = sc.page.locator("tbody tr", has=sc.page.locator(href)).first
             kind = "결함" if r["kind"] == "DEFECT" else "일반 이슈"
             for text in (r["key"], _TOOL_NAME.get(src["tool"], src["tool"]), src["connectionName"], kind):
                 expect(line).to_contain_text(text)

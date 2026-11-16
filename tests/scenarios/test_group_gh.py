@@ -200,6 +200,7 @@ def test_UC_060_S04_근거_부족(target, s0, llm):
     assert "지어낸 답" not in text
 
 
+@pytest.mark.remote_llm
 def test_UC_060_S05a_주입_차단(target, s0, llm):
     """가짜 모델이 「이슈는 977건」 출력 → 그 문장 미출력·미저장, 종료 사유 수치 검문 (AC-060-4)."""
     with tx() as cur:
@@ -217,6 +218,7 @@ def test_UC_060_S05a_주입_차단(target, s0, llm):
     assert scripted.stream_calls == 1
 
 
+@pytest.mark.remote_llm
 def test_UC_060_S17_잘못된_대상_결합(target, s0, llm):
     """가짜 모델이 「일반 이슈 처리율은 50%」(50 은 위험 처리율) → 그 문장 차단 (AC-060-12·4, DEC-13 무관)."""
     llm({"route": "AGGREGATE", "measure": "issue_resolution_rate", "template": "STAT_CARD"}, "일반 이슈 처리율은 50% 입니다. 확인해 주세요.")
@@ -234,9 +236,24 @@ def test_UC_060_S06a_다른_사업_접근_거절(target, s0, screen):
     _ui_UC_060_S06a(screen, s0)
 
 
-@pytest.mark.skip(reason="DEC-15(용역사 질의 허용) 결정 전. 결정 뒤 V1 의 답 또는 거절을 단언한다")
-def test_UC_060_S06b_배정된_용역사의_질의(target, s0):
-    """V1 이 TD-PRJ-1 범위로 질문 (AC-060-6, DEC-15)."""
+@pytest.mark.remote_llm
+def test_UC_060_S06b_배정된_용역사의_질의(target, s0, llm, screen):
+    """V1 이 배정된 TD-PRJ-1 범위로 S02 질문 → 정상 답 9건 (AC-060-6, DEC-15 (a) 2026-11-13 사용자 결정).
+
+    모의 모델: 권한 판정 확인용(실모델 검증 아님). 화면은 V1 에게 [새 질문]이 보이고 그 사업 질의
+    화면이 열리는지 따로 본다. 배정되지 않은 사업 거절은 UC-060-S06a(V3)가 본다."""
+    scripted = llm({"route": "AGGREGATE", "measure": "issue_count", "template": "STAT_CARD"}, "일반 이슈는 모두 9건입니다.")
+    events = _ask(target, s0, "TD-ACC-V1", "일반 이슈가 몇 건이야", [s0.ids["TD-PRJ-1"]])
+    text, done = _text(events), _done(events)
+    assert done["finishReason"] == "STOP", f"배정된 용역사의 질의가 정상 답으로 끝나지 않았다({done['finishReason']}): {text}"
+    assert "9건" in text, text
+    assert scripted.stream_calls == 1
+    if not screen:
+        return
+    sc = screen("TD-ACC-V1")
+    sc.open(f"/p/{s0.ids['TD-PRJ-1']}/ask").see("새 질문")
+    sc.not_see("접근 권한이 없습니다")
+    sc.done()
 
 
 @pytest.mark.remote_llm
