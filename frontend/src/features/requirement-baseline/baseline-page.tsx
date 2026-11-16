@@ -93,8 +93,9 @@ export function BaselinePage(): ReactNode {
   const { project } = useProjectContext();
   const { me } = useAuth();
   const base = `/projects/${project.id}/requirement-baseline`;
-  const isAuthor = me?.role === 'CONTRACTOR' || me?.role === 'SUPER_ADMIN';
-  const isConfirmer = me?.role === 'CLIENT' || me?.role === 'SUPER_ADMIN';
+  // 등록·정리·제출은 용역사, 확정·돌려보내기는 발주기관. 관리자는 대신하지 않는다(DEC-05, ARC-032)
+  const isAuthor = me?.role === 'CONTRACTOR';
+  const isConfirmer = me?.role === 'CLIENT';
 
   const state = useAsync<BaselineStateResponse>(() => api.get<BaselineStateResponse>(base), [base]);
   const refs = useAsync<UnresolvedRefResponse[]>(

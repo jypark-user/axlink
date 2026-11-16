@@ -499,6 +499,7 @@ _REQUIREMENT_COLUMNS = """
     r.tool_connection_id, r.external_id, r.external_url, r.source_kind, r.updated_at,
     coalesce(r.evidence_status, r.status) as evidence_status,
     r.decided_status, r.decided_reason, r.decided_at, du.name as decided_by_name,
+    du.role as decided_by_role,
     r.baseline_id,
     c.tool as tool_name, c.name as connection_name, c.target_resource,
     {source_state} as source_state,

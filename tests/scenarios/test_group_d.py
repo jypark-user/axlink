@@ -260,10 +260,14 @@ def test_UC_031_S08_같은_버전_재제출(target, s0):
 
 
 def test_UC_031_S05_거절들(target, s0):
-    """용역사 승인 / 빈 사유 반려 → 거절 (AC-031-4). 지난 버전 승인은 S04 뒤 본다."""
+    """용역사·관리자 승인 / 빈 사유 반려 → 거절 (AC-031-4, DEC-05). 지난 버전 승인은 S04 뒤 본다."""
     wp = s0.ids["TD-DOC-3:wp"]
     pid = s0.ids["TD-PRJ-1"]
     assert target.post(f"/api/projects/{pid}/work-products/{wp}/approve", headers=auth(s0.tokens["TD-ACC-V1"])).status_code == 403
+    a1 = auth(s0.tokens["TD-ACC-A1"])
+    for res in (target.post(f"/api/projects/{pid}/work-products/{wp}/approve", headers=a1),
+                target.post(f"/api/projects/{pid}/work-products/{wp}/reject", json={"reason": "x"}, headers=a1)):
+        assert res.status_code == 403 and "플랫폼 관리자는" in res.json()["message"], res.text
     assert target.post(f"/api/projects/{pid}/work-products/{wp}/reject", json={"reason": ""}, headers=auth(s0.tokens["TD-ACC-C1"])).status_code in (400, 422)
     assert target.post(f"/api/projects/{pid}/work-products/{wp}/reject", json={"reason": "x"}, headers=auth(s0.tokens["TD-ACC-V1"])).status_code == 403
 

@@ -186,9 +186,11 @@ function buildColumns(): ColumnDef<ReviewRequestResponse, unknown>[] {
 export function ReviewRequestsPage(): ReactNode {
   const { project } = useProjectContext();
   const { me } = useAuth();
-  // 요청은 운영 지원을 위해 최고관리자도 열 수 있다. 확인완료·다시 요청은 발주기관만이다 (SWFR.WEB.006)
-  const isClient = me?.role === 'CLIENT' || me?.role === 'SUPER_ADMIN';
-  const canDecide = me?.role === 'CLIENT';
+  // 요청·확인완료·다시 요청은 발주기관, 조치 보고는 용역사만 한다. 플랫폼 관리자는 보기만 한다
+  // (DEC-05, ARC-032). 서버도 같은 권한표로 다시 본다
+  const isClient = me?.role === 'CLIENT';
+  const isContractor = me?.role === 'CONTRACTOR';
+  const canDecide = isClient;
   const state = useAsync<PageResponse<ReviewRequestResponse>>(
     () =>
       api.get<PageResponse<ReviewRequestResponse>>(
@@ -222,7 +224,9 @@ export function ReviewRequestsPage(): ReactNode {
         description={
           isClient
             ? '확인이 필요한 항목을 짚어 요청하고, 용역사의 조치 보고를 검토합니다. 요청 시점의 상태가 함께 저장됩니다.'
-            : '발주기관이 요청한 항목의 조치 결과를 보고합니다. 요청 시점과 지금의 상태 차이가 보고에 함께 붙습니다.'
+            : isContractor
+              ? '발주기관이 요청한 항목의 조치 결과를 보고합니다. 요청 시점과 지금의 상태 차이가 보고에 함께 붙습니다.'
+              : '확인 요청과 조치 기록을 봅니다. 플랫폼 관리자는 요청·보고·확인을 대신하지 않습니다.'
         }
         actions={
           isClient ? <Button onClick={() => setCreateOpen(true)}>요청 등록</Button> : undefined
@@ -257,7 +261,7 @@ export function ReviewRequestsPage(): ReactNode {
       />
       <DetailSheet
         requestId={selectedId}
-        isClient={isClient}
+        isContractor={isContractor}
         canDecide={canDecide}
         onClose={() => setSelectedId(null)}
         onChanged={state.reload}
@@ -508,13 +512,13 @@ const SNAPSHOT_FIELD_LABEL: Record<string, string> = {
 
 function DetailSheet({
   requestId,
-  isClient,
+  isContractor,
   canDecide,
   onClose,
   onChanged,
 }: {
   requestId: string | null;
-  isClient: boolean;
+  isContractor: boolean;
   /** 확인완료·다시 요청·철회 버튼. 발주기관 계정에만 보인다. */
   canDecide: boolean;
   onClose: () => void;
@@ -594,7 +598,7 @@ function DetailSheet({
     e.kind === 'WORK_PRODUCT' ? !!e.workProductId : e.ref.trim(),
   );
   const projectIdOf = detail?.projectId;
-  const needProducts = isCompletion && !isClient && detail?.status === 'REQUESTED';
+  const needProducts = isCompletion && isContractor && detail?.status === 'REQUESTED';
   useEffect(() => {
     if (!needProducts || !projectIdOf) return;
     let cancelled = false;
@@ -699,7 +703,7 @@ function DetailSheet({
                 </section>
               )}
 
-              {!isClient && detail.status === 'REQUESTED' && (
+              {isContractor && detail.status === 'REQUESTED' && (
                 <section className="flex flex-col gap-2">
                   <Label htmlFor="rrReport">조치 결과</Label>
                   <Textarea

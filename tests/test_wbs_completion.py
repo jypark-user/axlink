@@ -536,8 +536,10 @@ def test_AT7_완료_확인은_그_사업_발주기관만(client, client_token, e
     r1, r2, r3 = client_token("r1"), client_token("r2"), client_token("r3")
     assert _request(client, r3, "1.1").status_code == 403  # 용역사
     assert _request(client, r1, "1.1").status_code == 403  # 최고관리자도 완료 확인은 못 연다
-    # 일반 확인 요청은 최고관리자도 연다(기존 운영 정책)
-    assert _request(client, r1, "1.2", purpose="GENERAL", scope=None).status_code == 201
+    # 일반 확인 요청도 최고관리자는 열지 않는다(DEC-05 2026-11-16, ARC-032). 예전엔 열었다
+    res = _request(client, r1, "1.2", purpose="GENERAL", scope=None)
+    assert res.status_code == 403, res.text
+    assert "플랫폼 관리자는" in res.json()["message"]
 
     rid = _request(client, r2, "1.1").json()["id"]
     assert _report(client, r3, rid).status_code == 200

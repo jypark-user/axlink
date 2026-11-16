@@ -16,6 +16,7 @@ from typing import Any
 
 from app.activity import service as activity
 from app.ai.embedding import embedding_port
+from app.auth import duties
 from app.auth import repository as auth_repo
 from app.auth.models import AuthPrincipal
 from app.common import errors
@@ -33,9 +34,8 @@ from app.standard.models import (
     UnresolvedRefResponse,
 )
 
-# 명세서를 올리고 정리·제출하는 쪽과 확정하는 쪽. 관리자는 둘 다 할 수 있고 확정한 역할을 남긴다
-AUTHOR_ROLES = ("CONTRACTOR", "SUPER_ADMIN")
-CONFIRM_ROLES = ("CLIENT", "SUPER_ADMIN")
+# 명세서를 올리고 정리·제출하는 쪽(용역사)과 확정하는 쪽(발주기관). 관리자는 어느 쪽도 대신하지
+# 않는다(DEC-05, ARC-032). 확정한 역할은 계속 남겨, 예전에 관리자가 확정한 기록은 그대로 보인다
 _PRIORITIES = ("MUST", "SHOULD", "COULD", "WONT")
 
 
@@ -47,9 +47,8 @@ def _check_project(cur: Any, principal: AuthPrincipal, project_id: str) -> None:
         raise errors.project_access_denied()
 
 
-def _require_role(principal: AuthPrincipal, roles: tuple[str, ...], message: str) -> None:
-    if principal.role not in roles:
-        raise errors.ApiError(403, "FORBIDDEN", message)
+def _require_role(principal: AuthPrincipal, duty: str, message: str) -> None:
+    duties.require(principal, duty, message)
 
 
 def _actor(cur: Any, principal: AuthPrincipal) -> str:
@@ -276,7 +275,7 @@ def create(
     cur: Any, principal: AuthPrincipal, project_id: str, document_id: str
 ) -> BaselineResponse:
     _check_project(cur, principal, project_id)
-    _require_role(principal, AUTHOR_ROLES, "요구사항 명세서 등록은 용역사가 합니다.")
+    _require_role(principal, "BASELINE_AUTHOR", "요구사항 명세서 등록은 용역사가 합니다.")
     if repo.find_confirmed(cur, project_id) is not None:
         # 1단계는 최초 기준선만이다. 확정 뒤 새 명세서는 기준선을 바꾸지 않는다
         raise errors.ApiError(
@@ -318,7 +317,7 @@ def create(
 
 
 def _editable(cur: Any, principal: AuthPrincipal, project_id: str, baseline_id: str) -> None:
-    _require_role(principal, AUTHOR_ROLES, "명세서 항목 정리는 용역사가 합니다.")
+    _require_role(principal, "BASELINE_AUTHOR", "명세서 항목 정리는 용역사가 합니다.")
     row = _load(cur, principal, project_id, baseline_id, lock=True)
     _require_status(row, "DRAFT")
 
@@ -409,7 +408,9 @@ def submit(
 def return_to_author(
     cur: Any, principal: AuthPrincipal, project_id: str, baseline_id: str, reason: str
 ) -> BaselineResponse:
-    _require_role(principal, CONFIRM_ROLES, "요구사항 목록을 돌려보내는 것은 발주기관이 합니다.")
+    _require_role(
+        principal, "BASELINE_CONFIRM", "요구사항 목록을 돌려보내는 것은 발주기관이 합니다."
+    )
     row = _load(cur, principal, project_id, baseline_id, lock=True)
     _require_status(row, "SUBMITTED")
     text = reason.strip()
@@ -429,7 +430,7 @@ def confirm(
     apply_spec_codes: list[str],
 ) -> BaselineResponse:
     """최초 기준선 확정. 호출한 쪽의 트랜잭션 하나로 끝난다. 중간에 실패하면 전부 되돌아간다."""
-    _require_role(principal, CONFIRM_ROLES, "요구사항 목록 확정은 발주기관이 합니다.")
+    _require_role(principal, "BASELINE_CONFIRM", "요구사항 목록 확정은 발주기관이 합니다.")
     row = _load(cur, principal, project_id, baseline_id, lock=True)
     _require_status(row, "SUBMITTED")
     if repo.find_confirmed(cur, project_id) is not None:

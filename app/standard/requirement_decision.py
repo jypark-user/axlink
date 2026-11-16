@@ -11,13 +11,13 @@
 from typing import Any
 
 from app.activity import service as activity
+from app.auth import duties
 from app.auth import repository as auth_repo
 from app.auth.models import AuthPrincipal
 from app.common import errors
 from app.standard import mapping, repository
 from app.standard.models import RequirementDecision
 
-DECIDER_ROLES = ("CLIENT", "SUPER_ADMIN")
 CLIENT_DECIDED = "CLIENT_DECIDED"
 REQUIREMENT_STATUS_DECIDED = "REQUIREMENT_STATUS_DECIDED"
 REQUIREMENT_STATUS_REVERTED = "REQUIREMENT_STATUS_REVERTED"
@@ -42,6 +42,7 @@ def decision_of(row: dict[str, Any]) -> RequirementDecision | None:
         status=row["decided_status"],
         reason=row["decided_reason"],
         decidedBy=row.get("decided_by_name"),
+        decidedByRole=row.get("decided_by_role"),
         decidedAt=row["decided_at"].isoformat(),
     )
 
@@ -49,8 +50,7 @@ def decision_of(row: dict[str, Any]) -> RequirementDecision | None:
 def _target(
     cur: Any, principal: AuthPrincipal, project_id: str, requirement_id: str
 ) -> dict[str, Any]:
-    if principal.role not in DECIDER_ROLES:
-        raise errors.ApiError(403, "FORBIDDEN", "요구사항 상태 지정은 발주기관이 합니다.")
+    duties.require(principal, "REQUIREMENT_DECIDE")  # 관리자는 대신하지 않는다(DEC-05)
     allowed = auth_repo.allowed_project_ids(
         cur, principal.role, principal.org_id, principal.user_id
     )

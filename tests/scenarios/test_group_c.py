@@ -66,9 +66,12 @@ def _links(cur, pid: str) -> set[tuple]:
 
 
 def test_UC_020_S05_발주기관_시도(target, s0):
-    """C1 이 등록 → 거절 (AC-020-3). 항목 수정·제출 거절은 S01 뒤 S11 과 함께 본다."""
+    """C1·A1 이 등록 → 거절 (AC-020-3, DEC-05). 항목 수정·제출 거절은 S01 뒤 S11 과 함께 본다."""
     res = target.post(_base(s0), json={"documentId": s0.ids["TD-DOC-1"]}, headers=auth(s0.tokens["TD-ACC-C1"]))
     assert res.status_code == 403, res.text
+    # 관리자도 용역사 행위를 대신하지 않는다(DEC-05 2026-11-16)
+    res = target.post(_base(s0), json={"documentId": s0.ids["TD-DOC-1"]}, headers=auth(s0.tokens["TD-ACC-A1"]))
+    assert res.status_code == 403 and "플랫폼 관리자는" in res.json()["message"], res.text
 
 
 def test_UC_020_S10_다른_사업_문서(target, s0):
@@ -238,9 +241,14 @@ def test_UC_020_S04_형식_경고_명칭_없음(target, s0):
 
 
 def test_UC_021_S04_제출_전_열람_용역사_확정(target, s0):
-    """용역사 확정 → 거절 (AC-021-8). 발주기관은 확정 대기 목록을 본다."""
+    """용역사·관리자 확정·돌려보내기 → 거절 (AC-021-8, DEC-05). 발주기관은 확정 대기 목록을 본다."""
     bid = s0.ids["BASELINE-1"]
     assert target.post(f"{_base(s0)}/{bid}/confirm", json={}, headers=auth(s0.tokens["TD-ACC-V1"])).status_code == 403
+    a1 = auth(s0.tokens["TD-ACC-A1"])
+    for action, body in (("confirm", {}), ("return", {"reason": "관리자 시도"})):
+        res = target.post(f"{_base(s0)}/{bid}/{action}", json=body, headers=a1)
+        assert res.status_code == 403 and "플랫폼 관리자는" in res.json()["message"], (action, res.text)
+    assert target.get(f"{_base(s0)}/{bid}", headers=a1).json()["status"] == "SUBMITTED"
     assert target.get(f"{_base(s0)}/{bid}", headers=auth(s0.tokens["TD-ACC-C1"])).status_code == 200
 
 
@@ -674,10 +682,12 @@ def test_UC_022_S10_조회_실패_vs_소실(target, s0, replay):
 
 
 def test_UC_023_S04_용역사_사유_없음(target, s0):
-    """V1 지정 / C1 빈 사유 → 각각 거절 (AC-023-5)."""
+    """V1·A1 지정 / C1 빈 사유 → 각각 거절 (AC-023-5, DEC-05)."""
     pid = s0.ids["TD-PRJ-1"]
     rid = s0.ids["REQ-D"]
     assert target.put(f"/api/projects/{pid}/requirements/{rid}/status", json={"status": "VERIFIED", "reason": "x"}, headers=auth(s0.tokens["TD-ACC-V1"])).status_code == 403
+    res = target.put(f"/api/projects/{pid}/requirements/{rid}/status", json={"status": "VERIFIED", "reason": "x"}, headers=auth(s0.tokens["TD-ACC-A1"]))
+    assert res.status_code == 403 and "플랫폼 관리자는" in res.json()["message"], res.text
     assert target.put(f"/api/projects/{pid}/requirements/{rid}/status", json={"status": "VERIFIED", "reason": ""}, headers=auth(s0.tokens["TD-ACC-C1"])).status_code in (400, 422)
 
 

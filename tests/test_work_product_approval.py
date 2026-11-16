@@ -153,8 +153,11 @@ def test_발주기관이라도_자기_사업이_아니면_못_한다(
     res = _post(client, token, wp_id, "approve", pid=PID)
     assert res.status_code == 404
     assert _row(wp_id)["status"] == "SUBMITTED"
-    # 최고관리자는 모든 사업에 접근한다
-    assert _post(client, client_token("r1"), wp_id, "approve", pid=pid).status_code == 204
+    # 최고관리자는 모든 사업에 접근하지만 승인은 대신하지 않는다(DEC-05, ARC-032)
+    res = _post(client, client_token("r1"), wp_id, "approve", pid=pid)
+    assert res.status_code == 403, res.text
+    assert "플랫폼 관리자는" in res.json()["message"]
+    assert _row(wp_id)["status"] == "SUBMITTED"
 
 
 @requires_db

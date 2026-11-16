@@ -9,6 +9,7 @@ from datetime import UTC, datetime
 from typing import Any
 
 from app.activity import service as activity
+from app.auth import duties
 from app.auth import repository as auth_repo
 from app.auth.models import AuthPrincipal
 from app.common import errors
@@ -40,9 +41,8 @@ def _require_project(cur: Any, principal: AuthPrincipal, project_id: str) -> Non
 
 
 def _require_requester(principal: AuthPrincipal) -> None:
-    """요청을 여는 쪽. 운영 지원을 위해 최고관리자도 일반 확인 요청은 열 수 있다."""
-    if principal.role not in ("CLIENT", "SUPER_ADMIN"):
-        raise errors.ApiError(403, "FORBIDDEN", "발주기관만 확인을 요청할 수 있습니다.")
+    """요청을 여는 쪽은 그 사업의 발주기관이다. 관리자도 열지 않는다(DEC-05, ARC-032)."""
+    duties.require(principal, "REVIEW_REQUEST")
 
 
 def _require_client(principal: AuthPrincipal) -> None:
@@ -51,24 +51,16 @@ def _require_client(principal: AuthPrincipal) -> None:
     요청을 닫는 것은 조치가 충분하다고 발주기관이 판단하는 행위다. 운영자가 닫으면
     "발주기관이 확인했다"는 기록이 거짓이 된다.
     """
-    if principal.role != "CLIENT":
-        raise errors.ApiError(
-            403, "FORBIDDEN", "확인완료와 다시 요청은 그 사업의 발주기관만 할 수 있습니다."
-        )
+    duties.require(principal, "REVIEW_CLOSE")
 
 
 def _require_completion_client(principal: AuthPrincipal) -> None:
     """작업 완료 확인·철회는 그 사업 발주기관만 한다. 최고관리자도 하지 않는다.
 
-    일반 확인 요청은 운영 지원을 위해 최고관리자도 열 수 있다(_require_requester).
-    닫는 것은 둘 다 발주기관만이다(_require_client).
     완료 확인은 계약 당사자인 발주기관이 작업 완료를 인정하는 행위라 대신할 수 없다.
     사업 접근은 _load·_require_project 가 따로 본다.
     """
-    if principal.role != "CLIENT":
-        raise errors.ApiError(
-            403, "FORBIDDEN", "작업 완료 확인은 그 사업의 발주기관만 할 수 있습니다."
-        )
+    duties.require(principal, "COMPLETION_CONFIRM")
 
 
 def _conflict(code: str, message: str) -> errors.ApiError:
@@ -112,8 +104,7 @@ def _products_now(cur: Any, evidence: list[dict[str, Any]]) -> list[dict[str, An
 
 
 def _require_contractor(principal: AuthPrincipal) -> None:
-    if principal.role != "CONTRACTOR":
-        raise errors.ApiError(403, "FORBIDDEN", "조치 보고는 용역사가 합니다.")
+    duties.require(principal, "REVIEW_REPORT")
 
 
 def _iso(value: Any) -> str | None:

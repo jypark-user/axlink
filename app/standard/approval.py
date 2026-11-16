@@ -9,19 +9,17 @@
 from typing import Any
 
 from app.activity import service as activity
+from app.auth import duties
 from app.auth import repository as auth_repo
 from app.auth.models import AuthPrincipal
 from app.common import errors
 from app.standard import repository
 
-APPROVER_ROLES = ("CLIENT", "SUPER_ADMIN")
-
 
 def _target(
     cur: Any, principal: AuthPrincipal, project_id: str, work_product_id: str
 ) -> dict[str, Any]:
-    if principal.role not in APPROVER_ROLES:
-        raise errors.ApiError(403, "FORBIDDEN", "산출물 승인·반려는 발주기관이 합니다.")
+    duties.require(principal, "PRODUCT_APPROVE")  # 관리자는 대신하지 않는다(DEC-05)
     allowed = auth_repo.allowed_project_ids(
         cur, principal.role, principal.org_id, principal.user_id
     )

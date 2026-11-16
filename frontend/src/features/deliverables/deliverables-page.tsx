@@ -358,7 +358,7 @@ function Checklist({ projectId }: { projectId: string }): ReactNode {
   const { me } = useAuth();
   const { toast } = useToast();
   // 승인·반려는 발주기관만. 서버도 역할과 사업 접근을 다시 본다
-  const canApprove = me?.role === 'CLIENT' || me?.role === 'SUPER_ADMIN';
+  const canApprove = me?.role === 'CLIENT'; // 관리자는 대신하지 않는다(DEC-05)
   const state = useAsync<WorkProductChecklistResponse>(
     () => api.get<WorkProductChecklistResponse>(`/projects/${projectId}/work-products`),
     [projectId],
