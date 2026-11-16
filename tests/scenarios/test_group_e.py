@@ -260,7 +260,9 @@ def test_UC_041_S02_진척률에서_작업까지(target, s0, screen):
 
 
 def test_UC_041_S03_L3_추정(target, s0):
-    """TD-PRJ-2: 일정 줄 = 날짜 있는 이슈 6건(N6 제외), 진척도 100·100·50·30·0·100. 대표 진척률 추정 표시 (AC-041-5, 값은 DEC-17)."""
+    """TD-PRJ-2: 일정 줄 = 날짜 있는 이슈 6건(N6 제외), 진척도 100·100·50·30·0·100. 대표 진척률은
+    이슈 기반 추정 진척률 54.3% (100+100+50+30+0+0+100)/7, 결측 1건(N6). 해결률 3/7 은 별도 지표
+    (AC-041-5, DEC-17 2026-11-16)."""
     pid = s0.ids["TD-PRJ-2"]
     wbs = _get(target, s0, f"/api/projects/{pid}/wbs?at={T0}", acc="TD-ACC-C2")
     prog = _get(target, s0, f"/api/projects/{pid}/progress?at={T0}", acc="TD-ACC-C2")
@@ -268,11 +270,64 @@ def test_UC_041_S03_L3_추정(target, s0):
     rows = [i for i in wbs["items"] if i["startDate"]]
     assert len(rows) == 6, [i["name"] for i in wbs["items"]]
     assert sorted(i["progress"] for i in rows) == [0, 30, 50, 100, 100, 100]
-    assert prog["level"] == "L3" and prog["representative"] is not None, prog
-    # 추정 표시와 산출 근거 문장(DEF-V037). 대표값 산식 자체는 DEC-17 결정 대기라 값은 보지 않는다
+    assert prog["level"] == "L3" and prog["basis"] == "ISSUE_PROGRESS", prog
+    assert prog["representative"] == 0.5429, prog["representative"]
+    est = prog["issueEstimate"]
+    assert est["label"] == "이슈 기반 추정 진척률", est
+    assert (est["denominator"], est["missing"], est["value"]) == (7, 1, 0.5429), est
+    # 해결률은 대표값이 아니라 별도 지표로 남는다(종료 N1·N2·N7)
+    assert (prog["issue"]["numerator"], prog["issue"]["denominator"]) == (3, 7), prog["issue"]
+    assert prog["issue"]["value"] != prog["representative"]
+    # 추정 표시와 산출 근거 문장(DEF-V037). 같은 가중치·결측 0 처리를 밝힌다
     assert prog["estimated"] is True, prog
-    assert prog["basisNote"].startswith("추정") and "L1" in prog["basisNote"], prog["basisNote"]
-    assert prog["basisNote"] in prog["warnings"], prog["warnings"]
+    note = prog["basisNote"]
+    assert note.startswith("추정: WBS 가 없어 이슈 기반 추정 진척률로 산정했습니다"), note
+    assert "같은 가중치" in note and "1건은 0으로 셌습니다" in note and "L1" in note, note
+    assert note in prog["warnings"], prog["warnings"]
+    # 사업 목록 칸도 같은 산정이다(AC-040-2)
+    listed = [p for p in _get(target, s0, "/api/projects?size=50", acc="TD-ACC-C2")["content"]
+              if p["id"] == pid]
+    assert listed and listed[0]["representative"] == 0.5429, listed
+    assert listed[0]["progressBasisNote"] == note
+    # 스냅샷은 산식을 함께 적는다(V65). 옛 L3(해결률) 행과 섞지 않는다
+    res = target.post(f"/api/projects/{pid}/snapshots", headers=auth(s0.tokens["TD-ACC-C2"]))
+    assert res.status_code == 200, res.text
+    snap = res.json()
+    assert snap["representativeBasis"] == "ISSUE_PROGRESS", snap
+    assert snap["representativeBasisLabel"] == "이슈 기반 추정 진척률"
+    assert snap["issueEstimateMissingCount"] == 1 and snap["issueEstimatePct"] == 54.29, snap
+
+
+def test_UC_041_S03b_L3_경계_진척도_전부_없음(target, s0, replay):
+    """TD-PRJ-2 의 이슈가 진척도를 하나도 주지 않으면 L3 산출 불가다. 0% 가 아니고 해결률로
+    대신하지 않으며 산출물로 내려가지 않는다(DEC-17). 진척도가 돌아오면 54.3% 로 돌아온다."""
+    pid = s0.ids["TD-PRJ-2"]
+
+    def resync() -> None:
+        res = target.post(
+            f"/api/connections/{s0.ids['TD-CON-4']}/sync", json={"kind": "BACKFILL"},
+            headers=auth(s0.tokens["TD-ACC-V3"]),
+        )
+        assert res.status_code == 202, res.text
+        assert res.json()["status"] == "SUCCEEDED", res.json()
+
+    replay.faults = Faults(drop_done_ratio=True)
+    try:
+        resync()
+        prog = _get(target, s0, f"/api/projects/{pid}/progress?at={T0}", acc="TD-ACC-C2")
+        assert prog["level"] == "L3" and prog["basis"] == "ISSUE_PROGRESS", prog
+        assert prog["representative"] is None, prog["representative"]
+        assert prog["estimated"] is False
+        est = prog["issueEstimate"]
+        assert est["value"] is None and (est["denominator"], est["missing"]) == (7, 7), est
+        assert prog["basisNote"].startswith("산출 불가"), prog["basisNote"]
+        assert "해결 3 / 전체 7건" in prog["basisNote"], prog["basisNote"]
+        assert prog["issue"]["value"] is not None  # 해결률은 그대로 산출된다
+    finally:
+        replay.faults = Faults()
+        resync()
+    back = _get(target, s0, f"/api/projects/{pid}/progress?at={T0}", acc="TD-ACC-C2")
+    assert back["representative"] == 0.5429, back["representative"]
 
 
 def test_UC_041_S04_재료_없음(target, s0, screen):

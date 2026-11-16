@@ -129,7 +129,9 @@ function DecisionForm({
                 <dd className="break-keep">{decision.reason}</dd>
                 <dt className="text-muted-foreground">지정</dt>
                 <dd>
-                  {decision.decidedBy ?? '알 수 없음'} · {formatDateTime(decision.decidedAt)}
+                  {decision.decidedBy ?? '알 수 없음'}
+                  {decision.decidedByRole === 'SUPER_ADMIN' ? '(관리자)' : ''} ·{' '}
+                  {formatDateTime(decision.decidedAt)}
                 </dd>
               </>
             )}

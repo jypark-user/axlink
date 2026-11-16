@@ -23,6 +23,9 @@ class RequirementDecision(BaseModel):
     reason: str
     decidedBy: str | None  # noqa: N815 — 지정한 사람 이름. 계정이 지워졌으면 None
     decidedAt: str  # noqa: N815
+    # 지정한 계정의 역할. DEC-05 전에 관리자가 지정한 기록은 SUPER_ADMIN 으로 남아
+    # 「(관리자)」로 보인다
+    decidedByRole: str | None = None  # noqa: N815
 
 
 class RequirementResponse(BaseModel):

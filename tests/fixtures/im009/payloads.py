@@ -71,7 +71,6 @@ def redmine_issue(
         "description": f"{issue.subject} 작업 내용",
         "start_date": issue.start.isoformat() if issue.start else None,
         "due_date": issue.due.isoformat() if issue.due else None,
-        "done_ratio": issue.done_ratio if issue.done_ratio is not None else 0,
         "custom_fields": custom,
         "relations": relations,
         "created_on": "2026-03-05T00:00:00Z",
@@ -82,6 +81,9 @@ def redmine_issue(
     }
     if issue.version:
         payload["fixed_version"] = {"id": versions.get(issue.version, 0), "name": issue.version}
+    # 진척도가 없는 이슈는 키를 두지 않는다(TD-ISS-N6 「결측」, DEC-17). 0 과 다른 자료다
+    if issue.done_ratio is not None:
+        payload["done_ratio"] = issue.done_ratio
     return str(issue.number), payload
 
 

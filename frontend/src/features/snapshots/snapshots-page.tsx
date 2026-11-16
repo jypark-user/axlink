@@ -131,6 +131,12 @@ function SnapshotBody({ rows }: { rows: ProgressSnapshotResponse[] }): ReactNode
     [rows],
   );
 
+  // 대표값 산식이 기간 중에 바뀌었으면(DEC-17: L3 해결률 → 이슈 진척도 평균) 그대로 견주지 않는다
+  const bases = useMemo(
+    () => [...new Set(rows.map((r) => r.representativeBasisLabel).filter(Boolean))],
+    [rows],
+  );
+
   if (rows.length === 0) {
     return <p className="text-muted-foreground text-sm">아직 기록이 없습니다.</p>;
   }
@@ -139,6 +145,12 @@ function SnapshotBody({ rows }: { rows: ProgressSnapshotResponse[] }): ReactNode
     <div className="flex flex-col gap-6">
       <section className="rounded border p-4">
         <h2 className="mb-3 text-sm font-semibold">진척률 추이</h2>
+        {bases.length > 1 && (
+          <p className="mb-3 text-xs text-amber-700 dark:text-amber-400">
+            이 기간에 진척률 산식이 바뀌었습니다({bases.join(' → ')}). 산식이 다른 날끼리는 그대로
+            견주지 마세요. 각 날의 산식은 아래 표의 「산정」 칸에 있습니다.
+          </p>
+        )}
         {series.length < 2 ? (
           <p className="text-muted-foreground text-sm">
             기록이 {series.length}건이라 아직 선이 되지 않습니다. 내일부터 이어집니다.
@@ -196,11 +208,15 @@ function SnapshotBody({ rows }: { rows: ProgressSnapshotResponse[] }): ReactNode
                 <td className="tnum px-4 py-2.5 whitespace-nowrap">{formatDate(r.snapshotDate)}</td>
                 <td className="tnum px-4 py-2.5 text-right">
                   <Pct value={r.representativePct} />
-                  <Delta
-                    now={r.representativePct}
-                    prev={prev?.representativePct ?? null}
-                    unit="%p"
-                  />
+                  {prev && prev.representativeBasisLabel !== r.representativeBasisLabel ? (
+                    <span className="ml-1 text-xs text-muted-foreground">산식 바뀜</span>
+                  ) : (
+                    <Delta
+                      now={r.representativePct}
+                      prev={prev?.representativePct ?? null}
+                      unit="%p"
+                    />
+                  )}
                 </td>
                 <td className="tnum px-4 py-2.5 text-right">
                   <Pct value={r.wbsPlannedPct} />
@@ -246,6 +262,14 @@ function SnapshotBody({ rows }: { rows: ProgressSnapshotResponse[] }): ReactNode
                 </td>
                 <td className="text-muted-foreground px-4 py-2.5 whitespace-nowrap">
                   {LEVEL_LABEL[r.level] ?? r.level}
+                  {r.representativeBasisLabel && (
+                    <span className="block text-xs">{r.representativeBasisLabel}</span>
+                  )}
+                  {r.issueEstimateMissingCount ? (
+                    <span className="block text-xs">
+                      결측 {r.issueEstimateMissingCount}건(0으로 셈)
+                    </span>
+                  ) : null}
                 </td>
                 <td className="text-muted-foreground tnum px-4 py-2.5 whitespace-nowrap">
                   {formatDateTime(r.createdAt)}

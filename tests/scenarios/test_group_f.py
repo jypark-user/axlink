@@ -62,8 +62,10 @@ def _ratio(v) -> float | None:
 
 
 def test_UC_050_S04_거절(target, s0):
-    """V1 요청 / 없는 이슈 / 빈 제목 → 각각 거절 (AC-050-3)."""
+    """V1·A1 요청 / 없는 이슈 / 빈 제목 → 각각 거절 (AC-050-3, DEC-05)."""
     assert _request(target, s0, "WBS_ITEM", "3.2", "x", acc="TD-ACC-V1").status_code == 403
+    res = _request(target, s0, "WBS_ITEM", "3.2", "x", acc="TD-ACC-A1")
+    assert res.status_code == 403 and "플랫폼 관리자는" in res.json()["message"], res.text
     assert _request(target, s0, "ISSUE", "00000000-0000-4000-8000-000000000000", "x").status_code in (400, 404)
     assert _request(target, s0, "WBS_ITEM", "3.2", "").status_code in (400, 422)
     assert _pending(target, s0) == 0

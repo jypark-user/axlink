@@ -20,6 +20,8 @@ class ProgressMeasure(BaseModel):
     unit: str
     kind: str
     note: str | None
+    # 진척도가 없어 0 으로 센 이슈 수. 이슈 기반 추정 진척률(DEC-17)에만 있다
+    missing: int | None = None
 
 
 class ProgressResponse(BaseModel):
@@ -35,6 +37,8 @@ class ProgressResponse(BaseModel):
     wbsDeclaredPlanned: float | None  # noqa: N815
 
     issue: ProgressMeasure
+    # 이슈 기반 추정 진척률(DEC-17). WBS 없는 사업(L3)의 대표값이다. 해결률(issue)과 다른 지표다
+    issueEstimate: ProgressMeasure | None = None  # noqa: N815
     workProduct: ProgressMeasure  # noqa: N815
     # 결함 처리율(DEC-02). 품질 축의 값이고 대표 진척률·격차에는 쓰지 않는다
     defect: ProgressMeasure | None = None
@@ -174,6 +178,11 @@ class ProgressSnapshotResponse(BaseModel):
     workProductApprovedCount: int  # noqa: N815
     workProductTotalCount: int  # noqa: N815
     createdAt: str  # noqa: N815
+    # 대표값의 산식(DEC-17, V65). 비어 있으면 V65 전 행이다. 이름은 서버가 붙인다
+    representativeBasis: str | None = None  # noqa: N815
+    representativeBasisLabel: str | None = None  # noqa: N815
+    issueEstimatePct: float | None = None  # noqa: N815
+    issueEstimateMissingCount: int | None = None  # noqa: N815
 
 
 # ---------------------------------------------------------------- 일정 (WBS)

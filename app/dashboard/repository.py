@@ -14,6 +14,35 @@ def issue_resolution(cur: Any, project_id: str) -> tuple[int, int]:
     return _resolution(cur, project_id, "GENERAL")
 
 
+def issue_progress(cur: Any, project_id: str) -> tuple[float, int, int]:
+    """이슈 기반 추정 진척률 재료(DEC-17). (진척도 합 %, 대상 이슈 수, 진척도가 있는 이슈 수).
+
+    대상은 일반 이슈 해결률과 같다. 결함은 빼고(DEC-02), 리스크와 예전에 요구사항으로 만든
+    이슈는 issue 표에 없다. 진척도는 원천 원본(Redmine done_ratio)에서 읽는다. 표준 모델에는
+    칸이 없다. 원본이 없거나 숫자가 아니면 결측이다(GitHub 이슈·수동 이슈는 늘 결측).
+    """
+    row = fetch_one(
+        cur,
+        """
+        with t as (
+          select case when jsonb_typeof(ra.payload_jsonb -> 'done_ratio') = 'number'
+                      then least(greatest((ra.payload_jsonb ->> 'done_ratio')::numeric, 0), 100)
+                 end as done
+            from issue i
+            left join raw_artifact ra
+              on ra.tool_connection_id = i.tool_connection_id
+             and ra.external_id = i.external_id
+             and ra.object_kind = 'issue'
+           where i.project_id = %s and i.issue_kind = 'GENERAL'
+        )
+        select coalesce(sum(done), 0) as done_sum, count(*) as total, count(done) as reported
+          from t
+        """,
+        (project_id,),
+    )
+    return float(row["done_sum"]), int(row["total"]), int(row["reported"])
+
+
 def defect_resolution(cur: Any, project_id: str) -> tuple[int, int]:
     """결함 처리율. 닫힌 결함 / 전체 결함(DEC-02)."""
     return _resolution(cur, project_id, "DEFECT")

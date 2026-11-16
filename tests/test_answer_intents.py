@@ -254,16 +254,41 @@ def one_submission(no_plan):  # noqa: F811 (픽스처 이름)
 
 @requires_db
 @pytest.mark.usefixtures("one_submission")
-def test_WBS_가_없으면_대표_진척률을_기준과_함께_일부만_답한다(ask, no_snapshots):
-    """WBS 없이도 대표 진척률이 이슈·산출물 갈래로 선다(제출본 하나). 계획 비교는 못 한다."""
+def test_WBS_가_없으면_대표_진척률을_기준과_함께_일부만_답한다(ask, no_snapshots, monkeypatch):
+    """WBS 없이 이슈 기반 추정 진척률(L3, DEC-17)이 선다. 계획 비교는 못 한다.
+
+    이슈 진척도 재료는 IM-009 TD-ISS-N1~N7 과 같게 둔다: 합 380, 대상 7, 진척도 있음 6.
+    """
+    monkeypatch.setattr(
+        intents.progress_service.repository, "issue_progress", lambda cur, pid: (380.0, 7, 6)
+    )
     ev, scripted = ask({"route": "INTENT", "intent": "PLAN_VS_ACTUAL"}, "안 불려야 한다")
     assert _finish(ev) == "PARTIAL"
     # 비교한 사업이 없으면 모델을 부르지 않고 서버가 있는 값과 기준만 말한다(되풀이 없음)
     assert scripted.stream_calls == 0
     text = _text(ev)
     assert "계획과 비교할 수 없습니다" in text and "대표 진척률은" in text and " 기준 " in text
+    assert "이슈 기반 추정 진척률 기준 54.29%" in text, text
+    assert "같은 가중치" in text and "1건은 0으로 셌습니다" in text, text
+    assert "해결률" not in text
     assert text.count("비교할 수 없") == 1
     assert "infographic" not in ev
+
+
+@requires_db
+@pytest.mark.usefixtures("one_submission")
+def test_이슈_진척도가_모두_없으면_대표값을_말하지_않는다(ask, no_snapshots, monkeypatch):
+    """대상 이슈는 있지만 진척도가 하나도 없으면 L3 산출 불가다(DEC-17).
+
+    해결률로 대신하지 않는다.
+    """
+    monkeypatch.setattr(
+        intents.progress_service.repository, "issue_progress", lambda cur, pid: (0.0, 4, 0)
+    )
+    ev, scripted = ask({"route": "INTENT", "intent": "PLAN_VS_ACTUAL"}, "안 불려야 한다")
+    assert _finish(ev) == "NO_DATA"
+    assert scripted.stream_calls == 0
+    assert "대표 진척률은" not in _text(ev)
 
 
 @requires_db

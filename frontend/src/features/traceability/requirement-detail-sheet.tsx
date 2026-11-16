@@ -89,6 +89,7 @@ function Detail({
                     <Row term="지정 사유">{r.decision.reason}</Row>
                     <Row term="지정">
                       {r.decision.decidedBy ?? '-'}
+                      {r.decision.decidedByRole === 'SUPER_ADMIN' ? '(관리자)' : ''}
                       {r.decision.decidedAt && (
                         <span className="text-muted-foreground tnum">
                           {' '}

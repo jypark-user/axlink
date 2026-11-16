@@ -503,6 +503,7 @@ def list_projects(
             openReviewRequestCount=reviews.get(str(r["id"]), 0),
             representative=_attr(progress[str(r["id"])], "representative"),
             progressLevel=_attr(progress[str(r["id"])], "level"),
+            progressBasisNote=_attr(progress[str(r["id"])], "basisNote"),
             progressDeviation=_attr(progress[str(r["id"])], "wbsDeviation"),
             progressError=progress[str(r["id"])] is None,
             scheduleCompliance=_rate(compliance.get(str(r["id"]))),

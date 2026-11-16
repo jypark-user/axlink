@@ -147,7 +147,12 @@ function projectColumns(role: Role | undefined): ColumnDef<ProjectSummaryRespons
     // 현황 화면 진척 카드와 같은 값이다. WBS 실적이 아니면 추정으로 적는다
     header: '진척률·계획 대비',
     cell: ({ row }) => {
-      const { representative: rep, progressLevel: level, progressDeviation: dev } = row.original;
+      const {
+        representative: rep,
+        progressLevel: level,
+        progressDeviation: dev,
+        progressBasisNote: basisNote,
+      } = row.original;
       // 집계 실패는 산출 불가(「-」)와 다르게 보인다. 목록의 나머지 칸은 그대로 쓴다
       if (row.original.progressError) {
         return (
@@ -159,12 +164,22 @@ function projectColumns(role: Role | undefined): ColumnDef<ProjectSummaryRespons
           </span>
         );
       }
-      if (rep == null) return <span className="text-muted-foreground">-</span>;
+      if (rep == null)
+        return (
+          <span className="text-muted-foreground" title={basisNote ?? undefined}>
+            -
+          </span>
+        );
       return (
-        <span className="flex flex-col tnum">
+        <span className="flex flex-col tnum" title={basisNote ?? undefined}>
           <span>
             {(rep * 100).toFixed(1)}%
-            {level !== 'L1' && <span className="ml-1 text-xs text-muted-foreground">추정</span>}
+            {level !== 'L1' && (
+              <span className="ml-1 text-xs text-muted-foreground">
+                {/* L3 는 이슈 진척도 평균이다(DEC-17). 해결률과 헷갈리지 않게 이름을 붙인다 */}
+                {level === 'L3' ? '이슈 기반 추정' : '추정'}
+              </span>
+            )}
           </span>
           {dev != null && (
             <span

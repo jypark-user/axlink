@@ -141,6 +141,8 @@ class ProjectSummaryResponse(BaseModel):
     # 현황 화면과 같은 산정(dashboard.service.compute). 산출 불가면 None
     representative: float | None = None
     progressLevel: str | None = None  # noqa: N815 — L1~L4
+    # 대표값의 산출 근거 한 문장(현황 화면과 같다). L3 이면 이슈 기반 추정 진척률이라고 밝힌다
+    progressBasisNote: str | None = None  # noqa: N815
     progressDeviation: float | None = None  # noqa: N815 — WBS 실적 − 계획선. WBS 가 없으면 None
     # 진척 집계 자체가 실패했다. 산출 불가(None)와 다르다. 목록은 그대로 내고 이 칸만 실패로 보인다
     progressError: bool = False  # noqa: N815

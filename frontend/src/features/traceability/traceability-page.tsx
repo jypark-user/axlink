@@ -48,7 +48,7 @@ export function TraceabilityPage(): ReactNode {
   const { project } = useProjectContext();
   const { me } = useAuth();
   // 요구사항 상태 지정은 발주기관이 한다(ARC-025). 용역사는 지정 결과와 사유만 본다
-  const canDecide = me?.role === 'CLIENT' || me?.role === 'SUPER_ADMIN';
+  const canDecide = me?.role === 'CLIENT'; // 상태 지정은 발주기관만. 관리자는 대신하지 않는다(DEC-05)
   const [deciding, setDeciding] = useState<TraceabilityRowResponse | null>(null);
   const [opened, setOpened] = useState<string | null>(null);
   const [page, setPage] = useState(0);
