@@ -389,3 +389,87 @@ def test_UC_041_S11_AI_와_일치(target, s0, variant, question, measure, record
     assert start["routing"]["measureKey"] == measure, f"AI 가 카드와 다른 지표를 골랐다: {start['routing']}"
     assert done["finishReason"] == "STOP", f"집계 답이 막혔다({done['finishReason']}): {text}"
     assert _has_value(text, value, card.get("unit")), f"카드 값 {value}{card.get('unit') or ''} 이 답에 없다: {text}"
+
+
+# ------------------------------------------------------------------ UC-021 · UC-023 (요구사항 범위·이행률)
+
+
+def _rate_card(target, s0) -> float:
+    return _card(target, s0, "requirement_fulfillment_rate")["total"]["values"]["value"]
+
+
+def _confirmed(target, s0) -> dict[str, str]:
+    """UC-021-S02 끝 상태: TD-DOC-1 명세서 등록·제출(V1) → 확정(C1, B 명칭 반영). 한 번만 한다.
+    돌려주는 값은 요구사항 코드 → id."""
+    if "REQ-CODES" in s0.ids:
+        return s0.ids["REQ-CODES"]
+    pid = s0.ids["TD-PRJ-1"]
+    v1, c1 = auth(s0.tokens["TD-ACC-V1"]), auth(s0.tokens["TD-ACC-C1"])
+    base = f"/api/projects/{pid}/requirement-baseline"
+    made = target.post(base, json={"documentId": s0.ids["TD-DOC-1"]}, headers=v1)
+    assert made.status_code == 201, made.text
+    bid = made.json()["id"]
+    sub = target.post(f"{base}/{bid}/submit", headers=v1)
+    assert sub.status_code == 200, sub.text
+    res = target.post(f"{base}/{bid}/confirm", json={"applySpecCodes": ["UR.PORT.002"]}, headers=c1)
+    assert res.status_code == 200 and res.json()["status"] == "CONFIRMED", res.text
+    reqs = target.get(f"/api/projects/{pid}/requirements?size=100", headers=c1).json()["content"]
+    s0.ids["REQ-CODES"] = {r["code"]: r["id"] for r in reqs}
+    return s0.ids["REQ-CODES"]
+
+
+@pytest.mark.parametrize("variant", [LIVE])
+def test_UC_021_S10_분모_AI_범위(target, s0, variant, record_property):
+    """실모델: 확정 뒤 이행률 분모 3(A·B·D) 33.3%, AI 「요구사항 목록」 표는 A·B·D 「확정 목록」과
+    C 「확정 명세서에 없음(이행률 제외)」을 가른다 (AC-021-10, DEC-11 (a), IM-009 7.4).
+
+    API 값은 test_group_c 의 같은 시나리오와 같다. 이 경우(실모델)만으로 시나리오를 판정할 수 있게
+    분모·카드 값도 함께 본다."""
+    _confirmed(target, s0)
+    pid = s0.ids["TD-PRJ-1"]
+    c1 = auth(s0.tokens["TD-ACC-C1"])
+    summary = target.get(f"/api/projects/{pid}/requirements/summary", headers=c1).json()
+    assert (summary["rateVerified"], summary["rateTotal"], summary["outsideBaseline"]) == (1, 3, 1), summary
+    assert round(_rate_card(target, s0), 2) == 33.33
+    events = _ask_live(target, s0, "요구사항 목록 보여줘", record_property)
+    text, done = _text(events), _done(events)
+    # 목록 답의 판정 대상은 표다. 모델이 표를 보고 스스로 센 수(「필수 1건」)를 문장에 쓰면 수치
+    # 검문이 그 문장을 막는다(절대 규칙 1). 그래도 표와 남은 문장은 나간다
+    assert done["finishReason"] in (*ANSWERED, "NUMBER_GUARD"), f"답이 나가지 않았다({done['finishReason']}): {text}"
+    tables = [dd["data"] for e, dd in events if e == "infographic" and dd.get("data")]
+    rows = [r["values"] for t in tables for r in t["rows"] if r["values"].get("code")]
+    scope = {r["code"]: r.get("scope") for r in rows}
+    assert scope.get("UR.PORT.003") == "확정 명세서에 없음(이행률 제외)", (scope, events[0][1]["routing"])
+    assert {c for c, v in scope.items() if v == "확정 목록"} == {"UR.PORT.001", "UR.PORT.002", "UR.PORT.004"}, scope
+    # 답 문장이 이행률을 말하면 분모 3 의 값이어야 한다(C 를 넣은 25%·50% 가 아니다)
+    for m in re.finditer(r"(\d+(?:\.\d+)?)\s*%", text):
+        assert m.group(1) in ("33.3", "33"), text
+
+
+@pytest.mark.parametrize("variant", [LIVE])
+def test_UC_023_S06_일관성(target, s0, variant, record_property):
+    """실모델: D 검증 지정 뒤 요약·카드·AI 「요구사항 이행률」이 모두 66.7%(분모 3), 답의 산출 근거에
+    「발주기관」 지정이 보인다 (AC-023-4). 끝에 D 를 되돌린다."""
+    pid = s0.ids["TD-PRJ-1"]
+    c1 = auth(s0.tokens["TD-ACC-C1"])
+    rid = _confirmed(target, s0)["UR.PORT.004"]
+    res = target.put(f"/api/projects/{pid}/requirements/{rid}/status", json={"status": "VERIFIED", "reason": "시험 결과서 확인"}, headers=c1)
+    assert res.status_code == 200, res.text
+    try:
+        summary = target.get(f"/api/projects/{pid}/requirements/summary", headers=c1).json()
+        assert (summary["rateVerified"], summary["rateTotal"]) == (2, 3), summary
+        assert round(_rate_card(target, s0), 2) == 66.67
+        events = _ask_live(target, s0, "요구사항 이행률은 얼마야", record_property)
+        text, done = _text(events), _done(events)
+        assert done["finishReason"] in ANSWERED, f"답이 나가지 않았다({done['finishReason']}): {text}"
+        assert events[0][1]["routing"]["measureKey"] == "requirement_fulfillment_rate", events[0][1]["routing"]
+        # 카드·목록은 66.7%, 답 문장은 집계 줄 표기(소수 둘째 자리)대로 66.67% 일 수 있다. 같은 값이다
+        assert re.search(r"66\.67?\s*%", text), text
+        basis = " ".join(str(dd["data"].get("basis")) for e, dd in events if e == "infographic" and dd.get("data"))
+        assert "발주기관" in text + basis, f"답·산출 근거에 발주기관 지정이 없다: {text} / {basis}"
+    finally:
+        target.post(
+            f"/api/projects/{pid}/requirements/{rid}/status/revert",
+            json={"reason": "시험 정리(UC-023-S06 실모델)"},
+            headers=c1,
+        )

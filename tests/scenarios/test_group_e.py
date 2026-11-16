@@ -8,6 +8,7 @@ S0 에서 시작해 UC-040-S01 이 S0r(TD-RR-1 등록)을 만들고, 다섯 축�
 
 from __future__ import annotations
 
+import os
 import re
 
 import pytest
@@ -133,9 +134,10 @@ def test_UC_040_S03_현황과_일치(target, s0):
 def test_UC_040_S04_일정_준수_칸(target, s0, monkeypatch):
     """T0 목록의 일정 준수 칸 1/3 (33.3%). 대상 MS-1·MS-2·MS-5, 달성 MS-1 (AC-040-5, DEC-01 (a), IM-009 7.1).
 
-    목록은 오늘 날짜로 센다. 시험 프로세스 안에서는 사업 시계를 T0 로 돌려 본다(원격은 날짜를 못 바꾼다)."""
-    if TARGET_URL:
-        pytest.skip("목록은 서버의 오늘로 센다. 원격 대상은 시계를 T0 로 돌릴 수 없다")
+    목록은 오늘 날짜로 센다. 시험 프로세스 안에서는 사업 시계를 T0 로 돌려 본다. 원격은 대상 서버
+    시계가 T0 인 격리 인스턴스(AXLINK_TARGET_CLOCK_T0=1)에서만 돈다."""
+    if TARGET_URL and os.environ.get("AXLINK_TARGET_CLOCK_T0") != "1":
+        pytest.skip("목록은 서버의 오늘로 센다. 원격 대상은 시계가 T0 인 격리 인스턴스에서만 본다")
     _at_t0(monkeypatch)
     rows = {p["id"]: p for p in _get(target, s0, "/api/projects?size=100")["content"]}
     p1, p3 = rows[s0.ids["TD-PRJ-1"]], rows[s0.ids["TD-PRJ-3"]]
