@@ -37,6 +37,9 @@ SUBMITTED = "SUBMITTED"
 APPROVED = "APPROVED"
 REJECTED = "REJECTED"
 
+# 초안 확정의 두 갈래. 제안한 유형대로면 CONFIRMED, 사람이 유형을 바꿔 확정하면 MANUAL_OVERRIDE
+_CONFIRMED_DRAFT = ("CONFIRMED", "MANUAL_OVERRIDE")
+
 RULE_DESIGNATED = "DESIGNATED"
 
 TEMPLATE_MAX_BYTES = 20 * 1024 * 1024
@@ -47,8 +50,12 @@ NAME_MAX = 300
 
 
 def version_state(row: dict[str, Any]) -> str:
-    """제출본 하나의 상태. 확정돼 산출물 버전이 생겨야 제출이다."""
-    if row.get("draft_status") != "CONFIRMED" or not row.get("work_product_id"):
+    """제출본 하나의 상태. 확정돼 산출물 버전이 생겨야 제출이다.
+
+    유형을 바꿔 확정한 것(MANUAL_OVERRIDE)도 확정이다. 지정 항목의 분류와 다른 유형으로
+    내는 일이 흔하다(22종은 분류일 뿐이다).
+    """
+    if row.get("draft_status") not in _CONFIRMED_DRAFT or not row.get("work_product_id"):
         return REGISTERED
     status = row.get("wp_status")
     if status in (APPROVED, REJECTED):

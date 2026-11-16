@@ -41,6 +41,10 @@ def test_확정해야_제출이고_항목_상태는_최근_제출본이_정한�
     registered = {"draft_status": "PROPOSED", "work_product_id": None}
     submitted = {"draft_status": "CONFIRMED", "work_product_id": "w", "wp_status": "SUBMITTED"}
     rejected = {"draft_status": "CONFIRMED", "work_product_id": "w", "wp_status": "REJECTED"}
+    # 제안과 다른 유형으로 확정해도 확정이다(CI 에서 잡힌 것: 시험결과서를 TEST_REPORT 로 확정)
+    overridden = {"draft_status": "MANUAL_OVERRIDE", "work_product_id": "w",
+                  "wp_status": "SUBMITTED"}
+    assert designation.version_state(overridden) == "SUBMITTED"
     assert designation.version_state(registered) == "REGISTERED"
     assert designation.version_state(submitted) == "SUBMITTED"
     assert designation.version_state(rejected) == "REJECTED"
@@ -310,6 +314,7 @@ def test_UC_033_S01_지정_양식_제출_반려_재제출_승인(client, client_
     row = _row(_screen(client, po), "2.1")
     assert row["designated"][0]["status"] == "SUBMITTED"
     assert (row["status"], row["ref"]) == ("SUBMITTED", "지정 산출물 1건 중 1건 제출")
+    assert [d["confirmed"] for d in row["documents"]] == [True]  # 유형을 바꿔 확정해도 확정
 
     # 반려 사유가 항목 버전에 보인다
     res = client.post(f"/api/projects/{PID}/work-products/{wp1}/reject",

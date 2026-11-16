@@ -753,7 +753,8 @@ def wbs_deliverables(
                         status=d["status"],
                         uploadedAt=d["created_at"].isoformat(),
                         proposedType=d.get("proposed_type"),
-                        confirmed=d.get("draft_status") == "CONFIRMED",
+                        # 유형을 바꿔 확정한 것(MANUAL_OVERRIDE)도 확정이다
+                        confirmed=d.get("draft_status") in ("CONFIRMED", "MANUAL_OVERRIDE"),
                     )
                     for d in docs
                 ],
