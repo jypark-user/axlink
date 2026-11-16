@@ -239,6 +239,64 @@ class WbsDeliverableDocument(BaseModel):
     confirmed: bool
 
 
+class DesignatedVersion(BaseModel):
+    """지정 항목에 이어 올린 제출본 하나(UC-033). 확정해야 제출이다(DEC-14)."""
+
+    documentId: str  # noqa: N815
+    fileName: str  # noqa: N815
+    uploadedAt: str  # noqa: N815
+    state: str  # REGISTERED(확정 전) | SUBMITTED | APPROVED | REJECTED
+    workProductId: str | None  # noqa: N815
+    version: str | None
+    rejectReason: str | None  # noqa: N815
+    decidedAt: str | None  # noqa: N815  승인 시각
+    isCurrent: bool  # noqa: N815  그 유형의 현행 버전인가. 승인·반려는 현행 버전에만 한다
+
+
+class DesignatedDeliverable(BaseModel):
+    """발주기관이 WBS 작업에 정한 산출물 항목과 양식(UC-033). 양식은 제출본이 아니다."""
+
+    id: str
+    taskKey: str  # noqa: N815
+    wbsIdAt: str  # noqa: N815  지정할 때의 번호
+    taskNameAt: str  # noqa: N815
+    name: str
+    description: str | None
+    productType: str | None  # noqa: N815  22종 분류. 필수 목록이 아니다
+    guide: str | None
+    templateFileName: str | None  # noqa: N815
+    templateSize: int | None  # noqa: N815
+    status: str  # MISSING | REGISTERED | SUBMITTED | APPROVED | REJECTED
+    needsRedesignation: bool  # noqa: N815  계획서 교체로 작업 정체가 끊겼다
+    versions: list[DesignatedVersion]
+
+
+class DesignateRequest(BaseModel):
+    taskKey: str  # noqa: N815
+    name: str
+    description: str | None = None
+    productType: str | None = None  # noqa: N815
+    guide: str | None = None
+
+
+class DesignationUpdateRequest(BaseModel):
+    """보낸 칸만 고친다. taskKey 를 보내면 다른 작업으로 옮긴다(재지정)."""
+
+    name: str | None = None
+    description: str | None = None
+    productType: str | None = None  # noqa: N815
+    guide: str | None = None
+    taskKey: str | None = None  # noqa: N815
+
+
+class DesignationEvent(BaseModel):
+    kind: str  # CREATED | UPDATED | TEMPLATE | REASSIGNED | REMOVED
+    at: str
+    actorName: str  # noqa: N815
+    actorRole: str  # noqa: N815
+    detail: dict
+
+
 class WbsDeliverableItem(BaseModel):
     """산출물 화면의 한 줄. WBS 말단 작업이 정한 산출물과 그 판정(ARC-016)."""
 
@@ -252,12 +310,16 @@ class WbsDeliverableItem(BaseModel):
     url: str | None
     productType: str | None  # noqa: N815  29110 유형 태그. 확정된 산출물이나 초안 추정에서 온다
     documents: list[WbsDeliverableDocument]
+    taskKey: str | None = None  # noqa: N815  작업 정체(V46). 지정은 번호가 아니라 이것에 묶인다
+    designated: list[DesignatedDeliverable] = []  # 발주기관 지정 항목(UC-033)
 
 
 class WbsDeliverablesResponse(BaseModel):
     baseDate: str  # noqa: N815
     items: list[WbsDeliverableItem]
     summary: "DeliverableSummary"
+    # 계획서 교체로 작업이 사라져 「재지정 필요」인 지정 항목. 지우지 않고 여기 모아 보인다
+    redesignation: list[DesignatedDeliverable] = []
 
 
 class DeliverableSummary(BaseModel):

@@ -26,7 +26,7 @@ from app.auth import repository as auth_repo
 from app.auth.deps import AuthPrincipal
 from app.common import clock, errors
 from app.config import settings
-from app.dashboard import deliverable, repository, wbs, wbs_issue
+from app.dashboard import deliverable, designation, repository, wbs, wbs_issue
 from app.dashboard.models import (
     OBSERVED,
     SELF_REPORTED,
@@ -636,12 +636,14 @@ def judge_deliverables(cur: Any, project_id: str, at: date) -> DeliverableCheck:
             paths=frozenset(raw_tree["paths"]),
             blob_url_base=raw_tree.get("html_url"),
         )
+    live = {str(i["task_key"]) for i in items if i.get("task_key") and i.get("weight") is not None}
     judgements = deliverable.judge(
         items,
         tree=tree,
         products=wbs_repository.current_products(cur, project_id),
         documents=wbs_repository.project_documents(cur, project_id),
         today=at,
+        designated=designation.coverage(cur, project_id, live),
     )
     return DeliverableCheck(items, judgements, (tree.sha or None) if tree else None)
 
@@ -703,6 +705,8 @@ def wbs_deliverables(
     documents = wbs_repository.project_documents(cur, project_id)
     products = wbs_repository.current_products(cur, project_id)
     doc_type_by_id = {str(p["id"]): p["type"] for p in products}
+    live = {str(i["task_key"]) for i in items if i.get("task_key") and i.get("weight") is not None}
+    designated_by_task, redesignation = designation.build(cur, project_id, live)
 
     by_item: dict[str, list[dict]] = {}
     by_stem: dict[str, list[dict]] = {}
@@ -749,10 +753,13 @@ def wbs_deliverables(
                         status=d["status"],
                         uploadedAt=d["created_at"].isoformat(),
                         proposedType=d.get("proposed_type"),
-                        confirmed=d.get("draft_status") == "CONFIRMED",
+                        # 유형을 바꿔 확정한 것(MANUAL_OVERRIDE)도 확정이다
+                        confirmed=d.get("draft_status") in ("CONFIRMED", "MANUAL_OVERRIDE"),
                     )
                     for d in docs
                 ],
+                taskKey=str(item["task_key"]) if item.get("task_key") else None,
+                designated=designated_by_task.get(str(item.get("task_key")), []),
             )
         )
     counts = deliverable.summarize(list(judged.values()))
@@ -765,6 +772,7 @@ def wbs_deliverables(
             overdue=counts[deliverable.OVERDUE],
             none=counts[deliverable.NONE],
         ),
+        redesignation=redesignation,
     )
 
 

@@ -1701,17 +1701,61 @@ export interface WbsDeliverableItem {
   deliverable: string | null;
   endDate: string | null;
   status: DeliverableStatus;
-  rule: 'LINKED_DOC' | 'REPO_PATH' | 'FILE_NAME' | 'PRODUCT_TYPE' | null;
+  rule: 'LINKED_DOC' | 'REPO_PATH' | 'FILE_NAME' | 'PRODUCT_TYPE' | 'DESIGNATED' | null;
   ref: string | null;
   url: string | null;
   productType: string | null;
   documents: WbsDeliverableDocument[];
+  /** 작업 정체(V46). 지정 산출물은 번호가 아니라 이것에 묶인다 */
+  taskKey?: string | null;
+  /** 발주기관이 이 작업에 정한 산출물 항목(UC-033) */
+  designated?: DesignatedDeliverable[];
+}
+
+/** 지정 항목의 제출본 하나. 확정해야 제출이다(DEC-14) */
+export interface DesignatedVersion {
+  documentId: string;
+  fileName: string;
+  uploadedAt: string;
+  state: 'REGISTERED' | 'SUBMITTED' | 'APPROVED' | 'REJECTED';
+  workProductId: string | null;
+  version: string | null;
+  rejectReason: string | null;
+  decidedAt: string | null;
+  isCurrent: boolean;
+}
+
+/** 발주기관이 WBS 작업에 정한 산출물 항목과 양식(UC-033). 양식은 제출본이 아니다 */
+export interface DesignatedDeliverable {
+  id: string;
+  taskKey: string;
+  wbsIdAt: string;
+  taskNameAt: string;
+  name: string;
+  description: string | null;
+  productType: string | null;
+  guide: string | null;
+  templateFileName: string | null;
+  templateSize: number | null;
+  status: 'MISSING' | 'REGISTERED' | 'SUBMITTED' | 'APPROVED' | 'REJECTED';
+  needsRedesignation: boolean;
+  versions: DesignatedVersion[];
+}
+
+export interface DesignationEvent {
+  kind: 'CREATED' | 'UPDATED' | 'TEMPLATE' | 'REASSIGNED' | 'REMOVED';
+  at: string;
+  actorName: string;
+  actorRole: Role;
+  detail: Record<string, unknown>;
 }
 
 export interface WbsDeliverablesResponse {
   baseDate: string;
   items: WbsDeliverableItem[];
   summary: DeliverableSummary;
+  /** 계획서 교체로 작업이 사라져 「재지정 필요」인 지정 항목 */
+  redesignation?: DesignatedDeliverable[];
 }
 
 export interface WbsScheduleResponse {

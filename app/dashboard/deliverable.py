@@ -25,6 +25,7 @@ RULE_LINK = "LINKED_DOC"
 RULE_PATH = "REPO_PATH"
 RULE_NAME = "FILE_NAME"
 RULE_TYPE = "PRODUCT_TYPE"
+RULE_DESIGNATED = "DESIGNATED"  # 발주기관 지정 항목으로 판정(UC-033)
 
 _PATH_LIKE = re.compile(r"[\\/]|\.[A-Za-z0-9]{1,5}$")
 
@@ -83,12 +84,16 @@ def judge(
     products: list[dict[str, Any]],
     documents: list[dict[str, Any]],
     today: date,
+    designated: dict[str, Any] | None = None,
 ) -> list[Judgement]:
     """말단 항목마다 판정 하나. 묶음(weight 없음)과 산출물 열이 빈 항목은 NONE.
 
     products: 현행 산출물 행. type · title · status · file_uri · external_url · id
     documents: 올린 문서. id · original_filename
+    designated: 작업 정체(task_key) → 발주기관 지정 항목 현황(total · submitted). 지정이 있는
+        작업은 산출물 열 대신 「지정 항목이 모두 제출됐는가」로 판정한다(UC-033 4단계).
     """
+    designated = designated or {}
     product_paths = {
         _norm_path(p["file_uri"]): p for p in products if p.get("file_uri")
     }
@@ -106,6 +111,16 @@ def judge(
     for item in items:
         wbs_id = item["wbs_id"]
         deliverable = (item.get("deliverable") or "").strip()
+        cover = designated.get(str(item.get("task_key"))) if item.get("task_key") else None
+        if item.get("weight") is not None and cover is not None and cover.total > 0:
+            ref = f"지정 산출물 {cover.total}건 중 {cover.submitted}건 제출"
+            if cover.submitted >= cover.total:
+                out.append(Judgement(wbs_id, SUBMITTED, RULE_DESIGNATED, ref))
+            else:
+                end = item.get("end_on")
+                late = end is not None and end < today
+                out.append(Judgement(wbs_id, OVERDUE if late else MISSING, RULE_DESIGNATED, ref))
+            continue
         if item.get("weight") is None or not deliverable:
             out.append(Judgement(wbs_id, NONE))
             continue

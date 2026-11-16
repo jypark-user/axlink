@@ -346,7 +346,7 @@ def list_items(cur: Any, project_id: str) -> list[dict[str, Any]]:
         """
         select id, wbs_id, parent_wbs_id, name, deliverable, start_on, end_on, weight,
                declared_planned, actual, line_no, work_product_id,
-               deliverable_status, deliverable_rule, deliverable_ref, deliverable_url
+               deliverable_status, deliverable_rule, deliverable_ref, deliverable_url, task_key
           from wbs_item
          where project_id = %s and active
          order by line_no, wbs_id
