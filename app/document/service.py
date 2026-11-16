@@ -82,14 +82,23 @@ def _store(project_id: str, file_hash: str, ext: str, content: bytes) -> str:
 def upload(
     cur: Any, principal: AuthPrincipal, project_id: str, filename: str, content: bytes,
     wbs_id: str | None = None,
+    designated_id: str | None = None,
 ) -> DocumentUploadResponse:
     """문서를 올린다. wbs_id 를 주면 그 WBS 항목의 산출물로 바로 붙는다(ARC-016).
+    designated_id 를 주면 발주기관이 지정한 산출물 항목의 제출본으로 붙는다(UC-033). 그
+    항목의 작업에도 함께 붙는다. 확정(초안 확정)해야 제출로 센다(DEC-14).
 
     항목이 없으면 올리기 전에 거절한다. 조용히 안 붙이면 용역사는 올렸다고 믿고 판정은 그대로다.
     """
     _require_project(cur, principal, project_id)
     wbs_item_id: str | None = None
-    if wbs_id:
+    designated = designated_id.strip() if designated_id and designated_id.strip() else None
+    if designated:
+        from app.dashboard import designation
+
+        dashboard_service.ensure_wbs_loaded(cur, project_id)
+        wbs_item_id = designation.resolve_for_upload(cur, project_id, designated)
+    elif wbs_id:
         dashboard_service.ensure_wbs_loaded(cur, project_id)
         item = wbs_repository.find_item(cur, project_id, wbs_id.strip())
         if item is None:
@@ -116,6 +125,8 @@ def upload(
         document_id = str(existing["id"])
         if wbs_item_id:
             repository.link_wbs_item(cur, document_id, wbs_item_id)
+        if designated and wbs_item_id:
+            _link_designated(cur, document_id, designated, wbs_item_id)
         if existing["processing_state"] == "FAILED":
             repository.requeue(cur, document_id)
             _after_enqueue(cur, document_id)
@@ -136,6 +147,8 @@ def upload(
         return _to_response(existing)
     if wbs_item_id:
         repository.link_wbs_item(cur, document_id, wbs_item_id)
+    if designated and wbs_item_id:
+        _link_designated(cur, document_id, designated, wbs_item_id)
     where = f" ({wbs_id.strip()} 항목)" if wbs_id else ""
     activity.record(
         cur, project_id=project_id, kind=activity.DOCUMENT_UPLOADED,
@@ -145,6 +158,12 @@ def upload(
     )
     _after_enqueue(cur, document_id)
     return _to_response(repository.find_by_id(cur, document_id))
+
+
+def _link_designated(cur: Any, document_id: str, designated_id: str, wbs_item_id: str) -> None:
+    from app.dashboard import designation_repository
+
+    designation_repository.link_document(cur, document_id, designated_id, wbs_item_id)
 
 
 def _after_enqueue(cur: Any, document_id: str) -> None:

@@ -37,6 +37,8 @@ DUTIES: dict[str, tuple[tuple[str, ...], str]] = {
     "COMPLETION_CONFIRM": ((CLIENT,), "작업 완료 확인은 그 사업의 발주기관만 할 수 있습니다."),
     # UC-051 조치 보고 · UC-032 완료 보고
     "REVIEW_REPORT": ((CONTRACTOR,), "조치 보고는 용역사가 합니다."),
+    # UC-033 WBS 작업별 산출물·양식 지정
+    "DELIVERABLE_DESIGNATE": ((CLIENT,), "작업별 산출물·양식 지정은 발주기관이 합니다."),
 }
 
 ADMIN_NOTE = " 플랫폼 관리자는 발주기관·용역사의 업무 판단을 대신하지 않습니다."

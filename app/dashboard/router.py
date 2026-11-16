@@ -6,14 +6,18 @@
 
 from datetime import date
 from typing import Annotated
+from urllib.parse import quote
 
-from fastapi import APIRouter, Query
+from fastapi import APIRouter, File, Query, Response, UploadFile
 
 from app.auth.deps import Principal
 from app.common import clock
-from app.dashboard import completion, service, snapshot
+from app.dashboard import completion, designation, service, snapshot
 from app.dashboard.models import (
     CompletionSummaryResponse,
+    DesignateRequest,
+    DesignationEvent,
+    DesignationUpdateRequest,
     ProgressResponse,
     ProgressSnapshotResponse,
     WbsDeliverablesResponse,
@@ -78,6 +82,75 @@ def wbs_deliverables(
     """산출물 화면. WBS 가 정한 산출물과 제출 판정(ARC-016)."""
     with tx() as cur:
         return service.wbs_deliverables(cur, principal, project_id, at)
+
+
+# ---- 작업별 지정 산출물·양식 (UC-033). 목록은 산출물 화면 응답(wbs/deliverables)에 함께 온다
+
+
+@router.post("/{project_id}/wbs/designated-deliverables", status_code=201)
+def designate_deliverable(
+    project_id: str, req: DesignateRequest, principal: Principal
+) -> dict[str, str]:
+    """작업에 내야 할 산출물 항목을 정한다. 발주기관만."""
+    with tx() as cur:
+        return {"id": designation.designate(cur, principal, project_id, req)}
+
+
+@router.patch("/{project_id}/wbs/designated-deliverables/{designated_id}", status_code=204)
+def update_designated_deliverable(
+    project_id: str, designated_id: str, req: DesignationUpdateRequest, principal: Principal
+) -> Response:
+    """항목을 고치거나 다른 작업으로 옮긴다(재지정)."""
+    with tx() as cur:
+        designation.update(cur, principal, project_id, designated_id, req)
+    return Response(status_code=204)
+
+
+@router.delete("/{project_id}/wbs/designated-deliverables/{designated_id}", status_code=204)
+def remove_designated_deliverable(
+    project_id: str, designated_id: str, principal: Principal
+) -> Response:
+    """지정을 거둔다. 제출 이력은 남는다."""
+    with tx() as cur:
+        designation.remove(cur, principal, project_id, designated_id)
+    return Response(status_code=204)
+
+
+@router.post("/{project_id}/wbs/designated-deliverables/{designated_id}/template", status_code=204)
+def put_designated_template(
+    project_id: str, designated_id: str, principal: Principal,
+    file: Annotated[UploadFile, File()],
+) -> Response:
+    """양식 파일을 올리거나 바꾼다. 제출본이 아니다."""
+    content = file.file.read(designation.TEMPLATE_MAX_BYTES + 1)
+    with tx() as cur:
+        designation.put_template(
+            cur, principal, project_id, designated_id, file.filename or "", content
+        )
+    return Response(status_code=204)
+
+
+@router.get("/{project_id}/wbs/designated-deliverables/{designated_id}/template")
+def get_designated_template(project_id: str, designated_id: str, principal: Principal) -> Response:
+    with tx() as cur:
+        row = designation.get_template(cur, principal, project_id, designated_id)
+    name = quote(row["template_filename"])
+    return Response(
+        content=bytes(row["template_bytes"]),
+        media_type=row["template_content_type"],
+        headers={"Content-Disposition": f"attachment; filename*=UTF-8''{name}"},
+    )
+
+
+@router.get(
+    "/{project_id}/wbs/designated-deliverables/{designated_id}/history",
+    response_model=list[DesignationEvent],
+)
+def designated_history(
+    project_id: str, designated_id: str, principal: Principal
+) -> list[DesignationEvent]:
+    with tx() as cur:
+        return designation.history(cur, principal, project_id, designated_id)
 
 
 @router.get("/{project_id}/wbs", response_model=WbsScheduleResponse)

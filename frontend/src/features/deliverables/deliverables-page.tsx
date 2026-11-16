@@ -17,6 +17,14 @@ import { cn } from '@/lib/utils';
 import { ALLOWED, rejectReason } from '@/features/documents/upload';
 import { useAuth } from '@/features/auth/auth-context';
 import { label } from '@/lib/labels';
+import {
+  DesignateDialog,
+  DesignatedCell,
+  RedesignationPanel,
+  type DesignatedActions,
+  type DesignationTarget,
+} from './designated';
+import { useTypeNames } from './use-type-names';
 import type {
   DeliverableStatus,
   DocumentUploadResponse,
@@ -59,6 +67,7 @@ const RULE_LABEL: Record<string, string> = {
   REPO_PATH: '저장소 파일',
   FILE_NAME: '같은 이름의 문서',
   PRODUCT_TYPE: '같은 유형의 산출물',
+  DESIGNATED: '발주기관 지정 산출물',
 };
 
 const inFilter = (item: WbsDeliverableItem, filter: Filter): boolean => {
@@ -73,8 +82,14 @@ export function DeliverablesPage(): ReactNode {
   const [filter, setFilter] = useState<Filter>('ALL');
   const [showChecklist, setShowChecklist] = useState(false);
   const [uploadingFor, setUploadingFor] = useState<string | null>(null);
+  const [designating, setDesignating] = useState<DesignationTarget | null>(null);
   const inputRef = useRef<HTMLInputElement>(null);
-  const targetRef = useRef<string | null>(null);
+  // 올릴 자리. 지정 산출물 항목을 골라 올리면 그 항목의 제출본이 된다(UC-033)
+  const targetRef = useRef<{ wbsId: string; designatedId?: string } | null>(null);
+  const { me } = useAuth();
+  // 산출물 지정은 발주기관만. 관리자는 대신하지 않는다(DEC-05). 서버도 다시 본다
+  const canDesignate = me?.role === 'CLIENT';
+  const typeNames = useTypeNames(project.id);
 
   const state = useAsync<WbsDeliverablesResponse>(
     () => api.get<WbsDeliverablesResponse>(`/projects/${project.id}/wbs/deliverables`),
@@ -82,16 +97,17 @@ export function DeliverablesPage(): ReactNode {
   );
   const { reload } = state;
 
-  const pickFile = (wbsId: string) => {
-    targetRef.current = wbsId;
+  const pickFile = (wbsId: string, designatedId?: string) => {
+    targetRef.current = { wbsId, designatedId };
     inputRef.current?.click();
   };
 
   const upload = async (e: ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
-    const wbsId = targetRef.current;
+    const target = targetRef.current;
     if (inputRef.current) inputRef.current.value = '';
-    if (!file || !wbsId) return;
+    if (!file || !target) return;
+    const { wbsId, designatedId } = target;
     const reason = rejectReason(file);
     if (reason) {
       toast({ title: reason, variant: 'error' });
@@ -99,12 +115,15 @@ export function DeliverablesPage(): ReactNode {
     }
     const form = new FormData();
     form.append('file', file);
-    form.append('wbsId', wbsId);
+    if (designatedId) form.append('designatedId', designatedId);
+    else form.append('wbsId', wbsId);
     setUploadingFor(wbsId);
     try {
       await api.upload<DocumentUploadResponse>(`/projects/${project.id}/documents`, form);
       toast({
-        title: `${wbsId} 항목의 산출물로 접수했습니다. 읽기·색인은 뒤에서 합니다.`,
+        title: designatedId
+          ? `${wbsId} 작업의 지정 산출물로 접수했습니다. 자료 상세에서 「산출물로 제출」해야 제출입니다.`
+          : `${wbsId} 항목의 산출물로 접수했습니다. 읽기·색인은 뒤에서 합니다.`,
         variant: 'success',
       });
       reload();
@@ -119,9 +138,19 @@ export function DeliverablesPage(): ReactNode {
     }
   };
 
+  const designatedActions: DesignatedActions = {
+    projectId: project.id,
+    canDesignate,
+    typeNames,
+    onUpload: pickFile,
+    onEdit: setDesignating,
+    onChanged: reload,
+  };
+
   const columns = useMemo(
-    () => buildColumns(project.id, pickFile, uploadingFor),
-    [project.id, uploadingFor],
+    () => buildColumns(project.id, pickFile, uploadingFor, designatedActions),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [project.id, uploadingFor, canDesignate, typeNames, reload],
   );
 
   return (
@@ -160,6 +189,11 @@ export function DeliverablesPage(): ReactNode {
                 )}{' '}
                 · 기준일 {formatDate(data.baseDate)}
               </p>
+              <RedesignationPanel
+                entries={data.redesignation ?? []}
+                tasks={data.items}
+                actions={designatedActions}
+              />
               <Tabs value={filter} onValueChange={(next) => setFilter(next as Filter)}>
                 <TabsList>
                   {FILTERS.map((tab) => (
@@ -194,6 +228,18 @@ export function DeliverablesPage(): ReactNode {
           );
         }}
       </DataState>
+      {designating && (
+        <DesignateDialog
+          projectId={project.id}
+          target={designating}
+          typeNames={typeNames}
+          onClose={() => setDesignating(null)}
+          onDone={() => {
+            setDesignating(null);
+            reload();
+          }}
+        />
+      )}
     </>
   );
 }
@@ -202,6 +248,7 @@ function buildColumns(
   projectId: string,
   onUpload: (wbsId: string) => void,
   uploadingFor: string | null,
+  designatedActions: DesignatedActions,
 ): ColumnDef<WbsDeliverableItem, unknown>[] {
   return [
     {
@@ -239,6 +286,12 @@ function buildColumns(
           {row.original.deliverable ?? '-'}
         </span>
       ),
+    },
+    {
+      id: 'designated',
+      // 발주기관이 정한 항목(UC-033). 있으면 판정이 산출물 열 대신 이것을 본다
+      header: () => <span title="발주기관이 이 작업에 정한 산출물과 양식">발주기관 지정</span>,
+      cell: ({ row }) => <DesignatedCell item={row.original} actions={designatedActions} />,
     },
     {
       accessorKey: 'status',
