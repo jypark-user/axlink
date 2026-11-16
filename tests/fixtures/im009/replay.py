@@ -65,6 +65,7 @@ class Faults:
     serve_design_file: bool = False  # 설정 경로 설계서 파일(DESIGN_FILE_PATH) 제공(UC-031-S02)
     delay_seconds: float = 0.0  # 이슈 목록 응답을 이만큼 늦춘다(장시간 응답, UC-011-S06)
     bulk_issues: int = 0  # BULK_TARGET 의 이슈 건수(상한 초과 변형, UC-011-S08)
+    drop_done_ratio: bool = False  # Redmine 이슈가 진척도를 하나도 주지 않는다(DEC-17 경계)
     calls: list[tuple[str, str, str]] = field(default_factory=list)  # (tool, kind, since)
 
 
@@ -170,6 +171,8 @@ class ReplaySource:
             out = []
             for i in issues:
                 eid, p = payloads.redmine_issue(i, self.state, base, by_tid, ver)
+                if self.faults.drop_done_ratio:
+                    p.pop("done_ratio", None)
                 name = p["tracker"]["name"]
                 if name in self.faults.tracker_rename:
                     p["tracker"] = {**p["tracker"], "name": self.faults.tracker_rename[name]}

@@ -53,6 +53,8 @@ from app.standard import wbs_repository
 PLAN_TYPE = "PROJECT_PLAN"
 
 _NONE = "NONE"
+# L3 대표값의 근거 코드(DEC-17). 옛 L3(일반 이슈 해결률) 기록은 "ISSUE" 로 남아 있다
+ISSUE_PROGRESS = "ISSUE_PROGRESS"
 
 
 def require_project(cur: Any, principal: AuthPrincipal, project_id: str) -> None:
@@ -78,11 +80,51 @@ def _issue_note(issue_total: int, defect_mapped: bool) -> str:
     """일반 이슈 해결률의 범위. 결함 매핑이 없으면 결함을 가르지 못한 것까지 적는다(DEC-02)."""
     if not issue_total:
         return "연동된 일반 이슈가 없습니다"
+    return _issue_scope(defect_mapped)
+
+
+def _issue_scope(defect_mapped: bool) -> str:
     if defect_mapped:
         return "리스크·결함·예전에 요구사항으로 만든 이슈 제외"
     return (
         "리스크·예전에 요구사항으로 만든 이슈 제외. 결함 매핑이 없어 수집한 이슈 전부를 "
         "일반 이슈로 셉니다"
+    )
+
+
+ISSUE_ESTIMATE_LABEL = "이슈 기반 추정 진척률"
+
+
+def issue_estimate_measure(
+    done_sum: float, total: int, reported: int, defect_mapped: bool
+) -> ProgressMeasure:
+    """이슈 기반 추정 진척률(DEC-17). 대상 이슈마다 같은 가중치로 진척도를 평균한다.
+
+    진척도가 없는 이슈는 0 으로 세고 그 건수를 남긴다. 마일스톤별 평균을 이슈 수 비례로 다시
+    평균한 값과 같으므로 버전 없는(미배정) 이슈를 따로 묶어도 값은 같다. 대상 이슈가 없거나
+    모든 이슈의 진척도가 없으면 산출 불가다. 일반 이슈 해결률(issue)과는 다른 지표다.
+    """
+    missing = total - reported
+    if not total:
+        value, note = None, "산출 불가: 대상 일반 이슈가 없습니다"
+    elif not reported:
+        value = None
+        note = f"산출 불가: 대상 일반 이슈 {total}건 모두 진척도가 없습니다"
+    else:
+        value = round(done_sum / 100.0 / total, 4)
+        note = (
+            f"대상 일반 이슈 {total}건({_issue_scope(defect_mapped)})의 진척도를 같은 가중치로 "
+            f"평균했습니다. 진척도가 없는 이슈는 0으로 셉니다(결측 {missing}건)"
+        )
+    return ProgressMeasure(
+        value=value,
+        numerator=None,
+        denominator=total,
+        label=ISSUE_ESTIMATE_LABEL,
+        unit="이슈 진척도 평균",
+        kind=SELF_REPORTED,
+        note=note,
+        missing=missing if total else None,
     )
 
 
@@ -109,6 +151,7 @@ def compute(cur: Any, project_id: str, at: date) -> ProgressResponse:
         warnings.extend(wbs_progress.warnings)
 
     issue_done, issue_total = repository.issue_resolution(cur, project_id)
+    done_sum, estimate_total, reported = repository.issue_progress(cur, project_id)
     defect_mapped = repository.defect_mapped(cur, project_id)
     defect_done, defect_total = repository.defect_resolution(cur, project_id)
     product_done, product_total = repository.work_product_submission(cur, project_id)
@@ -132,6 +175,7 @@ def compute(cur: Any, project_id: str, at: date) -> ProgressResponse:
         # 출처 이슈(예전에 요구사항으로 만든 이슈)와 리스크·결함은 분모에 없다. 범위를 같이 보인다
         note=_issue_note(issue_total, defect_mapped),
     )
+    estimate_measure = issue_estimate_measure(done_sum, estimate_total, reported, defect_mapped)
     defect_measure = ProgressMeasure(
         value=_ratio(defect_done, defect_total) if defect_mapped else None,
         numerator=defect_done if defect_mapped else None,
@@ -152,9 +196,9 @@ def compute(cur: Any, project_id: str, at: date) -> ProgressResponse:
     )
 
     level, basis, representative = _representative(
-        wbs_progress, issue_measure, product_measure
+        wbs_progress, estimate_measure, product_measure
     )
-    note = _basis_note(level, wbs_progress, issue_measure, product_measure)
+    note = _basis_note(level, wbs_progress, issue_measure, product_measure, estimate_measure)
     if level != "L1" or representative is None:
         # 대표값이 WBS 실적이 아니거나 산출 불가다. 경고 줄에도 같은 문장을 둔다(DEF-V037)
         warnings.append(note)
@@ -176,6 +220,7 @@ def compute(cur: Any, project_id: str, at: date) -> ProgressResponse:
         wbsDeviation=None if wbs_progress is None else wbs_progress.deviation,
         wbsDeclaredPlanned=None if wbs_progress is None else wbs_progress.declared_planned,
         issue=issue_measure,
+        issueEstimate=estimate_measure,
         workProduct=product_measure,
         defect=defect_measure,
         behind=[] if wbs_progress is None else wbs_progress.behind,
@@ -277,6 +322,7 @@ def _basis_note(
     wbs_progress: wbs.WbsProgress | None,
     issue: ProgressMeasure,
     product: ProgressMeasure,
+    estimate: ProgressMeasure,
 ) -> str:
     """대표값의 산출 근거 한 문장. 값은 넣지 않는다(분자·분모 건수만). 수치는 응답 필드가 낸다."""
     if level == "L1":
@@ -300,10 +346,18 @@ def _basis_note(
             "실적을 대신하지 않습니다."
         )
     if level == "L3":
+        # DEC-17. 해결률은 대표값이 아니라 별도 지표로 남는다
+        if estimate.value is None:
+            return (
+                f"산출 불가: WBS 가 없고 대상 일반 이슈 {estimate.denominator}건 모두 진척도가 "
+                f"없어 {ISSUE_ESTIMATE_LABEL}을 낼 수 없습니다. 일반 이슈 해결률(해결 "
+                f"{issue.numerator} / 전체 {issue.denominator}건)은 별도 지표로 봅니다."
+            )
         return (
-            f"추정: WBS 가 없어 일반 이슈 해결률(해결 {issue.numerator} / 전체 "
-            f"{issue.denominator}건)로 산정했습니다. WBS 실적 기준(L1)이 아닙니다. WBS 를 "
-            "등록하면 작업 단위 진척률과 실적 대조가 됩니다."
+            f"추정: WBS 가 없어 {ISSUE_ESTIMATE_LABEL}로 산정했습니다. 대상 일반 이슈 "
+            f"{estimate.denominator}건의 진척도를 같은 가중치로 평균했고, 진척도가 없는 "
+            f"{estimate.missing}건은 0으로 셌습니다. WBS 실적 기준(L1)이 아닙니다. 일반 이슈 "
+            "해결률은 별도 지표입니다. WBS 를 등록하면 작업 단위 진척률과 실적 대조가 됩니다."
         )
     if level == "L4":
         return (
@@ -924,7 +978,7 @@ def _plan_path(project_id: str, plan_row: dict[str, Any], cur: Any = None) -> Pa
 
 def _representative(
     wbs_progress: wbs.WbsProgress | None,
-    issue: ProgressMeasure,
+    issue_estimate: ProgressMeasure,
     product: ProgressMeasure,
 ) -> tuple[str, str, float | None]:
     """L1~L4 저하. 위에서부터 성립하는 첫 수준을 쓴다 (진척률-산정체계 §1).
@@ -936,8 +990,10 @@ def _representative(
         if wbs_progress.estimated:
             return "L2", "WBS_ESTIMATED", wbs_progress.actual
         return "L1", "WBS", wbs_progress.actual
-    if issue.denominator:
-        return "L3", "ISSUE", issue.value
+    # L3 는 이슈 기반 추정 진척률(DEC-17). 대상 이슈가 있으면 진척도가 모두 없어도 L3 에
+    # 머물고 산출 불가다. 해결률(ISSUE)은 2026-11-16 전까지의 L3 산식이라 근거 코드를 바꿨다
+    if issue_estimate.denominator:
+        return "L3", ISSUE_PROGRESS, issue_estimate.value
     # 점검표만 있고 제출본이 하나도 없으면 L4 를 세우지 않는다. 0% 는 「진척이 없다」는 주장이라
     # 재료가 없는 것과 다르다(DEF-V003, IM-007 AC-002-1 「데이터 없음·산출 불가」)
     if product.denominator and product.numerator:

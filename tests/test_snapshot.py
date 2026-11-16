@@ -68,9 +68,16 @@ def test_스냅샷은_그날의_집계를_그대로_담는다(client, client_tok
         )
     assert body["issueResolvedCount"] == expected["done"] >= 2
     assert body["issueTotalCount"] == expected["total"] >= 3
-    # WBS 가 없으면 이슈로 내려간다 (진척률-산정체계 L3)
+    # WBS 가 없으면 이슈 기반 추정 진척률(L3, DEC-17). 이 사업의 이슈는 원천 원본이 없는 수동
+    # 이슈라 진척도가 모두 결측이고, 그러면 산출 불가다. 해결률은 별도 칸에 그대로 남는다
     assert body["level"] in ("L1", "L3")
-    assert body["representativePct"] is not None
+    if body["level"] == "L3":
+        assert body["representativeBasis"] == "ISSUE_PROGRESS", body
+        assert body["representativeBasisLabel"] == "이슈 기반 추정 진척률"
+        assert body["representativePct"] is None
+        assert body["issueEstimateMissingCount"] == expected["total"]
+    else:
+        assert body["representativePct"] is not None
 
 
 @requires_db

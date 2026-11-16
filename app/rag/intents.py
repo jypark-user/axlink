@@ -11,6 +11,7 @@ from typing import Any
 
 from app.common import clock, korean
 from app.dashboard import service as progress_service
+from app.dashboard import snapshot as progress_snapshot
 from app.db import fetch_all, fetch_one
 from app.rag import blocks
 from app.semantic.models import WidgetColumn, WidgetDataResponse, WidgetRow
@@ -219,16 +220,27 @@ def _without_plan(
         )
     if progress.representative is not None and progress.basis in _BASIS_LABEL:
         value = _pct(progress.representative)
-        return (
+        text = (
             f"{korean.attach(name, '은')} WBS 계획 기간이 없어 계획과 비교할 수 없습니다. "
             f"대표 진척률은 {_BASIS_LABEL[progress.basis]} 기준 {format_value(value)}%입니다"
-            f"(기준일 {progress.baseDate}).",
-            date.fromisoformat(progress.baseDate),
+            f"(기준일 {progress.baseDate})."
         )
+        estimate = progress.issueEstimate
+        if progress.basis == progress_service.ISSUE_PROGRESS and estimate is not None:
+            # DEC-17: 같은 가중치·결측 0 을 답에도 밝힌다
+            text += (
+                f" 대상 일반 이슈 {estimate.denominator}건의 진척도를 같은 가중치로 평균했고, "
+                f"진척도가 없는 {estimate.missing}건은 0으로 셌습니다."
+            )
+        return text, date.fromisoformat(progress.baseDate)
     return None
 
 
-_BASIS_LABEL = {"ISSUE": "일반 이슈 해결률", "WORK_PRODUCT": "산출물 제출률"}
+# L3 는 이슈 기반 추정 진척률(DEC-17). 해결률은 대표값이 아니라 별도 지표다
+_BASIS_LABEL = {
+    progress_service.ISSUE_PROGRESS: progress_service.ISSUE_ESTIMATE_LABEL,
+    "WORK_PRODUCT": "산출물 제출률",
+}
 
 
 # ---------------------------------------------------------------- 늦은 작업
@@ -443,6 +455,11 @@ def progress_change(cur: Any, projects: list[dict[str, Any]], period: str) -> In
                 f". 두 날의 진척 산정 수준이 다르다({base['level']} → {latest['level']}). "
                 "그대로 견주면 안 된다"
             )
+        elif _basis(base) != _basis(latest):
+            # 같은 L3 라도 2026-11-16 전 행은 해결률, 그 뒤는 이슈 진척도 평균이다(DEC-17)
+            before = progress_snapshot.basis_label(base["level"], base["representative_basis"])
+            after = progress_snapshot.basis_label(latest["level"], latest["representative_basis"])
+            line += f". 두 날의 대표값 산식이 다르다({before} → {after}). 그대로 견주면 안 된다"
         result.lines.append(line)
         result.dates += [then, end]
     if not result.lines:
@@ -459,12 +476,16 @@ def progress_change(cur: Any, projects: list[dict[str, Any]], period: str) -> In
     return result
 
 
+def _basis(row: dict[str, Any]) -> str | None:
+    return progress_snapshot.effective_basis(row["level"], row.get("representative_basis"))
+
+
 def _snapshot_on(cur: Any, project_id: str, day: date) -> dict[str, Any] | None:
     """그날 또는 그 앞의 가장 가까운 스냅샷."""
     return fetch_one(
         cur,
         """
-        select snapshot_date, level, representative_pct from progress_snapshot
+        select snapshot_date, level, representative_pct, representative_basis from progress_snapshot
          where project_id = %s and representative_pct is not null and snapshot_date <= %s
          order by snapshot_date desc limit 1
         """,

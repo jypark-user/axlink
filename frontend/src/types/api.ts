@@ -324,6 +324,8 @@ export interface ProjectSummaryResponse {
   /** 대표 진척률(0~1). 현황 화면과 같은 산정. 산출 불가면 null. */
   representative: number | null;
   progressLevel: string | null;
+  /** 대표값의 산출 근거 한 문장. L3 면 이슈 기반 추정 진척률이다(DEC-17) */
+  progressBasisNote?: string | null;
   /** WBS 실적 − 계획선(0~1 차이). WBS 가 없으면 null. */
   progressDeviation: number | null;
   /** 진척 집계 자체가 실패했다. 산출 불가(null)와 다르다 */
@@ -667,6 +669,8 @@ export interface RequirementDecision {
   reason: string;
   decidedBy: string | null;
   decidedAt: string;
+  /** 지정한 계정의 역할. DEC-05 전에 관리자가 지정한 기록은 SUPER_ADMIN 이다 */
+  decidedByRole?: string | null;
 }
 
 export interface TraceabilityRowResponse {
@@ -1488,6 +1492,11 @@ export interface ProgressSnapshotResponse {
   workProductSubmittedCount: number;
   workProductApprovedCount: number;
   workProductTotalCount: number;
+  /** 대표값의 산식(DEC-17). 비어 있으면 2026-11-16 전 행이다. 이름은 서버가 붙인다 */
+  representativeBasis?: string | null;
+  representativeBasisLabel?: string | null;
+  issueEstimatePct?: number | null;
+  issueEstimateMissingCount?: number | null;
   createdAt: string;
 }
 

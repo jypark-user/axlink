@@ -93,6 +93,7 @@ def take_unchecked(
         {"p": project_id},
     )
     approval = progress.deliverableApproval
+    estimate = progress.issueEstimate
     row = fetch_one(
         cur,
         """
@@ -102,12 +103,14 @@ def take_unchecked(
           requirement_verified_count, requirement_total_count, risk_closed_count, risk_total_count,
           work_product_submitted_count, work_product_approved_count, work_product_total_count,
           defect_resolved_count, defect_total_count,
-          deliverable_approved_count, deliverable_total_count)
+          deliverable_approved_count, deliverable_total_count,
+          representative_basis, issue_estimate_pct, issue_estimate_missing_count)
         values (%(project_id)s, %(snapshot_date)s, %(level)s, %(representative)s, %(wbs_actual)s,
                 %(wbs_planned)s, %(behind)s, %(issue_resolved)s, %(issue_total)s,
                 %(req_verified)s, %(req_total)s, %(risk_closed)s, %(risk_total)s,
                 %(wp_submitted)s, %(wp_approved)s, %(wp_total)s,
-                %(defect_resolved)s, %(defect_total)s, %(deliv_approved)s, %(deliv_total)s)
+                %(defect_resolved)s, %(defect_total)s, %(deliv_approved)s, %(deliv_total)s,
+                %(basis)s, %(estimate)s, %(estimate_missing)s)
         on conflict (project_id, snapshot_date) do update set
           level = excluded.level,
           representative_pct = excluded.representative_pct,
@@ -127,6 +130,9 @@ def take_unchecked(
           defect_total_count = excluded.defect_total_count,
           deliverable_approved_count = excluded.deliverable_approved_count,
           deliverable_total_count = excluded.deliverable_total_count,
+          representative_basis = excluded.representative_basis,
+          issue_estimate_pct = excluded.issue_estimate_pct,
+          issue_estimate_missing_count = excluded.issue_estimate_missing_count,
           created_at = now()
         returning *
         """,
@@ -153,6 +159,10 @@ def take_unchecked(
             "defect_total": None if progress.defect is None else progress.defect.denominator,
             "deliv_approved": approval.numerator if approval else None,
             "deliv_total": approval.denominator if approval else None,
+            # 대표값의 산식(DEC-17). 옛 행과 새 행을 가르는 칸이다
+            "basis": progress.basis,
+            "estimate": _pct(estimate.value) if estimate else None,
+            "estimate_missing": estimate.missing if estimate else None,
         },
     )
     _record(cur, project_id, row, actor)
@@ -185,7 +195,33 @@ def _response(row: dict[str, Any]) -> ProgressSnapshotResponse:
         workProductApprovedCount=row["work_product_approved_count"],
         workProductTotalCount=row["work_product_total_count"],
         createdAt=row["created_at"].isoformat(),
+        representativeBasis=row.get("representative_basis"),
+        representativeBasisLabel=basis_label(row["level"], row.get("representative_basis")),
+        issueEstimatePct=_num(row.get("issue_estimate_pct")),
+        issueEstimateMissingCount=row.get("issue_estimate_missing_count"),
     )
+
+
+# 대표값 산식의 이름. 화면·AI 가 같은 말을 쓴다
+BASIS_LABEL = {
+    "WBS": "WBS 실적",
+    "WBS_ESTIMATED": "WBS 기간 비례 추정",
+    "ISSUE_PROGRESS": "이슈 기반 추정 진척률",
+    "ISSUE": "일반 이슈 해결률(옛 L3 산식)",
+    "WORK_PRODUCT": "산출물 제출률",
+}
+LEGACY_L3 = "ISSUE"  # V65 전 L3 행의 산식. 칸이 비어 있어도 L3 면 이것이다
+
+
+def effective_basis(level: str | None, basis: str | None) -> str | None:
+    """행의 대표값 산식. V65 전 행은 칸이 비어 있고, 그중 L3 는 일반 이슈 해결률이었다."""
+    if basis:
+        return basis
+    return LEGACY_L3 if level == "L3" else None
+
+
+def basis_label(level: str | None, basis: str | None) -> str | None:
+    return BASIS_LABEL.get(effective_basis(level, basis) or "")
 
 
 def _record(cur: Any, project_id: str, row: dict[str, Any], actor: AuthPrincipal | None) -> None:
