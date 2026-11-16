@@ -139,15 +139,15 @@ export const DASHBOARD_PRESETS: DashboardPreset[] = [
       {
         template: 'DONUT_CHART',
         title: '우선순위별 요구사항 비중',
-        intent: '요구사항 이행률을 우선순위별로 나눠 비중으로',
-        measure: 'requirement_fulfillment_rate',
+        intent: '요구사항이 우선순위별로 몇 건인지 비중과 합계로',
+        measure: 'requirement_count',
         dimensions: ['requirement_priority'],
       },
       {
         template: 'STATUS_FLOW',
         title: '요구사항 단계 분포',
         intent: '요구사항이 정의·구현·검증·인수 단계에 각각 몇 건 있는지 흐름으로',
-        measure: 'requirement_fulfillment_rate',
+        measure: 'requirement_count',
         dimensions: ['requirement_status'],
       },
       {
@@ -270,15 +270,15 @@ export const DASHBOARD_PRESETS: DashboardPreset[] = [
         template: 'STATUS_FLOW',
         title: '요구사항 단계 분포',
         intent: '요구사항이 정의·구현·검증·인수 단계에 각각 몇 건 있는지 흐름으로',
-        measure: 'requirement_fulfillment_rate',
+        measure: 'requirement_count',
         dimensions: ['requirement_status'],
       },
       // MoSCoW 넷 — 원보다 도넛이 가운데에 합계를 둘 수 있어 낫다.
       {
         template: 'DONUT_CHART',
         title: '우선순위별 요구사항 비중',
-        intent: '요구사항 이행률을 우선순위별로 나눠 비중으로',
-        measure: 'requirement_fulfillment_rate',
+        intent: '요구사항이 우선순위별로 몇 건인지 비중과 합계로',
+        measure: 'requirement_count',
         dimensions: ['requirement_priority'],
       },
     ],
@@ -343,7 +343,7 @@ export const DASHBOARD_PRESETS: DashboardPreset[] = [
         template: 'STATUS_FLOW',
         title: '산출물 상태 분포',
         intent: '산출물이 미제출·제출·승인 상태에 각각 몇 건 있는지 흐름으로',
-        measure: 'work_product_approval_rate',
+        measure: 'work_product_count',
         dimensions: ['work_product_status'],
       },
       {
