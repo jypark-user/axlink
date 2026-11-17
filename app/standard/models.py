@@ -253,6 +253,27 @@ class RequirementSummaryResponse(BaseModel):
     sources: list[SourceStateSummary]
 
 
+class RequirementIssue(BaseModel):
+    """요구사항에 이어진 이슈·일감 하나(이슈가 요구사항 코드를 참조해 생긴 연결)."""
+
+    id: str
+    key: str | None
+    title: str
+    status: str  # OPEN | IN_PROGRESS | RESOLVED | CLOSED
+    kind: str  # GENERAL | DEFECT
+    url: str | None
+
+
+class IssueProgress(BaseModel):
+    """요구사항에 이어진 이슈·일감의 진행. 용역사가 그 요구사항으로 얼마나 일을 등록해 얼마나
+    닫았는지 본다. 이행률과는 따로다(이행률은 검증·인수 상태로 센다)."""
+
+    total: int = 0
+    open: int = 0
+    inProgress: int = 0  # noqa: N815
+    closed: int = 0  # 해결·종료
+
+
 class TraceabilityRowResponse(BaseModel):
     """추적표 한 줄. 요구사항 하나에 설계·구현·시험 칸이 붙는다."""
 
@@ -269,6 +290,7 @@ class TraceabilityRowResponse(BaseModel):
     implementsList: list[TraceCell]  # noqa: N815 — implements 는 예약어라 프런트가 이렇게 부른다
     tests: list[TraceCell]
     brokenAt: list[str]  # noqa: N815
+    issueProgress: IssueProgress = IssueProgress()  # noqa: N815
 
 
 class EntityHistoryResponse(BaseModel):
@@ -305,6 +327,8 @@ class RequirementDetailResponse(RequirementResponse):
     traceLinks: list[TraceLinkResponse]  # noqa: N815
     history: list[EntityHistoryResponse]
     baselineSource: RequirementBaselineSource | None = None  # noqa: N815
+    issues: list[RequirementIssue] = []  # 이어진 이슈·일감. 열린 것이 앞에 온다
+    issueProgress: IssueProgress = IssueProgress()  # noqa: N815
 
 
 class RequirementDecisionRequest(BaseModel):

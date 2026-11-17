@@ -1,3 +1,4 @@
+import { IssueList } from './issue-progress';
 import type { ReactNode } from 'react';
 import { Link } from 'react-router-dom';
 import { ExternalLink } from 'lucide-react';
@@ -81,9 +82,6 @@ function Detail({
                 <Row term="현재 상태">
                   <RequirementStatusBadge status={r.status} basis={r.statusBasis} />
                 </Row>
-                {r.evidenceStatus && r.evidenceStatus !== r.status && (
-                  <Row term="근거 상태">{label(r.evidenceStatus)}</Row>
-                )}
                 {r.decision && (
                   <>
                     <Row term="지정 사유">{r.decision.reason ?? '사유 없음'}</Row>
@@ -101,10 +99,19 @@ function Detail({
                 )}
               </dl>
             </Section>
+            <Section
+              title={`연관 이슈·일감 ${r.issueProgress?.total ?? 0}건${
+                r.issueProgress && r.issueProgress.total > 0
+                  ? ` · 닫힘 ${r.issueProgress.closed}`
+                  : ''
+              }`}
+            >
+              <IssueList issues={r.issues ?? []} />
+            </Section>
             <BaselineSection projectId={projectId} r={r} />
             <Section title={`연결 ${r.traceLinks.length}건`}>
               {r.traceLinks.length === 0 ? (
-                <p className="text-muted-foreground">연결된 근거가 없습니다.</p>
+                <p className="text-muted-foreground">연결된 자료가 없습니다.</p>
               ) : (
                 <ul className="flex flex-col gap-2">
                   {r.traceLinks.map((lk) => (

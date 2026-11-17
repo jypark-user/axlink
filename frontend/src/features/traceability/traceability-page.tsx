@@ -1,3 +1,4 @@
+import { IssueProgressCell } from './issue-progress';
 import { useEffect, useMemo, useState, type ReactNode } from 'react';
 import type { ColumnDef } from '@tanstack/react-table';
 import { ExternalLink, PencilLine, X } from 'lucide-react';
@@ -399,6 +400,12 @@ function buildColumns(
       cell: ({ row }) => <StatusCell row={row.original} onDecide={onDecide} />,
     },
     {
+      // 이 요구사항 코드를 참조한 이슈·일감의 진행. 용역사가 얼마나 등록해 얼마나 닫았는지 본다
+      id: 'issues',
+      header: '연관 이슈·일감',
+      cell: ({ row }) => <IssueProgressCell progress={row.original.issueProgress} />,
+    },
+    {
       // 요구사항 코드를 적은 설계 문서다. 설계가 끝났다는 판정이 아니다(ARC-024)
       id: 'designs',
       header: '관련 설계 문서',
@@ -408,10 +415,11 @@ function buildColumns(
     },
     {
       id: 'implements',
-      header: '구현 관련 변경',
+      // 이슈·일감은 왼쪽 칸에서 진행으로 보인다. 여기는 커밋·PR 같은 변경만
+      header: '관련 커밋·PR',
       cell: ({ row }) => (
         <Cells
-          cells={row.original.implementsList}
+          cells={row.original.implementsList.filter((c) => c.sourceType !== 'ISSUE')}
           kind="IMPLEMENTS"
           broken={row.original.brokenAt}
         />
@@ -427,7 +435,7 @@ function buildColumns(
   ];
 }
 
-/** 상태 칸. 지정이 있으면 근거 상태와 사유를 함께 보이고, 발주기관에게는 지정 버튼을 둔다. */
+/** 상태 칸. 지정이 있으면 사유를 마우스로 보이고, 발주기관에게는 지정 버튼을 둔다. */
 function StatusCell({
   row,
   onDecide,
@@ -436,17 +444,11 @@ function StatusCell({
   onDecide: ((row: TraceabilityRowResponse) => void) | null;
 }): ReactNode {
   const decision = row.requirementDecision;
-  const evidence = row.requirementEvidenceStatus;
   return (
     <div className="flex flex-col items-start gap-1">
       <span title={decision ? `지정 사유: ${decision.reason ?? '없음'}` : undefined}>
         <RequirementStatusBadge status={row.requirementStatus} basis={row.requirementStatusBasis} />
       </span>
-      {decision && evidence && evidence !== row.requirementStatus && (
-        <span className="text-muted-foreground text-[11px] leading-none">
-          근거: {label(evidence)}
-        </span>
-      )}
       {onDecide && (
         <button
           type="button"

@@ -673,6 +673,25 @@ export interface RequirementDecision {
   decidedByRole?: string | null;
 }
 
+/** 요구사항에 이어진 이슈·일감의 진행. 이행률과 따로다 */
+export interface IssueProgress {
+  total: number;
+  open: number;
+  inProgress: number;
+  /** 해결·종료 */
+  closed: number;
+}
+
+/** 요구사항에 이어진 이슈·일감 하나 */
+export interface RequirementIssue {
+  id: string;
+  key: string | null;
+  title: string;
+  status: 'OPEN' | 'IN_PROGRESS' | 'RESOLVED' | 'CLOSED';
+  kind: string;
+  url: string | null;
+}
+
 export interface TraceabilityRowResponse {
   requirementId: string;
   requirementCode: string;
@@ -688,6 +707,7 @@ export interface TraceabilityRowResponse {
   implementsList: TraceCell[];
   tests: TraceCell[];
   brokenAt: TraceLinkKind[];
+  issueProgress?: IssueProgress;
 }
 
 export interface RequirementResponse {
@@ -729,6 +749,9 @@ export interface RequirementDetailResponse extends RequirementResponse {
   traceLinks: TraceLinkResponse[];
   history: EntityHistoryResponse[];
   baselineSource: RequirementBaselineSource | null;
+  /** 이어진 이슈·일감. 열린 것이 앞에 온다 */
+  issues?: RequirementIssue[];
+  issueProgress?: IssueProgress;
 }
 
 /** 일반 이슈 화면 카드. 목록 쪽과 상관없이 사업 전체를 서버가 센다. */

@@ -48,10 +48,10 @@ describe('요구사항 상태 지정', () => {
     expect(put.mock.calls[0][1]).toEqual({ status: 'IMPLEMENTED', reason: null });
   });
 
-  it('사유 없이 남은 지정은 「사유 없음」으로 보이고 사유 없이 되돌린다', async () => {
+  it('사유 없이 남은 지정은 「사유 없음」으로 보이고 사유 없이 해제한다', async () => {
     renderDialog();
     expect(screen.getByText('사유 없음')).toBeInTheDocument();
-    fireEvent.click(screen.getByRole('button', { name: /근거대로 되돌리기/ }));
+    fireEvent.click(screen.getByRole('button', { name: /지정 해제/ }));
     await waitFor(() => expect(post).toHaveBeenCalled());
     expect(post.mock.calls[0][1]).toEqual({ reason: null });
   });

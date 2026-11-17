@@ -89,7 +89,7 @@ function DecisionForm({
         await api.post<RequirementDetailResponse>(`${base}/revert`, { reason: text });
       }
       toast({
-        title: action === 'decide' ? '상태를 지정했습니다.' : '근거대로 되돌렸습니다.',
+        title: action === 'decide' ? '상태를 지정했습니다.' : '지정을 해제했습니다.',
         variant: 'success',
       });
       onOpenChange(false);
@@ -117,8 +117,6 @@ function DecisionForm({
 
         <div className="flex flex-col gap-4">
           <dl className="bg-muted/40 grid grid-cols-[auto_1fr] gap-x-4 gap-y-1 rounded-md px-3 py-2 text-sm">
-            <dt className="text-muted-foreground">근거 상태</dt>
-            <dd>{label(evidence)}</dd>
             <dt className="text-muted-foreground">지금 상태</dt>
             <dd>
               {label(row.requirementStatus)}
@@ -180,7 +178,7 @@ function DecisionForm({
               disabled={saving !== null}
               onClick={() => void submit('revert')}
             >
-              {saving === 'revert' ? '되돌리는 중…' : `근거대로 되돌리기 (${label(evidence)})`}
+              {saving === 'revert' ? '해제하는 중…' : `지정 해제 (${label(evidence)}로)`}
             </Button>
           ) : (
             <span />
