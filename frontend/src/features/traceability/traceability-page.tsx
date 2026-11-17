@@ -454,7 +454,7 @@ function StatusCell({
           className="text-primary inline-flex items-center gap-1 text-[11px] hover:underline"
           aria-label={`${row.requirementCode} 상태 지정`}
         >
-          <PencilLine className="size-3" /> {decision ? '지정 변경' : '상태 지정'}
+          <PencilLine className="size-3" /> {decision ? '상태 변경' : '상태 지정'}
         </button>
       )}
     </div>
