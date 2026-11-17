@@ -6,6 +6,7 @@ import type { WorkProductChecklistResponse } from '@/types/api';
 export function useTypeNames(projectId: string): Record<string, string> {
   const [names, setNames] = useState<Record<string, string>>({});
   useEffect(() => {
+    if (!projectId) return;
     let alive = true;
     api
       .get<WorkProductChecklistResponse>(`/projects/${projectId}/work-products`)

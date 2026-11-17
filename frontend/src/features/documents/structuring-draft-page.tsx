@@ -29,6 +29,7 @@ import { api } from '@/lib/http';
 import { isApiError } from '@/lib/api-error';
 import { label } from '@/lib/labels';
 import { missingForSubmit } from './draft-submit';
+import { useTypeNames } from '@/features/deliverables/use-type-names';
 import { useAsync } from '@/lib/use-async';
 import {
   WORK_PRODUCT_TYPES,
@@ -43,6 +44,8 @@ const PRIORITIES: Priority[] = ['MUST', 'SHOULD', 'COULD', 'WONT'];
 
 export function StructuringDraftPage(): ReactNode {
   const { projectId, documentId } = useParams();
+  // 22종 이름은 인도 점검표와 같은 원천(서버)에서 받는다. 코드는 작업자가 알아보기 어렵다
+  const typeNames = useTypeNames(projectId ?? '');
   const navigate = useNavigate();
   const { toast } = useToast();
 
@@ -83,16 +86,13 @@ export function StructuringDraftPage(): ReactNode {
     setAsking(false);
     setPending(true);
     try {
-      await api.post<StructuringConfirmResponse>(
-        `/documents/${documentId}/draft/confirm`,
-        {
-          type: type as WorkProductType,
-          title: title.trim(),
-          version: version.trim(),
-          authoredDate: authoredDate || null,
-          requirements,
-        },
-      );
+      await api.post<StructuringConfirmResponse>(`/documents/${documentId}/draft/confirm`, {
+        type: type as WorkProductType,
+        title: title.trim(),
+        version: version.trim(),
+        authoredDate: authoredDate || null,
+        requirements,
+      });
       toast({
         title: `${title.trim()} ${version.trim()} 제출본으로 등록했습니다.`,
         description: '발주기관 검토 대상입니다.',
@@ -140,7 +140,7 @@ export function StructuringDraftPage(): ReactNode {
                 <SelectContent>
                   {WORK_PRODUCT_TYPES.map((t) => (
                     <SelectItem key={t} value={t}>
-                      {t}
+                      {typeNames[t] ?? t}
                     </SelectItem>
                   ))}
                 </SelectContent>
@@ -176,8 +176,8 @@ export function StructuringDraftPage(): ReactNode {
               <h2 className="text-sm font-medium">추출 요구사항 {requirements.length}건</h2>
               {requirements.length === 0 && (
                 <p className="text-muted-foreground text-xs">
-                  이 문서에서 뽑은 요구사항이 없습니다. 산출물 제출에는 지장이 없습니다.
-                  요구사항은 요구사항 명세서 등록으로 들어갑니다.
+                  이 문서에서 뽑은 요구사항이 없습니다. 산출물 제출에는 지장이 없습니다. 요구사항은
+                  요구사항 명세서 등록으로 들어갑니다.
                 </p>
               )}
               {requirements.map((r, i) => (
@@ -248,8 +248,8 @@ export function StructuringDraftPage(): ReactNode {
           <AlertDialogHeader>
             <AlertDialogTitle>산출물로 제출할까요?</AlertDialogTitle>
             <AlertDialogDescription>
-              이 문서를 {title.trim()} {version.trim()} 제출본으로 등록합니다. 발주기관 검토
-              대상이 됩니다.
+              이 문서를 {title.trim()} {version.trim()} 제출본으로 등록합니다. 발주기관 검토 대상이
+              됩니다.
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>

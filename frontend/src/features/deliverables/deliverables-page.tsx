@@ -474,9 +474,11 @@ function Checklist({ projectId }: { projectId: string }): ReactNode {
     () => [
       {
         accessorKey: 'type',
-        header: '유형',
+        header: '분류',
         cell: ({ row }) => (
-          <span className="text-muted-foreground font-mono text-xs">{row.original.type}</span>
+          <span className="text-muted-foreground text-xs" title={row.original.type}>
+            {row.original.displayName}
+          </span>
         ),
       },
       {
