@@ -20,6 +20,7 @@ import { label } from '@/lib/labels';
 import {
   DesignateDialog,
   DesignatedCell,
+  DesignatedSheet,
   RedesignationPanel,
   type DesignatedActions,
   type DesignationTarget,
@@ -71,7 +72,8 @@ const RULE_LABEL: Record<string, string> = {
 };
 
 const inFilter = (item: WbsDeliverableItem, filter: Filter): boolean => {
-  if (filter === 'ALL') return item.status !== 'NONE';
+  // 산출물 열이 빈 작업(해당 없음)도 보인다. 발주기관이 거기에도 산출물을 지정할 수 있다
+  if (filter === 'ALL') return true;
   if (filter === 'OPEN') return item.status === 'MISSING' || item.status === 'OVERDUE';
   return item.status === 'SUBMITTED';
 };
@@ -83,6 +85,7 @@ export function DeliverablesPage(): ReactNode {
   const [showChecklist, setShowChecklist] = useState(false);
   const [uploadingFor, setUploadingFor] = useState<string | null>(null);
   const [designating, setDesignating] = useState<DesignationTarget | null>(null);
+  const [openWbsId, setOpenWbsId] = useState<string | null>(null);
   const inputRef = useRef<HTMLInputElement>(null);
   // 올릴 자리. 지정 산출물 항목을 골라 올리면 그 항목의 제출본이 된다(UC-033)
   const targetRef = useRef<{ wbsId: string; designatedId?: string } | null>(null);
@@ -145,10 +148,11 @@ export function DeliverablesPage(): ReactNode {
     onUpload: pickFile,
     onEdit: setDesignating,
     onChanged: reload,
+    onOpen: setOpenWbsId,
   };
 
   const columns = useMemo(
-    () => buildColumns(project.id, pickFile, uploadingFor, designatedActions),
+    () => buildColumns(project.id, pickFile, uploadingFor, designatedActions, typeNames),
     // eslint-disable-next-line react-hooks/exhaustive-deps
     [project.id, uploadingFor, canDesignate, typeNames, reload],
   );
@@ -216,6 +220,12 @@ export function DeliverablesPage(): ReactNode {
                 />
               </Tabs>
 
+              <DesignatedSheet
+                item={data.items.find((i) => i.wbsId === openWbsId) ?? null}
+                actions={designatedActions}
+                onClose={() => setOpenWbsId(null)}
+              />
+
               <div className="mt-8">
                 <Button variant="ghost" size="sm" onClick={() => setShowChecklist((v) => !v)}>
                   {showChecklist
@@ -249,6 +259,7 @@ function buildColumns(
   onUpload: (wbsId: string) => void,
   uploadingFor: string | null,
   designatedActions: DesignatedActions,
+  typeNames: Record<string, string>,
 ): ColumnDef<WbsDeliverableItem, unknown>[] {
   return [
     {
@@ -259,31 +270,26 @@ function buildColumns(
       ),
     },
     {
-      accessorKey: 'name',
-      header: ({ column }) => <SortableHeader column={column}>작업</SortableHeader>,
+      // 작업명 아래에 WBS 산출물 열에 적힌 이름을 작게 둔다. 찾기도 둘을 같이 본다
+      id: 'name',
+      accessorFn: (item) => `${item.name} ${item.deliverable ?? ''}`,
+      header: ({ column }) => <SortableHeader column={column}>작업 · WBS 산출물</SortableHeader>,
       cell: ({ row }) => (
-        <span className="block max-w-[14rem] truncate text-sm" title={row.original.name}>
-          {row.original.name}
-        </span>
-      ),
-    },
-    {
-      accessorKey: 'deliverable',
-      // WBS 산출물 열에 적힌 이름이다. 실제 파일이 아직 없을 수 있어 "정한" 을 붙인다.
-      header: () => (
-        <span title="WBS 산출물 열에 적힌 이름. 실제 파일과 다를 수 있다">WBS 가 정한 산출물</span>
-      ),
-      cell: ({ row }) => (
-        <span
-          className={cn(
-            'block max-w-[18rem] truncate text-sm',
-            row.original.status === 'SUBMITTED'
-              ? 'text-muted-foreground'
-              : 'text-muted-foreground/70 italic',
-          )}
-          title={`WBS 에 적힌 이름: ${row.original.deliverable ?? ''}`}
-        >
-          {row.original.deliverable ?? '-'}
+        <span className="flex max-w-[17rem] flex-col">
+          <span className="truncate text-sm" title={row.original.name}>
+            {row.original.name}
+          </span>
+          <span
+            className={cn(
+              'truncate text-xs',
+              row.original.status === 'SUBMITTED'
+                ? 'text-muted-foreground'
+                : 'text-muted-foreground/70 italic',
+            )}
+            title={`WBS 에 적힌 산출물 이름: ${row.original.deliverable ?? '없음'}`}
+          >
+            {row.original.deliverable ?? 'WBS 산출물 없음'}
+          </span>
         </span>
       ),
     },
@@ -331,7 +337,7 @@ function buildColumns(
               <span className="w-fit">{pill}</span>
             )}
             {why && (
-              <span className="text-muted-foreground max-w-[16rem] truncate text-xs" title={why}>
+              <span className="text-muted-foreground max-w-[11rem] truncate text-xs" title={why}>
                 {why}
               </span>
             )}
@@ -345,29 +351,34 @@ function buildColumns(
       cell: ({ row }) => {
         const docs = row.original.documents;
         if (docs.length === 0) return <span className="text-muted-foreground text-sm">-</span>;
+        const [first, ...rest] = docs;
         return (
-          <span className="flex flex-col gap-0.5">
-            {docs.map((d) => (
-              <Link
-                key={d.id}
-                to={`/p/${projectId}/documents/${d.id}`}
-                className="max-w-[14rem] truncate text-sm underline-offset-2 hover:underline"
-                title={`${d.fileName} · ${formatDateTime(d.uploadedAt)}`}
-              >
-                {d.fileName}
-              </Link>
-            ))}
+          <span className="flex max-w-[11rem] flex-col">
+            <Link
+              to={`/p/${projectId}/documents/${first.id}`}
+              className="truncate text-sm underline-offset-2 hover:underline"
+              title={docs.map((d) => `${d.fileName} · ${formatDateTime(d.uploadedAt)}`).join(', ')}
+            >
+              {first.fileName}
+            </Link>
+            {rest.length > 0 && (
+              <span className="text-muted-foreground text-xs">외 {rest.length}건</span>
+            )}
           </span>
         );
       },
     },
     {
       accessorKey: 'productType',
-      header: '유형',
+      // 붙은 문서의 29110 산출물 분류. 코드 대신 이름으로 보인다(인도 점검표와 같은 이름)
+      header: () => <span title="붙은 문서의 ISO/IEC 29110 산출물 분류">문서 분류</span>,
       cell: ({ row }) =>
         row.original.productType ? (
-          <span className="text-muted-foreground font-mono text-xs">
-            {row.original.productType}
+          <span
+            className="text-muted-foreground block max-w-[7rem] truncate text-xs"
+            title={typeNames[row.original.productType] ?? row.original.productType}
+          >
+            {typeNames[row.original.productType] ?? row.original.productType}
           </span>
         ) : (
           <span className="text-muted-foreground text-sm">-</span>
