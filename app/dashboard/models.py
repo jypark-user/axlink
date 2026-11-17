@@ -251,6 +251,9 @@ class DesignatedVersion(BaseModel):
     rejectReason: str | None  # noqa: N815
     decidedAt: str | None  # noqa: N815  승인 시각
     isCurrent: bool  # noqa: N815  그 유형의 현행 버전인가. 승인·반려는 현행 버전에만 한다
+    # 확정 전(REGISTERED)일 때 다음 할 일. READY: 초안이 있어 「산출물로 제출」할 수 있다 ·
+    # PROCESSING: 아직 읽는 중 · NO_DRAFT: 초안이 없다(읽기 실패 등). 제출된 버전은 None
+    submit: str | None = None
 
 
 class DesignatedDeliverable(BaseModel):

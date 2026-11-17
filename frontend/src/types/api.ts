@@ -1574,6 +1574,8 @@ export interface DocumentDetailResponse {
   productType: string | null;
   proposedType: string | null;
   draftStatus: StructuringDraftStatus | null;
+  /** 발주기관 지정 산출물 항목의 제출본이면 그 항목 이름(UC-033) */
+  designatedName?: string | null;
   workProductId: string | null;
   downloadUrl: string;
   originalUrl: string | null;
@@ -1723,6 +1725,8 @@ export interface DesignatedVersion {
   rejectReason: string | null;
   decidedAt: string | null;
   isCurrent: boolean;
+  /** 확정 전일 때 다음 할 일. READY 초안이 있어 제출 가능 · PROCESSING 읽는 중 · NO_DRAFT 초안 없음 */
+  submit?: 'READY' | 'PROCESSING' | 'NO_DRAFT' | null;
 }
 
 /** 발주기관이 WBS 작업에 정한 산출물 항목과 양식(UC-033). 양식은 제출본이 아니다 */

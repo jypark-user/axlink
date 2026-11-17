@@ -125,7 +125,7 @@ def submissions(cur: Any, project_id: str) -> list[dict[str, Any]]:
         cur,
         """
         select d.id, d.designated_deliverable_id, d.original_filename, d.created_at,
-               s.status as draft_status, s.work_product_id,
+               d.processing_state, s.status as draft_status, s.work_product_id,
                wp.version as wp_version, wp.status as wp_status, wp.reject_reason,
                wp.approved_at, wp.submitted_at, wp.is_current
           from document_upload d

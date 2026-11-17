@@ -42,6 +42,8 @@ class DocumentDetailResponse(BaseModel):
     productType: str | None  # noqa: N815  사람이 정한 태그. 없으면 초안 추정을 보인다
     proposedType: str | None  # noqa: N815
     draftStatus: str | None  # noqa: N815
+    # 발주기관 지정 산출물 항목의 제출본이면 그 항목 이름(UC-033). 거둔 항목이면 None
+    designatedName: str | None = None  # noqa: N815
     workProductId: str | None  # noqa: N815  확정돼 22종 항목에 들어갔으면 그 항목
     downloadUrl: str  # noqa: N815
     originalUrl: str | None  # noqa: N815  원천 도구 링크. 올린 문서는 없다

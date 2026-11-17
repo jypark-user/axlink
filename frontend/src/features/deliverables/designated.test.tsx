@@ -1,4 +1,5 @@
 import { fireEvent, render, screen } from '@testing-library/react';
+import { MemoryRouter } from 'react-router-dom';
 import { describe, expect, it, vi } from 'vitest';
 import { ToasterProvider } from '@/components/common/toaster';
 import {
@@ -109,5 +110,36 @@ describe('발주기관 지정 산출물 칸', () => {
     expect(screen.queryByRole('button', { name: '산출물 더 지정' })).toBeNull();
     fireEvent.click(screen.getByRole('button', { name: '새 버전 제출' }));
     expect(contractor.onUpload).toHaveBeenCalledWith('2.1', 'd1');
+  });
+
+  it('올렸지만 확정 전이면 미제출과 나눠 「제출 확정 대기」로 보이고 제출하러 가는 버튼이 있다', () => {
+    const waiting: DesignatedDeliverable = {
+      ...entry,
+      status: 'REGISTERED',
+      versions: [
+        {
+          ...entry.versions[0],
+          documentId: 'doc9',
+          state: 'REGISTERED',
+          workProductId: null,
+          version: null,
+          rejectReason: null,
+          submit: 'READY',
+        },
+      ],
+    };
+    const contractor = actions(false);
+    render(
+      <MemoryRouter>
+        <ToasterProvider>
+          <DesignatedCell item={row([waiting])} actions={contractor} />
+          <DesignatedSheet item={row([waiting])} actions={contractor} onClose={vi.fn()} />
+        </ToasterProvider>
+      </MemoryRouter>,
+    );
+    expect(screen.getByText('제출 확정 대기 1')).toBeInTheDocument();
+    expect(screen.queryByText(/미제출/)).toBeNull();
+    const go = screen.getByRole('link', { name: '산출물로 제출하러 가기' });
+    expect(go).toHaveAttribute('href', '/p/p1/documents/doc9/draft');
   });
 });

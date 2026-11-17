@@ -125,7 +125,7 @@ export function DeliverablesPage(): ReactNode {
       await api.upload<DocumentUploadResponse>(`/projects/${project.id}/documents`, form);
       toast({
         title: designatedId
-          ? `${wbsId} 작업의 지정 산출물로 접수했습니다. 자료 상세에서 「산출물로 제출」해야 제출입니다.`
+          ? `${wbsId} 작업의 지정 산출물로 접수했습니다. 옆 창의 「산출물로 제출하러 가기」까지 해야 제출입니다.`
           : `${wbsId} 항목의 산출물로 접수했습니다. 읽기·색인은 뒤에서 합니다.`,
         variant: 'success',
       });
@@ -398,6 +398,20 @@ function buildColumns(
       header: '',
       cell: ({ row }) => {
         const item = row.original;
+        // 지정 산출물이 있는 작업은 항목을 골라 올려야 그 항목에 이어진다. 옆 창을 연다
+        if ((item.designated ?? []).length > 0) {
+          return (
+            <div className="flex justify-end">
+              <Button
+                size="sm"
+                variant="outline"
+                onClick={() => designatedActions.onOpen(item.wbsId)}
+              >
+                항목 골라 올리기
+              </Button>
+            </div>
+          );
+        }
         if (item.status === 'NONE') return null;
         const busy = uploadingFor === item.wbsId;
         return (

@@ -63,6 +63,17 @@ def version_state(row: dict[str, Any]) -> str:
     return SUBMITTED
 
 
+def submit_readiness(row: dict[str, Any]) -> str | None:
+    """확정 전 제출본에서 다음 할 일. 제출된 것은 None."""
+    if version_state(row) != REGISTERED:
+        return None
+    if row.get("draft_status") == "PROPOSED":
+        return "READY"
+    if row.get("processing_state") not in (None, "DONE", "FAILED"):
+        return "PROCESSING"
+    return "NO_DRAFT"
+
+
 def item_status(states: list[str]) -> str:
     """항목 상태는 가장 최근 제출본이 정한다. 확정 전 문서만 있으면 「등록」이다.
 
@@ -102,6 +113,7 @@ def _versions(rows: list[dict[str, Any]]) -> list[DesignatedVersion]:
             rejectReason=r.get("reject_reason"),
             decidedAt=r["approved_at"].isoformat() if r.get("approved_at") else None,
             isCurrent=bool(r.get("is_current")),
+            submit=submit_readiness(r),
         )
         for r in rows
     ]

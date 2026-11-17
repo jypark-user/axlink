@@ -53,6 +53,18 @@ def test_확정해야_제출이고_항목_상태는_최근_제출본이_정한�
     # 새로 올린 것이 확정 전이면 그 앞의 제출본 상태가 남는다
     assert designation.item_status(["REGISTERED", "REJECTED", "APPROVED"]) == "REJECTED"
     assert not designation.is_submitted("REGISTERED")
+
+
+def test_확정_전_제출본은_다음_할_일을_알려_준다():
+    """「냈는데 왜 미제출이냐」를 막는다. 초안이 있으면 제출하러 가고, 읽는 중이면 기다린다."""
+    ready = {"draft_status": "PROPOSED", "work_product_id": None, "processing_state": "DONE"}
+    reading = {"draft_status": None, "work_product_id": None, "processing_state": "RUNNING"}
+    broken = {"draft_status": None, "work_product_id": None, "processing_state": "DONE"}
+    done = {"draft_status": "CONFIRMED", "work_product_id": "w", "wp_status": "SUBMITTED"}
+    assert designation.submit_readiness(ready) == "READY"
+    assert designation.submit_readiness(reading) == "PROCESSING"
+    assert designation.submit_readiness(broken) == "NO_DRAFT"
+    assert designation.submit_readiness(done) is None
     assert designation.is_submitted("REJECTED")
 
 
@@ -310,6 +322,9 @@ def test_UC_033_S01_지정_양식_제출_반려_재제출_승인(client, client_
     doc1 = _upload(client, pm, did, "통합시험결과-v1.xlsx", _xlsx("v1"))
     row = _row(_screen(client, pm), "2.1")
     assert row["designated"][0]["status"] == "REGISTERED" and row["status"] == "OVERDUE"
+    assert row["designated"][0]["versions"][0]["submit"] == "READY"  # 제출하러 갈 수 있다
+    detail = client.get(f"/api/documents/{doc1['id']}", headers=_auth(pm)).json()
+    assert detail["designatedName"] == "시험결과서" and detail["draftStatus"] == "PROPOSED"
     wp1 = _confirm(client, pm, doc1["id"], "1.0")
     row = _row(_screen(client, po), "2.1")
     assert row["designated"][0]["status"] == "SUBMITTED"
