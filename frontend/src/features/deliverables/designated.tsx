@@ -10,6 +10,13 @@ import {
 } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import {
+  Sheet,
+  SheetContent,
+  SheetDescription,
+  SheetHeader,
+  SheetTitle,
+} from '@/components/ui/sheet';
 import { Textarea } from '@/components/ui/textarea';
 import { ServerLink } from '@/components/common/server-link';
 import { useToast } from '@/components/common/toaster';
@@ -86,6 +93,8 @@ export interface DesignatedActions {
   onUpload: (wbsId: string, designatedId: string) => void;
   onEdit: (target: DesignationTarget) => void;
   onChanged: () => void;
+  /** 작업의 지정 산출물 옆 창 열기 */
+  onOpen: (wbsId: string) => void;
 }
 
 export type DesignationTarget =
@@ -118,35 +127,78 @@ export function DesignatedCell({
       </Button>
     );
   }
+  // 표 칸에는 요약만 둔다. 항목·양식·버전 이력은 옆 창에서 본다(표가 넓어지지 않게)
+  const done = list.filter((d) => d.status === 'APPROVED').length;
+  const open = list.filter((d) => d.status === 'MISSING' || d.status === 'REGISTERED').length;
   return (
-    <details className="text-sm">
-      <summary className="cursor-pointer whitespace-nowrap">
+    <button
+      type="button"
+      className="flex flex-col items-start text-left text-sm underline-offset-2 hover:underline"
+      onClick={() => actions.onOpen(item.wbsId)}
+    >
+      <span className="whitespace-nowrap">
         내야 할 산출물 <span className="tnum font-medium">{list.length}</span>건
-      </summary>
-      <ul className="mt-2 flex min-w-[20rem] flex-col gap-3">
-        {list.map((d) => (
-          <DesignatedEntry
-            key={d.id}
-            entry={d}
-            wbsId={item.wbsId}
-            taskLabel={taskLabel}
-            actions={actions}
-          />
-        ))}
-      </ul>
-      {actions.canDesignate && item.taskKey && (
-        <Button
-          size="sm"
-          variant="ghost"
-          className="mt-1"
-          onClick={() =>
-            actions.onEdit({ mode: 'create', taskKey: item.taskKey as string, taskLabel })
-          }
-        >
-          산출물 더 지정
-        </Button>
-      )}
-    </details>
+      </span>
+      <span className="text-muted-foreground text-xs whitespace-nowrap">
+        {open > 0 ? `미제출 ${open}` : '모두 제출'}
+        {done > 0 ? ` · 승인 ${done}` : ''}
+      </span>
+    </button>
+  );
+}
+
+/** 한 작업의 지정 산출물 전체. 표 옆 창으로 연다. */
+export function DesignatedSheet({
+  item,
+  actions,
+  onClose,
+}: {
+  item: WbsDeliverableItem | null;
+  actions: DesignatedActions;
+  onClose: () => void;
+}): ReactNode {
+  const list = item?.designated ?? [];
+  const taskLabel = item ? `${item.wbsId} ${item.name}` : '';
+  return (
+    <Sheet open={item !== null} onOpenChange={(o) => !o && onClose()}>
+      <SheetContent className="flex w-full flex-col gap-0 overflow-y-auto sm:max-w-xl">
+        {item && (
+          <>
+            <SheetHeader className="gap-1 px-6 pt-6 pb-4">
+              <SheetTitle className="pr-8">{taskLabel}</SheetTitle>
+              <SheetDescription>
+                발주기관이 이 작업에 정한 산출물입니다. 양식은 제출본이 아니고, 올린 파일은
+                「산출물로 제출」해야 제출로 셉니다.
+              </SheetDescription>
+            </SheetHeader>
+            <ul className="flex flex-col gap-4 px-6 pb-6">
+              {list.map((d) => (
+                <DesignatedEntry
+                  key={d.id}
+                  entry={d}
+                  wbsId={item.wbsId}
+                  taskLabel={taskLabel}
+                  actions={actions}
+                />
+              ))}
+            </ul>
+            {actions.canDesignate && item.taskKey && (
+              <div className="px-6 pb-6">
+                <Button
+                  size="sm"
+                  variant="outline"
+                  onClick={() =>
+                    actions.onEdit({ mode: 'create', taskKey: item.taskKey as string, taskLabel })
+                  }
+                >
+                  산출물 더 지정
+                </Button>
+              </div>
+            )}
+          </>
+        )}
+      </SheetContent>
+    </Sheet>
   );
 }
 

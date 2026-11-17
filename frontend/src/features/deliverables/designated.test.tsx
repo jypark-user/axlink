@@ -1,7 +1,11 @@
 import { fireEvent, render, screen } from '@testing-library/react';
 import { describe, expect, it, vi } from 'vitest';
 import { ToasterProvider } from '@/components/common/toaster';
-import { DesignatedCell, type DesignatedActions } from '@/features/deliverables/designated';
+import {
+  DesignatedCell,
+  DesignatedSheet,
+  type DesignatedActions,
+} from '@/features/deliverables/designated';
 import type { DesignatedDeliverable, WbsDeliverableItem } from '@/types/api';
 
 // 발주기관 지정 산출물(UC-033). 지정은 발주기관만, 제출본 올리기는 항목을 골라서 한다.
@@ -58,6 +62,7 @@ const actions = (canDesignate: boolean): DesignatedActions => ({
   onUpload: vi.fn(),
   onEdit: vi.fn(),
   onChanged: vi.fn(),
+  onOpen: vi.fn(),
 });
 
 const renderCell = (item: WbsDeliverableItem, a: DesignatedActions) =>
@@ -79,16 +84,29 @@ describe('발주기관 지정 산출물 칸', () => {
     });
   });
 
-  it('용역사는 지정 버튼 없이 항목·양식·반려 사유를 보고 그 항목으로 올린다', () => {
+  it('지정이 있으면 표 칸에는 요약만 두고 누르면 옆 창을 연다', () => {
     const contractor = actions(false);
-    const { container } = renderCell(row([entry]), contractor);
+    renderCell(row([entry]), contractor);
     expect(screen.queryByRole('button', { name: '산출물 지정' })).toBeNull();
-    expect(container.querySelector('summary')).toHaveTextContent('내야 할 산출물 1건');
-    container.querySelector('details')?.setAttribute('open', '');
+    const summary = screen.getByRole('button', { name: /내야 할 산출물/ });
+    expect(summary).toHaveTextContent('내야 할 산출물 1건');
+    expect(screen.queryByText(/양식 내려받기/)).toBeNull(); // 표 칸을 넓히지 않는다
+    fireEvent.click(summary);
+    expect(contractor.onOpen).toHaveBeenCalledWith('2.1');
+  });
+
+  it('옆 창에서 용역사는 양식·반려 사유를 보고 그 항목으로 올린다', () => {
+    const contractor = actions(false);
+    render(
+      <ToasterProvider>
+        <DesignatedSheet item={row([entry])} actions={contractor} onClose={vi.fn()} />
+      </ToasterProvider>,
+    );
     expect(screen.getByText('양식 내려받기: 양식.xlsx')).toBeInTheDocument();
     expect(screen.getByText('시험 보고서')).toBeInTheDocument();
     expect(screen.getByText(/반려 사유: 결함 목록 누락/)).toBeInTheDocument();
     expect(screen.queryByRole('button', { name: '고치기' })).toBeNull();
+    expect(screen.queryByRole('button', { name: '산출물 더 지정' })).toBeNull();
     fireEvent.click(screen.getByRole('button', { name: '새 버전 제출' }));
     expect(contractor.onUpload).toHaveBeenCalledWith('2.1', 'd1');
   });
