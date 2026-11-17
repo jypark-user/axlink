@@ -86,7 +86,7 @@ function Detail({
                 )}
                 {r.decision && (
                   <>
-                    <Row term="지정 사유">{r.decision.reason}</Row>
+                    <Row term="지정 사유">{r.decision.reason ?? '사유 없음'}</Row>
                     <Row term="지정">
                       {r.decision.decidedBy ?? '-'}
                       {r.decision.decidedByRole === 'SUPER_ADMIN' ? '(관리자)' : ''}

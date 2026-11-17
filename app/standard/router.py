@@ -88,7 +88,7 @@ def requirement_detail(
 def decide_requirement_status(
     project_id: str, requirement_id: str, req: RequirementDecisionRequest, principal: Principal
 ) -> RequirementDetailResponse:
-    """발주기관이 요구사항 상태를 사유와 함께 지정한다(ARC-025). 근거 상태는 따로 남는다."""
+    """발주기관이 요구사항 상태를 지정한다(ARC-025). 사유는 선택이다. 근거 상태는 따로 남는다."""
     with tx() as cur:
         requirement_decision.decide(
             cur, principal, project_id, requirement_id, req.status, req.reason

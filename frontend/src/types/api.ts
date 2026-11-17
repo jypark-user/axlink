@@ -663,10 +663,10 @@ export interface HelpDocResponse {
 /** 상태의 출처. SOURCE_ISSUE_CLOSED = GitHub 이슈 닫힘, CLIENT_DECIDED = 발주기관 지정 */
 export type RequirementStatusBasis = 'SOURCE_ISSUE_CLOSED' | 'CLIENT_DECIDED';
 
-/** 발주기관이 사유와 함께 지정한 요구사항 상태(ARC-025). 근거 상태와 따로 남는다. */
+/** 발주기관이 지정한 요구사항 상태(ARC-025). 근거 상태와 따로 남는다. 사유는 선택이다 */
 export interface RequirementDecision {
   status: RequirementStatus;
-  reason: string;
+  reason: string | null;
   decidedBy: string | null;
   decidedAt: string;
   /** 지정한 계정의 역할. DEC-05 전에 관리자가 지정한 기록은 SUPER_ADMIN 이다 */

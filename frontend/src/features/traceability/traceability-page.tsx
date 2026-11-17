@@ -439,7 +439,7 @@ function StatusCell({
   const evidence = row.requirementEvidenceStatus;
   return (
     <div className="flex flex-col items-start gap-1">
-      <span title={decision ? `지정 사유: ${decision.reason}` : undefined}>
+      <span title={decision ? `지정 사유: ${decision.reason ?? '없음'}` : undefined}>
         <RequirementStatusBadge status={row.requirementStatus} basis={row.requirementStatusBasis} />
       </span>
       {decision && evidence && evidence !== row.requirementStatus && (

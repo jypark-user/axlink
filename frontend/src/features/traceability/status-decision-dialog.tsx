@@ -77,15 +77,16 @@ function DecisionForm({
   const decision = row.requirementDecision;
   const evidence = row.requirementEvidenceStatus ?? row.requirementStatus;
   const base = `/projects/${projectId}/requirements/${row.requirementId}/status`;
-  const reasonOk = reason.trim().length > 0;
+  // 사유는 선택이다(2026-11-17 사용자 결정, ARC-025 개정). 비우면 없는 것으로 남는다
+  const text = reason.trim() || null;
 
   const submit = async (action: 'decide' | 'revert') => {
     setSaving(action);
     try {
       if (action === 'decide') {
-        await api.put<RequirementDetailResponse>(base, { status, reason: reason.trim() });
+        await api.put<RequirementDetailResponse>(base, { status, reason: text });
       } else {
-        await api.post<RequirementDetailResponse>(`${base}/revert`, { reason: reason.trim() });
+        await api.post<RequirementDetailResponse>(`${base}/revert`, { reason: text });
       }
       toast({
         title: action === 'decide' ? '상태를 지정했습니다.' : '근거대로 되돌렸습니다.',
@@ -126,7 +127,9 @@ function DecisionForm({
             {decision && (
               <>
                 <dt className="text-muted-foreground">지정 사유</dt>
-                <dd className="break-keep">{decision.reason}</dd>
+                <dd className="break-keep">
+                  {decision.reason ?? <span className="text-muted-foreground">사유 없음</span>}
+                </dd>
                 <dt className="text-muted-foreground">지정</dt>
                 <dd>
                   {decision.decidedBy ?? '알 수 없음'}
@@ -154,7 +157,7 @@ function DecisionForm({
           </div>
 
           <div className="flex flex-col gap-1.5">
-            <Label htmlFor="decision-reason">사유 (필수)</Label>
+            <Label htmlFor="decision-reason">사유 (선택)</Label>
             <Textarea
               id="decision-reason"
               rows={3}
@@ -164,8 +167,8 @@ function DecisionForm({
               placeholder="예: 10-14 시연에서 근거 부족 시 답변 차단 동작을 확인함"
             />
             <p className="text-muted-foreground text-xs">
-              사유와 지정한 사람은 변경 이력에 남고 용역사에게 알림이 갑니다. 다시 수집해도 지정한
-              상태는 바뀌지 않습니다.
+              지정한 사람과 시각은 변경 이력에 남고 용역사에게 알림이 갑니다. 사유를 적으면 함께
+              남습니다. 다시 수집해도 지정한 상태는 바뀌지 않습니다.
             </p>
           </div>
         </div>
@@ -174,7 +177,7 @@ function DecisionForm({
           {decision ? (
             <Button
               variant="outline"
-              disabled={!reasonOk || saving !== null}
+              disabled={saving !== null}
               onClick={() => void submit('revert')}
             >
               {saving === 'revert' ? '되돌리는 중…' : `근거대로 되돌리기 (${label(evidence)})`}
@@ -182,7 +185,7 @@ function DecisionForm({
           ) : (
             <span />
           )}
-          <Button disabled={!reasonOk || saving !== null} onClick={() => void submit('decide')}>
+          <Button disabled={saving !== null} onClick={() => void submit('decide')}>
             {saving === 'decide' ? '저장 중…' : '지정'}
           </Button>
         </DialogFooter>

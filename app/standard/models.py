@@ -17,10 +17,10 @@ class SourceRef(BaseModel):
 
 
 class RequirementDecision(BaseModel):
-    """발주기관이 사유와 함께 지정한 상태(ARC-025). 근거 상태와 따로 남는다."""
+    """발주기관이 지정한 상태(ARC-025). 근거 상태와 따로 남는다. 사유는 선택이다."""
 
     status: str
-    reason: str
+    reason: str | None
     decidedBy: str | None  # noqa: N815 — 지정한 사람 이름. 계정이 지워졌으면 None
     decidedAt: str  # noqa: N815
     # 지정한 계정의 역할. DEC-05 전에 관리자가 지정한 기록은 SUPER_ADMIN 으로 남아
@@ -308,16 +308,16 @@ class RequirementDetailResponse(RequirementResponse):
 
 
 class RequirementDecisionRequest(BaseModel):
-    """발주기관 상태 지정. 사유는 반드시 적는다."""
+    """발주기관 상태 지정. 사유는 선택이다(2026-11-17 사용자 결정)."""
 
     status: str
-    reason: str = Field(min_length=1, max_length=1000)
+    reason: str | None = Field(default=None, max_length=1000)
 
 
 class RequirementDecisionRevertRequest(BaseModel):
-    """지정을 거두고 근거 상태로 되돌린다. 되돌리는 사유도 남긴다."""
+    """지정을 거두고 근거 상태로 되돌린다. 사유는 적으면 남긴다."""
 
-    reason: str = Field(min_length=1, max_length=1000)
+    reason: str | None = Field(default=None, max_length=1000)
 
 
 # --- 요구사항 기준선 (GH-139, ARC-028) ----------------------------------------
