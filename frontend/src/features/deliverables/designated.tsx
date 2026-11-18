@@ -310,14 +310,15 @@ function DesignatedEntry({
       {entry.versions.length > 0 && (
         <ul className="text-muted-foreground flex flex-col gap-1 text-xs">
           {entry.versions.map((v) => (
-            <li key={v.documentId} className="flex flex-wrap items-center gap-1.5">
-              <span className="tnum">{v.version ?? '-'}</span>
+            // 앞에 붙이던 「-」「·」는 뺐다(11-18). 칸 사이는 간격으로만 나눈다
+            <li key={v.documentId} className="flex flex-wrap items-center gap-x-3 gap-y-1">
+              {v.version && <span className="tnum">{v.version}</span>}
               <span>{v.fileName}</span>
-              <span>· {VERSION_LABEL[v.state]}</span>
-              <span>· {formatDateTime(v.uploadedAt)}</span>
-              {v.decidedAt && <span>· 승인 {formatDate(v.decidedAt)}</span>}
+              <span>{VERSION_LABEL[v.state]}</span>
+              <span className="tnum">{formatDateTime(v.uploadedAt)}</span>
+              {v.decidedAt && <span>승인 {formatDate(v.decidedAt)}</span>}
               {v.rejectReason && (
-                <span className="text-destructive">· 반려 사유: {v.rejectReason}</span>
+                <span className="text-destructive">반려 사유: {v.rejectReason}</span>
               )}
               {uploading && v.state === 'REGISTERED' && (
                 <SubmitHint projectId={projectId} version={v} />
@@ -363,11 +364,12 @@ function SubmitHint({
     );
   }
   if (version.submit === 'PROCESSING') {
-    return <span>· 문서를 읽는 중입니다. 끝나면 제출할 수 있습니다</span>;
+    // 화면이 몇 초마다 다시 확인해 끝나면 이 자리가 제출 단추로 바뀐다
+    return <span>문서를 읽는 중입니다</span>;
   }
   return (
     <span>
-      · 초안이 없어 제출할 수 없습니다.{' '}
+      초안이 없어 제출할 수 없습니다.{' '}
       <Link
         to={`/p/${projectId}/documents/${version.documentId}`}
         className="underline underline-offset-2"

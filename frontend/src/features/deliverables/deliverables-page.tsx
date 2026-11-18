@@ -1,4 +1,12 @@
-import { useCallback, useMemo, useRef, useState, type ChangeEvent, type ReactNode } from 'react';
+import {
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  type ChangeEvent,
+  type ReactNode,
+} from 'react';
 import { Link } from 'react-router-dom';
 import type { ColumnDef } from '@tanstack/react-table';
 import { Button } from '@/components/ui/button';
@@ -102,6 +110,15 @@ export function DeliverablesPage(): ReactNode {
     [project.id],
   );
   const { reload } = state;
+  // 올린 문서를 읽는 중이면 몇 초마다 다시 받아, 끝나는 대로 「산출물로 제출하러 가기」가 뜬다
+  const reading = (state.data?.items ?? []).some((i) =>
+    (i.designated ?? []).some((d) => d.versions.some((v) => v.submit === 'PROCESSING')),
+  );
+  useEffect(() => {
+    if (!reading) return;
+    const timer = window.setInterval(reload, 4000);
+    return () => window.clearInterval(timer);
+  }, [reading, reload]);
 
   const pickFile = (wbsId: string, designatedId?: string) => {
     targetRef.current = { wbsId, designatedId };
