@@ -2,25 +2,37 @@ import { useMemo, useState, type KeyboardEvent, type ReactNode } from 'react';
 import { Popover as PopoverPrimitive } from 'radix-ui';
 import { Check, ChevronDown, Search } from 'lucide-react';
 import { cn } from '@/lib/utils';
-import type { ReviewTargetOption } from '@/types/api';
+
+export interface SearchSelectOption {
+  key: string;
+  label: string;
+}
 
 /** 띄어쓰기·대소문자를 무시하고 찾는다. 「1.2범위」로 쳐도 「1.2 범위·평가기준 합의」가 나온다 */
 const norm = (s: string): string => s.toLowerCase().replace(/\s+/g, '');
 
 /**
- * 확인 요청의 대상 고르기(11-18 사용자 지시). 누르면 펼쳐지고 맨 위 검색 칸으로 거르는 고르기다.
- * 찾기어는 공백으로 나눠 모두 들어간 항목만 남긴다. 위·아래 화살표로 옮기고 Enter 로 고른다.
+ * 검색해서 고르는 펼침 목록(select2 형태, 11-18 사용자 지시). 항목이 많은 고르기에 쓴다(확인 요청
+ * 대상, 산출물 양식 분류). 누르면 펼쳐지고 맨 위 검색 칸으로 거른다. 찾기어는 공백으로 나눠 모두
+ * 들어간 항목만 남긴다. 위·아래 화살표로 옮기고 Enter 로 고른다. 창(Dialog) 안에서도 쓴다.
  */
-export function TargetPicker({
+export function SearchSelect({
   id,
-  targets,
+  options: targets,
   value,
   onChange,
+  placeholder = '고르세요',
+  emptyText = '고를 것이 없습니다',
+  label = '목록',
 }: {
   id?: string;
-  targets: ReviewTargetOption[];
+  options: SearchSelectOption[];
   value: string;
   onChange: (key: string) => void;
+  placeholder?: string;
+  emptyText?: string;
+  /** 검색 칸·목록의 접근성 이름 */
+  label?: string;
 }): ReactNode {
   const [open, setOpen] = useState(false);
   const [text, setText] = useState('');
@@ -84,7 +96,7 @@ export function TargetPicker({
         >
           {/* 이름이 길면 말줄임하고, 마우스를 올리면 전체가 보인다 */}
           <span className="min-w-0 truncate" title={selected?.label}>
-            {selected?.label ?? (targets.length ? '대상을 고르세요' : '대상이 없습니다')}
+            {selected?.label ?? (targets.length ? placeholder : emptyText)}
           </span>
           <ChevronDown className="size-4 shrink-0 opacity-50" />
         </button>
@@ -110,13 +122,13 @@ export function TargetPicker({
               }}
               onKeyDown={onKey}
               placeholder="검색"
-              aria-label="대상 찾기"
+              aria-label={`${label} 찾기`}
               className="placeholder:text-muted-foreground h-9 w-full bg-transparent text-sm outline-none"
             />
           </div>
-          <div role="listbox" aria-label="대상" className="max-h-64 overflow-y-auto p-1">
+          <div role="listbox" aria-label={label} className="max-h-64 overflow-y-auto p-1">
             {shown.length === 0 ? (
-              <p className="text-muted-foreground px-2 py-1.5 text-sm">찾는 대상이 없습니다.</p>
+              <p className="text-muted-foreground px-2 py-1.5 text-sm">찾는 항목이 없습니다.</p>
             ) : (
               shown.map((t, i) => {
                 const on = t.key === value;

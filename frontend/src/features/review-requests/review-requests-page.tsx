@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState, type FormEvent, type ReactNode } from 'react';
 import { useSearchParams } from 'react-router-dom';
-import { TargetPicker } from '@/features/review-requests/target-picker';
+import { SearchSelect } from '@/components/ui/search-select';
 import type { ColumnDef } from '@tanstack/react-table';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -387,10 +387,13 @@ function CreateDialog({
           <div className={FIELD}>
             <Label htmlFor="rrTarget">대상</Label>
             {/* 누르면 펼쳐지고 검색 칸으로 거르는 고르기(11-18) */}
-            <TargetPicker
+            <SearchSelect
               key={targetType}
               id="rrTarget"
-              targets={targets}
+              label="대상"
+              placeholder="대상을 고르세요"
+              emptyText="대상이 없습니다"
+              options={targets}
               value={targetKey}
               onChange={setTargetKey}
             />

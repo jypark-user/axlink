@@ -11,6 +11,7 @@ import {
 } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import { SearchSelect } from '@/components/ui/search-select';
 import {
   Sheet,
   SheetContent,
@@ -603,7 +604,7 @@ export function DesignateDialog({
   return (
     <Dialog open onOpenChange={(o) => !o && onClose()}>
       <DialogContent>
-        <form onSubmit={submit} className="flex flex-col gap-4">
+        <form onSubmit={submit} className="flex min-w-0 flex-col gap-4">
           <DialogHeader>
             <DialogTitle>
               {target.mode === 'create' ? '산출물 양식 등록' : '산출물 양식 수정'}
@@ -616,19 +617,18 @@ export function DesignateDialog({
           </div>
           <div className="flex flex-col gap-1.5">
             <Label htmlFor="dd-type">분류 (선택)</Label>
-            <select
+            {/* 분류가 많아 검색해서 고른다(11-18) */}
+            <SearchSelect
               id="dd-type"
-              className="border-input bg-background h-9 rounded-md border px-2 text-sm"
+              label="분류"
+              placeholder="분류 없음"
+              options={[
+                { key: '', label: '분류 없음' },
+                ...types.map(([code, name]) => ({ key: code, label: name })),
+              ]}
               value={productType}
-              onChange={(e) => setProductType(e.target.value)}
-            >
-              <option value="">분류 없음</option>
-              {types.map(([code, label]) => (
-                <option key={code} value={code}>
-                  {label}
-                </option>
-              ))}
-            </select>
+              onChange={setProductType}
+            />
           </div>
           <div className="flex flex-col gap-1.5">
             <Label htmlFor="dd-desc">설명 (선택)</Label>
