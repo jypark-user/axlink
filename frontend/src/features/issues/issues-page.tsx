@@ -115,7 +115,7 @@ export function IssuesPage(): ReactNode {
   return (
     <>
       <PageHeader
-        title="일반 이슈"
+        title="이슈"
         description={`${GENERAL_ISSUE_SCOPE}. 리스크와 예전에 요구사항으로 만든 이슈는 들지 않습니다. 결함은 연결 설정의 결함 트래커·결함 라벨로 가릅니다.`}
       />
       <div className="@container flex flex-col gap-5">
