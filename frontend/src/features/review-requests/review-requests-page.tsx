@@ -386,7 +386,7 @@ function CreateDialog({
           </div>
           <div className={FIELD}>
             <Label htmlFor="rrTarget">대상</Label>
-            {/* 항목이 많으면 펼침 목록에서 찾기 어려워 찾기 칸과 목록을 바로 둔다(11-18) */}
+            {/* 누르면 펼쳐지고 검색 칸으로 거르는 고르기(11-18) */}
             <TargetPicker
               key={targetType}
               id="rrTarget"

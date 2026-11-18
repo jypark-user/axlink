@@ -1,6 +1,6 @@
-import { useMemo, useState, type ReactNode } from 'react';
-import { Check } from 'lucide-react';
-import { SearchInput } from '@/components/ui/search-input';
+import { useMemo, useState, type KeyboardEvent, type ReactNode } from 'react';
+import { Popover as PopoverPrimitive } from 'radix-ui';
+import { Check, ChevronDown, Search } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import type { ReviewTargetOption } from '@/types/api';
 
@@ -8,8 +8,8 @@ import type { ReviewTargetOption } from '@/types/api';
 const norm = (s: string): string => s.toLowerCase().replace(/\s+/g, '');
 
 /**
- * 확인 요청의 대상 고르기(11-18 사용자 지시). 항목이 수십 개면 펼침 목록에서 찾기 어려워, 찾기 칸과
- * 스크롤되는 목록을 창 안에 바로 둔다. 찾기어는 공백으로 나눠 모두 들어간 항목만 남긴다.
+ * 확인 요청의 대상 고르기(11-18 사용자 지시). 누르면 펼쳐지고 맨 위 검색 칸으로 거르는 고르기다.
+ * 찾기어는 공백으로 나눠 모두 들어간 항목만 남긴다. 위·아래 화살표로 옮기고 Enter 로 고른다.
  */
 export function TargetPicker({
   id,
@@ -22,7 +22,9 @@ export function TargetPicker({
   value: string;
   onChange: (key: string) => void;
 }): ReactNode {
+  const [open, setOpen] = useState(false);
   const [text, setText] = useState('');
+  const [active, setActive] = useState(0);
   const shown = useMemo(() => {
     const words = text.split(/\s+/).map(norm).filter(Boolean);
     if (words.length === 0) return targets;
@@ -31,57 +33,118 @@ export function TargetPicker({
       return words.every((w) => label.includes(w));
     });
   }, [targets, text]);
+  const selected = targets.find((t) => t.key === value);
 
-  if (targets.length === 0) {
-    return <p className="text-muted-foreground text-sm">고를 대상이 없습니다.</p>;
-  }
+  const toggle = (next: boolean) => {
+    setOpen(next);
+    if (next) {
+      setText('');
+      setActive(
+        Math.max(
+          0,
+          targets.findIndex((t) => t.key === value),
+        ),
+      );
+    }
+  };
+  const pick = (key: string) => {
+    onChange(key);
+    setOpen(false);
+  };
+  const onKey = (e: KeyboardEvent<HTMLInputElement>) => {
+    if (e.key === 'ArrowDown') {
+      e.preventDefault();
+      setActive((i) => Math.min(i + 1, shown.length - 1));
+    } else if (e.key === 'ArrowUp') {
+      e.preventDefault();
+      setActive((i) => Math.max(i - 1, 0));
+    } else if (e.key === 'Enter') {
+      // 창 안의 폼이라 Enter 가 등록을 누르지 않게 막는다
+      e.preventDefault();
+      const hit = shown[active];
+      if (hit) pick(hit.key);
+    }
+  };
 
   return (
-    <div className="flex flex-col gap-1.5">
-      <SearchInput
-        id={id}
-        value={text}
-        onValueChange={setText}
-        placeholder="검색"
-        aria-label="대상 찾기"
-        // 창 안의 폼이라 Enter 가 등록을 누르지 않게 막는다. 하나만 남았으면 그것을 고른다
-        onKeyDown={(e) => {
-          if (e.key !== 'Enter') return;
-          e.preventDefault();
-          if (shown.length === 1) onChange(shown[0].key);
-        }}
-      />
-      <div
-        role="listbox"
-        aria-label="대상"
-        // 높이를 고정한다. 찾을 때마다 줄 수가 바뀌어도 창 높이가 흔들리지 않는다
-        className="h-56 overflow-y-auto rounded-md border"
-        data-testid="review-target-list"
-      >
-        {shown.length === 0 ? (
-          <p className="text-muted-foreground px-3 py-2 text-sm">찾는 대상이 없습니다.</p>
-        ) : (
-          shown.map((t) => {
-            const on = t.key === value;
-            return (
-              <button
-                key={t.key}
-                type="button"
-                role="option"
-                aria-selected={on}
-                onClick={() => onChange(t.key)}
-                className={cn(
-                  'flex w-full items-start gap-2 px-3 py-1.5 text-left text-sm',
-                  on ? 'bg-primary-muted text-primary' : 'hover:bg-accent',
-                )}
-              >
-                <Check className={cn('mt-0.5 size-4 shrink-0', !on && 'invisible')} />
-                <span className="break-keep">{t.label}</span>
-              </button>
-            );
-          })
-        )}
-      </div>
-    </div>
+    // modal: 확인 요청 창(Dialog) 안에서 열리므로, 자기 스크롤 잠금을 가져야 목록 휠 스크롤이 된다
+    <PopoverPrimitive.Root open={open} onOpenChange={toggle} modal>
+      <PopoverPrimitive.Trigger asChild>
+        <button
+          id={id}
+          type="button"
+          role="combobox"
+          aria-expanded={open}
+          disabled={targets.length === 0}
+          className={cn(
+            'border-input flex h-9 w-full items-center justify-between gap-2 rounded-md border bg-transparent px-3 text-left text-sm shadow-xs outline-none',
+            'focus-visible:border-ring focus-visible:ring-ring/50 focus-visible:ring-[3px] disabled:cursor-not-allowed disabled:opacity-50',
+            !selected && 'text-muted-foreground',
+          )}
+        >
+          <span className="truncate">
+            {selected?.label ?? (targets.length ? '대상을 고르세요' : '대상이 없습니다')}
+          </span>
+          <ChevronDown className="size-4 shrink-0 opacity-50" />
+        </button>
+      </PopoverPrimitive.Trigger>
+      <PopoverPrimitive.Portal>
+        <PopoverPrimitive.Content
+          align="start"
+          sideOffset={4}
+          className="bg-popover text-popover-foreground z-50 w-(--radix-popover-trigger-width) rounded-md border shadow-md"
+          // 펼치면 검색 칸에 바로 친다
+          onOpenAutoFocus={(e) => {
+            e.preventDefault();
+            (e.currentTarget as HTMLElement).querySelector('input')?.focus();
+          }}
+        >
+          <div className="flex items-center gap-2 border-b px-3">
+            <Search className="text-muted-foreground size-4 shrink-0" />
+            <input
+              value={text}
+              onChange={(e) => {
+                setText(e.target.value);
+                setActive(0);
+              }}
+              onKeyDown={onKey}
+              placeholder="검색"
+              aria-label="대상 찾기"
+              className="placeholder:text-muted-foreground h-9 w-full bg-transparent text-sm outline-none"
+            />
+          </div>
+          <div role="listbox" aria-label="대상" className="max-h-64 overflow-y-auto p-1">
+            {shown.length === 0 ? (
+              <p className="text-muted-foreground px-2 py-1.5 text-sm">찾는 대상이 없습니다.</p>
+            ) : (
+              shown.map((t, i) => {
+                const on = t.key === value;
+                return (
+                  <button
+                    key={t.key}
+                    type="button"
+                    role="option"
+                    aria-selected={on}
+                    onClick={() => pick(t.key)}
+                    onMouseEnter={() => setActive(i)}
+                    ref={(el) => {
+                      if (i === active && el) el.scrollIntoView?.({ block: 'nearest' });
+                    }}
+                    className={cn(
+                      'flex w-full items-start gap-2 rounded-sm px-2 py-1.5 text-left text-sm',
+                      i === active && 'bg-accent',
+                      on && 'text-primary',
+                    )}
+                  >
+                    <Check className={cn('mt-0.5 size-4 shrink-0', !on && 'invisible')} />
+                    <span className="break-keep">{t.label}</span>
+                  </button>
+                );
+              })
+            )}
+          </div>
+        </PopoverPrimitive.Content>
+      </PopoverPrimitive.Portal>
+    </PopoverPrimitive.Root>
   );
 }
