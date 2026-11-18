@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState, type FormEvent, type ReactNode } from 'react';
 import { useSearchParams } from 'react-router-dom';
+import { TargetPicker } from '@/features/review-requests/target-picker';
 import type { ColumnDef } from '@tanstack/react-table';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -385,18 +386,14 @@ function CreateDialog({
           </div>
           <div className={FIELD}>
             <Label htmlFor="rrTarget">대상</Label>
-            <Select value={targetKey} onValueChange={setTargetKey}>
-              <SelectTrigger id="rrTarget">
-                <SelectValue placeholder={targets.length ? '대상을 고르세요' : '대상이 없습니다'} />
-              </SelectTrigger>
-              <SelectContent>
-                {targets.map((t) => (
-                  <SelectItem key={t.key} value={t.key}>
-                    {t.label}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
+            {/* 항목이 많으면 펼침 목록에서 찾기 어려워 찾기 칸과 목록을 바로 둔다(11-18) */}
+            <TargetPicker
+              key={targetType}
+              id="rrTarget"
+              targets={targets}
+              value={targetKey}
+              onChange={setTargetKey}
+            />
             <p className="text-muted-foreground text-xs">
               등록 시점의 상태(실적률·파일 대조·정식 제출·승인·이슈 상태·지표값)가 요청과 함께
               저장됩니다.
