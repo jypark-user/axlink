@@ -110,15 +110,31 @@ export function DocumentDetailPage(): ReactNode {
               </span>
             }
             actions={
-              <Button asChild size="sm" variant="outline">
-                <Link to={`/p/${project.id}/documents`}>자료 목록</Link>
-              </Button>
+              <div className="flex gap-2">
+                {/* 올리기만 하면 제출이 아니다(DEC-14). 초안을 확인하고 제출하는 길을 맨 위에 둔다 */}
+                {doc.draftStatus === 'PROPOSED' && (
+                  <Button asChild size="sm">
+                    <Link to={`/p/${project.id}/documents/${doc.id}/draft`}>산출물로 제출</Link>
+                  </Button>
+                )}
+                <Button asChild size="sm" variant="outline">
+                  <Link to={`/p/${project.id}/documents`}>자료 목록</Link>
+                </Button>
+              </div>
             }
           />
 
           <div className="grid gap-6 lg:grid-cols-[minmax(0,20rem)_minmax(0,1fr)]">
             {/* 왼쪽: 정보와 설정 */}
             <aside className="flex flex-col gap-5">
+              {doc.designatedName && (
+                <p className="rounded border p-3 text-sm">
+                  발주기관이 정한 산출물 「{doc.designatedName}」의 제출본입니다.{' '}
+                  {doc.workProductId
+                    ? '산출물로 제출했습니다.'
+                    : '오른쪽 위 「산출물로 제출」을 눌러 초안을 확인하고 제출해야 제출로 셉니다.'}
+                </p>
+              )}
               {doc.processingError && (
                 <p className="text-destructive rounded border border-destructive/30 p-3 text-sm">
                   {doc.processingError}
@@ -181,7 +197,7 @@ export function DocumentDetailPage(): ReactNode {
                     to={`/p/${project.id}/documents/${doc.id}/draft`}
                     className="underline-offset-2 hover:underline"
                   >
-                    초안 확인 (요구사항·유형)
+                    산출물로 제출 (초안 확인)
                   </Link>
                 )}
                 {doc.workProductId && (

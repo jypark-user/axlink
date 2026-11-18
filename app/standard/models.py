@@ -17,10 +17,10 @@ class SourceRef(BaseModel):
 
 
 class RequirementDecision(BaseModel):
-    """발주기관이 사유와 함께 지정한 상태(ARC-025). 근거 상태와 따로 남는다."""
+    """발주기관이 지정한 상태(ARC-025). 근거 상태와 따로 남는다. 사유는 선택이다."""
 
     status: str
-    reason: str
+    reason: str | None
     decidedBy: str | None  # noqa: N815 — 지정한 사람 이름. 계정이 지워졌으면 None
     decidedAt: str  # noqa: N815
     # 지정한 계정의 역할. DEC-05 전에 관리자가 지정한 기록은 SUPER_ADMIN 으로 남아
@@ -253,6 +253,27 @@ class RequirementSummaryResponse(BaseModel):
     sources: list[SourceStateSummary]
 
 
+class RequirementIssue(BaseModel):
+    """요구사항에 이어진 이슈·일감 하나(이슈가 요구사항 코드를 참조해 생긴 연결)."""
+
+    id: str
+    key: str | None
+    title: str
+    status: str  # OPEN | IN_PROGRESS | RESOLVED | CLOSED
+    kind: str  # GENERAL | DEFECT
+    url: str | None
+
+
+class IssueProgress(BaseModel):
+    """요구사항에 이어진 이슈·일감의 진행. 용역사가 그 요구사항으로 얼마나 일을 등록해 얼마나
+    닫았는지 본다. 이행률과는 따로다(이행률은 검증·인수 상태로 센다)."""
+
+    total: int = 0
+    open: int = 0
+    inProgress: int = 0  # noqa: N815
+    closed: int = 0  # 해결·종료
+
+
 class TraceabilityRowResponse(BaseModel):
     """추적표 한 줄. 요구사항 하나에 설계·구현·시험 칸이 붙는다."""
 
@@ -269,6 +290,7 @@ class TraceabilityRowResponse(BaseModel):
     implementsList: list[TraceCell]  # noqa: N815 — implements 는 예약어라 프런트가 이렇게 부른다
     tests: list[TraceCell]
     brokenAt: list[str]  # noqa: N815
+    issueProgress: IssueProgress = IssueProgress()  # noqa: N815
 
 
 class EntityHistoryResponse(BaseModel):
@@ -305,19 +327,21 @@ class RequirementDetailResponse(RequirementResponse):
     traceLinks: list[TraceLinkResponse]  # noqa: N815
     history: list[EntityHistoryResponse]
     baselineSource: RequirementBaselineSource | None = None  # noqa: N815
+    issues: list[RequirementIssue] = []  # 이어진 이슈·일감. 열린 것이 앞에 온다
+    issueProgress: IssueProgress = IssueProgress()  # noqa: N815
 
 
 class RequirementDecisionRequest(BaseModel):
-    """발주기관 상태 지정. 사유는 반드시 적는다."""
+    """발주기관 상태 지정. 사유는 선택이다(2026-11-17 사용자 결정)."""
 
     status: str
-    reason: str = Field(min_length=1, max_length=1000)
+    reason: str | None = Field(default=None, max_length=1000)
 
 
 class RequirementDecisionRevertRequest(BaseModel):
-    """지정을 거두고 근거 상태로 되돌린다. 되돌리는 사유도 남긴다."""
+    """지정을 거두고 근거 상태로 되돌린다. 사유는 적으면 남긴다."""
 
-    reason: str = Field(min_length=1, max_length=1000)
+    reason: str | None = Field(default=None, max_length=1000)
 
 
 # --- 요구사항 기준선 (GH-139, ARC-028) ----------------------------------------

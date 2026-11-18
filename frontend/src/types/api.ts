@@ -663,14 +663,33 @@ export interface HelpDocResponse {
 /** 상태의 출처. SOURCE_ISSUE_CLOSED = GitHub 이슈 닫힘, CLIENT_DECIDED = 발주기관 지정 */
 export type RequirementStatusBasis = 'SOURCE_ISSUE_CLOSED' | 'CLIENT_DECIDED';
 
-/** 발주기관이 사유와 함께 지정한 요구사항 상태(ARC-025). 근거 상태와 따로 남는다. */
+/** 발주기관이 지정한 요구사항 상태(ARC-025). 근거 상태와 따로 남는다. 사유는 선택이다 */
 export interface RequirementDecision {
   status: RequirementStatus;
-  reason: string;
+  reason: string | null;
   decidedBy: string | null;
   decidedAt: string;
   /** 지정한 계정의 역할. DEC-05 전에 관리자가 지정한 기록은 SUPER_ADMIN 이다 */
   decidedByRole?: string | null;
+}
+
+/** 요구사항에 이어진 이슈·일감의 진행. 이행률과 따로다 */
+export interface IssueProgress {
+  total: number;
+  open: number;
+  inProgress: number;
+  /** 해결·종료 */
+  closed: number;
+}
+
+/** 요구사항에 이어진 이슈·일감 하나 */
+export interface RequirementIssue {
+  id: string;
+  key: string | null;
+  title: string;
+  status: 'OPEN' | 'IN_PROGRESS' | 'RESOLVED' | 'CLOSED';
+  kind: string;
+  url: string | null;
 }
 
 export interface TraceabilityRowResponse {
@@ -688,6 +707,7 @@ export interface TraceabilityRowResponse {
   implementsList: TraceCell[];
   tests: TraceCell[];
   brokenAt: TraceLinkKind[];
+  issueProgress?: IssueProgress;
 }
 
 export interface RequirementResponse {
@@ -729,6 +749,9 @@ export interface RequirementDetailResponse extends RequirementResponse {
   traceLinks: TraceLinkResponse[];
   history: EntityHistoryResponse[];
   baselineSource: RequirementBaselineSource | null;
+  /** 이어진 이슈·일감. 열린 것이 앞에 온다 */
+  issues?: RequirementIssue[];
+  issueProgress?: IssueProgress;
 }
 
 /** 일반 이슈 화면 카드. 목록 쪽과 상관없이 사업 전체를 서버가 센다. */
@@ -1574,6 +1597,8 @@ export interface DocumentDetailResponse {
   productType: string | null;
   proposedType: string | null;
   draftStatus: StructuringDraftStatus | null;
+  /** 발주기관 지정 산출물 항목의 제출본이면 그 항목 이름(UC-033) */
+  designatedName?: string | null;
   workProductId: string | null;
   downloadUrl: string;
   originalUrl: string | null;
@@ -1723,6 +1748,8 @@ export interface DesignatedVersion {
   rejectReason: string | null;
   decidedAt: string | null;
   isCurrent: boolean;
+  /** 확정 전일 때 다음 할 일. READY 초안이 있어 제출 가능 · PROCESSING 읽는 중 · NO_DRAFT 초안 없음 */
+  submit?: 'READY' | 'PROCESSING' | 'NO_DRAFT' | null;
 }
 
 /** 발주기관이 WBS 작업에 정한 산출물 항목과 양식(UC-033). 양식은 제출본이 아니다 */

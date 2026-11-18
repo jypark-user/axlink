@@ -1299,3 +1299,27 @@ def entity_history(cur: Any, entity_type: str, entity_id: str) -> list[dict[str,
         """,
         (entity_type, entity_id),
     )
+
+
+def requirement_issues(cur: Any, requirement_ids: list[str]) -> list[dict[str, Any]]:
+    """요구사항마다 이어진 이슈·일감. 살아 있는 연결(ACTIVE)만, 이슈 하나는 한 번만 센다.
+
+    이슈가 요구사항 코드를 참조하면 수집이 「이슈 → 요구사항」 연결을 만든다(ARC-030). 끊기거나
+    정정으로 대체된 연결은 세지 않는다.
+    """
+    if not requirement_ids:
+        return []
+    return fetch_all(
+        cur,
+        """
+        select distinct on (tl.to_id, i.id)
+               tl.to_id as requirement_id, i.id, i.issue_key, i.title, i.status, i.issue_kind,
+               i.external_url
+          from trace_link tl
+          join issue i on i.id = tl.from_id
+         where tl.from_type = 'ISSUE' and tl.to_type = 'REQUIREMENT' and tl.status = 'ACTIVE'
+           and tl.to_id = any(%s::uuid[])
+         order by tl.to_id, i.id
+        """,
+        (requirement_ids,),
+    )

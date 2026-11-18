@@ -21,8 +21,10 @@ from app.standard import repository, requirement_decision, trace_rules
 from app.standard.mapping_rules import MappingRules
 from app.standard.models import (
     EntityHistoryResponse,
+    IssueProgress,
     RequirementBaselineSource,
     RequirementDetailResponse,
+    RequirementIssue,
     RequirementSummaryResponse,
     SourceRef,
     SourceStateSummary,
@@ -324,6 +326,41 @@ def _source_summary(row: dict[str, Any]) -> SourceStateSummary:
 _TOOL_NAME = {"GITHUB": "GitHub", "REDMINE": "Redmine"}
 
 
+_CLOSED = ("RESOLVED", "CLOSED")
+_ISSUE_ORDER = {"IN_PROGRESS": 0, "OPEN": 1, "RESOLVED": 2, "CLOSED": 3}
+
+
+def issue_progress(statuses: list[str]) -> IssueProgress:
+    """이어진 이슈·일감의 상태를 센다. 해결·종료는 닫힘으로 본다."""
+    return IssueProgress(
+        total=len(statuses),
+        open=sum(1 for s in statuses if s == "OPEN"),
+        inProgress=sum(1 for s in statuses if s == "IN_PROGRESS"),
+        closed=sum(1 for s in statuses if s in _CLOSED),
+    )
+
+
+def _issue_progress_by_requirement(cur: Any, ids: list[str]) -> dict[str, IssueProgress]:
+    statuses: dict[str, list[str]] = {}
+    for row in repository.requirement_issues(cur, ids):
+        statuses.setdefault(str(row["requirement_id"]), []).append(row["status"])
+    return {rid: issue_progress(s) for rid, s in statuses.items()}
+
+
+def _requirement_issues(cur: Any, requirement_id: str) -> list[RequirementIssue]:
+    rows = sorted(
+        repository.requirement_issues(cur, [requirement_id]),
+        key=lambda r: (_ISSUE_ORDER.get(r["status"], 9), r["issue_key"] or "", r["title"]),
+    )
+    return [
+        RequirementIssue(
+            id=str(r["id"]), key=r["issue_key"], title=r["title"], status=r["status"],
+            kind=r["issue_kind"], url=r["external_url"],
+        )
+        for r in rows
+    ]
+
+
 def traceability_rows(
     cur: Any,
     principal: AuthPrincipal,
@@ -364,6 +401,7 @@ def traceability_rows(
         if lk["status"] == "BROKEN" and lk["link_kind"] not in broken.setdefault(rid, []):
             broken[rid].append(lk["link_kind"])
 
+    progress = _issue_progress_by_requirement(cur, [str(r["id"]) for r in reqs])
     content = [
         TraceabilityRowResponse(
             requirementId=str(r["id"]),
@@ -378,6 +416,7 @@ def traceability_rows(
             implementsList=cells.get(str(r["id"]), {}).get("IMPLEMENTS", []),
             tests=cells.get(str(r["id"]), {}).get("TESTS", []),
             brokenAt=broken.get(str(r["id"]), []),
+            issueProgress=progress.get(str(r["id"]), IssueProgress()),
         )
         for r in reqs
     ]
@@ -402,6 +441,7 @@ def requirement_detail(
         return labels.get((entity_type, entity_id), ("?", None))[0]
 
     tool = row["tool_name"] or ("UPLOAD" if row["source_kind"] == "DOCUMENT" else "MANUAL")
+    issues = _requirement_issues(cur, requirement_id)
     return RequirementDetailResponse(
         id=str(row["id"]),
         projectId=str(row["project_id"]),
@@ -467,6 +507,8 @@ def requirement_detail(
             for h in repository.entity_history(cur, "REQUIREMENT", requirement_id)
         ],
         baselineSource=_baseline_source(cur, requirement_id),
+        issues=issues,
+        issueProgress=issue_progress([x.status for x in issues]),
     )
 
 

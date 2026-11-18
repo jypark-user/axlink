@@ -15,6 +15,7 @@ _COLUMNS = """
     s.status as draft_status, s.work_product_id as draft_work_product_id,
     s.proposed_type, d.product_type, d.wbs_item_id,
     w.wbs_id, w.name as wbs_name,
+    dd.name as designated_name, dd.active as designated_active,
     d.processing_state, d.processing_error, d.processing_attempts, d.processed_at,
     d.processing_steps
 """
@@ -23,6 +24,7 @@ _FROM = """
     join app_user u on u.id = d.uploaded_by_user_id
     left join structuring_draft s on s.document_upload_id = d.id
     left join wbs_item w on w.id = d.wbs_item_id
+    left join wbs_designated_deliverable dd on dd.id = d.designated_deliverable_id
 """
 
 

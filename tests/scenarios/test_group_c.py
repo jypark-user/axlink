@@ -682,13 +682,21 @@ def test_UC_022_S10_조회_실패_vs_소실(target, s0, replay):
 
 
 def test_UC_023_S04_용역사_사유_없음(target, s0):
-    """V1·A1 지정 / C1 빈 사유 → 각각 거절 (AC-023-5, DEC-05)."""
+    """V1·A1 지정은 거절, C1 빈 사유 지정은 허용 (AC-023-5, DEC-05).
+
+    사유는 2026-11-17 사용자 결정으로 선택이다(ARC-025 개정). 빈 사유 지정이 받아지는지 보고
+    곧바로 되돌려 뒤 시나리오(S05·S01)의 시작 상태를 그대로 둔다."""
     pid = s0.ids["TD-PRJ-1"]
     rid = s0.ids["REQ-D"]
     assert target.put(f"/api/projects/{pid}/requirements/{rid}/status", json={"status": "VERIFIED", "reason": "x"}, headers=auth(s0.tokens["TD-ACC-V1"])).status_code == 403
     res = target.put(f"/api/projects/{pid}/requirements/{rid}/status", json={"status": "VERIFIED", "reason": "x"}, headers=auth(s0.tokens["TD-ACC-A1"]))
     assert res.status_code == 403 and "플랫폼 관리자는" in res.json()["message"], res.text
-    assert target.put(f"/api/projects/{pid}/requirements/{rid}/status", json={"status": "VERIFIED", "reason": ""}, headers=auth(s0.tokens["TD-ACC-C1"])).status_code in (400, 422)
+    c1 = auth(s0.tokens["TD-ACC-C1"])
+    blank = target.put(f"/api/projects/{pid}/requirements/{rid}/status", json={"status": "VERIFIED", "reason": ""}, headers=c1)
+    assert blank.status_code == 200, blank.text
+    assert blank.json()["decision"]["reason"] is None
+    back = target.post(f"/api/projects/{pid}/requirements/{rid}/status/revert", json={}, headers=c1)
+    assert back.status_code == 200 and back.json()["decision"] is None, back.text
 
 
 def test_UC_023_S05_지표_독립(target, s0):

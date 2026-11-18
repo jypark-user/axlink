@@ -1,4 +1,5 @@
 import { useEffect, useState, type FormEvent, type ReactNode } from 'react';
+import { Link } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
 import {
   Dialog,
@@ -129,7 +130,14 @@ export function DesignatedCell({
   }
   // 표 칸에는 요약만 둔다. 항목·양식·버전 이력은 옆 창에서 본다(표가 넓어지지 않게)
   const done = list.filter((d) => d.status === 'APPROVED').length;
-  const open = list.filter((d) => d.status === 'MISSING' || d.status === 'REGISTERED').length;
+  const missing = list.filter((d) => d.status === 'MISSING').length;
+  // 올렸지만 「산출물로 제출」 전. 미제출과 섞으면 「냈는데 왜 미제출이냐」가 된다
+  const waiting = list.filter((d) => d.status === 'REGISTERED').length;
+  const parts = [
+    missing > 0 ? `미제출 ${missing}` : null,
+    waiting > 0 ? `제출 확정 대기 ${waiting}` : null,
+    done > 0 ? `승인 ${done}` : null,
+  ].filter(Boolean);
   return (
     <button
       type="button"
@@ -139,9 +147,13 @@ export function DesignatedCell({
       <span className="whitespace-nowrap">
         내야 할 산출물 <span className="tnum font-medium">{list.length}</span>건
       </span>
-      <span className="text-muted-foreground text-xs whitespace-nowrap">
-        {open > 0 ? `미제출 ${open}` : '모두 제출'}
-        {done > 0 ? ` · 승인 ${done}` : ''}
+      <span
+        className={cn(
+          'text-xs whitespace-nowrap',
+          waiting > 0 ? 'text-amber-700 dark:text-amber-300' : 'text-muted-foreground',
+        )}
+      >
+        {parts.length > 0 ? parts.join(' · ') : '모두 제출'}
       </span>
     </button>
   );
@@ -318,6 +330,7 @@ function DesignatedEntry({
               {v.rejectReason && (
                 <span className="text-destructive">· 반려 사유: {v.rejectReason}</span>
               )}
+              {v.state === 'REGISTERED' && <SubmitHint projectId={projectId} version={v} />}
               {canDesignate && v.isCurrent && v.state === 'SUBMITTED' && v.workProductId && (
                 <>
                   <Button size="sm" variant="outline" onClick={() => void decide(v, 'approve')}>
@@ -334,6 +347,39 @@ function DesignatedEntry({
       )}
       <History projectId={projectId} id={entry.id} />
     </li>
+  );
+}
+
+/** 확정 전 제출본의 다음 할 일. 올리기만 하면 제출이 아니다(DEC-14). */
+function SubmitHint({
+  projectId,
+  version,
+}: {
+  projectId: string;
+  version: DesignatedVersion;
+}): ReactNode {
+  if (version.submit === 'READY') {
+    return (
+      <Button asChild size="sm">
+        <Link to={`/p/${projectId}/documents/${version.documentId}/draft`}>
+          산출물로 제출하러 가기
+        </Link>
+      </Button>
+    );
+  }
+  if (version.submit === 'PROCESSING') {
+    return <span>· 문서를 읽는 중입니다. 끝나면 제출할 수 있습니다</span>;
+  }
+  return (
+    <span>
+      · 초안이 없어 제출할 수 없습니다.{' '}
+      <Link
+        to={`/p/${projectId}/documents/${version.documentId}`}
+        className="underline underline-offset-2"
+      >
+        자료 상세에서 확인
+      </Link>
+    </span>
   );
 }
 

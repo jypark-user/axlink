@@ -359,6 +359,7 @@ def get_detail(cur: Any, principal: AuthPrincipal, document_id: str) -> Document
         productType=row["product_type"],
         proposedType=row["proposed_type"],
         draftStatus=row["draft_status"],
+        designatedName=row["designated_name"] if row.get("designated_active") else None,
         workProductId=str(row["draft_work_product_id"]) if row["draft_work_product_id"] else None,
         processingState=row["processing_state"],
         processingError=row["processing_error"],

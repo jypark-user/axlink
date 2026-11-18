@@ -157,7 +157,7 @@ def test_되돌리면_근거_상태로_돌아가고_그_뒤로는_근거대로_�
 
 
 @requires_db
-def test_용역사는_지정할_수_없고_사유가_없거나_모르는_상태면_거절한다(
+def test_용역사는_지정할_수_없고_모르는_상태면_거절한다(
     client, client_token, gh_requirement
 ):
     rid = gh_requirement["id"]
@@ -170,13 +170,28 @@ def test_용역사는_지정할_수_없고_사유가_없거나_모르는_상태�
     assert by_contractor.status_code == 403
 
     client_auth = _auth(client_token("r2"))
-    assert client.put(url, json={"status": "VERIFIED", "reason": ""},
-                      headers=client_auth).status_code == 400
-    assert client.put(url, json={"status": "VERIFIED", "reason": "   "},
-                      headers=client_auth).status_code == 400
     assert client.put(url, json={"status": "DONE", "reason": "x"},
                       headers=client_auth).status_code == 400
     assert _row(rid)["decided_status"] is None
+
+
+@requires_db
+@pytest.mark.parametrize("body", [{"status": "VERIFIED"}, {"status": "VERIFIED", "reason": "   "}])
+def test_사유는_선택이고_비우면_없는_것으로_남는다(client, client_token, gh_requirement, body):
+    """2026-11-17 사용자 결정(ARC-025 개정). 지정자·시각·근거 상태는 사유가 없어도 남는다."""
+    rid = gh_requirement["id"]
+    token = client_token("r2")
+    res = client.put(f"/api/projects/{PID}/requirements/{rid}/status", json=body,
+                     headers=_auth(token))
+    assert res.status_code == 200, res.text
+    decision = res.json()["decision"]
+    assert decision["status"] == "VERIFIED" and decision["reason"] is None
+    assert decision["decidedBy"] and decision["decidedAt"]
+    assert _row(rid)["decided_reason"] is None  # 공백도 null 로
+    back = client.post(f"/api/projects/{PID}/requirements/{rid}/status/revert", json={},
+                       headers=_auth(token))
+    assert back.status_code == 200, back.text
+    assert back.json()["decision"] is None
 
 
 @requires_db

@@ -62,11 +62,10 @@ def _target(
     return row
 
 
-def _clean(reason: str) -> str:
+def _clean(reason: str | None) -> str | None:
+    """사유는 선택이다(2026-11-17 사용자 결정, ARC-025 개정). 빈 글자는 없는 것으로 남긴다."""
     text = (reason or "").strip()
-    if not text:
-        raise errors.validation_failed("사유를 적어 주세요.")
-    return text
+    return text or None
 
 
 def _actor(cur: Any, principal: AuthPrincipal) -> str:
@@ -80,7 +79,7 @@ def _label(row: dict[str, Any]) -> str:
 
 def decide(
     cur: Any, principal: AuthPrincipal, project_id: str, requirement_id: str,
-    status: str, reason: str,
+    status: str, reason: str | None,
 ) -> dict[str, Any]:
     row = _target(cur, principal, project_id, requirement_id)
     if status not in repository.REQUIREMENT_STATUSES:
@@ -109,7 +108,8 @@ def decide(
 
 
 def revert(
-    cur: Any, principal: AuthPrincipal, project_id: str, requirement_id: str, reason: str,
+    cur: Any, principal: AuthPrincipal, project_id: str, requirement_id: str,
+    reason: str | None,
 ) -> dict[str, Any]:
     row = _target(cur, principal, project_id, requirement_id)
     if not row["decided_status"]:
