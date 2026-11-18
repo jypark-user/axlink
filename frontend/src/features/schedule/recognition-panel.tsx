@@ -22,7 +22,7 @@ export function RecognitionPanel({
   if (r.status === 'OK')
     hint = r.readAt ? `${version} · ${formatDateTime(r.readAt)} 읽음` : version;
   return (
-    <Window title="계획서 인식 결과" hint={hint} className="pt-0">
+    <Window title="계획서 인식 결과" hint={hint} className="pt-0" innerClassName="px-0" bleed>
       {r.status === 'FAILED' ? (
         <Alert variant="destructive" className="mb-3" data-testid="recognition-failed">
           <AlertTitle>계획서({version})를 읽지 못했습니다</AlertTitle>

@@ -98,7 +98,7 @@ export function SchedulePage(): ReactNode {
               <>
                 <CompletionPanel state={completion} />
                 {recognition}
-                <Window title="작업 일정" className="pt-0" bleed>
+                <Window title="작업 일정" className="pt-0" innerClassName="px-0" bleed>
                   <Alert variant="destructive" className="mb-4">
                     <AlertTitle>진척률 산정의 핵심 입력이 빠져 있습니다</AlertTitle>
                     <AlertDescription>{data.notice}</AlertDescription>
@@ -147,6 +147,7 @@ export function SchedulePage(): ReactNode {
                   </>
                 }
                 className="pt-0"
+                innerClassName="px-0"
                 action={<ScheduleLegend />}
                 bleed
               >
