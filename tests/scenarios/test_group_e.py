@@ -1047,68 +1047,39 @@ def _ui_UC_042_S01(screen, target, s0, board_id: str):
 
 
 def _ui_UC_043_S01(screen, target, s0, summary: dict, rows: list[dict]):
-    """화면: 일반 이슈·결함·전체 탭의 건수와 「전체 N = 일반 n + 결함 m」 줄, 요약 카드, 행마다 원천
-    (도구 · 연결 · 저장소/프로젝트 #번호 → 원문 링크) (AC-043-1·4, DEC-02·ARC-031)."""
+    """화면: 수집한 이슈 전체(결함 포함)의 요약 카드와, 행마다 원천(도구 · 연결 · 저장소/프로젝트
+    #번호 → 원문 링크) (AC-043-1·4, ARC-031). 종류·심각도는 화면에서 뺐다(2026-11-18). 일반·결함
+    구분(DEC-02)은 API 와 결함 처리율 지표로 본다(UC-043-S05)."""
     if not screen:
         return
     from playwright.sync_api import expect
 
     pid = s0.ids["TD-PRJ-1"]
-    kinds = summary["kinds"]
+    summary = _get(target, s0, f"/api/projects/{pid}/issues/summary?kind=ALL")
+    rows = _get(target, s0, f"/api/projects/{pid}/issues?size=100&kind=ALL")["content"]
     sc = screen("TD-ACC-C1")
-    sc.open(f"/p/{pid}/issues").see("일반 이슈")
+    sc.open(f"/p/{pid}/issues").see("이슈")
+    sc.not_see("심각도", "일반 이슈(결함 제외)")
 
-    relation = sc.page.get_by_test_id("issue-kind-relation")
-    expect(relation).to_contain_text(f"전체 이슈(결함 포함) {kinds['allTotal']}건")
-    expect(relation).to_contain_text(f"= 일반 이슈(결함 제외) {kinds['generalTotal']}건 + 결함 {kinds['defectTotal']}건")
-    if kinds["defectRate"] is None:
-        expect(relation).to_contain_text(kinds.get("defectNote") or "산출 불가")
-    else:
-        expect(relation).to_contain_text(
-            f"결함 처리율: {kinds['defectRate'] * 100:.1f}% (해결·종료 {kinds['defectClosed']}건 / 결함 {kinds['defectTotal']}건)"
-        )
-
-    def tab(name: str):
-        return sc.page.get_by_role("tab").filter(has_text=re.compile(rf"^{re.escape(name)}\s*\d*$"))
-
-    tabs = {
-        "GENERAL": ("일반 이슈(결함 제외)", kinds["generalTotal"]),
-        "DEFECT": ("결함", kinds["defectTotal"]),
-        "ALL": ("전체 이슈(결함 포함)", kinds["allTotal"]),
-    }
-    for name, count in tabs.values():
-        expect(tab(name)).to_have_text(re.compile(rf"^{re.escape(name)}\s*{count}$"))
-
-    # 요약 카드: 열린 일반 이슈 n (일반 이슈 N건 중), 해결·닫힘 m (비율) (issues-page.tsx MetricCard)
-    opened = sc.page.locator("[data-slot=card]", has_text="열린 일반 이슈").first
-    expect(opened).to_contain_text(f"일반 이슈 {summary['total']}건 중")
-    assert _flat(opened.inner_text()).startswith(f"열린일반이슈{summary['open']}"), opened.inner_text()
+    # 요약 카드: 열린 이슈 n (이슈 N건 중), 해결·닫힘 m (비율) (issues-page.tsx MetricCard)
+    opened = sc.page.locator("[data-slot=card]", has_text="열린 이슈").first
+    expect(opened).to_contain_text(f"이슈 {summary['total']}건 중")
+    assert _flat(opened.inner_text()).startswith(f"열린이슈{summary['open']}"), opened.inner_text()
     closed = sc.page.locator("[data-slot=card]", has_text="해결·닫힘").first
     share = f"{_js_round(summary['closed'] / summary['total'] * 100)}%" if summary["total"] else "0%"
     assert _flat(closed.inner_text()) == f"해결·닫힘{summary['closed']}{share}", closed.inner_text()
 
-    def check_rows(want: list[dict]) -> None:
-        expect(sc.page.locator("tbody tr")).to_have_count(len(want), timeout=20000)
-        for r in want:
-            src = r["source"]
-            number = f"{src['target']} #{src['number']}" if src.get("target") else f"#{src['number']}"
-            href = f'a[href="{src["externalUrl"]}"]'
-            link = sc.page.locator(f"tbody {href}").first
-            expect(link).to_contain_text(number)
-            assert str(src["number"]) in (link.get_attribute("href") or ""), src
-            # has= 는 행 안에서 찾는다. 「tbody a」로 주면 행 안에 tbody 가 없어 아무 행도 맞지 않는다
-            line = sc.page.locator("tbody tr", has=sc.page.locator(href)).first
-            kind = "결함" if r["kind"] == "DEFECT" else "일반 이슈"
-            for text in (r["key"], _TOOL_NAME.get(src["tool"], src["tool"]), src["connectionName"], kind):
-                expect(line).to_contain_text(text)
-
-    check_rows(rows)
-    sc.shot("일반_이슈")
-    defects = _get(target, s0, f"/api/projects/{pid}/issues?size=100&kind=DEFECT")["content"]
-    tab(tabs["DEFECT"][0]).click()
-    check_rows(defects)
-    sc.shot("결함")
-    everything = _get(target, s0, f"/api/projects/{pid}/issues?size=100&kind=ALL")["content"]
-    tab(tabs["ALL"][0]).click()
-    check_rows(everything)
+    expect(sc.page.locator("tbody tr")).to_have_count(len(rows), timeout=20000)
+    for r in rows:
+        src = r["source"]
+        number = f"{src['target']} #{src['number']}" if src.get("target") else f"#{src['number']}"
+        href = f'a[href="{src["externalUrl"]}"]'
+        link = sc.page.locator(f"tbody {href}").first
+        expect(link).to_contain_text(number)
+        assert str(src["number"]) in (link.get_attribute("href") or ""), src
+        # has= 는 행 안에서 찾는다. 「tbody a」로 주면 행 안에 tbody 가 없어 아무 행도 맞지 않는다
+        line = sc.page.locator("tbody tr", has=sc.page.locator(href)).first
+        for text in (r["key"], _TOOL_NAME.get(src["tool"], src["tool"]), src["connectionName"]):
+            expect(line).to_contain_text(text)
+    sc.shot("이슈")
     sc.done()
