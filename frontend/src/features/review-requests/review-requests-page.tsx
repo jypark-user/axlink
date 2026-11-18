@@ -114,7 +114,7 @@ const VALUE_WORDS: Record<string, Record<string, string>> = {
     PRODUCT_TYPE: '산출물 유형 일치',
   },
 };
-const FIELD = 'flex flex-col gap-1.5';
+const FIELD = 'flex min-w-0 flex-col gap-1.5';
 
 /** 상태 값 하나를 사람이 읽는 꼴로. 비율은 퍼센트, 없으면 하이픈. */
 function showValue(field: string, value: unknown): string {
@@ -360,7 +360,7 @@ function CreateDialog({
         <DialogHeader>
           <DialogTitle>확인 요청 등록</DialogTitle>
         </DialogHeader>
-        <form onSubmit={submit} className="flex flex-col gap-3">
+        <form onSubmit={submit} className="flex min-w-0 flex-col gap-3">
           <div className={FIELD}>
             <Label htmlFor="rrType">대상 종류</Label>
             <Select

@@ -77,12 +77,13 @@ export function TargetPicker({
           aria-expanded={open}
           disabled={targets.length === 0}
           className={cn(
-            'border-input flex h-9 w-full items-center justify-between gap-2 rounded-md border bg-transparent px-3 text-left text-sm shadow-xs outline-none',
+            'border-input flex h-9 w-full min-w-0 items-center justify-between gap-2 rounded-md border bg-transparent px-3 text-left text-sm shadow-xs outline-none',
             'focus-visible:border-ring focus-visible:ring-ring/50 focus-visible:ring-[3px] disabled:cursor-not-allowed disabled:opacity-50',
             !selected && 'text-muted-foreground',
           )}
         >
-          <span className="truncate">
+          {/* 이름이 길면 말줄임하고, 마우스를 올리면 전체가 보인다 */}
+          <span className="min-w-0 truncate" title={selected?.label}>
             {selected?.label ?? (targets.length ? '대상을 고르세요' : '대상이 없습니다')}
           </span>
           <ChevronDown className="size-4 shrink-0 opacity-50" />
