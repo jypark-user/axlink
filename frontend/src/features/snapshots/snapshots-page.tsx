@@ -173,8 +173,15 @@ function SnapshotBody({ rows }: { rows: ProgressSnapshotResponse[] }): ReactNode
               <CartesianGrid vertical={false} strokeDasharray="3 3" />
               <XAxis dataKey="snapshotDate" tickFormatter={(v: string) => v.slice(5)} />
               <YAxis domain={[0, 100]} width={44} unit="%" />
-              <ChartTooltip content={<ChartTooltipContent />} />
-              <ChartLegend content={<ChartLegendContent />} />
+              <ChartTooltip
+                content={<ChartTooltipContent />}
+                itemSorter={(item) => METRIC_KEYS.indexOf(item.dataKey as MetricKey)}
+              />
+              {/* 범례는 기본으로 이름순이라 계획부터 정한 순서로 둔다 */}
+              <ChartLegend
+                content={<ChartLegendContent />}
+                itemSorter={(item) => METRIC_KEYS.indexOf(item.dataKey as MetricKey)}
+              />
               {METRIC_KEYS.map((k) => (
                 <Line
                   key={k}
