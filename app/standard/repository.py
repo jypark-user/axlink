@@ -849,6 +849,24 @@ def search_issues(
     )
 
 
+def issue_requirements(cur: Any, issue_ids: list[str]) -> list[dict[str, Any]]:
+    """이슈마다 이어진 요구사항. 요구사항 화면이 쓰는 ACTIVE 추적 연결(이슈 → 요구사항)이다."""
+    if not issue_ids:
+        return []
+    return fetch_all(
+        cur,
+        """
+        select distinct t.from_id as issue_id, r.id, r.code, r.title
+          from trace_link t
+          join requirement r on r.id = t.to_id
+         where t.from_type = 'ISSUE' and t.to_type = 'REQUIREMENT' and t.status = 'ACTIVE'
+           and t.from_id = any(%s::uuid[])
+         order by r.code nulls last, r.title
+        """,
+        (issue_ids,),
+    )
+
+
 def list_work_products(cur: Any, project_id: str) -> list[dict[str, Any]]:
     """현행 산출물 22종. 아직 안 낸 것도 항목으로 나와야 제출 현황이 성립한다."""
     return fetch_all(

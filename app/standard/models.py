@@ -65,6 +65,15 @@ class IssueRelation(BaseModel):
     issueKey: str  # noqa: N815 — 상대 이슈 키(RM-203)
 
 
+class IssueRequirement(BaseModel):
+    """이슈가 이어진 요구사항 한 건. 이슈 제목·본문의 요구사항 코드(또는 Redmine REQ ID)로 수집 때
+    만든 추적 연결이다. 요구사항 화면과 같은 연결을 쓴다(11-18 사용자 지시)."""
+
+    id: str
+    code: str | None
+    title: str
+
+
 class IssueResponse(BaseModel):
     """작업·결함 한 건. 도구가 달라도 같은 모양이다(GitHub 이슈, Redmine 작업·결함)."""
 
@@ -87,6 +96,8 @@ class IssueResponse(BaseModel):
     relations: list[IssueRelation] = []
     # GENERAL(일반 이슈) | DEFECT(결함). 연결 설정의 결함 트래커·라벨로 가른다(DEC-02)
     kind: str = "GENERAL"
+    # 이어진 요구사항. 비어 있으면 요구사항에 매핑되지 않은 이슈다
+    requirements: list[IssueRequirement] = []
 
 
 class IssueKindCounts(BaseModel):

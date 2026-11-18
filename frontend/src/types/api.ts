@@ -822,6 +822,14 @@ export interface IssueResponse {
   relations?: IssueRelation[];
   /** GENERAL 일반 이슈 · DEFECT 결함 (DEC-02) */
   kind?: 'GENERAL' | 'DEFECT';
+  /** 이어진 요구사항(제목·본문의 요구사항 코드로 만든 추적 연결). 비면 매핑 안 됨 */
+  requirements?: IssueRequirement[];
+}
+
+export interface IssueRequirement {
+  id: string;
+  code: string | null;
+  title: string;
 }
 
 export interface IssueRelation {

@@ -35,6 +35,7 @@ from app.standard.models import (
     IssueKindCounts,
     IssueMilestone,
     IssueRelation,
+    IssueRequirement,
     IssueResponse,
     IssueSourceCount,
     IssueSummaryResponse,
@@ -412,6 +413,11 @@ def list_issues(
 
     total = repository.count_issues(cur, project_id, q, status, connection_id, kind)
     rows = repository.search_issues(cur, project_id, q, status, page, connection_id, kind)
+    linked: dict[str, list[IssueRequirement]] = {}
+    for link in repository.issue_requirements(cur, [str(r["id"]) for r in rows]):
+        linked.setdefault(str(link["issue_id"]), []).append(
+            IssueRequirement(id=str(link["id"]), code=link["code"], title=link["title"])
+        )
     content = [
         IssueResponse(
             id=str(r["id"]),
@@ -427,6 +433,7 @@ def list_issues(
             updatedAt=(r["source_updated_at"] or r["updated_at"]).isoformat(),
             milestone=_milestone(r),
             kind=r["issue_kind"],
+            requirements=linked.get(str(r["id"]), []),
             **_source_details(r),
         )
         for r in rows

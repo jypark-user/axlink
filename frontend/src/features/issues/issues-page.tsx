@@ -32,6 +32,7 @@ import { localToday, milestoneText } from '@/features/issues/milestone-text';
 import type {
   IssueKind,
   IssueKindCounts,
+  IssueRequirement,
   IssueResponse,
   IssueSourceCount,
   IssueSummaryResponse,
@@ -322,6 +323,9 @@ function IssueDetailSheet({
               </DetailRow>
               <DetailRow term="담당">{issue.assignee ?? '-'}</DetailRow>
               {issue.tracker && <DetailRow term="트래커">{issue.tracker}</DetailRow>}
+              <DetailRow term="관련 요구사항">
+                <RequirementsCell items={issue.requirements ?? []} full />
+              </DetailRow>
               {(issue.requirementRefs?.length ?? 0) > 0 && (
                 <DetailRow term="요구사항 ID">{issue.requirementRefs?.join(', ')}</DetailRow>
               )}
@@ -379,6 +383,31 @@ function DetailRow({ term, children }: { term: string; children: ReactNode }): R
   );
 }
 
+/** 이어진 요구사항 코드. 없으면 「-」. full 이면 이름까지 적는다(상세) */
+function RequirementsCell({
+  items,
+  full = false,
+}: {
+  items: IssueRequirement[];
+  full?: boolean;
+}): ReactNode {
+  if (items.length === 0) return <span className="text-muted-foreground">-</span>;
+  return (
+    <div className="flex flex-col items-start gap-0.5">
+      {items.map((r) => (
+        <span
+          key={r.id}
+          className="font-mono text-xs whitespace-nowrap"
+          title={full ? undefined : r.title}
+        >
+          {r.code ?? r.title}
+          {full && r.code && <span className="ml-1.5 font-sans">{r.title}</span>}
+        </span>
+      ))}
+    </div>
+  );
+}
+
 function buildColumns(): ColumnDef<IssueResponse, unknown>[] {
   return [
     {
@@ -396,6 +425,12 @@ function buildColumns(): ColumnDef<IssueResponse, unknown>[] {
           {row.original.title}
         </span>
       ),
+    },
+    {
+      // 이슈 제목·본문에 요구사항 코드가 있으면 그 요구사항에 붙은 이슈다(11-18 사용자 지시)
+      id: 'requirements',
+      header: '관련 요구사항',
+      cell: ({ row }) => <RequirementsCell items={row.original.requirements ?? []} />,
     },
     {
       accessorKey: 'kind',
