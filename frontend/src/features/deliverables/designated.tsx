@@ -42,7 +42,7 @@ import type {
 
 const ITEM_LABEL: Record<DesignatedDeliverable['status'], string> = {
   MISSING: '미제출',
-  REGISTERED: '등록(확정 전)',
+  REGISTERED: '제출 처리 중',
   SUBMITTED: '제출',
   APPROVED: '승인',
   REJECTED: '반려',
@@ -57,7 +57,7 @@ const ITEM_TONE: Record<DesignatedDeliverable['status'], string> = {
 };
 
 const VERSION_LABEL: Record<DesignatedVersion['state'], string> = {
-  REGISTERED: '등록(확정 전)',
+  REGISTERED: '제출 처리 중',
   SUBMITTED: '제출',
   APPROVED: '승인',
   REJECTED: '반려',
@@ -354,29 +354,26 @@ function SubmitHint({
   projectId: string;
   version: DesignatedVersion;
 }): ReactNode {
+  // 양식으로 올린 문서는 읽기가 끝나면 서버가 바로 제출로 확정한다(11-18). 여기 남는 것은
+  // 아직 읽는 중이거나, 분류를 정하지 못해 자동 제출을 못 한 경우뿐이다
+  if (version.submit === 'PROCESSING') return <span>읽는 중</span>;
   if (version.submit === 'READY') {
     return (
-      <Button asChild size="sm">
-        <Link to={`/p/${projectId}/documents/${version.documentId}/draft`}>
-          산출물로 제출하러 가기
-        </Link>
-      </Button>
+      <Link
+        to={`/p/${projectId}/documents/${version.documentId}/draft`}
+        className="text-primary underline underline-offset-2"
+      >
+        분류를 정해 제출
+      </Link>
     );
   }
-  if (version.submit === 'PROCESSING') {
-    // 화면이 몇 초마다 다시 확인해 끝나면 이 자리가 제출 단추로 바뀐다
-    return <span>문서를 읽는 중입니다</span>;
-  }
   return (
-    <span>
-      초안이 없어 제출할 수 없습니다.{' '}
-      <Link
-        to={`/p/${projectId}/documents/${version.documentId}`}
-        className="underline underline-offset-2"
-      >
-        자료 상세에서 확인
-      </Link>
-    </span>
+    <Link
+      to={`/p/${projectId}/documents/${version.documentId}`}
+      className="underline underline-offset-2"
+    >
+      읽지 못함 · 자료 상세
+    </Link>
   );
 }
 

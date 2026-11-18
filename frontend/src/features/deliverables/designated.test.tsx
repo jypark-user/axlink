@@ -132,33 +132,45 @@ describe('올리기 창', () => {
     expect(contractor.onUpload).toHaveBeenCalledWith('2.1', 'd1');
   });
 
-  it('올렸지만 확정 전이면 제출하러 가는 버튼이 있다', () => {
-    const waiting: DesignatedDeliverable = {
+  it('읽는 중이면 「제출 처리 중」, 분류를 못 정했으면 초안으로 가는 링크만 있다', () => {
+    const version = (submit: 'PROCESSING' | 'READY') => ({
       ...entry,
-      status: 'REGISTERED',
+      status: 'REGISTERED' as const,
       versions: [
         {
           ...entry.versions[0],
           documentId: 'doc9',
-          state: 'REGISTERED',
+          state: 'REGISTERED' as const,
           workProductId: null,
           version: null,
           rejectReason: null,
-          submit: 'READY',
+          submit,
         },
       ],
-    };
-    render(
+    });
+    const { rerender } = render(
       <MemoryRouter>
         <ToasterProvider>
-          <UploadDialog item={row([waiting])} actions={actions(false)} onClose={vi.fn()} />
+          <UploadDialog
+            item={row([version('PROCESSING')])}
+            actions={actions(false)}
+            onClose={vi.fn()}
+          />
         </ToasterProvider>
       </MemoryRouter>,
     );
-    expect(
-      screen.getByText('등록(확정 전)', { selector: 'span.inline-block' }),
-    ).toBeInTheDocument();
-    const go = screen.getByRole('link', { name: '산출물로 제출하러 가기' });
-    expect(go).toHaveAttribute('href', '/p/p1/documents/doc9/draft');
+    expect(screen.getByText('읽는 중')).toBeInTheDocument();
+    expect(screen.queryByText('산출물로 제출하러 가기')).toBeNull();
+    rerender(
+      <MemoryRouter>
+        <ToasterProvider>
+          <UploadDialog item={row([version('READY')])} actions={actions(false)} onClose={vi.fn()} />
+        </ToasterProvider>
+      </MemoryRouter>,
+    );
+    expect(screen.getByRole('link', { name: '분류를 정해 제출' })).toHaveAttribute(
+      'href',
+      '/p/p1/documents/doc9/draft',
+    );
   });
 });

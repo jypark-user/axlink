@@ -318,18 +318,21 @@ def test_UC_033_S01_지정_양식_제출_반려_재제출_승인(client, client_
     assert row["designated"][0]["status"] == "MISSING" and row["status"] == "OVERDUE"
     assert row["documents"] == []  # 양식은 문서 목록에도 없다
 
-    # 올리기만 하면 등록이다. 확정해야 제출이다(DEC-14)
+    # 양식 자리에 올리면 읽기가 끝나는 대로 제출이다(11-18 사용자 지시). 「산출물로 제출」을
+    # 따로 하지 않는다. 이름은 양식 이름, 유형은 양식 분류다
     doc1 = _upload(client, pm, did, "통합시험결과-v1.xlsx", _xlsx("v1"))
-    row = _row(_screen(client, pm), "2.1")
-    assert row["designated"][0]["status"] == "REGISTERED" and row["status"] == "OVERDUE"
-    assert row["designated"][0]["versions"][0]["submit"] == "READY"  # 제출하러 갈 수 있다
     detail = client.get(f"/api/documents/{doc1['id']}", headers=_auth(pm)).json()
-    assert detail["designatedName"] == "시험결과서" and detail["draftStatus"] == "PROPOSED"
-    wp1 = _confirm(client, pm, doc1["id"], "1.0")
+    assert detail["designatedName"] == "시험결과서" and detail["draftStatus"] != "PROPOSED"
     row = _row(_screen(client, po), "2.1")
     assert row["designated"][0]["status"] == "SUBMITTED"
     assert (row["status"], row["ref"]) == ("SUBMITTED", "지정 산출물 1건 중 1건 제출")
-    assert [d["confirmed"] for d in row["documents"]] == [True]  # 유형을 바꿔 확정해도 확정
+    assert [d["confirmed"] for d in row["documents"]] == [True]
+    v1 = row["designated"][0]["versions"][0]
+    assert v1["state"] == "SUBMITTED" and v1.get("submit") is None
+    wp1 = v1["workProductId"]
+    with tx() as cur:
+        cur.execute("select type, title from work_product where id = %s", (wp1,))
+        assert dict(cur.fetchone()) == {"type": "TEST_REPORT", "title": "시험결과서"}
 
     # 반려 사유가 항목 버전에 보인다
     res = client.post(f"/api/projects/{PID}/work-products/{wp1}/reject",
@@ -338,14 +341,17 @@ def test_UC_033_S01_지정_양식_제출_반려_재제출_승인(client, client_
     v = _row(_screen(client, pm), "2.1")["designated"][0]
     assert v["status"] == "REJECTED" and v["versions"][0]["rejectReason"] == "결함 목록 누락"
 
-    doc2 = _upload(client, pm, did, "통합시험결과-v2.xlsx", _xlsx("v2"))
-    wp2 = _confirm(client, pm, doc2["id"], "1.1")
+    # 고쳐서 다시 올리면 새 버전으로 제출된다
+    _upload(client, pm, did, "통합시험결과-v2.xlsx", _xlsx("v2"))
+    v2 = _row(_screen(client, pm), "2.1")["designated"][0]["versions"][0]
+    assert v2["state"] == "SUBMITTED" and v2["version"] != v1["version"]
+    wp2 = v2["workProductId"]
     assert client.post(f"/api/projects/{PID}/work-products/{wp2}/approve",
                        json={}, headers=_auth(po)).status_code == 204
     item = _row(_screen(client, pm), "2.1")["designated"][0]
     assert item["status"] == "APPROVED"
     assert [x["state"] for x in item["versions"]] == ["APPROVED", "REJECTED"]
-    assert [x["version"] for x in item["versions"]] == ["1.1", "1.0"]
+    assert [x["version"] for x in item["versions"]] == [v2["version"], v1["version"]]
     assert item["versions"][1]["rejectReason"] == "결함 목록 누락"  # 지난 사유도 남는다
 
 
@@ -374,9 +380,8 @@ def test_UC_033_E2_다른_유형_제출은_막지_않고_항목_상태도_안_�
 def test_UC_033_S02_정체가_이어지면_지정이_따라가고_끊기면_재지정_필요(client, client_token, env):
     env.load(BASE)
     po, pm = client_token("r2"), client_token("r3")
-    did = _designate(client, po, env.task_key("2.1")).json()["id"]
-    doc = _upload(client, pm, did, "통합시험결과-v1.xlsx", _xlsx("v1"))
-    _confirm(client, pm, doc["id"], "1.0")
+    did = _designate(client, po, env.task_key("2.1"), productType="TEST_REPORT").json()["id"]
+    _upload(client, pm, did, "통합시험결과-v1.xlsx", _xlsx("v1"))  # 올리면 제출이다(11-18)
 
     # 실적만 바뀐 재업로드: 정체가 이어진다
     env.load([BASE[0], BASE[1], ("2.1", "통합 시험", "시험결과서", 0.5, 0.4)])

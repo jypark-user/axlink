@@ -110,7 +110,7 @@ export function DeliverablesPage(): ReactNode {
     [project.id],
   );
   const { reload } = state;
-  // 올린 문서를 읽는 중이면 몇 초마다 다시 받아, 끝나는 대로 「산출물로 제출하러 가기」가 뜬다
+  // 올린 문서를 읽는 중이면 몇 초마다 다시 받아, 끝나는 대로 「제출」로 바뀐 것을 보인다
   const reading = (state.data?.items ?? []).some((i) =>
     (i.designated ?? []).some((d) => d.versions.some((v) => v.submit === 'PROCESSING')),
   );
@@ -145,7 +145,7 @@ export function DeliverablesPage(): ReactNode {
       await api.upload<DocumentUploadResponse>(`/projects/${project.id}/documents`, form);
       toast({
         title: designatedId
-          ? `${wbsId} 작업의 산출물로 접수했습니다. 「산출물로 제출하러 가기」까지 해야 제출입니다.`
+          ? `${wbsId} 작업의 산출물로 올렸습니다. 문서를 읽고 나면 제출로 바뀝니다.`
           : `${wbsId} 항목의 산출물로 접수했습니다. 읽기·색인은 뒤에서 합니다.`,
         variant: 'success',
       });

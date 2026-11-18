@@ -17,6 +17,7 @@ from app.ai.port import LlmPort
 from app.auth.models import AuthPrincipal
 from app.common import errors
 from app.config import settings
+from app.db import fetch_all, fetch_one
 from app.document import draft_repository, repository, structuring
 from app.document.access import require_project
 from app.document.models import (
@@ -250,3 +251,85 @@ def confirm(
 def propose_for_upload(cur: Any, document_id: str, filename: str, text: str) -> None:
     """업로드 흐름에서 부른다. 구현체 선택은 llm_port 한 곳이다."""
     propose(cur, document_id, filename, text, llm_port)
+    submit_designated(cur, document_id)
+
+
+def submit_designated(cur: Any, document_id: str) -> str | None:
+    """산출물 양식으로 올린 문서는 올린 것이 곧 제출이다(2026-11-18 사용자 지시).
+
+    양식 자리에 골라 올렸으면 무엇을 냈는지 이미 정해진 것이라 「산출물로 제출」을 따로 묻지
+    않는다. 읽기가 끝나 초안이 생기면 올린 사람 이름으로 그 자리에서 확정한다. 이름은 양식
+    이름, 유형은 양식의 분류(없으면 초안이 고른 유형), 버전은 초안이 읽은 표기를 쓰되 그 유형에
+    이미 있으면 다음 번호를 붙인다. 유형을 정할 수 없으면 확정하지 않고 사람이 고르게 둔다.
+    고칠 것이 있으면 다시 올리면 새 버전이 된다.
+    """
+    row = fetch_one(
+        cur,
+        """
+        select d.project_id, d.uploaded_by_user_id, d.stored_path,
+               dd.name as designated_name, dd.product_type as designated_type,
+               s.id as draft_id, s.status as draft_status, s.proposed_type, s.draft_json
+          from document_upload d
+          join wbs_designated_deliverable dd on dd.id = d.designated_deliverable_id
+          join structuring_draft s on s.document_upload_id = d.id
+         where d.id = %s
+        """,
+        (document_id,),
+    )
+    if row is None or row["draft_status"] != "PROPOSED":
+        return None
+    product_type = row["designated_type"] or row["proposed_type"]
+    if product_type not in DISPLAY_NAMES:
+        return None
+    project_id = str(row["project_id"])
+    draft = row["draft_json"] or {}
+    authored_at = None
+    if draft.get("authoredDate"):
+        try:
+            authored_at = date.fromisoformat(draft["authoredDate"])
+        except ValueError:
+            authored_at = None
+    rec = {
+        "type": product_type,
+        "title": row["designated_name"][:500],
+        "version": _free_version(cur, project_id, product_type, draft.get("version")),
+        "status": _CONFIRM_STATUS,
+        "authored_at": authored_at,
+        "requirements": [],
+        "file_uri": row["stored_path"],
+    }
+    user_id = str(row["uploaded_by_user_id"])
+    try:
+        work_product_id = standard_repo.place_document_work_product(
+            cur, project_id, document_id, user_id, rec
+        )
+    except errors.ApiError as exc:
+        # 확정하지 못해도 읽기·색인은 끝난 것이다. 사람이 초안 화면에서 확정하게 둔다
+        repository.note_error(cur, document_id, f"자동 제출을 건너뛰었습니다. {exc.message}")
+        return None
+    status = "CONFIRMED" if product_type == row["proposed_type"] else "MANUAL_OVERRIDE"
+    draft_repository.mark_confirmed(cur, str(row["draft_id"]), user_id, work_product_id, status)
+    draft_repository.set_document_status(cur, document_id, "CONFIRMED")
+    from app.dashboard import service as dashboard_service  # 순환 import 회피
+
+    dashboard_service.sync_product_links(cur, project_id)
+    return work_product_id
+
+
+def _free_version(cur: Any, project_id: str, product_type: str, guess: str | None) -> str:
+    """그 유형에 아직 없는 버전 표기. 읽은 표기가 비었거나 이미 있으면 「n.0」 다음 번호."""
+    used = {
+        r["version"]
+        for r in fetch_all(
+            cur,
+            "select version from work_product where project_id = %s and type = %s",
+            (project_id, product_type),
+        )
+    }
+    guess = (guess or "").strip()[:40]
+    if guess and guess not in used:
+        return guess
+    n = len(used) + 1
+    while f"{n}.0" in used:
+        n += 1
+    return f"{n}.0"
