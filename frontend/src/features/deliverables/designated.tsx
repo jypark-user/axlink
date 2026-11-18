@@ -102,7 +102,10 @@ export type DesignationTarget =
   | { mode: 'create'; taskKey: string; taskLabel: string }
   | { mode: 'edit'; item: DesignatedDeliverable; taskLabel: string };
 
-/** 표의 한 칸. 「내야 할 산출물 n건」과 항목별 상태·양식·제출 이력. */
+/**
+ * 표의 「산출물 양식」 칸(11-18 사용자 지시). 발주기관은 없으면 [등록], 있으면 「n건」을 눌러
+ * 고친다. 용역사는 「n건」을 눌러 양식을 본다. 제출은 이 칸이 아니라 맨 오른쪽 [올리기]로만 한다.
+ */
 export function DesignatedCell({
   item,
   actions,
@@ -124,42 +127,22 @@ export function DesignatedCell({
           actions.onEdit({ mode: 'create', taskKey: item.taskKey as string, taskLabel })
         }
       >
-        산출물 지정
+        등록
       </Button>
     );
   }
-  // 표 칸에는 요약만 둔다. 항목·양식·버전 이력은 옆 창에서 본다(표가 넓어지지 않게)
-  const done = list.filter((d) => d.status === 'APPROVED').length;
-  const missing = list.filter((d) => d.status === 'MISSING').length;
-  // 올렸지만 「산출물로 제출」 전. 미제출과 섞으면 「냈는데 왜 미제출이냐」가 된다
-  const waiting = list.filter((d) => d.status === 'REGISTERED').length;
-  const parts = [
-    missing > 0 ? `미제출 ${missing}` : null,
-    waiting > 0 ? `제출 확정 대기 ${waiting}` : null,
-    done > 0 ? `승인 ${done}` : null,
-  ].filter(Boolean);
   return (
     <button
       type="button"
-      className="flex flex-col items-start text-left text-sm underline-offset-2 hover:underline"
+      className="text-primary text-sm whitespace-nowrap underline-offset-2 hover:underline"
       onClick={() => actions.onOpen(item.wbsId)}
     >
-      <span className="whitespace-nowrap">
-        내야 할 산출물 <span className="tnum font-medium">{list.length}</span>건
-      </span>
-      <span
-        className={cn(
-          'text-xs whitespace-nowrap',
-          waiting > 0 ? 'text-amber-700 dark:text-amber-300' : 'text-muted-foreground',
-        )}
-      >
-        {parts.length > 0 ? parts.join(' · ') : '모두 제출'}
-      </span>
+      <span className="tnum font-medium">{list.length}</span>건
     </button>
   );
 }
 
-/** 한 작업의 지정 산출물 전체. 표 옆 창으로 연다. */
+/** 한 작업의 산출물 양식 전체. 표의 「n건」을 누르면 옆 창으로 연다. 제출(올리기)은 여기서 하지 않는다. */
 export function DesignatedSheet({
   item,
   actions,
@@ -178,10 +161,7 @@ export function DesignatedSheet({
           <>
             <SheetHeader className="gap-1 px-6 pt-6 pb-4">
               <SheetTitle className="pr-8">{taskLabel}</SheetTitle>
-              <SheetDescription>
-                발주기관이 이 작업에 정한 산출물입니다. 양식은 제출본이 아니고, 올린 파일은
-                「산출물로 제출」해야 제출로 셉니다.
-              </SheetDescription>
+              <SheetDescription>산출물 양식</SheetDescription>
             </SheetHeader>
             <ul className="flex flex-col gap-4 px-6 pb-6">
               {list.map((d) => (
@@ -191,6 +171,7 @@ export function DesignatedSheet({
                   wbsId={item.wbsId}
                   taskLabel={taskLabel}
                   actions={actions}
+                  mode="manage"
                 />
               ))}
             </ul>
@@ -203,7 +184,7 @@ export function DesignatedSheet({
                     actions.onEdit({ mode: 'create', taskKey: item.taskKey as string, taskLabel })
                   }
                 >
-                  산출물 더 지정
+                  양식 추가 등록
                 </Button>
               </div>
             )}
@@ -214,17 +195,24 @@ export function DesignatedSheet({
   );
 }
 
+/**
+ * 양식 한 건. manage 는 양식 옆 창(발주기관 고치기·거두기·승인), upload 는 올리기 창(누구나
+ * 그 양식으로 올리고 「산출물로 제출」까지 간다).
+ */
 function DesignatedEntry({
   entry,
   wbsId,
   taskLabel,
   actions,
+  mode,
 }: {
   entry: DesignatedDeliverable;
   wbsId: string | null;
   taskLabel: string;
   actions: DesignatedActions;
+  mode: 'manage' | 'upload';
 }): ReactNode {
+  const uploading = mode === 'upload';
   const { toast } = useToast();
   const { projectId, canDesignate } = actions;
 
@@ -298,12 +286,12 @@ function DesignatedEntry({
         ) : (
           <span className="text-muted-foreground">양식 없음</span>
         )}
-        {wbsId && !entry.needsRedesignation && (
+        {uploading && wbsId && !entry.needsRedesignation && (
           <Button size="sm" variant="outline" onClick={() => actions.onUpload(wbsId, entry.id)}>
-            {entry.versions.length > 0 ? '새 버전 제출' : '제출할 파일 올리기'}
+            올리기
           </Button>
         )}
-        {canDesignate && (
+        {!uploading && canDesignate && (
           <>
             <Button
               size="sm"
@@ -330,22 +318,28 @@ function DesignatedEntry({
               {v.rejectReason && (
                 <span className="text-destructive">· 반려 사유: {v.rejectReason}</span>
               )}
-              {v.state === 'REGISTERED' && <SubmitHint projectId={projectId} version={v} />}
-              {canDesignate && v.isCurrent && v.state === 'SUBMITTED' && v.workProductId && (
-                <>
-                  <Button size="sm" variant="outline" onClick={() => void decide(v, 'approve')}>
-                    승인
-                  </Button>
-                  <Button size="sm" variant="ghost" onClick={() => void decide(v, 'reject')}>
-                    반려
-                  </Button>
-                </>
+              {uploading && v.state === 'REGISTERED' && (
+                <SubmitHint projectId={projectId} version={v} />
               )}
+              {!uploading &&
+                canDesignate &&
+                v.isCurrent &&
+                v.state === 'SUBMITTED' &&
+                v.workProductId && (
+                  <>
+                    <Button size="sm" variant="outline" onClick={() => void decide(v, 'approve')}>
+                      승인
+                    </Button>
+                    <Button size="sm" variant="ghost" onClick={() => void decide(v, 'reject')}>
+                      반려
+                    </Button>
+                  </>
+                )}
             </li>
           ))}
         </ul>
       )}
-      <History projectId={projectId} id={entry.id} />
+      {!uploading && <History projectId={projectId} id={entry.id} />}
     </li>
   );
 }
@@ -414,6 +408,47 @@ function History({ projectId, id }: { projectId: string; id: string }): ReactNod
   );
 }
 
+/**
+ * 올리기 창(11-18 사용자 지시). 양식이 등록된 작업에서 맨 오른쪽 [올리기]를 누르면 연다. 양식마다
+ * 내려받고, 그 양식으로 올리고, 올린 것을 「산출물로 제출」까지 한다. 양식 고치기는 여기 없다.
+ */
+export function UploadDialog({
+  item,
+  actions,
+  onClose,
+}: {
+  item: WbsDeliverableItem | null;
+  actions: DesignatedActions;
+  onClose: () => void;
+}): ReactNode {
+  const list = (item?.designated ?? []).filter((d) => !d.needsRedesignation);
+  const taskLabel = item ? `${item.wbsId} ${item.name}` : '';
+  return (
+    <Dialog open={item !== null} onOpenChange={(o) => !o && onClose()}>
+      <DialogContent className="max-h-[85vh] overflow-y-auto sm:max-w-xl">
+        <DialogHeader>
+          <DialogTitle>올리기</DialogTitle>
+          <DialogDescription>{taskLabel}</DialogDescription>
+        </DialogHeader>
+        {item && (
+          <ul className="flex min-w-0 flex-col gap-4">
+            {list.map((d) => (
+              <DesignatedEntry
+                key={d.id}
+                entry={d}
+                wbsId={item.wbsId}
+                taskLabel={taskLabel}
+                actions={actions}
+                mode="upload"
+              />
+            ))}
+          </ul>
+        )}
+      </DialogContent>
+    </Dialog>
+  );
+}
+
 /** 계획서 교체로 작업이 끊긴 지정 항목. 지우지 않고 모아 두고 발주기관이 작업을 다시 정한다. */
 export function RedesignationPanel({
   entries,
@@ -465,6 +500,7 @@ export function RedesignationPanel({
               wbsId={null}
               taskLabel={`${entry.wbsIdAt} ${entry.taskNameAt}`}
               actions={actions}
+              mode="manage"
             />
             {actions.canDesignate && (
               <div className="flex items-center gap-2">
@@ -554,7 +590,7 @@ export function DesignateDialog({
         form.append('file', file);
         await api.upload(`${base(projectId)}/${id}/template`, form);
       }
-      toast({ title: '산출물 지정을 저장했습니다.', variant: 'success' });
+      toast({ title: '산출물 양식을 저장했습니다.', variant: 'success' });
       onDone();
     } catch (err) {
       setError(isApiError(err) ? err.message : '저장하지 못했습니다.');
@@ -569,11 +605,10 @@ export function DesignateDialog({
       <DialogContent>
         <form onSubmit={submit} className="flex flex-col gap-4">
           <DialogHeader>
-            <DialogTitle>{target.mode === 'create' ? '산출물 지정' : '지정 고치기'}</DialogTitle>
-            <DialogDescription>
-              {target.taskLabel} 작업에서 용역사가 내야 할 산출물과 양식을 정합니다. 양식은
-              제출본으로 세지 않습니다.
-            </DialogDescription>
+            <DialogTitle>
+              {target.mode === 'create' ? '산출물 양식 등록' : '산출물 양식 수정'}
+            </DialogTitle>
+            <DialogDescription>{target.taskLabel}</DialogDescription>
           </DialogHeader>
           <div className="flex flex-col gap-1.5">
             <Label htmlFor="dd-name">산출물 이름</Label>

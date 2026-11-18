@@ -22,6 +22,7 @@ import {
   DesignatedCell,
   DesignatedSheet,
   RedesignationPanel,
+  UploadDialog,
   type DesignatedActions,
   type DesignationTarget,
 } from './designated';
@@ -86,6 +87,8 @@ export function DeliverablesPage(): ReactNode {
   const [uploadingFor, setUploadingFor] = useState<string | null>(null);
   const [designating, setDesignating] = useState<DesignationTarget | null>(null);
   const [openWbsId, setOpenWbsId] = useState<string | null>(null);
+  // 양식이 있는 작업의 올리기 창
+  const [uploadWbsId, setUploadWbsId] = useState<string | null>(null);
   const inputRef = useRef<HTMLInputElement>(null);
   // 올릴 자리. 지정 산출물 항목을 골라 올리면 그 항목의 제출본이 된다(UC-033)
   const targetRef = useRef<{ wbsId: string; designatedId?: string } | null>(null);
@@ -125,7 +128,7 @@ export function DeliverablesPage(): ReactNode {
       await api.upload<DocumentUploadResponse>(`/projects/${project.id}/documents`, form);
       toast({
         title: designatedId
-          ? `${wbsId} 작업의 지정 산출물로 접수했습니다. 옆 창의 「산출물로 제출하러 가기」까지 해야 제출입니다.`
+          ? `${wbsId} 작업의 산출물로 접수했습니다. 「산출물로 제출하러 가기」까지 해야 제출입니다.`
           : `${wbsId} 항목의 산출물로 접수했습니다. 읽기·색인은 뒤에서 합니다.`,
         variant: 'success',
       });
@@ -152,7 +155,15 @@ export function DeliverablesPage(): ReactNode {
   };
 
   const columns = useMemo(
-    () => buildColumns(project.id, pickFile, uploadingFor, designatedActions, typeNames),
+    () =>
+      buildColumns(
+        project.id,
+        pickFile,
+        setUploadWbsId,
+        uploadingFor,
+        designatedActions,
+        typeNames,
+      ),
     // eslint-disable-next-line react-hooks/exhaustive-deps
     [project.id, uploadingFor, canDesignate, typeNames, reload],
   );
@@ -213,7 +224,7 @@ export function DeliverablesPage(): ReactNode {
                   columns={columns}
                   data={rows}
                   filterColumn="name"
-                  filterPlaceholder="작업이나 산출물 이름으로 찾기"
+                  filterPlaceholder="검색"
                   pageSize={50}
                   emptyText="해당하는 산출물이 없습니다."
                   className="mt-4"
@@ -224,6 +235,11 @@ export function DeliverablesPage(): ReactNode {
                 item={data.items.find((i) => i.wbsId === openWbsId) ?? null}
                 actions={designatedActions}
                 onClose={() => setOpenWbsId(null)}
+              />
+              <UploadDialog
+                item={data.items.find((i) => i.wbsId === uploadWbsId) ?? null}
+                actions={designatedActions}
+                onClose={() => setUploadWbsId(null)}
               />
 
               <div className="mt-8">
@@ -257,6 +273,7 @@ export function DeliverablesPage(): ReactNode {
 function buildColumns(
   projectId: string,
   onUpload: (wbsId: string) => void,
+  onOpenUpload: (wbsId: string) => void,
   uploadingFor: string | null,
   designatedActions: DesignatedActions,
   typeNames: Record<string, string>,
@@ -270,33 +287,20 @@ function buildColumns(
       ),
     },
     {
-      // 작업명 아래에 WBS 산출물 열에 적힌 이름을 작게 둔다. 찾기도 둘을 같이 본다
+      // 작업명만 둔다(11-18 사용자 지시)
       id: 'name',
-      accessorFn: (item) => `${item.name} ${item.deliverable ?? ''}`,
-      header: ({ column }) => <SortableHeader column={column}>작업 · WBS 산출물</SortableHeader>,
+      accessorKey: 'name',
+      header: ({ column }) => <SortableHeader column={column}>작업명</SortableHeader>,
       cell: ({ row }) => (
-        <span className="flex max-w-[17rem] flex-col">
-          <span className="truncate text-sm" title={row.original.name}>
-            {row.original.name}
-          </span>
-          <span
-            className={cn(
-              'truncate text-xs',
-              row.original.status === 'SUBMITTED'
-                ? 'text-muted-foreground'
-                : 'text-muted-foreground/70 italic',
-            )}
-            title={`WBS 에 적힌 산출물 이름: ${row.original.deliverable ?? '없음'}`}
-          >
-            {row.original.deliverable ?? 'WBS 산출물 없음'}
-          </span>
+        <span className="block max-w-[17rem] truncate text-sm" title={row.original.name}>
+          {row.original.name}
         </span>
       ),
     },
     {
       id: 'designated',
-      // 발주기관이 정한 항목(UC-033). 있으면 판정이 산출물 열 대신 이것을 본다
-      header: () => <span title="발주기관이 이 작업에 정한 산출물과 양식">발주기관 지정</span>,
+      // 발주기관이 정한 산출물 양식(UC-033). 있으면 판정이 WBS 산출물 열 대신 이것을 본다
+      header: '산출물 양식',
       cell: ({ row }) => <DesignatedCell item={row.original} actions={designatedActions} />,
     },
     {
@@ -398,21 +402,10 @@ function buildColumns(
       header: '',
       cell: ({ row }) => {
         const item = row.original;
-        // 지정 산출물이 있는 작업은 항목을 골라 올려야 그 항목에 이어진다. 옆 창을 연다
-        if ((item.designated ?? []).length > 0) {
-          return (
-            <div className="flex justify-end">
-              <Button
-                size="sm"
-                variant="outline"
-                onClick={() => designatedActions.onOpen(item.wbsId)}
-              >
-                항목 골라 올리기
-              </Button>
-            </div>
-          );
-        }
-        if (item.status === 'NONE') return null;
+        // 산출물 제출은 이 [올리기]로만 한다(11-18 사용자 지시). 양식이 있으면 양식을 골라 올리는
+        // 창을 열고, 없으면 바로 파일을 고른다
+        const hasForm = (item.designated ?? []).some((d) => !d.needsRedesignation);
+        if (!hasForm && item.status === 'NONE') return null;
         const busy = uploadingFor === item.wbsId;
         return (
           <div className="flex justify-end">
@@ -420,9 +413,9 @@ function buildColumns(
               size="sm"
               variant={item.status === 'SUBMITTED' ? 'ghost' : 'outline'}
               disabled={busy}
-              onClick={() => onUpload(item.wbsId)}
+              onClick={() => (hasForm ? onOpenUpload(item.wbsId) : onUpload(item.wbsId))}
             >
-              {busy ? '올리는 중…' : item.status === 'SUBMITTED' ? '새 버전 올리기' : '올리기'}
+              {busy ? '올리는 중…' : '올리기'}
             </Button>
           </div>
         );
