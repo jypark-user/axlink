@@ -287,7 +287,7 @@ function DesignatedEntry({
           <span className="text-muted-foreground">양식 없음</span>
         )}
         {uploading && wbsId && !entry.needsRedesignation && (
-          <Button size="sm" variant="outline" onClick={() => actions.onUpload(wbsId, entry.id)}>
+          <Button size="sm" onClick={() => actions.onUpload(wbsId, entry.id)}>
             올리기
           </Button>
         )}

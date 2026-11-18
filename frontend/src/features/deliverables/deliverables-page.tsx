@@ -411,7 +411,6 @@ function buildColumns(
           <div className="flex justify-end">
             <Button
               size="sm"
-              variant={item.status === 'SUBMITTED' ? 'ghost' : 'outline'}
               disabled={busy}
               onClick={() => (hasForm ? onOpenUpload(item.wbsId) : onUpload(item.wbsId))}
             >
