@@ -363,6 +363,20 @@ class WbsRecognitionResponse(BaseModel):
     guidance: str
 
 
+class WbsSourceFile(BaseModel):
+    """일정·진척 수치를 읽어 온 원천 파일 (2026-11-18 사용자 지시). 수치가 바뀌려면 이 파일이 바뀌어
+    다시 수집돼야 한다. 용역사가 어느 파일을 고쳐야 하는지 헷갈리지 않게 화면에 그대로 보인다."""
+
+    origin: str  # REPOSITORY(저장소에서 수집) | UPLOAD(자료로 올림) | OTHER
+    path: str | None  # 저장소 안 경로 또는 올린 파일 이름
+    url: str | None  # 원본을 여는 주소
+    tool: str | None  # GITHUB | GITLAB | REDMINE ...
+    repository: str | None  # 저장소(owner/name) 또는 연결 대상
+    revision: str | None  # 읽은 판(커밋 등)
+    readAt: str | None  # noqa: N815 (이 판을 반영한 시각)
+    lastSyncedAt: str | None  # noqa: N815 (그 연결을 마지막으로 수집한 시각)
+
+
 class WbsScheduleResponse(BaseModel):
     source: str  # WBS_FILE | REDMINE | NONE
     sourceLabel: str  # noqa: N815
@@ -376,6 +390,7 @@ class WbsScheduleResponse(BaseModel):
     notice: str | None
     deliverables: DeliverableSummary = DeliverableSummary()
     recognition: WbsRecognitionResponse | None = None
+    sourceFile: WbsSourceFile | None = None  # noqa: N815
 
 
 # --- 인포 템플릿 카탈로그 (ARC-012) ----------------------------------------------

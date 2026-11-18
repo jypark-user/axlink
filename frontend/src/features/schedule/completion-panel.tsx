@@ -3,17 +3,10 @@ import { Link } from 'react-router-dom';
 import { Badge } from '@/components/ui/badge';
 import { Card, CardContent } from '@/components/ui/card';
 import { DataState } from '@/components/common/data-state';
-import { api } from '@/lib/http';
 import { formatDate, formatPercent } from '@/lib/format';
-import { useAsync } from '@/lib/use-async';
+import type { AsyncState } from '@/lib/use-async';
 import { cn } from '@/lib/utils';
-import {
-  APPROVAL_WORD,
-  completionText,
-  FILE_CHECK_WORD,
-  rateText,
-  SUBMISSION_WORD,
-} from '@/features/review-requests/completion-text';
+import { completionText, rateText } from '@/features/review-requests/completion-text';
 import type { CompletionItem, CompletionSummaryResponse } from '@/types/api';
 
 /**
@@ -21,11 +14,11 @@ import type { CompletionItem, CompletionSummaryResponse } from '@/types/api';
  * 보고 진척률은 용역사가 WBS 에 적은 실적이고, 완료 확인율은 발주기관이 '작업 완료 확인'
  * 요청으로 완료를 인정한 작업의 가중치 비율이다. 두 값을 나란히 두고 섞지 않는다.
  */
-export function CompletionPanel({ projectId }: { projectId: string }): ReactNode {
-  const state = useAsync<CompletionSummaryResponse>(
-    () => api.get<CompletionSummaryResponse>(`/projects/${projectId}/wbs/completion`),
-    [projectId],
-  );
+export function CompletionPanel({
+  state,
+}: {
+  state: AsyncState<CompletionSummaryResponse>;
+}): ReactNode {
   return (
     <DataState state={state} onRetry={state.reload}>
       {(s) => (
@@ -51,7 +44,6 @@ export function CompletionPanel({ projectId }: { projectId: string }): ReactNode
               </>
             )}
           </p>
-          {s.items.length > 0 && <CompletionTable items={s.items} />}
         </section>
       )}
     </DataState>
@@ -70,55 +62,11 @@ function Stat({ term, value, hint }: { term: string; value: string; hint: string
   );
 }
 
-/** 작업마다 네 사실. 파일 대조·정식 제출·산출물 승인은 근거이고, 마지막 칸만 완료 확인이다. */
-function CompletionTable({ items }: { items: CompletionItem[] }): ReactNode {
-  return (
-    <div className="overflow-x-auto rounded border">
-      <table className="w-full text-sm">
-        <thead className="bg-muted/50 text-muted-foreground text-xs">
-          <tr>
-            <th className="px-3 py-2 text-left font-medium">작업</th>
-            <th className="px-3 py-2 text-right font-medium">가중치</th>
-            <th className="px-3 py-2 text-right font-medium">보고 실적</th>
-            <th className="px-3 py-2 text-left font-medium">파일 대조</th>
-            <th className="px-3 py-2 text-left font-medium">정식 제출</th>
-            <th className="px-3 py-2 text-left font-medium">산출물 승인</th>
-            <th className="px-3 py-2 text-left font-medium">작업 완료 확인</th>
-          </tr>
-        </thead>
-        <tbody>
-          {items.map((i) => (
-            <tr key={i.taskKey} className="border-t">
-              <td className="px-3 py-2">
-                <span className="tnum text-muted-foreground mr-1.5 text-xs">{i.wbsId}</span>
-                {i.name}
-              </td>
-              <td className="tnum px-3 py-2 text-right">{formatPercent(i.weight, 0)}</td>
-              <td className="tnum px-3 py-2 text-right">
-                {i.reportedActual === null ? '-' : formatPercent(i.reportedActual, 0)}
-              </td>
-              <td className="px-3 py-2 text-xs" title={i.fileRef ?? undefined}>
-                {i.fileCheck ? (FILE_CHECK_WORD[i.fileCheck] ?? i.fileCheck) : '-'}
-              </td>
-              <td className="px-3 py-2 text-xs">{SUBMISSION_WORD[i.submission] ?? i.submission}</td>
-              <td className="px-3 py-2 text-xs">
-                {APPROVAL_WORD[i.approval] ?? i.approval}
-                {i.productVersion && (
-                  <span className="text-muted-foreground"> · {i.productVersion}</span>
-                )}
-              </td>
-              <td className="px-3 py-2 text-xs">
-                <CompletionCell item={i} />
-              </td>
-            </tr>
-          ))}
-        </tbody>
-      </table>
-    </div>
-  );
-}
-
-function CompletionCell({ item: i }: { item: CompletionItem }): ReactNode {
+/**
+ * 작업 완료 확인 칸 (UC-032 4단계). 위쪽에 따로 두던 작업별 표는 WBS 탭과 겹쳐 뺐고(11-18 사용자
+ * 지시), 이 칸만 WBS 탭 표에 붙는다.
+ */
+export function CompletionCell({ item: i }: { item: CompletionItem }): ReactNode {
   const confirmed = i.completionStatus === 'CONFIRMED';
   const attention =
     i.completionStatus === 'RECONFIRM' || (i.completionStatus === 'NONE' && i.predecessorConfirmed);

@@ -17,9 +17,10 @@ import {
   WbsView,
 } from '@/features/schedule/schedule-views';
 import { toScheduleTasks } from '@/features/schedule/wbs-tasks';
-import type { WbsScheduleResponse } from '@/types/api';
+import type { CompletionItem, CompletionSummaryResponse, WbsScheduleResponse } from '@/types/api';
 import { CompletionPanel } from '@/features/schedule/completion-panel';
 import { RecognitionPanel } from '@/features/schedule/recognition-panel';
+import { SourceFilePanel } from '@/features/schedule/source-file-panel';
 
 const VIEW_KEY = 'ax-link.schedule-view';
 
@@ -55,6 +56,16 @@ export function SchedulePage(): ReactNode {
     [project.id],
   );
 
+  const completion = useAsync<CompletionSummaryResponse>(
+    () => api.get<CompletionSummaryResponse>(`/projects/${project.id}/wbs/completion`),
+    [project.id],
+  );
+  // WBS 탭의 「작업 완료 확인」 칸. 작업 번호로 잇는다
+  const completionByWbs = useMemo(
+    () => new Map<string, CompletionItem>((completion.data?.items ?? []).map((i) => [i.wbsId, i])),
+    [completion.data],
+  );
+
   const pick = (next: string) => {
     setView(next as ViewId);
     window.localStorage.setItem(VIEW_KEY, next);
@@ -63,8 +74,6 @@ export function SchedulePage(): ReactNode {
   return (
     <>
       <PageHeader title="일정(WBS)" description="용역사 WBS 기준의 작업 일정과 진척입니다." />
-      <CompletionPanel projectId={project.id} />
-
       <DataState state={state} onRetry={state.reload}>
         {(data) => {
           const tasks = toScheduleTasks(data.items);
@@ -78,9 +87,18 @@ export function SchedulePage(): ReactNode {
             <RecognitionPanel recognition={data.recognition} shownLeaves={leaves.length} />
           ) : null;
 
+          // 원천 → 두 진척 카드 → 인식 결과 → 작업 일정 순이다
+          const head = (
+            <>
+              <SourceFilePanel data={data} />
+              <CompletionPanel state={completion} />
+            </>
+          );
+
           if (data.source === 'NONE') {
             return (
               <>
+                <CompletionPanel state={completion} />
                 {recognition}
                 <Window title="작업 일정" className="pt-0" bleed>
                   <Alert variant="destructive" className="mb-4">
@@ -99,6 +117,7 @@ export function SchedulePage(): ReactNode {
 
           return (
             <>
+              {head}
               {recognition}
               <Window
                 title="작업 일정"
@@ -133,22 +152,9 @@ export function SchedulePage(): ReactNode {
                 action={<ScheduleLegend />}
                 bleed
               >
+                {/* 어느 파일에서 왔는지는 맨 위 「수치의 원천」이 말한다 */}
                 <p className="text-muted-foreground mb-3 text-sm">
-                  {SOURCE_DESCRIPTION[data.source]}{' '}
-                  {data.sourceUrl ? (
-                    <a
-                      href={data.sourceUrl}
-                      target="_blank"
-                      rel="noreferrer"
-                      className="text-primary underline-offset-2 hover:underline"
-                    >
-                      {data.sourceLabel}
-                    </a>
-                  ) : (
-                    <span>{data.sourceLabel}</span>
-                  )}
-                  {data.planVersion && <span className="tnum"> · 버전 {data.planVersion}</span>}
-                  <span className="tnum"> · 기준일 {data.baseDate}</span>
+                  {SOURCE_DESCRIPTION[data.source]}
                 </p>
 
                 {data.warnings.map((w) => (
@@ -177,7 +183,7 @@ export function SchedulePage(): ReactNode {
                     <CalendarView tasks={tasks} today={today} />
                   </TabsContent>
                   <TabsContent value="wbs" className="pt-2">
-                    <WbsView tasks={tasks} />
+                    <WbsView tasks={tasks} completion={completionByWbs} />
                   </TabsContent>
                 </Tabs>
               </Window>

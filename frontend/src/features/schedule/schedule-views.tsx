@@ -26,6 +26,8 @@ import {
   type ScheduleStatus,
   type ScheduleTask,
 } from '@/features/schedule/schedule-task';
+import { CompletionCell } from '@/features/schedule/completion-panel';
+import type { CompletionItem } from '@/types/api';
 import 'gantt-task-react/dist/index.css';
 import './schedule-gantt.css';
 import './schedule-calendar.css';
@@ -349,13 +351,18 @@ const DELIVERABLE_TONE: Record<ScheduleTask['deliverableStatus'], string> = {
  * 말(열림·진행중·해결·종료)로 쓴다. 원문 주소가 있으면 원천의 그 이슈로 간다.
  */
 function LinkedIssuesCell({ task }: { task: ScheduleTask }): ReactNode {
-  if (task.linkedIssues.length === 0) return <span className="text-muted-foreground text-sm">—</span>;
+  if (task.linkedIssues.length === 0)
+    return <span className="text-muted-foreground text-sm">—</span>;
   return (
     <span className="flex flex-col gap-1">
       {task.linkedIssues.map((issue, i) => {
         const key = issue.key ?? issue.title;
         return (
-          <span key={`${key}-${i}`} className="flex items-center gap-1.5 text-xs" title={issue.title}>
+          <span
+            key={`${key}-${i}`}
+            className="flex items-center gap-1.5 text-xs"
+            title={issue.title}
+          >
             {issue.url ? (
               <a
                 href={issue.url}
@@ -424,7 +431,14 @@ function DeliverableCell({ task }: { task: ScheduleTask }): ReactNode {
   );
 }
 
-export function WbsView({ tasks }: { tasks: ScheduleTask[] }): ReactNode {
+export function WbsView({
+  tasks,
+  completion,
+}: {
+  tasks: ScheduleTask[];
+  /** 작업 번호 → 작업 완료 확인(UC-032 4단계). 주면 마지막에 「완료 확인」 칸이 붙는다 */
+  completion?: Map<string, CompletionItem>;
+}): ReactNode {
   const columns = useMemo<ColumnDef<ScheduleTask, unknown>[]>(
     () => [
       {
@@ -515,8 +529,26 @@ export function WbsView({ tasks }: { tasks: ScheduleTask[] }): ReactNode {
           );
         },
       },
+      ...(completion
+        ? [
+            {
+              id: 'completion',
+              header: '완료 확인',
+              cell: ({ row }: { row: { original: ScheduleTask } }) => {
+                const item = completion.get(row.original.code);
+                return item ? (
+                  <span className="text-xs">
+                    <CompletionCell item={item} />
+                  </span>
+                ) : (
+                  <span className="text-muted-foreground text-xs">-</span>
+                );
+              },
+            } satisfies ColumnDef<ScheduleTask, unknown>,
+          ]
+        : []),
     ],
-    [],
+    [completion],
   );
 
   return (

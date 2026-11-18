@@ -1801,6 +1801,19 @@ export interface WbsScheduleResponse {
   notice: string | null;
   /** 계획서 인식 결과(UC-030 3단계, DEC-04 (b)). 계획서가 없으면 null */
   recognition?: WbsRecognitionResponse | null;
+  /** 수치를 읽어 온 원천 파일. WBS 파일일 때만 */
+  sourceFile?: WbsSourceFile | null;
+}
+
+export interface WbsSourceFile {
+  origin: 'REPOSITORY' | 'UPLOAD' | 'OTHER';
+  path: string | null;
+  url: string | null;
+  tool: string | null;
+  repository: string | null;
+  revision: string | null;
+  readAt: string | null;
+  lastSyncedAt: string | null;
 }
 
 export interface WbsRecognitionColumn {

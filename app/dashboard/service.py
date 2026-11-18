@@ -44,7 +44,9 @@ from app.dashboard.models import (
     WbsRecognitionColumn,
     WbsRecognitionResponse,
     WbsScheduleResponse,
+    WbsSourceFile,
 )
+from app.db import fetch_one
 from app.integration import repository as integration_repo
 from app.standard import repository as standard_repo
 from app.standard import wbs_repository
@@ -420,6 +422,7 @@ def schedule(cur: Any, project_id: str, at: date) -> WbsScheduleResponse:
                 none=counts[deliverable.NONE],
             ),
             recognition=_recognition(cur, project_id, plan),
+            sourceFile=_source_file(cur, plan_row),
         )
 
     issues = integration_repo.redmine_issue_payloads(cur, project_id)
@@ -586,6 +589,43 @@ def _previous_baseline(
     previous = standard_repo.work_product_row(cur, loaded)
     label = f"버전 {previous['version']}" if previous else "직전 판"
     return plan, f"{reason} 직전에 읽은 계획서({label})의 작업을 이전 기준선으로 보입니다."
+
+
+def _source_file(cur: Any, plan_row: dict[str, Any]) -> WbsSourceFile:
+    """계획서 행이 어디서 왔는지. 저장소에서 수집했으면 연결·경로·커밋, 올렸으면 파일 이름."""
+    row = fetch_one(
+        cur,
+        """
+        select wp.file_uri, wp.external_url, wp.source_kind, wp.source_revision, wp.version,
+               wp.updated_at, tc.tool, tc.target_resource, tc.last_synced_at,
+               du.original_filename
+          from work_product wp
+          left join tool_connection tc on tc.id = wp.tool_connection_id
+          left join document_upload du on du.id = wp.document_upload_id
+         where wp.id = %s
+        """,
+        (plan_row["id"],),
+    )
+    if row is None:
+        row = {}
+    if row.get("tool"):
+        origin = "REPOSITORY"
+    elif row.get("original_filename"):
+        origin = "UPLOAD"
+    else:
+        origin = "OTHER"
+    read_at = row.get("updated_at")
+    synced = row.get("last_synced_at")
+    return WbsSourceFile(
+        origin=origin,
+        path=row.get("file_uri") or row.get("original_filename"),
+        url=row.get("external_url"),
+        tool=row.get("tool"),
+        repository=row.get("target_resource"),
+        revision=row.get("source_revision") or row.get("version"),
+        readAt=read_at.isoformat() if read_at else None,
+        lastSyncedAt=synced.isoformat() if synced else None,
+    )
 
 
 def _shown_plan_row(
