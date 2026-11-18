@@ -54,7 +54,8 @@ export function TargetPicker({
       <div
         role="listbox"
         aria-label="대상"
-        className="max-h-56 overflow-y-auto rounded-md border"
+        // 높이를 고정한다. 찾을 때마다 줄 수가 바뀌어도 창 높이가 흔들리지 않는다
+        className="h-56 overflow-y-auto rounded-md border"
         data-testid="review-target-list"
       >
         {shown.length === 0 ? (
