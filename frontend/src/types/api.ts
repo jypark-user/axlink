@@ -1760,6 +1760,9 @@ export interface DeliverableReview {
   status: 'SUBMITTED' | 'APPROVED' | 'REJECTED';
   rejectReason: string | null;
   isCurrent: boolean;
+  /** 원문으로 가는 길. 올린 문서면 문서 id, 저장소 파일이면 원문 주소 */
+  documentId?: string | null;
+  externalUrl?: string | null;
 }
 
 export interface WbsDeliverableItem {

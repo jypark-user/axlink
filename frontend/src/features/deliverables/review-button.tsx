@@ -1,4 +1,6 @@
 import { useState, type ReactNode } from 'react';
+import { Link } from 'react-router-dom';
+import { Download, ExternalLink } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import {
   Dialog,
@@ -7,6 +9,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog';
+import { ServerLink } from '@/components/common/server-link';
 import { useToast } from '@/components/common/toaster';
 import { isApiError } from '@/lib/api-error';
 import { api } from '@/lib/http';
@@ -155,15 +158,49 @@ function ReviewRow({
           {STATUS_TEXT[r.status] ?? r.status}
         </span>
       </div>
-      <div className="text-muted-foreground flex min-w-0 flex-wrap gap-x-3 text-xs">
-        {r.fileName && <span className="truncate">{r.fileName}</span>}
-        {r.version && <span className="tnum">버전 {r.version}</span>}
+      {/* 파일 이름을 누르면 원문(자료 상세)으로, 옆 단추로 내려받는다. 저장소 파일은 원문 주소로 간다 */}
+      <div className="flex min-w-0 flex-wrap items-center gap-x-3 gap-y-1 text-xs">
+        {r.documentId ? (
+          <Link
+            to={`/p/${projectId}/documents/${r.documentId}`}
+            className="text-primary inline-flex min-w-0 items-center gap-1 underline-offset-2 hover:underline"
+            title="원문 보기"
+          >
+            <span className="truncate">{r.fileName ?? '원문 보기'}</span>
+            <ExternalLink className="size-3 shrink-0" />
+          </Link>
+        ) : r.externalUrl ? (
+          <a
+            href={r.externalUrl}
+            target="_blank"
+            rel="noreferrer"
+            className="text-primary inline-flex min-w-0 items-center gap-1 underline-offset-2 hover:underline"
+            title="원문 보기"
+          >
+            <span className="truncate">{r.fileName ?? '원문 보기'}</span>
+            <ExternalLink className="size-3 shrink-0" />
+          </a>
+        ) : (
+          r.fileName && <span className="text-muted-foreground truncate">{r.fileName}</span>
+        )}
+        {r.documentId && (
+          <ServerLink
+            url={`/api/documents/${r.documentId}/content`}
+            filename={r.fileName ?? 'deliverable'}
+            className="text-muted-foreground hover:text-foreground inline-flex items-center gap-1"
+            title="파일 내려받기"
+          >
+            <Download className="size-3.5" />
+            내려받기
+          </ServerLink>
+        )}
+        {r.version && <span className="text-muted-foreground tnum">버전 {r.version}</span>}
       </div>
       {r.rejectReason && r.status === 'REJECTED' && (
         <p className="text-destructive text-xs">반려 사유: {r.rejectReason}</p>
       )}
       {r.isCurrent ? (
-        <div className="flex gap-2">
+        <div className="flex justify-end gap-2">
           {r.status === 'SUBMITTED' && (
             <Button size="sm" disabled={busy} onClick={() => void decide('approve')}>
               승인

@@ -319,6 +319,9 @@ class DeliverableReview(BaseModel):
     status: str  # SUBMITTED | APPROVED | REJECTED
     rejectReason: str | None  # noqa: N815
     isCurrent: bool  # noqa: N815  승인·반려는 그 유형의 현행 버전에만 한다
+    # 내용을 보고 판단하게 원본으로 간다. 올린 문서면 그 문서, 저장소 파일이면 원문 주소
+    documentId: str | None = None  # noqa: N815
+    externalUrl: str | None = None  # noqa: N815
 
 
 class WbsDeliverableItem(BaseModel):

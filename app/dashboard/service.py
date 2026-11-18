@@ -833,7 +833,7 @@ def _review_rows(cur: Any, ids: list[str]) -> dict[str, DeliverableReview]:
         cur,
         """
         select w.id, w.title, w.type, w.version, w.status, w.reject_reason, w.is_current,
-               w.file_uri, d.original_filename
+               w.file_uri, w.external_url, w.document_upload_id, d.original_filename
           from work_product w
           left join document_upload d on d.id = w.document_upload_id
          where w.id = any(%s::uuid[])
@@ -850,6 +850,8 @@ def _review_rows(cur: Any, ids: list[str]) -> dict[str, DeliverableReview]:
             status=r["status"],
             rejectReason=r["reject_reason"],
             isCurrent=bool(r["is_current"]),
+            documentId=str(r["document_upload_id"]) if r.get("document_upload_id") else None,
+            externalUrl=r.get("external_url"),
         )
         for r in rows
         if r["status"] in ("SUBMITTED", "APPROVED", "REJECTED")
@@ -871,7 +873,7 @@ def _review_of(
             out.append(DeliverableReview(
                 workProductId=v.workProductId, name=d.name, fileName=v.fileName,
                 version=v.version, status=v.state, rejectReason=v.rejectReason,
-                isCurrent=v.isCurrent,
+                isCurrent=v.isCurrent, documentId=v.documentId,
             ))
         return out
     if j is not None and j.product_id and j.product_id in plain:
