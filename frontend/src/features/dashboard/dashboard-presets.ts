@@ -65,20 +65,20 @@ export const DEFAULT_PRESET: DashboardPreset = {
     {
       template: 'STAT_CARD',
       title: '산출물 승인률',
-      intent: '가장 최근 스냅샷의 산출물 승인률을 일별 추세와 함께 한 숫자로',
-      measure: 'snapshot_work_product_approval_pct',
-      dimensions: ['period_day'],
+      intent: '지금 산출물 승인률을 한 숫자로',
+      measure: 'deliverable_approval_rate',
+      dimensions: [],
       rationale:
-        '산출물 기준 진척. WBS 가 정한 산출물 중 현행 버전을 발주기관이 승인한 비율이다. 올리기만 하고 승인 전인 것은 넣지 않아서, WBS 실적이 앞서가도 이 값이 낮으면 확인할 결과물이 아직 없다는 뜻이다. 일별 스냅샷의 가장 최근 값이다.',
+        '산출물 기준 진척. WBS 가 정한 산출물 중 현행 버전을 발주기관이 승인한 비율이다. 올리기만 하고 승인 전인 것은 넣지 않아서, WBS 실적이 앞서가도 이 값이 낮으면 확인할 결과물이 아직 없다는 뜻이다. 지금 값이라 산출물 화면에서 승인하면 바로 바뀐다. 아래 일별 그래프는 하루 한 번 남긴 기록이라 다음 기록 때 따라온다.',
     },
     {
       template: 'STAT_CARD',
       title: '요구사항 이행률',
-      intent: '가장 최근 스냅샷의 요구사항 이행률을 일별 추세와 함께 한 숫자로',
-      measure: 'snapshot_requirement_fulfillment_pct',
-      dimensions: ['period_day'],
+      intent: '지금 요구사항 이행률을 한 숫자로',
+      measure: 'requirement_fulfillment_rate',
+      dimensions: [],
       rationale:
-        '요구사항 승인 기준 진척. 요구사항 중 발주기관이 검증 또는 인수로 정한 비율이다(요구사항 화면의 상태 지정). 확정된 기준선이 있으면 그 기준선 안의 요구사항만 센다. 일별 스냅샷의 가장 최근 값이다.',
+        '요구사항 승인 기준 진척. 요구사항 중 발주기관이 검증 또는 인수로 정한 비율이다(요구사항 화면의 상태 지정). 확정된 기준선이 있으면 그 기준선 안의 요구사항만 센다. 지금 값이라 상태를 지정하면 바로 바뀐다. 아래 일별 그래프는 하루 한 번 남긴 기록이다.',
     },
     {
       template: 'STAT_CARD',

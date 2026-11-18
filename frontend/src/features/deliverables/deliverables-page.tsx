@@ -35,7 +35,7 @@ import {
   type DesignationTarget,
 } from './designated';
 import { useTypeNames } from './use-type-names';
-import { ReviewButton } from './review-button';
+import { ReviewBadge, ReviewButton } from './review-button';
 import type {
   DeliverableStatus,
   DocumentUploadResponse,
@@ -358,6 +358,8 @@ function buildColumns(
             ) : (
               <span className="w-fit">{pill}</span>
             )}
+            {/* 제출본의 승인 상태(11-18). 제출과 승인은 다른 일이라 따로 보인다 */}
+            <ReviewBadge item={item} />
             {why && (
               <span className="text-muted-foreground max-w-[11rem] truncate text-xs" title={why}>
                 {why}

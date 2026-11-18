@@ -2,7 +2,7 @@ import { fireEvent, render, screen } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
 import { describe, expect, it, vi } from 'vitest';
 import { ToasterProvider } from '@/components/common/toaster';
-import { ReviewButton, reviewState } from '@/features/deliverables/review-button';
+import { ReviewBadge, ReviewButton, reviewState } from '@/features/deliverables/review-button';
 import type { DeliverableReview, WbsDeliverableItem } from '@/types/api';
 
 // 산출물 줄의 검토(11-18). 발주기관은 눌러 승인·반려하고, 용역사는 상태만 본다.
@@ -57,7 +57,7 @@ describe('검토 단추', () => {
         </ToasterProvider>
       </MemoryRouter>,
     );
-    fireEvent.click(screen.getByRole('button', { name: '승인 대기' }));
+    fireEvent.click(screen.getByRole('button', { name: '검토' }));
     expect(screen.getByRole('button', { name: '승인' })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: '반려' })).toBeInTheDocument();
     // 파일 이름을 누르면 원문(자료 상세)으로 가고, 내려받기도 있다
@@ -68,8 +68,8 @@ describe('검토 단추', () => {
     expect(screen.getByText('내려받기')).toBeInTheDocument();
   });
 
-  it('용역사는 상태만 본다', () => {
-    render(
+  it('용역사에게는 단추가 없고, 상태는 판정 칸 딱지로 본다', () => {
+    const { container } = render(
       <MemoryRouter>
         <ToasterProvider>
           <ReviewButton
@@ -78,11 +78,12 @@ describe('검토 단추', () => {
             canReview={false}
             onChanged={vi.fn()}
           />
+          <ReviewBadge item={item([review('REJECTED')])} />
         </ToasterProvider>
       </MemoryRouter>,
     );
     expect(screen.queryByRole('button')).toBeNull();
-    expect(screen.getByText('반려')).toBeInTheDocument();
+    expect(container).toHaveTextContent('반려');
   });
 
   it('제출본이 없으면 아무것도 그리지 않는다', () => {

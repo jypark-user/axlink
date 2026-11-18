@@ -38,6 +38,22 @@ export function reviewState(
   return 'REJECTED';
 }
 
+/** 판정 칸에 붙는 승인 상태 딱지. 제출본이 없으면 그리지 않는다 */
+export function ReviewBadge({ item }: { item: WbsDeliverableItem }): ReactNode {
+  const state = reviewState(item.review ?? []);
+  if (state === null) return null;
+  return (
+    <span
+      className={cn(
+        'inline-block rounded px-1.5 py-0.5 text-xs font-medium whitespace-nowrap',
+        STATUS_TONE[state],
+      )}
+    >
+      {STATUS_TEXT[state]}
+    </span>
+  );
+}
+
 /**
  * 산출물 줄의 검토(11-18 사용자 지시). 올리기 왼쪽에 둔다. 발주기관은 눌러 올라온 제출본을
  * 승인·반려하고, 용역사는 상태만 본다. 양식은 양식 창에서, 제출본 검토는 여기서만 한다.
@@ -57,18 +73,8 @@ export function ReviewButton({
   const list = item.review ?? [];
   const state = reviewState(list);
   if (state === null) return null;
-  if (!canReview) {
-    return (
-      <span
-        className={cn(
-          'rounded px-1.5 py-0.5 text-xs font-medium whitespace-nowrap',
-          STATUS_TONE[state],
-        )}
-      >
-        {STATUS_TEXT[state]}
-      </span>
-    );
-  }
+  // 상태는 판정 칸이 보인다. 용역사에게는 단추가 없다
+  if (!canReview) return null;
   return (
     <>
       <Button
@@ -77,7 +83,7 @@ export function ReviewButton({
         className={cn(state === 'SUBMITTED' && 'border-sky-500/60')}
         onClick={() => setOpen(true)}
       >
-        {STATUS_TEXT[state]}
+        검토
       </Button>
       <Dialog open={open} onOpenChange={setOpen}>
         <DialogContent className="max-h-[85vh] overflow-y-auto sm:max-w-xl">

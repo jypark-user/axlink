@@ -481,3 +481,28 @@ def test_작업에_올리면_제출이고_줄에서_승인하면_승인률에_�
     screen = _screen(client, pm)
     assert _row(screen, "1.2")["review"][0]["status"] == "APPROVED"
     assert _row(screen, "2.1")["review"][0]["status"] == "APPROVED"
+
+
+@requires_db
+def test_저장소_WBS_가_있으면_올린_문서로_계획서를_바꾸지_않는다(client, client_token, env):
+    """11-18 개발 DB 에서 산출물로 올린 발표자료가 사업수행계획서로 확정돼 저장소 WBS 가 현행에서
+    내려갔다. 저장소 WBS 가 원천이면 그 자리를 올린 문서로 바꾸지 않는다(자동·사람 확정 모두)."""
+    env.load(BASE)
+    po, pm = client_token("r2"), client_token("r3")
+    did = _designate(client, po, env.task_key("2.1"), productType="PROJECT_PLAN").json()["id"]
+    doc = _upload(client, pm, did, "발표.xlsx", _xlsx("발표"))
+    row = _row(_screen(client, po), "2.1")
+    assert row["designated"][0]["status"] == "REGISTERED"  # 자동 제출하지 않았다
+    res = client.post(
+        f"/api/documents/{doc['id']}/draft/confirm",
+        json={"type": "PROJECT_PLAN", "title": "발표", "version": "9.0", "requirements": []},
+        headers=_auth(pm),
+    )
+    assert res.status_code == 409 and res.json()["code"] == "PLAN_FROM_REPOSITORY", res.text
+    with tx() as cur:
+        cur.execute(
+            "select source_kind from work_product "
+            "where project_id = %s and type = 'PROJECT_PLAN' and is_current",
+            (PID,),
+        )
+        assert cur.fetchone()["source_kind"] == "TOOL"
