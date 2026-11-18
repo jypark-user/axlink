@@ -394,10 +394,6 @@ function CreateDialog({
               value={targetKey}
               onChange={setTargetKey}
             />
-            <p className="text-muted-foreground text-xs">
-              등록 시점의 상태(실적률·파일 대조·정식 제출·승인·이슈 상태·지표값)가 요청과 함께
-              저장됩니다.
-            </p>
           </div>
           {targetType === 'WBS_ITEM' && (
             <div className={FIELD}>

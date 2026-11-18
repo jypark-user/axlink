@@ -11,11 +11,10 @@ const targets = [
 ];
 
 describe('대상 고르기', () => {
-  it('띄어쓰기와 상관없이 찾고 건수를 보인다', () => {
+  it('띄어쓰기와 상관없이 찾는다', () => {
     render(<TargetPicker targets={targets} value="" onChange={() => {}} />);
     fireEvent.change(screen.getByLabelText('대상 찾기'), { target: { value: '1.2범위' } });
     expect(screen.getAllByRole('option')).toHaveLength(1);
-    expect(screen.getByText('3건 중 1건', { exact: false })).toBeInTheDocument();
   });
 
   it('여러 낱말은 모두 들어간 항목만 남긴다', () => {
@@ -35,12 +34,11 @@ describe('대상 고르기', () => {
     expect(onChange).toHaveBeenLastCalledWith('c');
   });
 
-  it('고른 대상을 아래에 적는다', () => {
+  it('고른 대상을 표시한다', () => {
     render(<TargetPicker targets={targets} value="b" onChange={() => {}} />);
     expect(screen.getByRole('option', { name: '1.2 범위·평가기준 합의' })).toHaveAttribute(
       'aria-selected',
       'true',
     );
-    expect(screen.getByText(/고른 대상: 1.2 범위·평가기준 합의/)).toBeInTheDocument();
   });
 });

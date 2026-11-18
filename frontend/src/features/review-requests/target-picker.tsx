@@ -31,7 +31,6 @@ export function TargetPicker({
       return words.every((w) => label.includes(w));
     });
   }, [targets, text]);
-  const selected = targets.find((t) => t.key === value);
 
   if (targets.length === 0) {
     return <p className="text-muted-foreground text-sm">고를 대상이 없습니다.</p>;
@@ -43,7 +42,7 @@ export function TargetPicker({
         id={id}
         value={text}
         onValueChange={setText}
-        placeholder="번호·이름으로 찾기"
+        placeholder="검색"
         aria-label="대상 찾기"
         // 창 안의 폼이라 Enter 가 등록을 누르지 않게 막는다. 하나만 남았으면 그것을 고른다
         onKeyDown={(e) => {
@@ -82,10 +81,6 @@ export function TargetPicker({
           })
         )}
       </div>
-      <p className="text-muted-foreground tnum text-xs">
-        {text ? `${targets.length}건 중 ${shown.length}건` : `${targets.length}건`}
-        {selected ? ` · 고른 대상: ${selected.label}` : ' · 아직 고르지 않았습니다'}
-      </p>
     </div>
   );
 }
