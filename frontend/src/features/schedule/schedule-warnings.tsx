@@ -42,7 +42,7 @@ export function ScheduleWarnings({ warnings }: { warnings: string[] }): ReactNod
       </DialogTrigger>
       <DialogContent className="max-h-[80vh] overflow-y-auto sm:max-w-2xl">
         <DialogHeader>
-          <DialogTitle>일정 경고</DialogTitle>
+          <DialogTitle>{gaps.length > 0 ? '격차 경고' : '확인할 점'}</DialogTitle>
           <DialogDescription>
             격차 경고는 WBS 파일에 실적 80% 이상으로 적었는데 산출물이 아직 없거나 연결 이슈가 열려
             있는 작업입니다. 신고한 실적과 증거가 맞지 않는 곳입니다.
@@ -50,7 +50,7 @@ export function ScheduleWarnings({ warnings }: { warnings: string[] }): ReactNod
         </DialogHeader>
         {gaps.length > 0 && (
           <section>
-            <h3 className="mb-1 text-sm font-medium">격차 경고 {gaps.length}건</h3>
+            <h3 className="mb-1 text-sm font-medium">총 {gaps.length}건</h3>
             <ul className="list-disc space-y-1 pl-5 text-sm">
               {gaps.map((w) => (
                 <li key={w}>{w}</li>
