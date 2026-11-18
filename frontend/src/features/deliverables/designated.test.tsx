@@ -78,7 +78,7 @@ describe('산출물 양식 칸', () => {
   it('양식이 없으면 발주기관에게만 [등록]이 보인다', () => {
     const client = actions(true);
     renderCell(row([]), client);
-    fireEvent.click(screen.getByRole('button', { name: '등록' }));
+    fireEvent.click(screen.getByRole('button', { name: '양식 등록' }));
     expect(client.onEdit).toHaveBeenCalledWith({
       mode: 'create',
       taskKey: 'k1',
@@ -88,7 +88,7 @@ describe('산출물 양식 칸', () => {
 
   it('용역사에게는 양식이 없으면 「-」다', () => {
     renderCell(row([]), actions(false));
-    expect(screen.queryByRole('button', { name: '등록' })).toBeNull();
+    expect(screen.queryByRole('button', { name: '양식 등록' })).toBeNull();
     expect(screen.getByText('-')).toBeInTheDocument();
   });
 
@@ -120,7 +120,12 @@ describe('올리기 창', () => {
     const contractor = actions(false);
     render(
       <ToasterProvider>
-        <UploadDialog item={row([entry])} actions={contractor} onClose={vi.fn()} />
+        <UploadDialog
+          item={row([entry])}
+          actions={contractor}
+          onClose={vi.fn()}
+          onUploadPlain={vi.fn()}
+        />
       </ToasterProvider>,
     );
     expect(screen.getByText('양식 내려받기: 양식.xlsx')).toBeInTheDocument();
@@ -132,45 +137,21 @@ describe('올리기 창', () => {
     expect(contractor.onUpload).toHaveBeenCalledWith('2.1', 'd1');
   });
 
-  it('읽는 중이면 「제출 처리 중」, 분류를 못 정했으면 초안으로 가는 링크만 있다', () => {
-    const version = (submit: 'PROCESSING' | 'READY') => ({
-      ...entry,
-      status: 'REGISTERED' as const,
-      versions: [
-        {
-          ...entry.versions[0],
-          documentId: 'doc9',
-          state: 'REGISTERED' as const,
-          workProductId: null,
-          version: null,
-          rejectReason: null,
-          submit,
-        },
-      ],
-    });
-    const { rerender } = render(
+  it('기타 산출물 올리기는 양식 없이 그 작업에 올린다', () => {
+    const plain = vi.fn();
+    render(
       <MemoryRouter>
         <ToasterProvider>
           <UploadDialog
-            item={row([version('PROCESSING')])}
+            item={row([entry])}
             actions={actions(false)}
             onClose={vi.fn()}
+            onUploadPlain={plain}
           />
         </ToasterProvider>
       </MemoryRouter>,
     );
-    expect(screen.getByText('읽는 중')).toBeInTheDocument();
-    expect(screen.queryByText('산출물로 제출하러 가기')).toBeNull();
-    rerender(
-      <MemoryRouter>
-        <ToasterProvider>
-          <UploadDialog item={row([version('READY')])} actions={actions(false)} onClose={vi.fn()} />
-        </ToasterProvider>
-      </MemoryRouter>,
-    );
-    expect(screen.getByRole('link', { name: '분류를 정해 제출' })).toHaveAttribute(
-      'href',
-      '/p/p1/documents/doc9/draft',
-    );
+    fireEvent.click(screen.getByRole('button', { name: '기타 산출물 올리기' }));
+    expect(plain).toHaveBeenCalledWith('2.1');
   });
 });

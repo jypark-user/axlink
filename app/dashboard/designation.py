@@ -50,39 +50,23 @@ NAME_MAX = 300
 
 
 def version_state(row: dict[str, Any]) -> str:
-    """제출본 하나의 상태. 확정돼 산출물 버전이 생겨야 제출이다.
+    """양식 자리에 올라온 산출물 하나의 상태(V70). 올라오면 제출, 발주기관이 승인·반려한다.
 
-    유형을 바꿔 확정한 것(MANUAL_OVERRIDE)도 확정이다. 지정 항목의 분류와 다른 유형으로
-    내는 일이 흔하다(22종은 분류일 뿐이다).
+    예전에는 초안을 확정해 22종 산출물 버전이 생겨야 제출이었다. 2026-11-18 사용자 결정으로
+    올라온 산출물 자체가 승인 단위가 됐다.
     """
-    if row.get("draft_status") not in _CONFIRMED_DRAFT or not row.get("work_product_id"):
-        return REGISTERED
-    status = row.get("wp_status")
-    if status in (APPROVED, REJECTED):
-        return status
-    return SUBMITTED
+    status = row.get("review_status")
+    return status if status in (SUBMITTED, APPROVED, REJECTED) else SUBMITTED
 
 
 def submit_readiness(row: dict[str, Any]) -> str | None:
-    """확정 전 제출본에서 다음 할 일. 제출된 것은 None."""
-    if version_state(row) != REGISTERED:
-        return None
-    if row.get("draft_status") == "PROPOSED":
-        return "READY"
-    if row.get("processing_state") not in (None, "DONE", "FAILED"):
-        return "PROCESSING"
-    return "NO_DRAFT"
+    """예전 「산출물로 제출」 단계의 다음 할 일. 올리면 제출이라 이제 늘 없다(V70)."""
+    return None
 
 
 def item_status(states: list[str]) -> str:
-    """항목 상태는 가장 최근 제출본이 정한다. 확정 전 문서만 있으면 「등록」이다.
-
-    states 는 최근 것이 앞이다.
-    """
-    submitted = [s for s in states if s != REGISTERED]
-    if submitted:
-        return submitted[0]
-    return REGISTERED if states else MISSING
+    """항목 상태는 가장 최근 올라온 산출물이 정한다. states 는 최근 것이 앞이다."""
+    return states[0] if states else MISSING
 
 
 def is_submitted(status: str) -> bool:
@@ -113,9 +97,11 @@ def _versions(rows: list[dict[str, Any]]) -> list[DesignatedVersion]:
             state=version_state(r),
             workProductId=str(r["work_product_id"]) if r.get("work_product_id") else None,
             version=r.get("wp_version"),
-            rejectReason=r.get("reject_reason"),
-            decidedAt=r["approved_at"].isoformat() if r.get("approved_at") else None,
-            isCurrent=bool(r.get("is_current")),
+            rejectReason=r.get("review_reason") if r.get("review_status") == REJECTED else None,
+            decidedAt=r["reviewed_at"].isoformat()
+            if r.get("reviewed_at") and r.get("review_status") == APPROVED
+            else None,
+            isCurrent=True,
             submit=submit_readiness(r),
         )
         for r in rows

@@ -145,9 +145,7 @@ export function DeliverablesPage(): ReactNode {
     try {
       await api.upload<DocumentUploadResponse>(`/projects/${project.id}/documents`, form);
       toast({
-        title: designatedId
-          ? `${wbsId} 작업의 산출물로 올렸습니다. 문서를 읽고 나면 제출로 바뀝니다.`
-          : `${wbsId} 항목의 산출물로 접수했습니다. 읽기·색인은 뒤에서 합니다.`,
+        title: `${wbsId} 작업의 산출물로 제출했습니다.`,
         variant: 'success',
       });
       reload();
@@ -258,6 +256,7 @@ export function DeliverablesPage(): ReactNode {
                 item={data.items.find((i) => i.wbsId === uploadWbsId) ?? null}
                 actions={designatedActions}
                 onClose={() => setUploadWbsId(null)}
+                onUploadPlain={(wbsId) => pickFile(wbsId)}
               />
 
               <div className="mt-8">

@@ -94,6 +94,7 @@ def take_unchecked(
         {"p": project_id},
     )
     approval = progress.deliverableApproval
+    submission = progress.deliverableSubmission
     estimate = progress.issueEstimate
     row = fetch_one(
         cur,
@@ -104,13 +105,14 @@ def take_unchecked(
           requirement_verified_count, requirement_total_count, risk_closed_count, risk_total_count,
           work_product_submitted_count, work_product_approved_count, work_product_total_count,
           defect_resolved_count, defect_total_count,
-          deliverable_approved_count, deliverable_total_count,
+          deliverable_approved_count, deliverable_total_count, deliverable_submitted_count,
           representative_basis, issue_estimate_pct, issue_estimate_missing_count)
         values (%(project_id)s, %(snapshot_date)s, %(level)s, %(representative)s, %(wbs_actual)s,
                 %(wbs_planned)s, %(behind)s, %(issue_resolved)s, %(issue_total)s,
                 %(req_verified)s, %(req_total)s, %(risk_closed)s, %(risk_total)s,
                 %(wp_submitted)s, %(wp_approved)s, %(wp_total)s,
                 %(defect_resolved)s, %(defect_total)s, %(deliv_approved)s, %(deliv_total)s,
+                %(deliv_submitted)s,
                 %(basis)s, %(estimate)s, %(estimate_missing)s)
         on conflict (project_id, snapshot_date) do update set
           level = excluded.level,
@@ -131,6 +133,7 @@ def take_unchecked(
           defect_total_count = excluded.defect_total_count,
           deliverable_approved_count = excluded.deliverable_approved_count,
           deliverable_total_count = excluded.deliverable_total_count,
+          deliverable_submitted_count = excluded.deliverable_submitted_count,
           representative_basis = excluded.representative_basis,
           issue_estimate_pct = excluded.issue_estimate_pct,
           issue_estimate_missing_count = excluded.issue_estimate_missing_count,
@@ -160,6 +163,7 @@ def take_unchecked(
             "defect_total": None if progress.defect is None else progress.defect.denominator,
             "deliv_approved": approval.numerator if approval else None,
             "deliv_total": approval.denominator if approval else None,
+            "deliv_submitted": submission.numerator if submission else None,
             # 대표값의 산식(DEC-17). 옛 행과 새 행을 가르는 칸이다
             "basis": progress.basis,
             "estimate": _pct(estimate.value) if estimate else None,
@@ -202,6 +206,10 @@ def _response(row: dict[str, Any]) -> ProgressSnapshotResponse:
         issueEstimateMissingCount=row.get("issue_estimate_missing_count"),
         deliverableApprovedCount=row.get("deliverable_approved_count"),
         deliverableTotalCount=row.get("deliverable_total_count"),
+        deliverableSubmittedCount=row.get("deliverable_submitted_count"),
+        deliverableSubmissionPct=_rate(
+            row.get("deliverable_submitted_count"), row.get("deliverable_total_count")
+        ),
         deliverableApprovalPct=_rate(
             row.get("deliverable_approved_count"), row.get("deliverable_total_count")
         ),

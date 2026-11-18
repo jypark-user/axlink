@@ -105,8 +105,9 @@ describe('dashboard-presets', () => {
     const measures = DEFAULT_PRESET.widgets.map((w) => w.measure);
     for (const m of [
       'progress_wbs_pct',
-      'snapshot_work_product_approval_pct',
-      'snapshot_requirement_fulfillment_pct',
+      'deliverable_submission_rate',
+      'deliverable_approval_rate',
+      'requirement_fulfillment_rate',
       'wbs_task_actual_pct',
     ]) {
       expect(measures, m).toContain(m);

@@ -17,7 +17,7 @@ from app.ai.port import LlmPort
 from app.auth.models import AuthPrincipal
 from app.common import errors
 from app.config import settings
-from app.db import fetch_all, fetch_one
+from app.db import fetch_one
 from app.document import draft_repository, repository, structuring
 from app.document.access import require_project
 from app.document.models import (
@@ -277,100 +277,5 @@ def _guard_repository_plan(cur: Any, project_id: str, product_type: str) -> None
 def propose_for_upload(cur: Any, document_id: str, filename: str, text: str) -> None:
     """업로드 흐름에서 부른다. 구현체 선택은 llm_port 한 곳이다."""
     propose(cur, document_id, filename, text, llm_port)
-    submit_task_upload(cur, document_id)
 
 
-_TYPE_BY_NAME = {" ".join(label.split()).casefold(): code for code, label in DISPLAY_NAMES.items()}
-
-
-def submit_task_upload(cur: Any, document_id: str) -> str | None:
-    """산출물 화면에서 작업에 올린 문서는 올린 것이 곧 제출이다(2026-11-18 사용자 지시).
-
-    작업(또는 그 작업의 산출물 양식)을 골라 올렸으면 무엇을 냈는지 이미 정해진 것이라 「산출물로
-    제출」을 따로 묻지 않는다. 읽기가 끝나 초안이 생기면 올린 사람 이름으로 그 자리에서 확정한다.
-    이름은 양식 이름(없으면 WBS 산출물 이름, 그것도 없으면 작업명), 유형은 양식 분류 → WBS 산출물
-    이름이 22종 이름과 같으면 그 유형 → 초안이 고른 유형 순이다. 버전은 초안이 읽은 표기를 쓰되
-    그 유형에 이미 있으면 다음 번호를 붙인다. 유형을 정할 수 없으면 확정하지 않고 사람이 고르게
-    둔다. 고칠 것이 있으면 다시 올리면 새 버전이 된다. 자료 화면에 그냥 올린 문서(작업 없음)는
-    여기 해당하지 않는다(DEC-14).
-    """
-    row = fetch_one(
-        cur,
-        """
-        select d.project_id, d.uploaded_by_user_id, d.stored_path,
-               dd.name as designated_name, dd.product_type as designated_type,
-               w.deliverable as wbs_deliverable, w.name as task_name,
-               s.id as draft_id, s.status as draft_status, s.proposed_type, s.draft_json
-          from document_upload d
-          left join wbs_designated_deliverable dd on dd.id = d.designated_deliverable_id
-          left join wbs_item w on w.id = d.wbs_item_id
-          join structuring_draft s on s.document_upload_id = d.id
-         where d.id = %s and (dd.id is not null or w.id is not null)
-        """,
-        (document_id,),
-    )
-    if row is None or row["draft_status"] != "PROPOSED":
-        return None
-    wbs_name = (row["wbs_deliverable"] or "").strip()
-    product_type = (
-        row["designated_type"]
-        or _TYPE_BY_NAME.get(" ".join(wbs_name.split()).casefold())
-        or row["proposed_type"]
-    )
-    if product_type not in DISPLAY_NAMES or product_type == PLAN_TYPE:
-        # 사업수행계획서는 WBS 원천이다. 올린 문서가 자동으로 그 자리를 차지하면 일정·진척이
-        # 그 문서를 읽으려 든다(11-18 개발 DB 에서 실제로 WBS 가 밀려났다). 사람이 고르게 둔다
-        return None
-    title = row["designated_name"] or wbs_name or row["task_name"] or DISPLAY_NAMES[product_type]
-    project_id = str(row["project_id"])
-    draft = row["draft_json"] or {}
-    authored_at = None
-    if draft.get("authoredDate"):
-        try:
-            authored_at = date.fromisoformat(draft["authoredDate"])
-        except ValueError:
-            authored_at = None
-    rec = {
-        "type": product_type,
-        "title": title[:500],
-        "version": _free_version(cur, project_id, product_type, draft.get("version")),
-        "status": _CONFIRM_STATUS,
-        "authored_at": authored_at,
-        "requirements": [],
-        "file_uri": row["stored_path"],
-    }
-    user_id = str(row["uploaded_by_user_id"])
-    try:
-        work_product_id = standard_repo.place_document_work_product(
-            cur, project_id, document_id, user_id, rec
-        )
-    except errors.ApiError as exc:
-        # 확정하지 못해도 읽기·색인은 끝난 것이다. 사람이 초안 화면에서 확정하게 둔다
-        repository.note_error(cur, document_id, f"자동 제출을 건너뛰었습니다. {exc.message}")
-        return None
-    status = "CONFIRMED" if product_type == row["proposed_type"] else "MANUAL_OVERRIDE"
-    draft_repository.mark_confirmed(cur, str(row["draft_id"]), user_id, work_product_id, status)
-    draft_repository.set_document_status(cur, document_id, "CONFIRMED")
-    from app.dashboard import service as dashboard_service  # 순환 import 회피
-
-    dashboard_service.sync_product_links(cur, project_id)
-    return work_product_id
-
-
-def _free_version(cur: Any, project_id: str, product_type: str, guess: str | None) -> str:
-    """그 유형에 아직 없는 버전 표기. 읽은 표기가 비었거나 이미 있으면 「n.0」 다음 번호."""
-    used = {
-        r["version"]
-        for r in fetch_all(
-            cur,
-            "select version from work_product where project_id = %s and type = %s",
-            (project_id, product_type),
-        )
-    }
-    guess = (guess or "").strip()[:40]
-    if guess and guess not in used:
-        return guess
-    n = len(used) + 1
-    while f"{n}.0" in used:
-        n += 1
-    return f"{n}.0"

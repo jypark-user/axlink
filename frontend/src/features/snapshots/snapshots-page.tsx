@@ -32,12 +32,13 @@ import type { ProgressSnapshotResponse, ProjectScheduleResponse } from '@/types/
 const CHART: ChartConfig = {
   planned: { label: '계획', color: 'var(--chart-2)' },
   wbs: { label: '진척률(WBS)', color: 'var(--chart-1)' },
-  deliverable: { label: '진척률(산출물)', color: 'var(--chart-3)' },
+  submission: { label: '진척률(산출물 제출)', color: 'var(--chart-5)' },
+  deliverable: { label: '진척률(산출물 승인)', color: 'var(--chart-3)' },
   requirement: { label: '진척률(요구사항 이행)', color: 'var(--chart-4)' },
 };
 
-type MetricKey = 'planned' | 'wbs' | 'deliverable' | 'requirement';
-const METRIC_KEYS: MetricKey[] = ['planned', 'wbs', 'deliverable', 'requirement'];
+type MetricKey = 'planned' | 'wbs' | 'submission' | 'deliverable' | 'requirement';
+const METRIC_KEYS: MetricKey[] = ['planned', 'wbs', 'submission', 'deliverable', 'requirement'];
 
 /** WBS 진척률. WBS 칸이 비었어도 대표값이 WBS 산식(L1·L2)이면 그 값이다 */
 function wbsPct(r: ProgressSnapshotResponse): number | null {
@@ -58,6 +59,7 @@ function metrics(r: ProgressSnapshotResponse): Record<MetricKey, number | null> 
   return {
     planned: r.wbsPlannedPct,
     wbs: wbsPct(r),
+    submission: r.deliverableSubmissionPct ?? null,
     deliverable: r.deliverableApprovalPct ?? null,
     requirement: r.requirementFulfillmentPct ?? null,
   };
@@ -211,7 +213,8 @@ function SnapshotBody({ rows }: { rows: ProgressSnapshotResponse[] }): ReactNode
               <th className="px-4 py-2.5 text-left font-medium">날짜</th>
               <th className="px-4 py-2.5 text-right font-medium">계획</th>
               <th className="px-4 py-2.5 text-right font-medium">진척률(WBS)</th>
-              <th className="px-4 py-2.5 text-right font-medium">진척률(산출물)</th>
+              <th className="px-4 py-2.5 text-right font-medium">진척률(산출물 제출)</th>
+              <th className="px-4 py-2.5 text-right font-medium">진척률(산출물 승인)</th>
               <th className="px-4 py-2.5 text-right font-medium">진척률(요구사항 이행)</th>
               <th className="px-4 py-2.5 text-right font-medium">편차</th>
               <th className="px-4 py-2.5 text-right font-medium">지연 작업</th>
@@ -231,6 +234,11 @@ function SnapshotBody({ rows }: { rows: ProgressSnapshotResponse[] }): ReactNode
                 <td className="tnum px-4 py-2.5 text-right whitespace-nowrap">
                   <Pct value={now.wbs} />
                   <Delta now={now.wbs} prev={prev?.wbs ?? null} unit="%p" />
+                </td>
+                <td className="tnum px-4 py-2.5 text-right whitespace-nowrap">
+                  <Pct value={now.submission} />
+                  <Delta now={now.submission} prev={prev?.submission ?? null} unit="%p" />
+                  <Count num={r.deliverableSubmittedCount} den={r.deliverableTotalCount} />
                 </td>
                 <td className="tnum px-4 py-2.5 text-right whitespace-nowrap">
                   <Pct value={now.deliverable} />

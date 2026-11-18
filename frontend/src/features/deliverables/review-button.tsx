@@ -12,6 +12,7 @@ import {
 import { ServerLink } from '@/components/common/server-link';
 import { useToast } from '@/components/common/toaster';
 import { isApiError } from '@/lib/api-error';
+import { formatDateTime } from '@/lib/format';
 import { api } from '@/lib/http';
 import { cn } from '@/lib/utils';
 import type { DeliverableReview, WbsDeliverableItem } from '@/types/api';
@@ -28,17 +29,21 @@ const STATUS_TONE: Record<string, string> = {
   REJECTED: 'bg-destructive/15 text-destructive',
 };
 
-/** 작업의 검토 상태 한 마디. 하나라도 승인 대기면 승인 대기, 모두 승인이면 승인, 아니면 반려 */
+/**
+ * 작업의 검토 상태 한 마디. 지난 판(같은 양식에 다시 올린 것의 앞 판)은 보지 않는다.
+ * 하나라도 승인 대기면 승인 대기, 모두 승인이면 승인, 아니면 반려
+ */
 export function reviewState(
   list: DeliverableReview[],
 ): 'SUBMITTED' | 'APPROVED' | 'REJECTED' | null {
-  if (list.length === 0) return null;
-  if (list.some((r) => r.status === 'SUBMITTED')) return 'SUBMITTED';
-  if (list.every((r) => r.status === 'APPROVED')) return 'APPROVED';
+  const live = list.filter((r) => r.latest);
+  if (live.length === 0) return null;
+  if (live.some((r) => r.status === 'SUBMITTED')) return 'SUBMITTED';
+  if (live.every((r) => r.status === 'APPROVED')) return 'APPROVED';
   return 'REJECTED';
 }
 
-/** 판정 칸에 붙는 승인 상태 딱지. 제출본이 없으면 그리지 않는다 */
+/** 판정 칸에 붙는 승인 상태 딱지. 올라온 산출물이 없으면 그리지 않는다 */
 export function ReviewBadge({ item }: { item: WbsDeliverableItem }): ReactNode {
   const state = reviewState(item.review ?? []);
   if (state === null) return null;
@@ -55,8 +60,8 @@ export function ReviewBadge({ item }: { item: WbsDeliverableItem }): ReactNode {
 }
 
 /**
- * 산출물 줄의 검토(11-18 사용자 지시). 올리기 왼쪽에 둔다. 발주기관은 눌러 올라온 제출본을
- * 승인·반려하고, 용역사는 상태만 본다. 양식은 양식 창에서, 제출본 검토는 여기서만 한다.
+ * 산출물 줄의 검토(11-18 사용자 결정: 승인 단위는 올라온 산출물). 올리기 왼쪽에 둔다. 발주기관은
+ * 눌러 그 작업에 올라온 산출물 하나하나를 승인·반려한다. 용역사는 판정 칸의 상태만 본다.
  */
 export function ReviewButton({
   projectId,
@@ -71,18 +76,10 @@ export function ReviewButton({
 }): ReactNode {
   const [open, setOpen] = useState(false);
   const list = item.review ?? [];
-  const state = reviewState(list);
-  if (state === null) return null;
-  // 상태는 판정 칸이 보인다. 용역사에게는 단추가 없다
-  if (!canReview) return null;
+  if (!canReview || list.length === 0) return null;
   return (
     <>
-      <Button
-        size="sm"
-        variant="outline"
-        className={cn(state === 'SUBMITTED' && 'border-sky-500/60')}
-        onClick={() => setOpen(true)}
-      >
+      <Button size="sm" variant="outline" onClick={() => setOpen(true)}>
         검토
       </Button>
       <Dialog open={open} onOpenChange={setOpen}>
@@ -96,7 +93,7 @@ export function ReviewButton({
           <ul className="flex min-w-0 flex-col gap-3">
             {list.map((r) => (
               <ReviewRow
-                key={r.workProductId}
+                key={r.documentId}
                 projectId={projectId}
                 review={r}
                 onChanged={onChanged}
@@ -120,21 +117,17 @@ function ReviewRow({
 }): ReactNode {
   const { toast } = useToast();
   const [busy, setBusy] = useState(false);
-  const label = `${r.name}${r.version ? ` ${r.version}` : ''}`;
 
   const decide = async (action: 'approve' | 'reject') => {
     let body: { reason: string } | undefined;
     if (action === 'reject') {
-      const reason = window.prompt(`${label} 을(를) 반려하는 사유를 적어 주세요.`)?.trim();
+      const reason = window.prompt(`${r.fileName} 을(를) 반려하는 사유를 적어 주세요.`)?.trim();
       if (!reason) return;
       body = { reason };
     }
     setBusy(true);
     try {
-      await api.post(
-        `/projects/${projectId}/work-products/${r.workProductId}/${action}`,
-        body ?? {},
-      );
+      await api.post(`/projects/${projectId}/documents/${r.documentId}/${action}`, body ?? {});
       toast({
         title: action === 'approve' ? '승인했습니다.' : '반려했습니다.',
         variant: 'success',
@@ -152,7 +145,12 @@ function ReviewRow({
   };
 
   return (
-    <li className="flex min-w-0 flex-col gap-1.5 rounded-md border px-3 py-2">
+    <li
+      className={cn(
+        'flex min-w-0 flex-col gap-1.5 rounded-md border px-3 py-2',
+        !r.latest && 'opacity-70',
+      )}
+    >
       <div className="flex min-w-0 flex-wrap items-center gap-2">
         <span className="font-medium">{r.name}</span>
         <span
@@ -163,71 +161,42 @@ function ReviewRow({
         >
           {STATUS_TEXT[r.status] ?? r.status}
         </span>
+        {!r.latest && <span className="text-muted-foreground text-xs">지난 판</span>}
       </div>
-      {/* 파일 이름을 누르면 원문(자료 상세)으로, 옆 단추로 내려받는다. 저장소 파일은 원문 주소로 간다 */}
+      {/* 파일 이름을 누르면 원문(자료 상세)으로, 옆 단추로 내려받는다 */}
       <div className="flex min-w-0 flex-wrap items-center gap-x-3 gap-y-1 text-xs">
-        {r.documentId ? (
-          <Link
-            to={`/p/${projectId}/documents/${r.documentId}`}
-            className="text-primary inline-flex min-w-0 items-center gap-1 underline-offset-2 hover:underline"
-            title="원문 보기"
-          >
-            <span className="truncate">{r.fileName ?? '원문 보기'}</span>
-            <ExternalLink className="size-3 shrink-0" />
-          </Link>
-        ) : r.externalUrl ? (
-          <a
-            href={r.externalUrl}
-            target="_blank"
-            rel="noreferrer"
-            className="text-primary inline-flex min-w-0 items-center gap-1 underline-offset-2 hover:underline"
-            title="원문 보기"
-          >
-            <span className="truncate">{r.fileName ?? '원문 보기'}</span>
-            <ExternalLink className="size-3 shrink-0" />
-          </a>
-        ) : (
-          r.fileName && <span className="text-muted-foreground truncate">{r.fileName}</span>
-        )}
-        {r.documentId && (
-          <ServerLink
-            url={`/api/documents/${r.documentId}/content`}
-            filename={r.fileName ?? 'deliverable'}
-            className="text-muted-foreground hover:text-foreground inline-flex items-center gap-1"
-            title="파일 내려받기"
-          >
-            <Download className="size-3.5" />
-            내려받기
-          </ServerLink>
-        )}
-        {r.version && <span className="text-muted-foreground tnum">버전 {r.version}</span>}
+        <Link
+          to={`/p/${projectId}/documents/${r.documentId}`}
+          className="text-primary inline-flex min-w-0 items-center gap-1 underline-offset-2 hover:underline"
+          title="원문 보기"
+        >
+          <span className="truncate">{r.fileName}</span>
+          <ExternalLink className="size-3 shrink-0" />
+        </Link>
+        <ServerLink
+          url={`/api/documents/${r.documentId}/content`}
+          filename={r.fileName}
+          className="text-muted-foreground hover:text-foreground inline-flex items-center gap-1"
+          title="파일 내려받기"
+        >
+          <Download className="size-3.5" />
+          내려받기
+        </ServerLink>
+        <span className="text-muted-foreground tnum">{formatDateTime(r.uploadedAt)}</span>
       </div>
-      {r.rejectReason && r.status === 'REJECTED' && (
-        <p className="text-destructive text-xs">반려 사유: {r.rejectReason}</p>
-      )}
-      {r.isCurrent ? (
-        <div className="flex justify-end gap-2">
-          {r.status === 'SUBMITTED' && (
-            <Button size="sm" disabled={busy} onClick={() => void decide('approve')}>
-              승인
-            </Button>
-          )}
-          {r.status !== 'REJECTED' && (
-            <Button
-              size="sm"
-              variant="outline"
-              disabled={busy}
-              onClick={() => void decide('reject')}
-            >
-              반려
-            </Button>
-          )}
-        </div>
-      ) : (
-        <p className="text-muted-foreground text-xs">
-          같은 분류의 새 버전이 올라와 있어 이 버전은 승인·반려할 수 없습니다.
-        </p>
-      )}
+      {r.rejectReason && <p className="text-destructive text-xs">반려 사유: {r.rejectReason}</p>}
+      <div className="flex justify-end gap-2">
+        {r.status !== 'APPROVED' && (
+          <Button size="sm" disabled={busy} onClick={() => void decide('approve')}>
+            승인
+          </Button>
+        )}
+        {r.status !== 'REJECTED' && (
+          <Button size="sm" variant="outline" disabled={busy} onClick={() => void decide('reject')}>
+            반려
+          </Button>
+        )}
+      </div>
     </li>
   );
 }

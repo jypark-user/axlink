@@ -64,12 +64,21 @@ export const DEFAULT_PRESET: DashboardPreset = {
     },
     {
       template: 'STAT_CARD',
+      title: '산출물 제출률',
+      intent: '지금 산출물 제출률을 한 숫자로',
+      measure: 'deliverable_submission_rate',
+      dimensions: [],
+      rationale:
+        '산출물 기준 진척(제출). 발주기관이 작업마다 정한 산출물 양식 중 산출물이 올라온 비율이다. 작업에 양식이 2개면 2건으로 세고, 하나만 올라와도 1건이 제출이다. 반려된 것은 뺀다. 양식을 정하지 않은 사업은 WBS 산출물 열을 기준으로 센다. 지금 값이다.',
+    },
+    {
+      template: 'STAT_CARD',
       title: '산출물 승인률',
       intent: '지금 산출물 승인률을 한 숫자로',
       measure: 'deliverable_approval_rate',
       dimensions: [],
       rationale:
-        '산출물 기준 진척. WBS 가 정한 산출물 중 현행 버전을 발주기관이 승인한 비율이다. 올리기만 하고 승인 전인 것은 넣지 않아서, WBS 실적이 앞서가도 이 값이 낮으면 확인할 결과물이 아직 없다는 뜻이다. 지금 값이라 산출물 화면에서 승인하면 바로 바뀐다. 아래 일별 그래프는 하루 한 번 남긴 기록이라 다음 기록 때 따라온다.',
+        '산출물 기준 진척(승인). 산출물 양식마다 가장 최근 올라온 산출물을 발주기관이 승인한 비율이다. 올리기만 하고 승인 전인 것은 넣지 않아서, 제출률이 높아도 이 값이 낮으면 아직 확인을 마치지 못한 결과물이 많다는 뜻이다. 지금 값이라 산출물 화면에서 승인하면 바로 바뀐다. 아래 일별 그래프는 하루 한 번 남긴 기록이라 다음 기록 때 따라온다.',
     },
     {
       template: 'STAT_CARD',
@@ -80,19 +89,10 @@ export const DEFAULT_PRESET: DashboardPreset = {
       rationale:
         '요구사항 승인 기준 진척. 요구사항 중 발주기관이 검증 또는 인수로 정한 비율이다(요구사항 화면의 상태 지정). 확정된 기준선이 있으면 그 기준선 안의 요구사항만 센다. 지금 값이라 상태를 지정하면 바로 바뀐다. 아래 일별 그래프는 하루 한 번 남긴 기록이다.',
     },
-    {
-      template: 'STAT_CARD',
-      title: '계획 대비 편차',
-      intent: 'WBS 실적 진척이 계획 진척보다 몇 %p 앞서거나 뒤졌는지',
-      measure: 'progress_variance_pct',
-      dimensions: ['period_day'],
-      rationale:
-        'WBS 진척률만으로는 늦은지 빠른지 알 수 없어서 옆에 둔다. 작업 기간으로 안분한 계획 진척과 실적의 차이(%p)이고, 음수면 계획보다 뒤진 것이다.',
-    },
     // ② 세 기준을 한 그래프에. 기준끼리 벌어지는 시점이 보인다
     {
       template: 'LINE_CHART',
-      title: '일별 진척률 (WBS · 산출물 · 요구사항)',
+      title: '일별 진척률 (WBS · 산출물 제출·승인 · 요구사항)',
       intent:
         '사업 시작부터 오늘까지 WBS 진척률·산출물 승인률·요구사항 이행률을 일별로 한 그래프에',
       measure: 'progress_metric_pct',
@@ -189,6 +189,15 @@ export const DEFAULT_PRESET: DashboardPreset = {
       measure: 'open_defect_count',
       rationale:
         '품질 쪽 남은 일이다. 해결·종료되지 않은 결함 건수다. 진척률이 높아도 결함이 남아 있으면 인수 전에 처리해야 한다.',
+    },
+    {
+      template: 'STAT_CARD',
+      title: '계획 대비 편차',
+      intent: 'WBS 실적 진척이 계획 진척보다 몇 %p 앞서거나 뒤졌는지',
+      measure: 'progress_variance_pct',
+      dimensions: ['period_day'],
+      rationale:
+        'WBS 진척률만으로는 늦은지 빠른지 알 수 없어서 옆에 둔다. 작업 기간으로 안분한 계획 진척과 실적의 차이(%p)이고, 음수면 계획보다 뒤진 것이다.',
     },
   ],
 };

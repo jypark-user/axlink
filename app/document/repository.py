@@ -17,7 +17,7 @@ _COLUMNS = """
     w.wbs_id, w.name as wbs_name,
     dd.name as designated_name, dd.active as designated_active,
     d.processing_state, d.processing_error, d.processing_attempts, d.processed_at,
-    d.processing_steps
+    d.processing_steps, d.review_status
 """
 _FROM = """
     from document_upload d
@@ -81,9 +81,36 @@ def insert(
 
 
 def link_wbs_item(cur: Any, document_id: str, wbs_item_id: str | None) -> None:
+    """문서를 작업에 붙이거나 뗀다. 작업에 붙은 문서는 산출물이라 검토 상태가 생긴다(V70).
+
+    이미 승인·반려된 것은 그대로 둔다. 작업과 양식에서 모두 떼면 검토 상태도 지운다.
+    """
     cur.execute(
-        "update document_upload set wbs_item_id = %s, updated_at = now() where id = %s",
-        (wbs_item_id, document_id),
+        """
+        update document_upload
+           set wbs_item_id = %s,
+               review_status = case
+                 when %s::uuid is not null then coalesce(review_status, 'SUBMITTED')
+                 when designated_deliverable_id is not null then review_status
+               end,
+               updated_at = now()
+         where id = %s
+        """,
+        (wbs_item_id, wbs_item_id, document_id),
+    )
+
+
+def set_review(
+    cur: Any, document_id: str, status: str, user_id: str | None, reason: str | None
+) -> None:
+    cur.execute(
+        """
+        update document_upload
+           set review_status = %s, reviewed_by_user_id = %s, reviewed_at = now(),
+               review_reason = %s, updated_at = now()
+         where id = %s
+        """,
+        (status, user_id, reason, document_id),
     )
 
 

@@ -58,6 +58,7 @@ class ProgressResponse(BaseModel):
     scheduleCompliance: ProgressMeasure | None = None  # noqa: N815
     # 산출물 승인률(DEC-12): WBS 가 정한 산출물 중 현행 버전이 승인된 것
     deliverableApproval: ProgressMeasure | None = None  # noqa: N815
+    deliverableSubmission: ProgressMeasure | None = None  # noqa: N815  산출물 제출률(V70)
 
 
 # ---------------------------------------------------------------- 대시보드 · 위젯
@@ -187,6 +188,8 @@ class ProgressSnapshotResponse(BaseModel):
     # 대시보드 카탈로그(snapshot_*_pct)와 같은 식으로 낸다. 분모가 없으면 null
     deliverableApprovedCount: int | None = None  # noqa: N815
     deliverableTotalCount: int | None = None  # noqa: N815
+    deliverableSubmittedCount: int | None = None  # noqa: N815  V70
+    deliverableSubmissionPct: float | None = None  # noqa: N815  V70
     deliverableApprovalPct: float | None = None  # noqa: N815
     requirementFulfillmentPct: float | None = None  # noqa: N815
 
@@ -307,21 +310,19 @@ class DesignationEvent(BaseModel):
 
 
 class DeliverableReview(BaseModel):
-    """발주기관이 승인·반려할 제출본 하나(11-18 사용자 지시: 산출물 줄에서 바로 검토).
+    """작업에 올라온 산출물 하나(V70, 2026-11-18 사용자 결정: 승인 단위는 올라온 산출물).
 
-    양식이 있는 작업은 양식마다 최근 제출본, 없는 작업은 판정이 맞춘 산출물이다.
+    발주기관이 산출물 화면에서 승인·반려한다. 22종 분류별 산출물 버전과는 상관없다.
     """
 
-    workProductId: str  # noqa: N815
-    name: str
-    fileName: str | None  # noqa: N815
-    version: str | None
+    documentId: str  # noqa: N815
+    name: str  # 양식 이름, 양식 없이 올렸으면 파일 이름
+    fileName: str  # noqa: N815
+    uploadedAt: str  # noqa: N815
     status: str  # SUBMITTED | APPROVED | REJECTED
     rejectReason: str | None  # noqa: N815
-    isCurrent: bool  # noqa: N815  승인·반려는 그 유형의 현행 버전에만 한다
-    # 내용을 보고 판단하게 원본으로 간다. 올린 문서면 그 문서, 저장소 파일이면 원문 주소
-    documentId: str | None = None  # noqa: N815
-    externalUrl: str | None = None  # noqa: N815
+    reviewedAt: str | None  # noqa: N815
+    latest: bool  # 같은 양식에 다시 올린 것이 있으면 앞의 것은 지난 판이다
 
 
 class WbsDeliverableItem(BaseModel):

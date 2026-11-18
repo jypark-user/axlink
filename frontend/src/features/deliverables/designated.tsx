@@ -123,12 +123,12 @@ export function DesignatedCell({
     return (
       <Button
         size="sm"
-        variant="ghost"
+        variant="outline"
         onClick={() =>
           actions.onEdit({ mode: 'create', taskKey: item.taskKey as string, taskLabel })
         }
       >
-        등록
+        양식 등록
       </Button>
     );
   }
@@ -373,10 +373,13 @@ export function UploadDialog({
   item,
   actions,
   onClose,
+  onUploadPlain,
 }: {
   item: WbsDeliverableItem | null;
   actions: DesignatedActions;
   onClose: () => void;
+  /** 양식에 매이지 않은 산출물을 그 작업에 올린다. 진척 셈에는 들지 않는다 */
+  onUploadPlain: (wbsId: string) => void;
 }): ReactNode {
   const list = (item?.designated ?? []).filter((d) => !d.needsRedesignation);
   const taskLabel = item ? `${item.wbsId} ${item.name}` : '';
@@ -400,6 +403,13 @@ export function UploadDialog({
               />
             ))}
           </ul>
+        )}
+        {item && (
+          <div className="flex justify-end border-t pt-3">
+            <Button size="sm" variant="outline" onClick={() => onUploadPlain(item.wbsId)}>
+              기타 산출물 올리기
+            </Button>
+          </div>
         )}
       </DialogContent>
     </Dialog>

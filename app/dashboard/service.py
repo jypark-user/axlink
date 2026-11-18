@@ -35,7 +35,6 @@ from app.dashboard.models import (
     WBS_SOURCE_REDMINE,
     DeliverableReview,
     DeliverableSummary,
-    DesignatedDeliverable,
     LinkedIssue,
     ProgressMeasure,
     ProgressResponse,
@@ -211,7 +210,7 @@ def compute(cur: Any, project_id: str, at: date) -> ProgressResponse:
     achieved, evaluated = repository.schedule_compliance(cur, [project_id], at).get(
         project_id, (0, 0)
     )
-    approved, defined = deliverable_approval_now(cur, project_id, at)
+    submitted_units, approved, defined = deliverable_units(cur, project_id, at)
 
     return ProgressResponse(
         baseDate=at.isoformat(),
@@ -236,6 +235,7 @@ def compute(cur: Any, project_id: str, at: date) -> ProgressResponse:
         basisNote=note,
         scheduleCompliance=schedule_compliance_measure(achieved, evaluated),
         deliverableApproval=deliverable_approval_measure(approved, defined),
+        deliverableSubmission=deliverable_submission_measure(submitted_units, defined),
     )
 
 
@@ -276,25 +276,81 @@ def deliverable_approval_measure(approved: int, defined: int) -> ProgressMeasure
     )
 
 
-def deliverable_approval_now(cur: Any, project_id: str, at: date) -> tuple[int, int]:
-    """산출물 승인 수(DEC-12): (현행 버전이 승인된 수, WBS 가 정한 산출물 수). 읽기만 한다.
+def deliverable_units(cur: Any, project_id: str, at: date) -> tuple[int, int, int]:
+    """산출물 진척의 셈(V70): (제출 수, 승인 수, 셈 단위 수). 읽기만 한다.
 
-    판정을 지금 다시 해서(저장하지 않음) 문서를 붙이거나 산출물을 확정한 직후에도 맞는다.
-    진척 산정은 스냅샷·확인 요청 상태 뜨기에도 쓰이므로 판정 저장·활동 기록을 남기면 안 된다.
-    분모·분자 조건은 시맨틱 지표 deliverable_approval_rate(V64)와 같다. 지표는 일정·산출물 화면이
-    남긴 판정(wbs_item.deliverable_product_id)을 읽는다.
+    산출물 양식을 정한 사업은 양식 하나가 한 건이다. 작업에 양식이 2개면 2건이고 하나만
+    올라와도 1건 제출이다. 양식마다 가장 최근 올라온 산출물의 검토 상태를 본다(뷰
+    v_deliverable_unit, 시맨틱 지표와 같은 셈). 양식이 없는 사업은 WBS 산출물 열이 있는 말단
+    작업이 한 건이고, 판정을 지금 다시 해서(저장하지 않음) 문서를 붙인 직후에도 맞게 센다.
+    승인은 그 작업에 올린 산출물의 승인이나 현행 버전 승인이다.
     """
+    form = fetch_one(
+        cur,
+        """
+        select count(*) filter (where submitted) as submitted,
+               count(*) filter (where approved) as approved, count(*) as total
+          from v_deliverable_unit
+         where project_id = %s and basis = 'FORM'
+        """,
+        (project_id,),
+    )
+    if form and form["total"]:
+        return int(form["submitted"]), int(form["approved"]), int(form["total"])
+
     check = judge_deliverables(cur, project_id, at)
     leaves = {
-        i["wbs_id"] for i in check.items
+        i["wbs_id"]: str(i["id"]) for i in check.items
         if i.get("weight") is not None and (i.get("deliverable") or "").strip()
     }
     judged = [j for j in check.judgements if j.wbs_id in leaves]
     status = repository.current_status_by_product(
         cur, [j.product_id for j in judged if j.product_id]
     )
-    approved = sum(1 for j in judged if j.product_id and status.get(j.product_id) == "APPROVED")
-    return approved, len(leaves)
+    reviewed = {
+        str(r["wbs_item_id"]): r["review_status"]
+        for r in fetch_all(
+            cur,
+            """
+            select distinct on (wbs_item_id) wbs_item_id, review_status
+              from document_upload
+             where project_id = %s and wbs_item_id is not null and review_status is not null
+             order by wbs_item_id, created_at desc
+            """,
+            (project_id,),
+        )
+    }
+    approved = sum(
+        1 for j in judged
+        if reviewed.get(leaves[j.wbs_id]) == "APPROVED"
+        or (j.product_id and status.get(j.product_id) == "APPROVED")
+    )
+    submitted = sum(
+        1 for j in judged
+        if j.status == deliverable.SUBMITTED and reviewed.get(leaves[j.wbs_id]) != "REJECTED"
+    )
+    return submitted, approved, len(leaves)
+
+
+def deliverable_approval_now(cur: Any, project_id: str, at: date) -> tuple[int, int]:
+    """산출물 승인 수(DEC-12, V70): (승인 수, 셈 단위 수). deliverable_units 의 승인 쪽이다."""
+    _, approved, total = deliverable_units(cur, project_id, at)
+    return approved, total
+
+
+def deliverable_submission_measure(submitted: int, defined: int) -> ProgressMeasure:
+    """산출물 제출률(V70). 양식(없으면 WBS 산출물) 중 산출물이 올라온 비율."""
+    return ProgressMeasure(
+        value=_ratio(submitted, defined),
+        numerator=submitted,
+        denominator=defined,
+        label="산출물 제출률",
+        unit="건",
+        kind=OBSERVED,
+        note="산출물 양식(없으면 WBS 산출물) 중 산출물이 올라온 비율. 반려된 것은 뺀다"
+        if defined
+        else "산출 불가: 셀 산출물이 없습니다",
+    )
 
 
 def sync_product_links(cur: Any, project_id: str, at: date | None = None) -> None:
@@ -757,10 +813,8 @@ def wbs_deliverables(
             by_item.setdefault(str(d["wbs_item_id"]), []).append(d)
         by_stem.setdefault(deliverable_stem(d["original_filename"]), []).append(d)
 
-    # 양식이 없는 작업의 검토 대상: 판정이 맞춘 산출물(11-18)
-    plain_products = _review_rows(
-        cur, [j.product_id for j in judged.values() if j.product_id and j.rule != "DESIGNATED"]
-    )
+    # 작업마다 올라온 산출물(V70). 승인 단위다
+    uploaded = _uploaded_by_item(cur, project_id)
 
     out: list[WbsDeliverableItem] = []
     for item in items:
@@ -807,9 +861,7 @@ def wbs_deliverables(
                 ],
                 taskKey=str(item["task_key"]) if item.get("task_key") else None,
                 designated=designated_by_task.get(str(item.get("task_key")), []),
-                review=_review_of(
-                    designated_by_task.get(str(item.get("task_key")), []), j, plain_products
-                ),
+                review=uploaded.get(str(item["id"]), []),
             )
         )
     counts = deliverable.summarize(list(judged.values()))
@@ -826,59 +878,43 @@ def wbs_deliverables(
     )
 
 
-def _review_rows(cur: Any, ids: list[str]) -> dict[str, DeliverableReview]:
-    if not ids:
-        return {}
+def _uploaded_by_item(cur: Any, project_id: str) -> dict[str, list[DeliverableReview]]:
+    """작업마다 올라온 산출물(V70). 최근 것이 앞이다. 양식마다 가장 최근 것만 latest 다.
+
+    작업에 바로 올린 것은 하나하나가 따로 낸 산출물이라 모두 latest 다. 같은 양식에 다시 올린 것은
+    새 판이라 앞의 것은 지난 판이다. 상태(승인 대기·승인·반려)는 latest 들로 정한다.
+    """
     rows = fetch_all(
         cur,
         """
-        select w.id, w.title, w.type, w.version, w.status, w.reject_reason, w.is_current,
-               w.file_uri, w.external_url, w.document_upload_id, d.original_filename
-          from work_product w
-          left join document_upload d on d.id = w.document_upload_id
-         where w.id = any(%s::uuid[])
+        select d.id, d.wbs_item_id, d.designated_deliverable_id, dd.name as form_name,
+               d.original_filename, d.created_at, d.review_status, d.review_reason, d.reviewed_at
+          from document_upload d
+          left join wbs_designated_deliverable dd on dd.id = d.designated_deliverable_id
+         where d.project_id = %s and d.wbs_item_id is not null and d.review_status is not null
+           and d.status not in ('FAILED', 'REJECTED')
+         order by d.created_at desc, d.id
         """,
-        (list(set(ids)),),
+        (project_id,),
     )
-    return {
-        str(r["id"]): DeliverableReview(
-            workProductId=str(r["id"]),
-            name=r["title"] or r["type"],
-            fileName=r["original_filename"]
-            or (r["file_uri"].rsplit("/", 1)[-1] if r.get("file_uri") else None),
-            version=r["version"],
-            status=r["status"],
-            rejectReason=r["reject_reason"],
-            isCurrent=bool(r["is_current"]),
-            documentId=str(r["document_upload_id"]) if r.get("document_upload_id") else None,
-            externalUrl=r.get("external_url"),
-        )
-        for r in rows
-        if r["status"] in ("SUBMITTED", "APPROVED", "REJECTED")
-    }
-
-
-def _review_of(
-    designated: list[DesignatedDeliverable],
-    j: deliverable.Judgement | None,
-    plain: dict[str, DeliverableReview],
-) -> list[DeliverableReview]:
-    """한 작업에서 발주기관이 승인·반려할 제출본. 양식이 있으면 양식마다 가장 최근 제출본."""
-    if designated:
-        out: list[DeliverableReview] = []
-        for d in designated:
-            v = next((v for v in d.versions if v.workProductId), None)
-            if v is None or v.state not in ("SUBMITTED", "APPROVED", "REJECTED"):
-                continue
-            out.append(DeliverableReview(
-                workProductId=v.workProductId, name=d.name, fileName=v.fileName,
-                version=v.version, status=v.state, rejectReason=v.rejectReason,
-                isCurrent=v.isCurrent, documentId=v.documentId,
-            ))
-        return out
-    if j is not None and j.product_id and j.product_id in plain:
-        return [plain[j.product_id]]
-    return []
+    out: dict[str, list[DeliverableReview]] = {}
+    seen_forms: set[str] = set()
+    for r in rows:
+        form = str(r["designated_deliverable_id"]) if r["designated_deliverable_id"] else None
+        latest = form is None or form not in seen_forms
+        if form:
+            seen_forms.add(form)
+        out.setdefault(str(r["wbs_item_id"]), []).append(DeliverableReview(
+            documentId=str(r["id"]),
+            name=r["form_name"] or r["original_filename"],
+            fileName=r["original_filename"],
+            uploadedAt=r["created_at"].isoformat(),
+            status=r["review_status"],
+            rejectReason=r["review_reason"] if r["review_status"] == "REJECTED" else None,
+            reviewedAt=r["reviewed_at"].isoformat() if r["reviewed_at"] else None,
+            latest=latest,
+        ))
+    return out
 
 
 def deliverable_stem(value: str) -> str:

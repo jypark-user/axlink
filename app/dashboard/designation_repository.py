@@ -126,6 +126,7 @@ def submissions(cur: Any, project_id: str) -> list[dict[str, Any]]:
         """
         select d.id, d.designated_deliverable_id, d.original_filename, d.created_at,
                d.processing_state, s.status as draft_status, s.work_product_id,
+               d.review_status, d.review_reason, d.reviewed_at,
                wp.version as wp_version, wp.status as wp_status, wp.reject_reason,
                wp.approved_at, wp.submitted_at, wp.is_current
           from document_upload d
@@ -155,7 +156,8 @@ def link_document(cur: Any, document_id: str, designated_id: str, wbs_item_id: s
     cur.execute(
         """
         update document_upload
-           set designated_deliverable_id = %s, wbs_item_id = %s, updated_at = now()
+           set designated_deliverable_id = %s, wbs_item_id = %s,
+               review_status = coalesce(review_status, 'SUBMITTED'), updated_at = now()
          where id = %s
         """,
         (designated_id, wbs_item_id, document_id),

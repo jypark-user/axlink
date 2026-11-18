@@ -1550,6 +1550,8 @@ export interface ProgressSnapshotResponse {
   /** 지표별 진척률(11-18). 그날 센 건수에서 대시보드 카탈로그와 같은 식으로 낸다. 분모가 없으면 null */
   deliverableApprovedCount?: number | null;
   deliverableTotalCount?: number | null;
+  deliverableSubmittedCount?: number | null;
+  deliverableSubmissionPct?: number | null;
   deliverableApprovalPct?: number | null;
   requirementFulfillmentPct?: number | null;
   createdAt: string;
@@ -1753,16 +1755,16 @@ export interface WbsDeliverableDocument {
 }
 
 export interface DeliverableReview {
-  workProductId: string;
+  /** 작업에 올라온 산출물 하나(V70). 승인 단위다 */
+  documentId: string;
   name: string;
-  fileName: string | null;
-  version: string | null;
+  fileName: string;
+  uploadedAt: string;
   status: 'SUBMITTED' | 'APPROVED' | 'REJECTED';
   rejectReason: string | null;
-  isCurrent: boolean;
-  /** 원문으로 가는 길. 올린 문서면 문서 id, 저장소 파일이면 원문 주소 */
-  documentId?: string | null;
-  externalUrl?: string | null;
+  reviewedAt: string | null;
+  /** 같은 양식에 다시 올린 것이 있으면 앞의 것은 지난 판이다 */
+  latest: boolean;
 }
 
 export interface WbsDeliverableItem {

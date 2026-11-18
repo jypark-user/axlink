@@ -7,6 +7,7 @@ from typing import Annotated
 
 from fastapi import APIRouter, File, Form, Query, Response, UploadFile
 from fastapi.responses import FileResponse
+from pydantic import BaseModel
 
 from app.auth.deps import Principal
 from app.common.paging import PageQuery, PageResponse
@@ -70,6 +71,28 @@ def get_document(document_id: str, principal: Principal) -> DocumentDetailRespon
     """자료 상세. 정보·설정과 추출 결과 링크."""
     with tx() as cur:
         return service.get_detail(cur, principal, document_id)
+
+
+class ReviewBody(BaseModel):
+    reason: str | None = None
+
+
+@router.post("/projects/{project_id}/documents/{document_id}/approve", status_code=204)
+def approve_deliverable(project_id: str, document_id: str, principal: Principal) -> Response:
+    """작업·양식에 올라온 산출물 하나를 승인한다(V70, 발주기관)."""
+    with tx() as cur:
+        service.review(cur, principal, project_id, document_id, "APPROVED", None)
+    return Response(status_code=204)
+
+
+@router.post("/projects/{project_id}/documents/{document_id}/reject", status_code=204)
+def reject_deliverable(
+    project_id: str, document_id: str, body: ReviewBody, principal: Principal
+) -> Response:
+    """올라온 산출물 하나를 반려한다. 사유가 필요하다."""
+    with tx() as cur:
+        service.review(cur, principal, project_id, document_id, "REJECTED", body.reason)
+    return Response(status_code=204)
 
 
 @router.patch("/documents/{document_id}", response_model=DocumentDetailResponse)

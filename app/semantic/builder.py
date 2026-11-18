@@ -37,6 +37,8 @@ TIME_COLUMNS: dict[str, str] = {
     "v_wbs_completion": "coalesce(e.decided_at, e.end_on::timestamptz)",
     # 마일스톤(V58). 기한 기준
     "milestone": "e.due_on::timestamptz",
+    # 산출물 셈 단위(V70). 그 작업의 종료일 기준
+    "v_deliverable_unit": "e.end_on::timestamptz",
 }
 
 _TIME_COL = "<TIME_COL>"
