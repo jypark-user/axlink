@@ -85,6 +85,16 @@ def test_세_기준_일별_추이는_스냅샷_값을_펼친다(client, client_t
     assert card("snapshot_requirement_fulfillment_pct") == got[("2026-10-03", "요구사항 이행률")]
     assert card("snapshot_work_product_approval_pct") == got[("2026-10-02", "산출물 승인률")]
 
+    # 스냅샷 화면의 지표별 진척률(11-18)도 같은 값이다. 분모가 없는 날은 비운다
+    res = client.get(f"/api/projects/{PID}/snapshots?limit=10", headers=_auth(token))
+    assert res.status_code == 200, res.text
+    screen = {r["snapshotDate"]: r for r in res.json()}
+    for day in ("2026-10-01", "2026-10-02", "2026-10-03"):
+        r = screen[day]
+        assert r["wbsActualPct"] == got[(day, "WBS 진척률")]
+        assert r["requirementFulfillmentPct"] == got[(day, "요구사항 이행률")]
+        assert r["deliverableApprovalPct"] == got.get((day, "산출물 승인률"))
+
 
 @pytest.fixture
 def wbs_tasks():

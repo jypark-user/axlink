@@ -28,10 +28,31 @@ import type { ProgressSnapshotResponse, ProjectScheduleResponse } from '@/types/
  * 줄마다 전날 대비 변화가 붙은 표다. 동기화(도구에서 읽어 오기)와는 다른 것이다.
  */
 
+// 지표별 진척률 네 줄(11-18 사용자 지시). 계획은 기준선이라 점선이다
 const CHART: ChartConfig = {
-  representativePct: { label: '진척률', color: 'var(--chart-1)' },
-  wbsPlannedPct: { label: '계획', color: 'var(--chart-2)' },
+  planned: { label: '계획', color: 'var(--chart-2)' },
+  wbs: { label: '진척률(WBS)', color: 'var(--chart-1)' },
+  deliverable: { label: '진척률(산출물)', color: 'var(--chart-3)' },
+  requirement: { label: '진척률(요구사항 이행)', color: 'var(--chart-4)' },
 };
+
+type MetricKey = 'planned' | 'wbs' | 'deliverable' | 'requirement';
+const METRIC_KEYS: MetricKey[] = ['planned', 'wbs', 'deliverable', 'requirement'];
+
+/** WBS 진척률. WBS 칸이 비었어도 대표값이 WBS 산식(L1·L2)이면 그 값이다 */
+function wbsPct(r: ProgressSnapshotResponse): number | null {
+  if (r.wbsActualPct !== null) return r.wbsActualPct;
+  return r.level === 'L1' || r.level === 'L2' ? r.representativePct : null;
+}
+
+function metrics(r: ProgressSnapshotResponse): Record<MetricKey, number | null> {
+  return {
+    planned: r.wbsPlannedPct,
+    wbs: wbsPct(r),
+    deliverable: r.deliverableApprovalPct ?? null,
+    requirement: r.requirementFulfillmentPct ?? null,
+  };
+}
 
 const LEVEL_LABEL: Record<string, string> = {
   L1: 'WBS 실적',
@@ -121,19 +142,16 @@ export function SnapshotsPage(): ReactNode {
 
 function SnapshotBody({ rows }: { rows: ProgressSnapshotResponse[] }): ReactNode {
   // 서버는 최근 것이 앞. 그래프는 오래된 것부터
-  const series = useMemo(() => [...rows].reverse(), [rows]);
-  const withDelta = useMemo(
-    () =>
-      rows.map((r, i) => ({
-        row: r,
-        prev: rows[i + 1] ?? null, // 표는 최근이 위라 다음 줄이 전날이다
-      })),
+  const series = useMemo(
+    () => [...rows].reverse().map((r) => ({ snapshotDate: r.snapshotDate, ...metrics(r) })),
     [rows],
   );
-
-  // 대표값 산식이 기간 중에 바뀌었으면(DEC-17: L3 해결률 → 이슈 진척도 평균) 그대로 견주지 않는다
-  const bases = useMemo(
-    () => [...new Set(rows.map((r) => r.representativeBasisLabel).filter(Boolean))],
+  const withDelta = useMemo(
+    () =>
+      rows.map((r, i) => {
+        const prevRow = rows[i + 1] ?? null; // 표는 최근이 위라 다음 줄이 전날이다
+        return { row: r, now: metrics(r), prev: prevRow ? metrics(prevRow) : null, prevRow };
+      }),
     [rows],
   );
 
@@ -144,13 +162,7 @@ function SnapshotBody({ rows }: { rows: ProgressSnapshotResponse[] }): ReactNode
   return (
     <div className="flex flex-col gap-6">
       <section className="rounded border p-4">
-        <h2 className="mb-3 text-sm font-semibold">진척률 추이</h2>
-        {bases.length > 1 && (
-          <p className="mb-3 text-xs text-amber-700 dark:text-amber-400">
-            이 기간에 진척률 산식이 바뀌었습니다({bases.join(' → ')}). 산식이 다른 날끼리는 그대로
-            견주지 마세요. 각 날의 산식은 아래 표의 「산정」 칸에 있습니다.
-          </p>
-        )}
+        <h2 className="mb-3 text-sm font-semibold">지표별 진척률 추이</h2>
         {series.length < 2 ? (
           <p className="text-muted-foreground text-sm">
             기록이 {series.length}건이라 아직 선이 되지 않습니다. 내일부터 이어집니다.
@@ -160,26 +172,21 @@ function SnapshotBody({ rows }: { rows: ProgressSnapshotResponse[] }): ReactNode
             <LineChart data={series} margin={{ left: 8, right: 16, top: 8, bottom: 0 }}>
               <CartesianGrid vertical={false} strokeDasharray="3 3" />
               <XAxis dataKey="snapshotDate" tickFormatter={(v: string) => v.slice(5)} />
-              <YAxis domain={[0, 100]} width={36} />
+              <YAxis domain={[0, 100]} width={44} unit="%" />
               <ChartTooltip content={<ChartTooltipContent />} />
               <ChartLegend content={<ChartLegendContent />} />
-              <Line
-                type="monotone"
-                dataKey="representativePct"
-                stroke="var(--color-representativePct)"
-                strokeWidth={2}
-                dot={{ r: 3 }}
-                connectNulls
-              />
-              <Line
-                type="monotone"
-                dataKey="wbsPlannedPct"
-                stroke="var(--color-wbsPlannedPct)"
-                strokeWidth={1.5}
-                strokeDasharray="4 3"
-                dot={false}
-                connectNulls
-              />
+              {METRIC_KEYS.map((k) => (
+                <Line
+                  key={k}
+                  type="monotone"
+                  dataKey={k}
+                  stroke={`var(--color-${k})`}
+                  strokeWidth={k === 'planned' ? 1.5 : 2}
+                  strokeDasharray={k === 'planned' ? '4 3' : undefined}
+                  dot={k === 'planned' ? false : { r: 3 }}
+                  connectNulls
+                />
+              ))}
             </LineChart>
           </ChartContainer>
         )}
@@ -190,45 +197,43 @@ function SnapshotBody({ rows }: { rows: ProgressSnapshotResponse[] }): ReactNode
           <thead className="bg-muted/50 text-muted-foreground text-xs">
             <tr>
               <th className="px-4 py-2.5 text-left font-medium">날짜</th>
-              <th className="px-4 py-2.5 text-right font-medium">진척률</th>
               <th className="px-4 py-2.5 text-right font-medium">계획</th>
+              <th className="px-4 py-2.5 text-right font-medium">진척률(WBS)</th>
+              <th className="px-4 py-2.5 text-right font-medium">진척률(산출물)</th>
+              <th className="px-4 py-2.5 text-right font-medium">진척률(요구사항 이행)</th>
               <th className="px-4 py-2.5 text-right font-medium">편차</th>
               <th className="px-4 py-2.5 text-right font-medium">지연 작업</th>
               <th className="px-4 py-2.5 text-right font-medium">이슈 해결</th>
-              <th className="px-4 py-2.5 text-right font-medium">요구사항 검증</th>
               <th className="px-4 py-2.5 text-right font-medium">리스크 종료</th>
-              <th className="px-4 py-2.5 text-right font-medium">산출물 제출</th>
               <th className="px-4 py-2.5 text-left font-medium">산정</th>
               <th className="px-4 py-2.5 text-left font-medium">찍은 시각</th>
             </tr>
           </thead>
           <tbody>
-            {withDelta.map(({ row: r, prev }) => (
-              <tr key={r.snapshotDate} className="border-t">
+            {withDelta.map(({ row: r, now, prev, prevRow }) => (
+              <tr key={r.snapshotDate} className="border-t align-top">
                 <td className="tnum px-4 py-2.5 whitespace-nowrap">{formatDate(r.snapshotDate)}</td>
                 <td className="tnum px-4 py-2.5 text-right">
-                  <Pct value={r.representativePct} />
-                  {prev && prev.representativeBasisLabel !== r.representativeBasisLabel ? (
-                    <span className="ml-1 text-xs text-muted-foreground">산식 바뀜</span>
-                  ) : (
-                    <Delta
-                      now={r.representativePct}
-                      prev={prev?.representativePct ?? null}
-                      unit="%p"
-                    />
-                  )}
+                  <Pct value={now.planned} />
+                </td>
+                <td className="tnum px-4 py-2.5 text-right whitespace-nowrap">
+                  <Pct value={now.wbs} />
+                  <Delta now={now.wbs} prev={prev?.wbs ?? null} unit="%p" />
+                </td>
+                <td className="tnum px-4 py-2.5 text-right whitespace-nowrap">
+                  <Pct value={now.deliverable} />
+                  <Delta now={now.deliverable} prev={prev?.deliverable ?? null} unit="%p" />
+                  <Count num={r.deliverableApprovedCount} den={r.deliverableTotalCount} />
+                </td>
+                <td className="tnum px-4 py-2.5 text-right whitespace-nowrap">
+                  <Pct value={now.requirement} />
+                  <Delta now={now.requirement} prev={prev?.requirement ?? null} unit="%p" />
+                  <Count num={r.requirementVerifiedCount} den={r.requirementTotalCount} />
                 </td>
                 <td className="tnum px-4 py-2.5 text-right">
-                  <Pct value={r.wbsPlannedPct} />
-                </td>
-                <td className="tnum px-4 py-2.5 text-right">
-                  {r.representativePct !== null && r.wbsPlannedPct !== null ? (
-                    <span
-                      className={cn(
-                        r.representativePct - r.wbsPlannedPct < 0 && 'text-destructive',
-                      )}
-                    >
-                      {(r.representativePct - r.wbsPlannedPct).toFixed(1)}%p
+                  {now.wbs !== null && now.planned !== null ? (
+                    <span className={cn(now.wbs - now.planned < 0 && 'text-destructive')}>
+                      {(now.wbs - now.planned).toFixed(1)}%p
                     </span>
                   ) : (
                     '-'
@@ -238,7 +243,7 @@ function SnapshotBody({ rows }: { rows: ProgressSnapshotResponse[] }): ReactNode
                   {r.behindTaskCount}
                   <Delta
                     now={r.behindTaskCount}
-                    prev={prev?.behindTaskCount ?? null}
+                    prev={prevRow?.behindTaskCount ?? null}
                     unit=""
                     badIsUp
                   />
@@ -247,23 +252,24 @@ function SnapshotBody({ rows }: { rows: ProgressSnapshotResponse[] }): ReactNode
                   {r.issueResolvedCount}/{r.issueTotalCount}
                 </td>
                 <td className="tnum px-4 py-2.5 text-right">
-                  {r.requirementVerifiedCount}/{r.requirementTotalCount}
-                </td>
-                <td className="tnum px-4 py-2.5 text-right">
                   {r.riskClosedCount}/{r.riskTotalCount}
-                </td>
-                <td className="tnum px-4 py-2.5 text-right">
-                  {r.workProductSubmittedCount}/{r.workProductTotalCount}
-                  <Delta
-                    now={r.workProductSubmittedCount}
-                    prev={prev?.workProductSubmittedCount ?? null}
-                    unit=""
-                  />
                 </td>
                 <td className="text-muted-foreground px-4 py-2.5 whitespace-nowrap">
                   {LEVEL_LABEL[r.level] ?? r.level}
                   {r.representativeBasisLabel && (
                     <span className="block text-xs">{r.representativeBasisLabel}</span>
+                  )}
+                  {/* 대표값 산식이 전날과 다르면 그대로 견주지 않는다(진척률-산정체계 §189) */}
+                  {prevRow && prevRow.representativeBasisLabel !== r.representativeBasisLabel && (
+                    <span className="block text-xs text-amber-700 dark:text-amber-400">
+                      산식 바뀜
+                    </span>
+                  )}
+                  {/* WBS 가 아닌 산식이면 대표값을 따로 적는다. 위 네 지표와 다른 값이다 */}
+                  {r.level !== 'L1' && r.level !== 'L2' && r.representativePct !== null && (
+                    <span className="tnum block text-xs">
+                      대표 {r.representativePct.toFixed(1)}%
+                    </span>
                   )}
                   {r.issueEstimateMissingCount ? (
                     <span className="block text-xs">
@@ -280,6 +286,22 @@ function SnapshotBody({ rows }: { rows: ProgressSnapshotResponse[] }): ReactNode
         </table>
       </section>
     </div>
+  );
+}
+
+/** 백분율 밑의 근거 건수. 분모가 없으면 안 보인다 */
+function Count({
+  num,
+  den,
+}: {
+  num: number | null | undefined;
+  den: number | null | undefined;
+}): ReactNode {
+  if (num == null || !den) return null;
+  return (
+    <span className="text-muted-foreground block text-xs">
+      {num}/{den}건
+    </span>
   );
 }
 

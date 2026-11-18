@@ -183,6 +183,12 @@ class ProgressSnapshotResponse(BaseModel):
     representativeBasisLabel: str | None = None  # noqa: N815
     issueEstimatePct: float | None = None  # noqa: N815
     issueEstimateMissingCount: int | None = None  # noqa: N815
+    # 지표별 진척률(11-18 사용자 지시). 계획·WBS 는 위 두 칸, 산출물·요구사항은 그날 센 건수에서
+    # 대시보드 카탈로그(snapshot_*_pct)와 같은 식으로 낸다. 분모가 없으면 null
+    deliverableApprovedCount: int | None = None  # noqa: N815
+    deliverableTotalCount: int | None = None  # noqa: N815
+    deliverableApprovalPct: float | None = None  # noqa: N815
+    requirementFulfillmentPct: float | None = None  # noqa: N815
 
 
 # ---------------------------------------------------------------- 일정 (WBS)

@@ -1522,6 +1522,11 @@ export interface ProgressSnapshotResponse {
   representativeBasisLabel?: string | null;
   issueEstimatePct?: number | null;
   issueEstimateMissingCount?: number | null;
+  /** 지표별 진척률(11-18). 그날 센 건수에서 대시보드 카탈로그와 같은 식으로 낸다. 분모가 없으면 null */
+  deliverableApprovedCount?: number | null;
+  deliverableTotalCount?: number | null;
+  deliverableApprovalPct?: number | null;
+  requirementFulfillmentPct?: number | null;
   createdAt: string;
 }
 

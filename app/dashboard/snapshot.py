@@ -12,6 +12,7 @@
 """
 
 from datetime import date
+from decimal import ROUND_HALF_UP, Decimal
 from typing import Any
 
 from app.activity import service as activity
@@ -199,7 +200,24 @@ def _response(row: dict[str, Any]) -> ProgressSnapshotResponse:
         representativeBasisLabel=basis_label(row["level"], row.get("representative_basis")),
         issueEstimatePct=_num(row.get("issue_estimate_pct")),
         issueEstimateMissingCount=row.get("issue_estimate_missing_count"),
+        deliverableApprovedCount=row.get("deliverable_approved_count"),
+        deliverableTotalCount=row.get("deliverable_total_count"),
+        deliverableApprovalPct=_rate(
+            row.get("deliverable_approved_count"), row.get("deliverable_total_count")
+        ),
+        requirementFulfillmentPct=_rate(
+            row["requirement_verified_count"], row["requirement_total_count"]
+        ),
     )
+
+
+def _rate(num: int | None, den: int | None) -> float | None:
+    """카탈로그의 round(100.0 * a / b, 2) 와 같은 값. 화면과 대시보드 수치가 어긋나지 않게
+    반올림도 PostgreSQL 처럼 0.5 를 올린다."""
+    if num is None or not den:
+        return None
+    pct = (Decimal(100) * num / den).quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)
+    return float(pct)
 
 
 # 대표값 산식의 이름. 화면·AI 가 같은 말을 쓴다
