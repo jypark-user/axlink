@@ -78,7 +78,8 @@ CATALOG: tuple[TemplateDef, ...] = (
        "가로 기간 축, 세로 값 축, 선 하나 또는 범주별 여러 선과 범례",
        "추이를 물을 때 기본. 기간 구간 12개 이하",
        ANY, 1, 2, TIME_REQUIRED, 12, False, False, False,
-       ("unit", "showLegend"), 100,
+       # 일별 추이 × 범주 몇 개(진척 기준 셋 × 130일 남짓)를 담는다. 최근 구간부터 남긴다
+       ("unit", "showLegend"), 400,
        "test_pass_rate", ("period_month",), "월별 시험 통과율", True),
     _T("AREA_CHART", "면적 추이", "추이",
        "기간에 따른 값의 변화, 선 아래를 채운다",

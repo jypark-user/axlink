@@ -1162,6 +1162,8 @@ export interface WidgetSpec {
   options: WidgetOptions | null;
   /** 만들 때 적은 의도. 고칠 때 다시 보여 준다. 값은 query 가 정한다 */
   prompt?: string | null;
+  /** 이 위젯을 둔 근거. 기본 구성이 채우고 고칠 때 읽기 전용으로 보인다 */
+  rationale?: string | null;
 }
 
 export interface WidgetColumn {

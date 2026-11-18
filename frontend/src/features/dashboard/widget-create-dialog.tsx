@@ -45,6 +45,28 @@ function PreviewBody({ spec, data }: { spec: WidgetSpec; data: WidgetDataRespons
 const COLUMN_PICK_TEMPLATES = new Set<string>(['DATA_TABLE', 'CHECKLIST']);
 
 /**
+ * 위젯을 둔 근거(spec.rationale)는 무엇을 어떻게 세는지에 붙은 설명이다. 다시 생성해서 지표·차원·필터가
+ * 그대로면 이어 쓰고, 하나라도 바뀌면 버린다. 바뀐 위젯에 옛 근거가 붙어 있으면 틀린 설명이 된다.
+ */
+const keepRationale = (before: WidgetSpec | null, after: WidgetSpec | null): WidgetSpec | null => {
+  if (!after || !before?.rationale) return after;
+  const same =
+    JSON.stringify([
+      before.template,
+      before.query.measure,
+      before.query.dimensions,
+      before.query.filters,
+    ]) ===
+    JSON.stringify([
+      after.template,
+      after.query.measure,
+      after.query.dimensions,
+      after.query.filters,
+    ]);
+  return same ? { ...after, rationale: before.rationale } : after;
+};
+
+/**
  * 열 하나를 켜거나 끈 명세. 열 순서는 데이터 순서를 따르고, 기본 상태(설정 없음)에서
  * 처음 손대면 그때 보이던 열 목록을 기준으로 시작한다.
  */
@@ -152,7 +174,7 @@ export function WidgetCreateDialog({
         setPreview(null);
         return;
       }
-      setSpec(res.spec);
+      setSpec(keepRationale(spec, res.spec));
       setPreview(res.preview);
       // 제목을 안 적었으면 지어 준 것을 채워 둔다 — 그대로 두거나 고쳐 쓰면 된다.
       if (!title.trim() && res.spec) setTitle(res.spec.title);
@@ -218,6 +240,15 @@ export function WidgetCreateDialog({
               placeholder="비워 두면 내용에 맞춰 지어 줍니다"
             />
           </div>
+
+          {spec?.rationale && (
+            <div className="flex flex-col gap-2">
+              <Label>만든 근거</Label>
+              <p className="rounded-md border border-border/60 bg-muted/30 px-3 py-2.5 text-sm leading-relaxed">
+                {spec.rationale}
+              </p>
+            </div>
+          )}
 
           <div className="flex flex-col gap-2">
             <Label htmlFor="widget-prompt">내용</Label>

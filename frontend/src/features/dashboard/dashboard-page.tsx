@@ -4,7 +4,7 @@ import { Link, useParams } from 'react-router-dom';
 import { Responsive, WidthProvider, type Layouts } from 'react-grid-layout';
 import 'react-grid-layout/css/styles.css';
 import 'react-resizable/css/styles.css';
-import { Pencil } from 'lucide-react';
+import { LayoutTemplate, Loader2, Pencil } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
 import { DataState, EmptyState } from '@/components/common/data-state';
@@ -26,6 +26,8 @@ import {
 import { WidgetHost } from '@/features/widgets/widget-host';
 import { WidgetCreateDialog } from '@/features/dashboard/widget-create-dialog';
 import { DashboardApplyActions, DashboardEditPanel } from '@/features/dashboard/edit-panel';
+import { DEFAULT_PRESET } from '@/features/dashboard/dashboard-presets';
+import { applyPreset } from '@/features/dashboard/preset-apply';
 import { ResourceSheet } from '@/features/ax-query/resource-sheet';
 import type {
   DashboardDetailResponse,
@@ -161,6 +163,25 @@ export function DashboardPage(): ReactNode {
     state.reload();
   };
 
+  // 빈 화면에서 기본 구성을 바로 놓는다. 새 사업은 대시보드가 비어 있다(11-18 사용자 지시)
+  const [seeding, setSeeding] = useState(false);
+  const seedDefault = async (dashboardId: string) => {
+    if (!projectId) return;
+    setSeeding(true);
+    try {
+      await applyPreset(dashboardId, projectId, [], DEFAULT_PRESET);
+    } catch (e) {
+      toast({
+        title: '기본 구성을 놓지 못했습니다.',
+        description: isApiError(e) ? e.message : undefined,
+        variant: 'error',
+      });
+    } finally {
+      setSeeding(false);
+      applied();
+    }
+  };
+
   const removeWidget = async (widgetId: string) => {
     try {
       await api.del<void>(`/widgets/${widgetId}`);
@@ -229,13 +250,25 @@ export function DashboardPage(): ReactNode {
           {(d) =>
             d.widgets.length === 0 ? (
               <EmptyState
-                text="위젯이 없습니다. 편집 모드에서 추천 구성을 고르거나 위젯을 하나씩 더하세요."
+                text="위젯이 없습니다. 기본 구성을 놓거나, 편집 모드에서 추천 구성을 고르거나 위젯을 하나씩 더하세요."
                 action={
                   d.editable && !editing ? (
-                    <Button size="sm" onClick={() => setEditing(true)}>
-                      <Pencil className="size-4" />
-                      편집 모드
-                    </Button>
+                    <div className="flex gap-2">
+                      {projectId && (
+                        <Button size="sm" disabled={seeding} onClick={() => void seedDefault(d.id)}>
+                          {seeding ? (
+                            <Loader2 className="size-4 animate-spin" />
+                          ) : (
+                            <LayoutTemplate className="size-4" />
+                          )}
+                          기본 구성 놓기
+                        </Button>
+                      )}
+                      <Button size="sm" variant="outline" onClick={() => setEditing(true)}>
+                        <Pencil className="size-4" />
+                        편집 모드
+                      </Button>
+                    </div>
                   ) : undefined
                 }
               />

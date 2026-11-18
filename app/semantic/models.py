@@ -45,6 +45,9 @@ class WidgetSpec(BaseModel):
     # 위젯을 만들 때 적은 의도("용역사별 이번 달 이슈 처리율"). 고칠 때 다시 보여 준다.
     # 값을 정하는 것은 query 이고 이 문장은 사람을 위한 기록이다
     prompt: str | None = None
+    # 왜 이 위젯을 두었는지(무엇을 판단하려는 그림이고 값은 어디서 오는지). 기본 구성이 채운다.
+    # 위젯을 고칠 때 읽기 전용으로 보여 준다. 값에는 영향이 없다
+    rationale: str | None = None
 
 
 class WidgetColumn(BaseModel):
