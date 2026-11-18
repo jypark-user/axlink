@@ -42,7 +42,16 @@ const METRIC_KEYS: MetricKey[] = ['planned', 'wbs', 'deliverable', 'requirement'
 /** WBS 진척률. WBS 칸이 비었어도 대표값이 WBS 산식(L1·L2)이면 그 값이다 */
 function wbsPct(r: ProgressSnapshotResponse): number | null {
   if (r.wbsActualPct !== null) return r.wbsActualPct;
-  return r.level === 'L1' || r.level === 'L2' ? r.representativePct : null;
+  return isWbsLevel(r) ? r.representativePct : null;
+}
+
+function isWbsLevel(r: ProgressSnapshotResponse): boolean {
+  return r.level === 'L1' || r.level === 'L2';
+}
+
+/** 그날 대표값의 산식. 산식 칸이 없던 옛 행은 수준 이름으로 갈음한다 */
+function basisOf(r: ProgressSnapshotResponse): string {
+  return r.representativeBasisLabel ?? LEVEL_LABEL[r.level] ?? r.level;
 }
 
 function metrics(r: ProgressSnapshotResponse): Record<MetricKey, number | null> {
@@ -259,22 +268,25 @@ function SnapshotBody({ rows }: { rows: ProgressSnapshotResponse[] }): ReactNode
                 </td>
                 <td className="text-muted-foreground px-4 py-2.5 whitespace-nowrap">
                   {LEVEL_LABEL[r.level] ?? r.level}
-                  {r.representativeBasisLabel && (
-                    <span className="block text-xs">{r.representativeBasisLabel}</span>
-                  )}
-                  {/* 대표값 산식이 전날과 다르면 그대로 견주지 않는다(진척률-산정체계 §189) */}
-                  {prevRow && prevRow.representativeBasisLabel !== r.representativeBasisLabel && (
+                  {/* 산식 이름이 수준 이름과 같으면(WBS 실적) 두 번 적지 않는다 */}
+                  {r.representativeBasisLabel &&
+                    r.representativeBasisLabel !== LEVEL_LABEL[r.level] && (
+                      <span className="block text-xs">{r.representativeBasisLabel}</span>
+                    )}
+                  {/* 대표값 산식이 전날과 다르면 그대로 견주지 않는다(진척률-산정체계 §189).
+                      산식 칸이 생기기 전 행은 수준으로 견준다 */}
+                  {prevRow && basisOf(prevRow) !== basisOf(r) && (
                     <span className="block text-xs text-amber-700 dark:text-amber-400">
                       산식 바뀜
                     </span>
                   )}
-                  {/* WBS 가 아닌 산식이면 대표값을 따로 적는다. 위 네 지표와 다른 값이다 */}
-                  {r.level !== 'L1' && r.level !== 'L2' && r.representativePct !== null && (
+                  {/* WBS 가 아닌 산식이면 대표값과 결측을 따로 적는다. 위 네 지표와 다른 값이다 */}
+                  {!isWbsLevel(r) && r.representativePct !== null && (
                     <span className="tnum block text-xs">
                       대표 {r.representativePct.toFixed(1)}%
                     </span>
                   )}
-                  {r.issueEstimateMissingCount ? (
+                  {!isWbsLevel(r) && r.issueEstimateMissingCount ? (
                     <span className="block text-xs">
                       결측 {r.issueEstimateMissingCount}건(0으로 셈)
                     </span>
