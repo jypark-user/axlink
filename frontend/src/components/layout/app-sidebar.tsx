@@ -48,6 +48,7 @@ import {
 } from '@/components/ui/sidebar';
 import { useAuth } from '@/features/auth/auth-context';
 import { UserMenu } from '@/components/layout/user-menu';
+import { conversationPath, scopeLabel } from '@/components/layout/conversation-link';
 import { api } from '@/lib/http';
 import { cn } from '@/lib/utils';
 import { useAsync } from '@/lib/use-async';
@@ -211,11 +212,24 @@ function AskSection({ role, onNavigate }: { role: Role; onNavigate: () => void }
               {list.map((c) => (
                 <SidebarMenuItem key={c.id}>
                   <SidebarMenuButton asChild tooltip={c.title} isActive={c.id === conversationId}>
-                    <Link to={`${base}/${c.id}`} onClick={onNavigate}>
+                    <Link
+                      to={conversationPath(c, projectId)}
+                      onClick={onNavigate}
+                      className={cn(
+                        !projectId && 'h-auto min-h-8 py-1.5 group-data-[collapsible=icon]:h-8',
+                      )}
+                    >
                       <MessageSquare className="size-4 shrink-0" />
-                      <span className="truncate">
-                        {c.pinned ? '📌 ' : ''}
-                        {c.title}
+                      <span className="flex min-w-0 flex-col gap-0.5">
+                        {!projectId && (
+                          <span className="text-sidebar-foreground/45 truncate text-[10.5px] leading-tight">
+                            {scopeLabel(c)}
+                          </span>
+                        )}
+                        <span className="truncate">
+                          {c.pinned ? '📌 ' : ''}
+                          {c.title}
+                        </span>
                       </span>
                     </Link>
                   </SidebarMenuButton>
