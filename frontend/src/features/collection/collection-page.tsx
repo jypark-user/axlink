@@ -116,7 +116,7 @@ export function CollectionPage(): ReactNode {
         description="도구에서 가져온 수집 잡 이력입니다. 30초마다 자동 갱신됩니다."
         actions={
           <>
-            <ScheduleSettingsDialog projectId={project.id} onSaved={reload} />
+            <ScheduleSettingsDialog projectId={project.id} part="sync" onSaved={reload} />
             <Button size="sm" variant="outline" onClick={reload}>
               새로고침
             </Button>

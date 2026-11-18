@@ -1,5 +1,4 @@
 import { useMemo, useState, type ReactNode } from 'react';
-import { Link } from 'react-router-dom';
 import { CartesianGrid, Line, LineChart, XAxis, YAxis } from 'recharts';
 import { Button } from '@/components/ui/button';
 import {
@@ -15,6 +14,7 @@ import { useToast } from '@/components/common/toaster';
 import { PageHeader } from '@/components/layout/page-header';
 import { useProjectContext } from '@/components/layout/project-shell';
 import { useAuth } from '@/features/auth/auth-context';
+import { ScheduleSettingsDialog } from '@/features/collection/schedule-settings-dialog';
 import { api } from '@/lib/http';
 import { isApiError } from '@/lib/api-error';
 import { formatDate, formatDateTime } from '@/lib/format';
@@ -102,11 +102,19 @@ export function SnapshotsPage(): ReactNode {
         title="스냅샷"
         description="매일 한 번 지표를 한 줄로 고정한 기록입니다. 도구에서 읽어 오는 동기화와는 다른 것으로, 이 기록이 추이 그래프와 보고서 수치의 출처입니다."
         actions={
-          canTake ? (
-            <Button size="sm" onClick={() => void takeNow()} disabled={taking}>
-              {taking ? '찍는 중…' : '지금 찍기'}
-            </Button>
-          ) : null
+          <>
+            {/* 일별 스냅샷 빈도·시각. 동기화 화면의 수집 설정에서 옮겨 왔다(11-18 사용자 지시) */}
+            <ScheduleSettingsDialog
+              projectId={project.id}
+              part="snapshot"
+              onSaved={schedule.reload}
+            />
+            {canTake && (
+              <Button size="sm" onClick={() => void takeNow()} disabled={taking}>
+                {taking ? '찍는 중…' : '지금 찍기'}
+              </Button>
+            )}
+          </>
         }
       />
 
@@ -117,18 +125,6 @@ export function SnapshotsPage(): ReactNode {
             {formatDateTime(s.nextSnapshotAt)} ({s.timezone}) · 빈도{' '}
             {s.snapshotOptions.find((o) => o.hours === s.snapshotIntervalHours)?.label ??
               `${s.snapshotIntervalHours}시간`}
-            {s.editable && (
-              <>
-                {' '}
-                ·{' '}
-                <Link
-                  to={`/p/${project.id}/collection`}
-                  className="underline-offset-2 hover:underline"
-                >
-                  수집 설정에서 바꾸기
-                </Link>
-              </>
-            )}
           </p>
         )}
       </DataState>
