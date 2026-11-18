@@ -407,10 +407,6 @@ function CreateDialog({
                   <SelectItem value="WBS_COMPLETION">작업 완료 확인 요청</SelectItem>
                 </SelectContent>
               </Select>
-              <p className="text-muted-foreground text-xs">
-                작업 완료 확인은 이 작업의 완료를 인정하는 확인 절차입니다. 확인되면 완료 확인율에
-                들어갑니다. 일반 확인 요청은 들어가지 않습니다.
-              </p>
             </div>
           )}
           {completion && (
