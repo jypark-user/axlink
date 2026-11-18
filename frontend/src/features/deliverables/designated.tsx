@@ -1,4 +1,4 @@
-import { useEffect, useState, type FormEvent, type ReactNode } from 'react';
+import { useEffect, useRef, useState, type FormEvent, type ReactNode } from 'react';
 import { Link } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
 import {
@@ -556,6 +556,7 @@ export function DesignateDialog({
   const [productType, setProductType] = useState(initial?.productType ?? '');
   const [guide, setGuide] = useState(initial?.guide ?? '');
   const [file, setFile] = useState<File | null>(null);
+  const fileRef = useRef<HTMLInputElement>(null);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
 
@@ -653,12 +654,30 @@ export function DesignateDialog({
               양식 파일 (선택
               {initial?.templateFileName ? `, 지금: ${initial.templateFileName}` : ''})
             </Label>
-            <Input
+            {/* 브라우저 기본 파일 칸은 「선택된 파일 없음」이 같이 찍혀 숨기고 단추로 연다(11-18) */}
+            <input
+              ref={fileRef}
               id="dd-file"
               type="file"
+              className="hidden"
               accept={ALLOWED.join(',')}
               onChange={(e) => setFile(e.target.files?.[0] ?? null)}
             />
+            <div className="flex min-w-0 items-center gap-2">
+              <Button
+                type="button"
+                size="sm"
+                variant="outline"
+                onClick={() => fileRef.current?.click()}
+              >
+                파일 선택
+              </Button>
+              {file && (
+                <span className="min-w-0 truncate text-sm" title={file.name}>
+                  {file.name}
+                </span>
+              )}
+            </div>
           </div>
           {error && (
             <p role="alert" className="text-destructive text-sm">
