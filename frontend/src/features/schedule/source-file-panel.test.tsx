@@ -1,8 +1,9 @@
-import { render, screen } from '@testing-library/react';
+import { fireEvent, render, screen } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
 import { describe, expect, it } from 'vitest';
 import { SourceFilePanel } from '@/features/schedule/source-file-panel';
 import { WbsView } from '@/features/schedule/schedule-views';
+import { ScheduleWarnings } from '@/features/schedule/schedule-warnings';
 import type { ScheduleTask } from '@/features/schedule/schedule-task';
 import type { CompletionItem, WbsScheduleResponse } from '@/types/api';
 
@@ -100,5 +101,28 @@ describe('WBS 탭 완료 확인 칸 (UC-032 4단계)', () => {
     );
     expect(screen.getByRole('columnheader', { name: '완료 확인' })).toBeInTheDocument();
     expect(screen.getByText(/김주무관/)).toBeInTheDocument();
+  });
+});
+
+describe('일정 경고 버튼', () => {
+  it('경고가 없으면 그리지 않는다', () => {
+    const { container } = render(<ScheduleWarnings warnings={[]} />);
+    expect(container).toBeEmptyDOMElement();
+  });
+
+  it('격차 경고 건수를 버튼에 보이고 누르면 목록을 연다', async () => {
+    render(
+      <ScheduleWarnings
+        warnings={[
+          '격차 경고: 2.3 설계 — 실적 90% 신고, 산출물 미제출',
+          '가중치 합이 1이 아닙니다',
+        ]}
+      />,
+    );
+    const button = screen.getByTestId('schedule-warnings');
+    expect(button).toHaveTextContent('격차 경고 1건');
+    fireEvent.click(button);
+    expect(await screen.findByText('2.3 설계 — 실적 90% 신고, 산출물 미제출')).toBeInTheDocument();
+    expect(screen.getByText('가중치 합이 1이 아닙니다')).toBeInTheDocument();
   });
 });

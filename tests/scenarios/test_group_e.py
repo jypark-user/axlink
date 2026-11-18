@@ -941,8 +941,12 @@ def _ui_UC_041_S02(screen, target, s0):
     expected = dl.get("submitted", 0) + dl.get("missing", 0) + dl.get("overdue", 0)
     if expected:
         assert f"산출물파일대조{dl['submitted']}/{expected}개" in head, head[:400]
-    for w in wbs["warnings"]:
-        sc.see(w)
+    # 경고는 「격차 경고 n건」(또는 「확인할 점 n건」) 버튼을 눌러 연다(11-18)
+    if wbs["warnings"]:
+        sc.page.get_by_test_id("schedule-warnings").click()
+        for w in wbs["warnings"]:
+            sc.see(w.removeprefix("격차 경고: "))
+        sc.page.keyboard.press("Escape")
 
     # WBS 표: 3.2 지연(40%), 계획선, 산출물 판정. 격차 경고는 API 가 붙인 줄에만 (DEC-20 (b))
     sc.page.get_by_role("tab", name="WBS").click()

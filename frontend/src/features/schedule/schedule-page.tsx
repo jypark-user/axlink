@@ -21,6 +21,7 @@ import type { CompletionItem, CompletionSummaryResponse, WbsScheduleResponse } f
 import { CompletionPanel } from '@/features/schedule/completion-panel';
 import { RecognitionPanel } from '@/features/schedule/recognition-panel';
 import { SourceFilePanel } from '@/features/schedule/source-file-panel';
+import { ScheduleWarnings } from '@/features/schedule/schedule-warnings';
 
 const VIEW_KEY = 'ax-link.schedule-view';
 
@@ -38,12 +39,6 @@ function readView(): ViewId {
   const saved = window.localStorage.getItem(VIEW_KEY);
   return VIEWS.some((v) => v.id === saved) ? (saved as ViewId) : 'gantt';
 }
-
-const SOURCE_DESCRIPTION: Record<WbsScheduleResponse['source'], string> = {
-  WBS_FILE: '용역사가 제출한 WBS 의 항목·기간·실적입니다. 계획선은 기간으로 다시 계산했습니다.',
-  REDMINE: 'Redmine 이슈의 시작일·종료일·진척률입니다. WBS 파일이 없어 이것으로 대신합니다.',
-  NONE: '일정을 읽을 WBS 파일도 Redmine 일정도 없습니다.',
-};
 
 export function SchedulePage(): ReactNode {
   const { project } = useProjectContext();
@@ -87,7 +82,10 @@ export function SchedulePage(): ReactNode {
             <RecognitionPanel recognition={data.recognition} shownLeaves={leaves.length} />
           ) : null;
 
-          // 원천 → 두 진척 카드 → 인식 결과 → 작업 일정 순이다
+          // 원천 → 두 진척 카드 → 작업 일정 → 인식 결과 순이다. 실사용자가 먼저 볼 것은 작업
+          // 일정의 네 탭이라 인식 결과는 아래로 내렸다(11-18 사용자 지시). 다만 읽지 못한 판은
+          // 사유를 먼저 알아야 하므로 위에 둔다(AC-030-4)
+          const failed = data.recognition?.status === 'FAILED';
           const head = (
             <>
               <SourceFilePanel data={data} />
@@ -118,7 +116,7 @@ export function SchedulePage(): ReactNode {
           return (
             <>
               {head}
-              {recognition}
+              {failed && recognition}
               <Window
                 title="작업 일정"
                 hint={
@@ -152,26 +150,19 @@ export function SchedulePage(): ReactNode {
                 action={<ScheduleLegend />}
                 bleed
               >
-                {/* 어느 파일에서 왔는지는 맨 위 「수치의 원천」이 말한다 */}
-                <p className="text-muted-foreground mb-3 text-sm">
-                  {SOURCE_DESCRIPTION[data.source]}
-                </p>
-
-                {data.warnings.map((w) => (
-                  <Alert key={w} className="mb-2">
-                    <AlertDescription>{w}</AlertDescription>
-                  </Alert>
-                ))}
-
                 <Tabs value={view} onValueChange={pick}>
-                  <TabsList aria-label="일정 보기 방식">
-                    {VIEWS.map((item) => (
-                      <TabsTrigger key={item.id} value={item.id}>
-                        <item.icon />
-                        {item.label}
-                      </TabsTrigger>
-                    ))}
-                  </TabsList>
+                  <div className="flex flex-wrap items-center justify-between gap-2">
+                    <TabsList aria-label="일정 보기 방식">
+                      {VIEWS.map((item) => (
+                        <TabsTrigger key={item.id} value={item.id}>
+                          <item.icon />
+                          {item.label}
+                        </TabsTrigger>
+                      ))}
+                    </TabsList>
+                    {/* 경고는 버튼으로 접어 두고 누르면 연다(11-18 사용자 지시) */}
+                    <ScheduleWarnings warnings={data.warnings} />
+                  </div>
 
                   <TabsContent value="gantt" className="pt-2">
                     <GanttView tasks={tasks} today={today} />
@@ -187,6 +178,7 @@ export function SchedulePage(): ReactNode {
                   </TabsContent>
                 </Tabs>
               </Window>
+              {!failed && recognition && <div className="mt-4">{recognition}</div>}
             </>
           );
         }}
