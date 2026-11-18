@@ -366,8 +366,7 @@ def test_UC_033_E2_다른_유형_제출은_막지_않고_항목_상태도_안_�
         data={"wbsId": "2.1"},
         headers=_auth(pm),
     )
-    assert res.status_code == 201, res.text
-    _confirm(client, pm, res.json()["id"], "9.0")
+    assert res.status_code == 201, res.text  # 작업에 올리면 읽은 뒤 바로 제출이다(11-18)
     row = _row(_screen(client, po), "2.1")
     assert row["designated"][0]["status"] == "MISSING"
     assert row["status"] == "OVERDUE"  # 지정 항목이 안 왔으니 작업 판정도 제출이 아니다
@@ -439,3 +438,46 @@ def test_지정을_거둬도_행과_제출_이력은_남는다(client, client_to
         assert cur.fetchone()["n"] == 1
     assert client.delete(f"{_base()}/{did}", headers=_auth(po)).status_code == 404
     assert client.get(f"{_base()}/not-a-uuid/history", headers=_auth(po)).status_code == 404
+
+
+@requires_db
+def test_작업에_올리면_제출이고_줄에서_승인하면_승인률에_든다(client, client_token, env):
+    """11-18 사용자 지시. 양식이 없는 작업도 올리면 제출(산출물 버전)이 되고, 발주기관은 산출물
+    줄의 검토로 승인한다. 양식이 있는 작업은 양식이 모두 승인이면 승인률(DEC-12)에 든다."""
+    from app.dashboard import service as dashboard_service
+
+    env.load([
+        ("1.1", "착수보고", "착수보고서.md", 0.2, 1.0),
+        ("1.2", "주간 회의", "회의록", 0.3, 0.5),
+        ("2.1", "통합 시험", "시험결과서", 0.5, 0.0),
+    ])
+    po, pm = client_token("r2"), client_token("r3")
+    did = _designate(client, po, env.task_key("2.1"), productType="TEST_REPORT").json()["id"]
+
+    def approved() -> int:
+        with tx() as cur:
+            return dashboard_service.deliverable_approval_now(cur, PID, TODAY)[0]
+
+    res = client.post(
+        f"/api/projects/{PID}/documents",
+        files={"file": ("회의-1.xlsx", _xlsx("회의"), "application/octet-stream")},
+        data={"wbsId": "1.2"}, headers=_auth(pm),
+    )
+    assert res.status_code == 201, res.text
+    _upload(client, pm, did, "결과.xlsx", _xlsx("결과"))
+
+    screen = _screen(client, po)
+    plain, formed = _row(screen, "1.2"), _row(screen, "2.1")
+    assert plain["status"] == "SUBMITTED"
+    assert [(r["name"], r["status"]) for r in plain["review"]] == [("회의록", "SUBMITTED")]
+    assert [(r["name"], r["status"]) for r in formed["review"]] == [("시험결과서", "SUBMITTED")]
+    before = approved()
+
+    for r in (plain["review"][0], formed["review"][0]):
+        res = client.post(f"/api/projects/{PID}/work-products/{r['workProductId']}/approve",
+                          json={}, headers=_auth(po))
+        assert res.status_code == 204, res.text
+    assert approved() == before + 2
+    screen = _screen(client, pm)
+    assert _row(screen, "1.2")["review"][0]["status"] == "APPROVED"
+    assert _row(screen, "2.1")["review"][0]["status"] == "APPROVED"

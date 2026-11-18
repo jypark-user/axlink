@@ -232,35 +232,6 @@ function DesignatedEntry({
     }
   };
 
-  const decide = async (v: DesignatedVersion, action: 'approve' | 'reject') => {
-    let body: { reason: string } | undefined;
-    const name = `${entry.name} ${v.version ?? ''}`.trim();
-    if (action === 'reject') {
-      const reason = window.prompt(`${name} 을(를) 반려하는 사유를 적어 주세요.`)?.trim();
-      if (!reason) return;
-      body = { reason };
-    } else if (!window.confirm(`${name} 을(를) 승인합니다. 이 버전에만 붙습니다.`)) {
-      return;
-    }
-    try {
-      await api.post(
-        `/projects/${projectId}/work-products/${v.workProductId}/${action}`,
-        body ?? {},
-      );
-      toast({
-        title: action === 'approve' ? '승인했습니다.' : '반려했습니다.',
-        variant: 'success',
-      });
-      actions.onChanged();
-    } catch (err) {
-      toast({
-        title: action === 'approve' ? '승인하지 못했습니다.' : '반려하지 못했습니다.',
-        description: isApiError(err) ? err.message : undefined,
-        variant: 'error',
-      });
-    }
-  };
-
   return (
     <li className="border-border flex flex-col gap-1 border-l-2 pl-2">
       <div className="flex flex-wrap items-center gap-1.5">
@@ -323,20 +294,6 @@ function DesignatedEntry({
               {uploading && v.state === 'REGISTERED' && (
                 <SubmitHint projectId={projectId} version={v} />
               )}
-              {!uploading &&
-                canDesignate &&
-                v.isCurrent &&
-                v.state === 'SUBMITTED' &&
-                v.workProductId && (
-                  <>
-                    <Button size="sm" variant="outline" onClick={() => void decide(v, 'approve')}>
-                      승인
-                    </Button>
-                    <Button size="sm" variant="ghost" onClick={() => void decide(v, 'reject')}>
-                      반려
-                    </Button>
-                  </>
-                )}
             </li>
           ))}
         </ul>

@@ -437,6 +437,16 @@ class Seeder:
                 raise SeedError(f"문서 처리가 {timeout:.0f}초 안에 끝나지 않았다: {doc_id} {state}")
             time.sleep(0.5)
 
+    def _link_wbs(self, acc: str, doc_tid: str, wbs_id: str) -> None:
+        """올린 문서를 WBS 작업에 붙인다(자료 설정)."""
+        self._ok(
+            self.c.patch(
+                f"/api/documents/{self.ids[doc_tid]}",
+                json={"wbsId": wbs_id},
+                headers=self._h(acc),
+            )
+        )
+
     def _confirm_work_product(
         self,
         acc: str,
@@ -567,10 +577,13 @@ class Seeder:
         self._materialize_wbs()
         # 문서: 명세서(처리만), 요구사항정의서(3.1 산출물 v1 승인), 회의록
         self._upload("TD-ACC-V1", "TD-PRJ-1", "TD-DOC-1")
-        self._upload("TD-ACC-V1", "TD-PRJ-1", "TD-DOC-2", wbs_id="3.1")
+        # 작업에 바로 올리면 읽은 뒤 자동 제출된다(11-18). 시험 자료는 유형·제목·버전을 정해 두어야
+        # 하므로 먼저 확정하고 작업에 붙인다
+        self._upload("TD-ACC-V1", "TD-PRJ-1", "TD-DOC-2")
         self._confirm_work_product(
             "TD-ACC-V1", "TD-DOC-2", "REQUIREMENTS_SPEC", "요구사항정의서", "v1"
         )
+        self._link_wbs("TD-ACC-V1", "TD-DOC-2", "3.1")
         self._ok(
             self.c.post(
                 f"/api/projects/{self.ids['TD-PRJ-1']}/work-products/{self.ids['TD-DOC-2:wp']}/approve",
@@ -612,8 +625,9 @@ class Seeder:
 
     def s0a(self) -> Seeder:
         """+ TD-DOC-3 업로드·SW설계서 v1 제출본(3.2 연결). 실적·이슈·커밋은 그대로."""
-        self._upload("TD-ACC-V1", "TD-PRJ-1", "TD-DOC-3", wbs_id="3.2")
+        self._upload("TD-ACC-V1", "TD-PRJ-1", "TD-DOC-3")
         self._confirm_work_product("TD-ACC-V1", "TD-DOC-3", "SOFTWARE_DESIGN", "SW설계서", "v1")
+        self._link_wbs("TD-ACC-V1", "TD-DOC-3", "3.2")
         self.state = "S0a"
         return self
 

@@ -1752,6 +1752,16 @@ export interface WbsDeliverableDocument {
   confirmed: boolean;
 }
 
+export interface DeliverableReview {
+  workProductId: string;
+  name: string;
+  fileName: string | null;
+  version: string | null;
+  status: 'SUBMITTED' | 'APPROVED' | 'REJECTED';
+  rejectReason: string | null;
+  isCurrent: boolean;
+}
+
 export interface WbsDeliverableItem {
   wbsId: string;
   name: string;
@@ -1767,6 +1777,8 @@ export interface WbsDeliverableItem {
   taskKey?: string | null;
   /** 발주기관이 이 작업에 정한 산출물 항목(UC-033) */
   designated?: DesignatedDeliverable[];
+  /** 발주기관이 승인·반려할 제출본(11-18). 양식이 있으면 양식마다 최근 제출본 */
+  review?: DeliverableReview[];
 }
 
 /** 지정 항목의 제출본 하나. 확정해야 제출이다(DEC-14) */

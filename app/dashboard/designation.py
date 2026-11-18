@@ -96,6 +96,9 @@ class Coverage:
 
     total: int
     submitted: int
+    # 승인률(DEC-12)이 볼 산출물. 양식이 모두 승인이면 승인된 것, 아니면 아직 승인 안 된 것.
+    # 이걸 판정에 실어 두면 승인률 계산이 양식 없는 작업과 같은 길(현행 버전 승인 여부)로 간다
+    product_id: str | None = None
 
 
 # ---------------------------------------------------------------- 조회 조립
@@ -158,9 +161,25 @@ def coverage(cur: Any, project_id: str, live_task_keys: set[str]) -> dict[str, C
     """작업 정체별 지정 항목 수와 그중 제출된 수. 지정이 없는 작업은 들어 있지 않다."""
     by_task, _ = build(cur, project_id, live_task_keys)
     return {
-        key: Coverage(len(items), sum(1 for i in items if is_submitted(i.status)))
+        key: Coverage(
+            len(items), sum(1 for i in items if is_submitted(i.status)), _review_product(items)
+        )
         for key, items in by_task.items()
     }
+
+
+def _latest_product(item: DesignatedDeliverable) -> str | None:
+    return next((v.workProductId for v in item.versions if v.workProductId), None)
+
+
+def _review_product(items: list[DesignatedDeliverable]) -> str | None:
+    """작업의 승인 여부를 대표하는 산출물. 모두 승인이면 그중 하나, 아니면 승인 안 된 것 하나."""
+    if items and all(i.status == APPROVED for i in items):
+        return _latest_product(items[0])
+    for i in items:
+        if i.status != APPROVED:
+            return _latest_product(i)
+    return None
 
 
 # ---------------------------------------------------------------- 변경

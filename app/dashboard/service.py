@@ -33,7 +33,9 @@ from app.dashboard.models import (
     WBS_SOURCE_FILE,
     WBS_SOURCE_NONE,
     WBS_SOURCE_REDMINE,
+    DeliverableReview,
     DeliverableSummary,
+    DesignatedDeliverable,
     LinkedIssue,
     ProgressMeasure,
     ProgressResponse,
@@ -46,7 +48,7 @@ from app.dashboard.models import (
     WbsScheduleResponse,
     WbsSourceFile,
 )
-from app.db import fetch_one
+from app.db import fetch_all, fetch_one
 from app.integration import repository as integration_repo
 from app.standard import repository as standard_repo
 from app.standard import wbs_repository
@@ -755,6 +757,11 @@ def wbs_deliverables(
             by_item.setdefault(str(d["wbs_item_id"]), []).append(d)
         by_stem.setdefault(deliverable_stem(d["original_filename"]), []).append(d)
 
+    # 양식이 없는 작업의 검토 대상: 판정이 맞춘 산출물(11-18)
+    plain_products = _review_rows(
+        cur, [j.product_id for j in judged.values() if j.product_id and j.rule != "DESIGNATED"]
+    )
+
     out: list[WbsDeliverableItem] = []
     for item in items:
         if item["weight"] is None:
@@ -800,6 +807,9 @@ def wbs_deliverables(
                 ],
                 taskKey=str(item["task_key"]) if item.get("task_key") else None,
                 designated=designated_by_task.get(str(item.get("task_key")), []),
+                review=_review_of(
+                    designated_by_task.get(str(item.get("task_key")), []), j, plain_products
+                ),
             )
         )
     counts = deliverable.summarize(list(judged.values()))
@@ -814,6 +824,59 @@ def wbs_deliverables(
         ),
         redesignation=redesignation,
     )
+
+
+def _review_rows(cur: Any, ids: list[str]) -> dict[str, DeliverableReview]:
+    if not ids:
+        return {}
+    rows = fetch_all(
+        cur,
+        """
+        select w.id, w.title, w.type, w.version, w.status, w.reject_reason, w.is_current,
+               w.file_uri, d.original_filename
+          from work_product w
+          left join document_upload d on d.id = w.document_upload_id
+         where w.id = any(%s::uuid[])
+        """,
+        (list(set(ids)),),
+    )
+    return {
+        str(r["id"]): DeliverableReview(
+            workProductId=str(r["id"]),
+            name=r["title"] or r["type"],
+            fileName=r["original_filename"]
+            or (r["file_uri"].rsplit("/", 1)[-1] if r.get("file_uri") else None),
+            version=r["version"],
+            status=r["status"],
+            rejectReason=r["reject_reason"],
+            isCurrent=bool(r["is_current"]),
+        )
+        for r in rows
+        if r["status"] in ("SUBMITTED", "APPROVED", "REJECTED")
+    }
+
+
+def _review_of(
+    designated: list[DesignatedDeliverable],
+    j: deliverable.Judgement | None,
+    plain: dict[str, DeliverableReview],
+) -> list[DeliverableReview]:
+    """한 작업에서 발주기관이 승인·반려할 제출본. 양식이 있으면 양식마다 가장 최근 제출본."""
+    if designated:
+        out: list[DeliverableReview] = []
+        for d in designated:
+            v = next((v for v in d.versions if v.workProductId), None)
+            if v is None or v.state not in ("SUBMITTED", "APPROVED", "REJECTED"):
+                continue
+            out.append(DeliverableReview(
+                workProductId=v.workProductId, name=d.name, fileName=v.fileName,
+                version=v.version, status=v.state, rejectReason=v.rejectReason,
+                isCurrent=v.isCurrent,
+            ))
+        return out
+    if j is not None and j.product_id and j.product_id in plain:
+        return [plain[j.product_id]]
+    return []
 
 
 def deliverable_stem(value: str) -> str:

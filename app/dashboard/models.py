@@ -306,6 +306,21 @@ class DesignationEvent(BaseModel):
     detail: dict
 
 
+class DeliverableReview(BaseModel):
+    """발주기관이 승인·반려할 제출본 하나(11-18 사용자 지시: 산출물 줄에서 바로 검토).
+
+    양식이 있는 작업은 양식마다 최근 제출본, 없는 작업은 판정이 맞춘 산출물이다.
+    """
+
+    workProductId: str  # noqa: N815
+    name: str
+    fileName: str | None  # noqa: N815
+    version: str | None
+    status: str  # SUBMITTED | APPROVED | REJECTED
+    rejectReason: str | None  # noqa: N815
+    isCurrent: bool  # noqa: N815  승인·반려는 그 유형의 현행 버전에만 한다
+
+
 class WbsDeliverableItem(BaseModel):
     """산출물 화면의 한 줄. WBS 말단 작업이 정한 산출물과 그 판정(ARC-016)."""
 
@@ -321,6 +336,7 @@ class WbsDeliverableItem(BaseModel):
     documents: list[WbsDeliverableDocument]
     taskKey: str | None = None  # noqa: N815  작업 정체(V46). 지정은 번호가 아니라 이것에 묶인다
     designated: list[DesignatedDeliverable] = []  # 발주기관 지정 항목(UC-033)
+    review: list[DeliverableReview] = []  # 승인·반려할 제출본
 
 
 class WbsDeliverablesResponse(BaseModel):

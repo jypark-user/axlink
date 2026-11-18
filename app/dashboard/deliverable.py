@@ -115,7 +115,10 @@ def judge(
         if item.get("weight") is not None and cover is not None and cover.total > 0:
             ref = f"지정 산출물 {cover.total}건 중 {cover.submitted}건 제출"
             if cover.submitted >= cover.total:
-                out.append(Judgement(wbs_id, SUBMITTED, RULE_DESIGNATED, ref))
+                out.append(Judgement(
+                    wbs_id, SUBMITTED, RULE_DESIGNATED, ref,
+                    product_id=getattr(cover, "product_id", None),
+                ))
             else:
                 end = item.get("end_on")
                 late = end is not None and end < today

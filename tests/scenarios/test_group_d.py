@@ -584,10 +584,12 @@ def test_UC_032_S10_가중치_기준_확인(target, s0, replay):
     assert job["status"] == "SUCCEEDED", job
     assert len([i for i in _wbs(target, s0, "TD-PRJ-9")["items"] if i["weight"] and i["level"] > 0]) == 6
     pid = s0.ids["TD-PRJ-9"]
-    doc = _upload(target, s0, "TD-PRJ-9", s0.files["TD-DOC-2"], "시험결과서.docx", DOCX, wbs_id="3.4")
+    # 작업에 바로 올리면 읽은 뒤 자동 제출된다(11-18). 유형·버전을 정해 확정한 뒤 작업에 붙인다
+    doc = _upload(target, s0, "TD-PRJ-9", s0.files["TD-DOC-2"], "시험결과서.docx", DOCX)
     res = _confirm(target, s0, doc, "TEST_REPORT", "시험결과서", "v1")
     assert res.status_code == 200, res.text
     wp = res.json()["workProductId"]
+    assert target.patch(f"/api/documents/{doc}", json={"wbsId": "3.4"}, headers=v1).status_code == 200
     req = target.post(f"/api/projects/{pid}/review-requests", json={
         "targetType": "WBS_ITEM", "targetKey": "3.4", "title": "3.4 완료 확인", "body": "", "purpose": "WBS_COMPLETION", "completionScope": "시험 완료",
     }, headers=auth(s0.tokens["TD-ACC-C1"]))

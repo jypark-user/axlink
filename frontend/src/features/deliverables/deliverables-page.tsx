@@ -35,6 +35,7 @@ import {
   type DesignationTarget,
 } from './designated';
 import { useTypeNames } from './use-type-names';
+import { ReviewButton } from './review-button';
 import type {
   DeliverableStatus,
   DocumentUploadResponse,
@@ -425,7 +426,14 @@ function buildColumns(
         if (!hasForm && item.status === 'NONE') return null;
         const busy = uploadingFor === item.wbsId;
         return (
-          <div className="flex justify-end">
+          <div className="flex items-center justify-end gap-2">
+            {/* 올라온 제출본의 승인·반려(11-18). 양식 창이 아니라 여기서 한다 */}
+            <ReviewButton
+              projectId={projectId}
+              item={item}
+              canReview={designatedActions.canDesignate}
+              onChanged={designatedActions.onChanged}
+            />
             <Button
               size="sm"
               disabled={busy}

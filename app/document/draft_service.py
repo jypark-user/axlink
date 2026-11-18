@@ -251,36 +251,49 @@ def confirm(
 def propose_for_upload(cur: Any, document_id: str, filename: str, text: str) -> None:
     """업로드 흐름에서 부른다. 구현체 선택은 llm_port 한 곳이다."""
     propose(cur, document_id, filename, text, llm_port)
-    submit_designated(cur, document_id)
+    submit_task_upload(cur, document_id)
 
 
-def submit_designated(cur: Any, document_id: str) -> str | None:
-    """산출물 양식으로 올린 문서는 올린 것이 곧 제출이다(2026-11-18 사용자 지시).
+_TYPE_BY_NAME = {" ".join(label.split()).casefold(): code for code, label in DISPLAY_NAMES.items()}
 
-    양식 자리에 골라 올렸으면 무엇을 냈는지 이미 정해진 것이라 「산출물로 제출」을 따로 묻지
-    않는다. 읽기가 끝나 초안이 생기면 올린 사람 이름으로 그 자리에서 확정한다. 이름은 양식
-    이름, 유형은 양식의 분류(없으면 초안이 고른 유형), 버전은 초안이 읽은 표기를 쓰되 그 유형에
-    이미 있으면 다음 번호를 붙인다. 유형을 정할 수 없으면 확정하지 않고 사람이 고르게 둔다.
-    고칠 것이 있으면 다시 올리면 새 버전이 된다.
+
+def submit_task_upload(cur: Any, document_id: str) -> str | None:
+    """산출물 화면에서 작업에 올린 문서는 올린 것이 곧 제출이다(2026-11-18 사용자 지시).
+
+    작업(또는 그 작업의 산출물 양식)을 골라 올렸으면 무엇을 냈는지 이미 정해진 것이라 「산출물로
+    제출」을 따로 묻지 않는다. 읽기가 끝나 초안이 생기면 올린 사람 이름으로 그 자리에서 확정한다.
+    이름은 양식 이름(없으면 WBS 산출물 이름, 그것도 없으면 작업명), 유형은 양식 분류 → WBS 산출물
+    이름이 22종 이름과 같으면 그 유형 → 초안이 고른 유형 순이다. 버전은 초안이 읽은 표기를 쓰되
+    그 유형에 이미 있으면 다음 번호를 붙인다. 유형을 정할 수 없으면 확정하지 않고 사람이 고르게
+    둔다. 고칠 것이 있으면 다시 올리면 새 버전이 된다. 자료 화면에 그냥 올린 문서(작업 없음)는
+    여기 해당하지 않는다(DEC-14).
     """
     row = fetch_one(
         cur,
         """
         select d.project_id, d.uploaded_by_user_id, d.stored_path,
                dd.name as designated_name, dd.product_type as designated_type,
+               w.deliverable as wbs_deliverable, w.name as task_name,
                s.id as draft_id, s.status as draft_status, s.proposed_type, s.draft_json
           from document_upload d
-          join wbs_designated_deliverable dd on dd.id = d.designated_deliverable_id
+          left join wbs_designated_deliverable dd on dd.id = d.designated_deliverable_id
+          left join wbs_item w on w.id = d.wbs_item_id
           join structuring_draft s on s.document_upload_id = d.id
-         where d.id = %s
+         where d.id = %s and (dd.id is not null or w.id is not null)
         """,
         (document_id,),
     )
     if row is None or row["draft_status"] != "PROPOSED":
         return None
-    product_type = row["designated_type"] or row["proposed_type"]
+    wbs_name = (row["wbs_deliverable"] or "").strip()
+    product_type = (
+        row["designated_type"]
+        or _TYPE_BY_NAME.get(" ".join(wbs_name.split()).casefold())
+        or row["proposed_type"]
+    )
     if product_type not in DISPLAY_NAMES:
         return None
+    title = row["designated_name"] or wbs_name or row["task_name"] or DISPLAY_NAMES[product_type]
     project_id = str(row["project_id"])
     draft = row["draft_json"] or {}
     authored_at = None
@@ -291,7 +304,7 @@ def submit_designated(cur: Any, document_id: str) -> str | None:
             authored_at = None
     rec = {
         "type": product_type,
-        "title": row["designated_name"][:500],
+        "title": title[:500],
         "version": _free_version(cur, project_id, product_type, draft.get("version")),
         "status": _CONFIRM_STATUS,
         "authored_at": authored_at,
