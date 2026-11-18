@@ -155,6 +155,8 @@ export function TraceabilityPage(): ReactNode {
                   data={data.content}
                   paginated={false}
                   emptyText={emptyText}
+                  // 줄을 누르면 오른쪽에 상세가 열린다(11-18 사용자 지시)
+                  onRowClick={(row) => setOpened(row.requirementId)}
                 />
                 <PaginationBar page={data} onChange={setPage} />
               </>
@@ -377,11 +379,14 @@ function buildColumns(
     {
       accessorKey: 'requirementCode',
       header: ({ column }) => <SortableHeader column={column}>코드</SortableHeader>,
-      // 코드를 누르면 상세가 열린다. 행 전체를 누르게 하면 칸 안 단추·링크와 겹친다
+      // 줄 어디를 눌러도 상세가 열린다. 코드는 키보드로도 열 수 있게 단추로 둔다
       cell: ({ row }) => (
         <button
           type="button"
-          onClick={() => onOpen(row.original.requirementId)}
+          onClick={(e) => {
+            e.stopPropagation();
+            onOpen(row.original.requirementId);
+          }}
           className="text-primary font-mono text-xs hover:underline"
           aria-label={`${row.original.requirementCode} 상세`}
         >
@@ -413,18 +418,8 @@ function buildColumns(
         <Cells cells={row.original.designs} kind="DESIGNS" broken={row.original.brokenAt} />
       ),
     },
-    {
-      id: 'implements',
-      // 이슈·일감은 왼쪽 칸에서 진행으로 보인다. 여기는 커밋·PR 같은 변경만
-      header: '관련 커밋·PR',
-      cell: ({ row }) => (
-        <Cells
-          cells={row.original.implementsList.filter((c) => c.sourceType !== 'ISSUE')}
-          kind="IMPLEMENTS"
-          broken={row.original.brokenAt}
-        />
-      ),
-    },
+    // 커밋·PR 칸은 뺐다. 커밋·PR 은 이슈에 붙여 이슈 화면에서 본다(11-18 사용자 지시).
+    // 요구사항과 직접 이어진 커밋은 상세의 「근거 연결」에 남는다(UC-022)
     {
       id: 'tests',
       header: '시험 연결',
@@ -452,7 +447,10 @@ function StatusCell({
       {onDecide && (
         <button
           type="button"
-          onClick={() => onDecide(row)}
+          onClick={(e) => {
+            e.stopPropagation();
+            onDecide(row);
+          }}
           className="text-primary inline-flex items-center gap-1 text-[11px] hover:underline"
           aria-label={`${row.requirementCode} 상태 지정`}
         >
@@ -463,22 +461,12 @@ function StatusCell({
   );
 }
 
-/** 요구사항 제목. 두 줄까지 보이고, 누르면 전체를 펼친다. 마우스를 올려도 전체가 보인다. */
+/** 요구사항 제목. 두 줄까지 보이고, 마우스를 올리면 전체가 보인다. 누르면 상세가 열린다. */
 function TitleCell({ text }: { text: string }): ReactNode {
-  const [open, setOpen] = useState(false);
   return (
-    <button
-      type="button"
-      onClick={() => setOpen((v) => !v)}
-      aria-expanded={open}
-      title={open ? undefined : text}
-      className={cn(
-        'block max-w-md text-left whitespace-normal break-keep hover:underline',
-        !open && 'line-clamp-2',
-      )}
-    >
+    <span className="line-clamp-2 block max-w-md break-keep whitespace-normal" title={text}>
       {text}
-    </button>
+    </span>
   );
 }
 
@@ -534,6 +522,7 @@ function Cells({
                       href={c.externalUrl}
                       target="_blank"
                       rel="noreferrer"
+                      onClick={(e) => e.stopPropagation()}
                     >
                       <span className="truncate">{name}</span>
                       <ExternalLink className="text-muted-foreground size-3 shrink-0" />
@@ -557,7 +546,10 @@ function Cells({
             <li>
               <button
                 type="button"
-                onClick={() => setAll((v) => !v)}
+                onClick={(e) => {
+                  e.stopPropagation();
+                  setAll((v) => !v);
+                }}
                 aria-expanded={all}
                 className="text-primary text-xs hover:underline"
               >

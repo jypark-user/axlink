@@ -1,4 +1,4 @@
-import { IssueList } from './issue-progress';
+import { IssueTable } from './issue-progress';
 import type { ReactNode } from 'react';
 import { Link } from 'react-router-dom';
 import { ExternalLink } from 'lucide-react';
@@ -106,10 +106,11 @@ function Detail({
                   : ''
               }`}
             >
-              <IssueList issues={r.issues ?? []} />
+              <IssueTable issues={r.issues ?? []} />
             </Section>
             <BaselineSection projectId={projectId} r={r} />
-            <Section title={`연결 ${r.traceLinks.length}건`}>
+            {/* 이슈 말고 이 요구사항과 직접 이어진 근거(설계 문서·커밋·시험 등). UC-022 의 근거 확인 */}
+            <Section title={`근거 연결 ${r.traceLinks.length}건`}>
               {r.traceLinks.length === 0 ? (
                 <p className="text-muted-foreground">연결된 자료가 없습니다.</p>
               ) : (

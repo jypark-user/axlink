@@ -690,6 +690,10 @@ export interface RequirementIssue {
   status: 'OPEN' | 'IN_PROGRESS' | 'RESOLVED' | 'CLOSED';
   kind: string;
   url: string | null;
+  /** 요구사항 상세의 이슈 표(11-18) */
+  assignee?: string | null;
+  updatedAt?: string | null;
+  codeChangeCount?: number;
 }
 
 export interface TraceabilityRowResponse {
@@ -824,6 +828,19 @@ export interface IssueResponse {
   kind?: 'GENERAL' | 'DEFECT';
   /** 이어진 요구사항(제목·본문의 요구사항 코드로 만든 추적 연결). 비면 매핑 안 됨 */
   requirements?: IssueRequirement[];
+  /** 이어진 커밋·PR(커밋·PR 의 GH-n·RM-n 참조). 최근 것이 앞 */
+  codeChanges?: IssueCodeChange[];
+}
+
+export interface IssueCodeChange {
+  id: string;
+  kind: string;
+  title: string;
+  refName: string | null;
+  state: string;
+  author: string | null;
+  occurredAt: string;
+  url: string | null;
 }
 
 export interface IssueRequirement {

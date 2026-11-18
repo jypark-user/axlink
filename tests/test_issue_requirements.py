@@ -61,10 +61,44 @@ def test_제목에_요구사항_코드가_있는_이슈는_그_요구사항이_�
         got = {i["key"]: i["requirements"] for i in res.json()["content"]}
         assert got["GH-1"] == [{"id": rid, "code": code, "title": "TST 이슈 연결 요구사항"}]
         assert got["GH-2"] == []
+
+        # 커밋·PR 은 이슈에 붙는다(11-18). 이슈 목록에 커밋이, 요구사항 상세 이슈 표에 수가 보인다
+        with tx() as cur:
+            cur.execute("select id from issue where tool_connection_id = %s and issue_key = 'GH-1'",
+                        (cid,))
+            iid = str(cur.fetchone()["id"])
+            cur.execute(
+                """insert into code_change (project_id, kind, title, ref_name, state, author,
+                       occurred_at, tool_connection_id, external_id, external_url, source_kind)
+                   values (%s, 'COMMIT', 'feat: 화면 GH-1', 'abcdef1234', 'CREATED', '김개발',
+                           '2026-10-03T00:00:00Z', %s, 'commit:abcdef1234',
+                           'https://github.com/x/commit/abcdef1234', 'TOOL') returning id""",
+                (PID, cid),
+            )
+            ccid = str(cur.fetchone()["id"])
+            cur.execute(
+                """insert into trace_link
+                       (project_id, from_type, from_id, to_type, to_id, link_kind, origin)
+                   values (%s, 'CODE_CHANGE', %s, 'ISSUE', %s, 'IMPLEMENTS', 'MANUAL')""",
+                (PID, ccid, iid),
+            )
+        res = client.get(f"/api/projects/{PID}/issues?connectionId={cid}&size=50",
+                         headers={"Authorization": f"Bearer {token}"})
+        rows = {i["key"]: i for i in res.json()["content"]}
+        assert [(c["kind"], c["refName"], c["author"]) for c in rows["GH-1"]["codeChanges"]] == [
+            ("COMMIT", "abcdef1234", "김개발")
+        ]
+        assert rows["GH-2"]["codeChanges"] == []
+        detail = client.get(f"/api/projects/{PID}/requirements/{rid}",
+                            headers={"Authorization": f"Bearer {token}"}).json()
+        assert [(i["key"], i["codeChangeCount"]) for i in detail["issues"]] == [("GH-1", 1)]
+        assert detail["issues"][0]["updatedAt"]
     finally:
         with tx() as cur:
             cur.execute("delete from trace_link where to_id = %s or from_id in "
-                        "(select id from issue where tool_connection_id = %s)", (rid, cid))
+                        "(select id from issue where tool_connection_id = %s) or to_id in "
+                        "(select id from issue where tool_connection_id = %s)", (rid, cid, cid))
+            cur.execute("delete from code_change where tool_connection_id = %s", (cid,))
             cur.execute("delete from issue where tool_connection_id = %s", (cid,))
             cur.execute("delete from tool_connection where id = %s", (cid,))
             cur.execute("delete from requirement where id = %s", (rid,))

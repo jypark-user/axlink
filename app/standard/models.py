@@ -74,6 +74,20 @@ class IssueRequirement(BaseModel):
     title: str
 
 
+class IssueCodeChange(BaseModel):
+    """이슈에 이어진 커밋·PR 한 건. 커밋·PR 메시지의 GH-n·RM-n 참조나 PR 의 닫는 이슈로 수집 때
+    만든 추적 연결이다. 커밋·PR 은 요구사항이 아니라 이슈에 붙여 본다(11-18 사용자 지시)."""
+
+    id: str
+    kind: str  # COMMIT | MERGE_REQUEST
+    title: str
+    refName: str | None  # noqa: N815 — 커밋 해시·PR 번호
+    state: str
+    author: str | None
+    occurredAt: str  # noqa: N815
+    url: str | None
+
+
 class IssueResponse(BaseModel):
     """작업·결함 한 건. 도구가 달라도 같은 모양이다(GitHub 이슈, Redmine 작업·결함)."""
 
@@ -98,6 +112,8 @@ class IssueResponse(BaseModel):
     kind: str = "GENERAL"
     # 이어진 요구사항. 비어 있으면 요구사항에 매핑되지 않은 이슈다
     requirements: list[IssueRequirement] = []
+    # 이어진 커밋·PR. 최근 것이 앞이다
+    codeChanges: list[IssueCodeChange] = []  # noqa: N815
 
 
 class IssueKindCounts(BaseModel):
@@ -273,6 +289,11 @@ class RequirementIssue(BaseModel):
     status: str  # OPEN | IN_PROGRESS | RESOLVED | CLOSED
     kind: str  # GENERAL | DEFECT
     url: str | None
+    # 요구사항 상세의 이슈 표(11-18 사용자 지시): 담당, 원천에서 마지막으로 움직인 시각,
+    # 그 이슈에 이어진 커밋·PR 수
+    assignee: str | None = None
+    updatedAt: str | None = None  # noqa: N815
+    codeChangeCount: int = 0  # noqa: N815
 
 
 class IssueProgress(BaseModel):

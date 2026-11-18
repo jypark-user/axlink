@@ -30,6 +30,7 @@ import { useAsync } from '@/lib/use-async';
 import { localToday, milestoneText } from '@/features/issues/milestone-text';
 import type {
   IssueKind,
+  IssueCodeChange,
   IssueRequirement,
   IssueResponse,
   IssueSourceCount,
@@ -266,10 +267,60 @@ function IssueDetailSheet({
                 </DetailRow>
               )}
             </dl>
+            <section className="flex flex-col gap-2 px-6 pb-8 text-sm">
+              <h3 className="font-semibold">관련 커밋·PR {issue.codeChanges?.length ?? 0}건</h3>
+              <CodeChangeList items={issue.codeChanges ?? []} />
+            </section>
           </>
         )}
       </SheetContent>
     </Sheet>
+  );
+}
+
+const CHANGE_KIND: Record<string, string> = { COMMIT: '커밋', MERGE_REQUEST: 'PR' };
+
+/** 이슈에 이어진 커밋·PR. 커밋·PR 메시지에 이슈 번호(GH-n·RM-n)를 적으면 수집이 잇는다. */
+function CodeChangeList({ items }: { items: IssueCodeChange[] }): ReactNode {
+  if (items.length === 0) {
+    return (
+      <p className="text-muted-foreground">
+        이어진 커밋·PR 이 없습니다. 커밋·PR 메시지에 이 이슈 번호를 적으면 다음 수집 때 이어집니다.
+      </p>
+    );
+  }
+  return (
+    <ul className="flex flex-col gap-1.5">
+      {items.map((c) => (
+        <li key={c.id} className="flex min-w-0 items-start gap-2">
+          <Badge variant="outline" className="shrink-0">
+            {CHANGE_KIND[c.kind] ?? c.kind}
+          </Badge>
+          <span className="flex min-w-0 flex-col">
+            {c.url ? (
+              <a
+                className="truncate underline-offset-2 hover:underline"
+                href={c.url}
+                target="_blank"
+                rel="noreferrer"
+                title={c.title}
+              >
+                {c.title}
+              </a>
+            ) : (
+              <span className="truncate" title={c.title}>
+                {c.title}
+              </span>
+            )}
+            <span className="text-muted-foreground tnum text-xs">
+              {c.refName ? `${c.kind === 'COMMIT' ? c.refName.slice(0, 7) : c.refName} · ` : ''}
+              {c.author ? `${c.author} · ` : ''}
+              {formatDateTime(c.occurredAt)}
+            </span>
+          </span>
+        </li>
+      ))}
+    </ul>
   );
 }
 
@@ -354,6 +405,19 @@ function buildColumns(): ColumnDef<IssueResponse, unknown>[] {
       id: 'requirements',
       header: '관련 요구사항',
       cell: ({ row }) => <RequirementsCell items={row.original.requirements ?? []} />,
+    },
+    {
+      // 커밋·PR 은 요구사항이 아니라 이슈에 붙여 본다(11-18 사용자 지시)
+      id: 'codeChanges',
+      header: '커밋·PR',
+      cell: ({ row }) => {
+        const n = row.original.codeChanges?.length ?? 0;
+        return n === 0 ? (
+          <span className="text-muted-foreground">-</span>
+        ) : (
+          <span className="tnum">{n}</span>
+        );
+      },
     },
     {
       accessorKey: 'status',

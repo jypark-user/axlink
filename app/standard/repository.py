@@ -867,6 +867,26 @@ def issue_requirements(cur: Any, issue_ids: list[str]) -> list[dict[str, Any]]:
     )
 
 
+def issue_code_changes(cur: Any, issue_ids: list[str]) -> list[dict[str, Any]]:
+    """이슈마다 이어진 커밋·PR(ACTIVE 추적 연결 변경 → 이슈). 최근 것이 앞이다."""
+    if not issue_ids:
+        return []
+    return fetch_all(
+        cur,
+        """
+        select distinct on (t.to_id, c.occurred_at, c.id)
+               t.to_id as issue_id, c.id, c.kind, c.title, c.ref_name, c.state, c.author,
+               c.occurred_at, c.external_url
+          from trace_link t
+          join code_change c on c.id = t.from_id
+         where t.from_type = 'CODE_CHANGE' and t.to_type = 'ISSUE' and t.status = 'ACTIVE'
+           and t.to_id = any(%s::uuid[])
+         order by t.to_id, c.occurred_at desc, c.id
+        """,
+        (issue_ids,),
+    )
+
+
 def list_work_products(cur: Any, project_id: str) -> list[dict[str, Any]]:
     """현행 산출물 22종. 아직 안 낸 것도 항목으로 나와야 제출 현황이 성립한다."""
     return fetch_all(
@@ -1332,7 +1352,11 @@ def requirement_issues(cur: Any, requirement_ids: list[str]) -> list[dict[str, A
         """
         select distinct on (tl.to_id, i.id)
                tl.to_id as requirement_id, i.id, i.issue_key, i.title, i.status, i.issue_kind,
-               i.external_url
+               i.external_url, i.assignee,
+               coalesce(i.source_updated_at, i.updated_at) as moved_at,
+               (select count(distinct c.from_id) from trace_link c
+                 where c.to_type = 'ISSUE' and c.to_id = i.id and c.from_type = 'CODE_CHANGE'
+                   and c.status = 'ACTIVE') as code_change_count
           from trace_link tl
           join issue i on i.id = tl.from_id
          where tl.from_type = 'ISSUE' and tl.to_type = 'REQUIREMENT' and tl.status = 'ACTIVE'
