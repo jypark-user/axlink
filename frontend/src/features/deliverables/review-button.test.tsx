@@ -31,7 +31,7 @@ const item = (list: DeliverableReview[]): WbsDeliverableItem =>
     productType: null,
     documents: [],
     review: list,
-  }) as WbsDeliverableItem;
+  });
 
 describe('검토 상태', () => {
   it('하나라도 대기면 승인 대기, 모두 승인이면 승인, 그 밖은 반려', () => {
