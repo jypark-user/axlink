@@ -262,7 +262,8 @@ function ReviewDetail({
           목록
         </Button>
       </div>
-      <ul className="flex min-w-0 flex-col gap-1">
+      {/* 버전이 늘어도 창이 길어지지 않게 세 줄까지만 보이고 나머지는 이 안에서 내린다 */}
+      <ul className="flex max-h-[7.25rem] min-w-0 flex-col gap-1 overflow-y-auto pr-1">
         {versions.map((v, i) => (
           <li key={v.documentId}>
             <button
@@ -270,18 +271,18 @@ function ReviewDetail({
               aria-pressed={v.documentId === current.documentId}
               onClick={() => setSelected(v.documentId)}
               className={cn(
-                'flex w-full min-w-0 flex-wrap items-center gap-x-3 gap-y-1 rounded-md border px-3 py-1.5 text-left text-xs',
+                'flex h-9 w-full min-w-0 items-center gap-3 rounded-md border px-3 text-left text-xs',
                 v.documentId === current.documentId
                   ? 'border-primary bg-primary/5'
                   : 'hover:bg-muted/50',
               )}
             >
-              <span className="text-muted-foreground w-12 shrink-0">
-                {i === 0 ? '최신' : '지난 버전'}
-              </span>
-              <span className="min-w-0 truncate font-medium">{v.fileName}</span>
+              <span className="text-muted-foreground w-8 shrink-0">{i === 0 ? '최신' : 'old'}</span>
+              <span className="min-w-0 flex-1 truncate font-medium">{v.fileName}</span>
               <StatusTag status={v.status} />
-              <span className="text-muted-foreground tnum">{formatDateTime(v.uploadedAt)}</span>
+              <span className="text-muted-foreground tnum shrink-0 whitespace-nowrap">
+                {formatDateTime(v.uploadedAt)}
+              </span>
             </button>
           </li>
         ))}
