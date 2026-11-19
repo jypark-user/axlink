@@ -10,14 +10,16 @@ import type { DeliverableReview, WbsDeliverableItem } from '@/types/api';
 vi.mock('@/lib/http', () => ({
   api: {
     post: vi.fn(),
-    get: vi.fn(async (url: string) => ({
-      id: url,
-      fileName: '',
-      status: 'STRUCTURED',
-      charCount: 4,
-      pageCount: null,
-      text: `원문 ${url}`,
-    })),
+    get: vi.fn((url: string) =>
+      Promise.resolve({
+        id: url,
+        fileName: '',
+        status: 'STRUCTURED',
+        charCount: 4,
+        pageCount: null,
+        text: `원문 ${url}`,
+      }),
+    ),
   },
   download: vi.fn(),
 }));
@@ -115,7 +117,7 @@ describe('검토 단추', () => {
     expect(screen.getByText('반려 사유: 누락')).toBeInTheDocument();
   });
 
-  it('용역사에게는 단추가 없고, 상태는 판정 칸 딱지로 본다', () => {
+  it('용역사는 보기로 열어 보기만 하고 승인·반려 단추는 없다', () => {
     const { container } = render(
       <MemoryRouter>
         <ToasterProvider>
@@ -129,8 +131,11 @@ describe('검토 단추', () => {
         </ToasterProvider>
       </MemoryRouter>,
     );
-    expect(screen.queryByRole('button')).toBeNull();
     expect(container).toHaveTextContent('반려');
+    fireEvent.click(screen.getByRole('button', { name: '보기' }));
+    expect(screen.getByRole('button', { name: '상세보기' })).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: '승인' })).toBeNull();
+    expect(screen.queryByRole('button', { name: '반려' })).toBeNull();
   });
 
   it('제출본이 없으면 아무것도 그리지 않는다', () => {

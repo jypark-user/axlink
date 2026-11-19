@@ -71,7 +71,8 @@ function versionsOf(list: DeliverableReview[], r: DeliverableReview): Deliverabl
 
 /**
  * 산출물 줄의 검토(11-18 사용자 결정: 승인 단위는 올라온 산출물). 올리기 왼쪽에 둔다. 발주기관은
- * 눌러 그 작업에 올라온 산출물 하나하나를 승인·반려한다. 용역사는 판정 칸의 상태만 본다.
+ * 눌러 그 작업에 올라온 산출물 하나하나를 승인·반려한다. 용역사는 같은 창을 「보기」로 열어
+ * 올라온 것과 원문을 보기만 한다(11-19, 업로드 자료 칸을 업로드 상태 칸에 합치면서).
  * 목록에는 최신 버전만 둔다. 지난 버전은 그 최신 버전의 상세보기에서 원문과 함께 본다(11-19).
  */
 export function ReviewButton({
@@ -88,13 +89,13 @@ export function ReviewButton({
   const [open, setOpen] = useState(false);
   const [detailId, setDetailId] = useState<string | null>(null);
   const list = item.review ?? [];
-  if (!canReview || list.length === 0) return null;
+  if (list.length === 0) return null;
   const latest = list.filter((r) => r.latest);
   const target = latest.find((r) => r.documentId === detailId) ?? null;
   return (
     <>
       <Button size="sm" variant="outline" onClick={() => setOpen(true)}>
-        검토
+        {canReview ? '검토' : '보기'}
       </Button>
       <Dialog
         open={open}
@@ -107,7 +108,9 @@ export function ReviewButton({
           className={cn('max-h-[85vh] overflow-y-auto', target ? 'sm:max-w-3xl' : 'sm:max-w-xl')}
         >
           <DialogHeader>
-            <DialogTitle>{target ? target.name : '산출물 검토'}</DialogTitle>
+            <DialogTitle>
+              {target ? target.name : canReview ? '산출물 검토' : '올라온 산출물'}
+            </DialogTitle>
             <DialogDescription>
               {item.wbsId} {item.name}
             </DialogDescription>
@@ -125,6 +128,7 @@ export function ReviewButton({
                   key={r.documentId}
                   projectId={projectId}
                   review={r}
+                  canReview={canReview}
                   older={versionsOf(list, r).length - 1}
                   onDetail={() => setDetailId(r.documentId)}
                   onChanged={onChanged}
@@ -168,12 +172,14 @@ function DownloadLink({ review: r }: { review: DeliverableReview }): ReactNode {
 function ReviewRow({
   projectId,
   review: r,
+  canReview,
   older,
   onDetail,
   onChanged,
 }: {
   projectId: string;
   review: DeliverableReview;
+  canReview: boolean;
   older: number;
   onDetail: () => void;
   onChanged: () => void;
@@ -224,12 +230,12 @@ function ReviewRow({
         <Button size="sm" variant="ghost" onClick={onDetail}>
           상세보기
         </Button>
-        {r.status !== 'APPROVED' && (
+        {canReview && r.status !== 'APPROVED' && (
           <Button size="sm" disabled={busy} onClick={() => void decide('approve')}>
             승인
           </Button>
         )}
-        {r.status !== 'REJECTED' && (
+        {canReview && r.status !== 'REJECTED' && (
           <Button size="sm" variant="outline" disabled={busy} onClick={() => void decide('reject')}>
             반려
           </Button>

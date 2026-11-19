@@ -1,5 +1,4 @@
 import { useEffect, useMemo, useRef, useState, type ChangeEvent, type ReactNode } from 'react';
-import { Link } from 'react-router-dom';
 import type { ColumnDef } from '@tanstack/react-table';
 import { Button } from '@/components/ui/button';
 import { DataTable } from '@/components/ui/data-table';
@@ -10,7 +9,7 @@ import { PageHeader } from '@/components/layout/page-header';
 import { useProjectContext } from '@/components/layout/project-shell';
 import { api } from '@/lib/http';
 import { isApiError } from '@/lib/api-error';
-import { formatDate, formatDateTime } from '@/lib/format';
+import { formatDate } from '@/lib/format';
 import { useAsync } from '@/lib/use-async';
 import { cn } from '@/lib/utils';
 import { ALLOWED, rejectReason } from '@/features/documents/upload';
@@ -61,6 +60,13 @@ const STATUS_TONE: Record<DeliverableStatus, string> = {
   SUBMITTED: 'bg-emerald-500/15 text-emerald-700 dark:text-emerald-300',
   MISSING: 'bg-amber-500/15 text-amber-700 dark:text-amber-300',
   OVERDUE: 'bg-destructive/15 text-destructive',
+};
+
+const BAR_TONE: Record<DeliverableStatus, string> = {
+  NONE: 'bg-muted-foreground',
+  SUBMITTED: 'bg-emerald-500',
+  MISSING: 'bg-amber-500',
+  OVERDUE: 'bg-destructive',
 };
 
 const inFilter = (item: WbsDeliverableItem, filter: Filter): boolean => {
@@ -310,61 +316,17 @@ function buildColumns(
       cell: ({ row }) => <DesignatedCell item={row.original} actions={designatedActions} />,
     },
     {
+      // 판정과 업로드 자료를 한 칸으로(11-19). n/m 막대, 남은 건의 상태, 승인 현황, 검토
       accessorKey: 'status',
-      header: '판정',
-      cell: ({ row }) => {
-        const item = row.original;
-        // 예상 산출물이 없는 작업은 판정할 것이 없다(11-19). 칸을 비운다
-        if (item.status === 'NONE') return null;
-        const pill = (
-          <span
-            className={cn(
-              'inline-block rounded px-1.5 py-0.5 text-xs font-medium whitespace-nowrap',
-              STATUS_TONE[item.status],
-            )}
-          >
-            {STATUS_LABEL[item.status]}
-          </span>
-        );
-        // 판정 근거 문구는 두지 않는다(11-19). 올라온 것은 업로드 자료 칸에 보인다
-        const detailDoc = item.rule === 'LINKED_DOC' ? item.documents[0] : undefined;
-        return (
-          <span className="flex flex-col gap-0.5">
-            {detailDoc ? (
-              <Link to={`/p/${projectId}/documents/${detailDoc.id}`} className="w-fit">
-                {pill}
-              </Link>
-            ) : (
-              <span className="w-fit">{pill}</span>
-            )}
-            {/* 올라온 산출물의 승인 현황(11-19). 제출과 승인은 다른 일이라 따로 보인다 */}
-            <ReviewBadge item={item} />
-          </span>
-        );
-      },
-    },
-    {
-      id: 'documents',
-      header: '업로드 자료',
-      cell: ({ row }) => {
-        const docs = row.original.documents;
-        if (docs.length === 0) return <span className="text-muted-foreground text-sm">-</span>;
-        const [first, ...rest] = docs;
-        return (
-          <span className="flex max-w-[11rem] flex-col">
-            <Link
-              to={`/p/${projectId}/documents/${first.id}`}
-              className="truncate text-sm underline-offset-2 hover:underline"
-              title={docs.map((d) => `${d.fileName} · ${formatDateTime(d.uploadedAt)}`).join(', ')}
-            >
-              {first.fileName}
-            </Link>
-            {rest.length > 0 && (
-              <span className="text-muted-foreground text-xs">외 {rest.length}건</span>
-            )}
-          </span>
-        );
-      },
+      header: '업로드 상태',
+      cell: ({ row }) => (
+        <UploadStatusCell
+          projectId={projectId}
+          item={row.original}
+          canReview={designatedActions.canDesignate}
+          onChanged={designatedActions.onChanged}
+        />
+      ),
     },
     {
       accessorKey: 'productType',
@@ -403,13 +365,6 @@ function buildColumns(
         const busy = uploadingFor === item.wbsId;
         return (
           <div className="flex items-center justify-end gap-2">
-            {/* 올라온 제출본의 승인·반려(11-18). 양식 창이 아니라 여기서 한다 */}
-            <ReviewButton
-              projectId={projectId}
-              item={item}
-              canReview={designatedActions.canDesignate}
-              onChanged={designatedActions.onChanged}
-            />
             {hasForm ? (
               <Button size="sm" disabled={busy} onClick={() => onOpenUpload(item.wbsId)}>
                 {busy ? '올리는 중…' : '올리기'}
@@ -428,4 +383,61 @@ function buildColumns(
       },
     },
   ];
+}
+
+/**
+ * 업로드 상태 칸(11-19). 예상 산출물 n/m 을 작은 막대로, 옆에 남은 건의 상태(「2건 지연」
+ * 「1건 미제출」, 다 올라왔으면 「제출」)를 둔다. 아래에 승인 현황과 검토 단추. 수는 서버 판정이 준다.
+ */
+function UploadStatusCell({
+  projectId,
+  item,
+  canReview,
+  onChanged,
+}: {
+  projectId: string;
+  item: WbsDeliverableItem;
+  canReview: boolean;
+  onChanged: () => void;
+}): ReactNode {
+  // 예상 산출물이 없는 작업은 판정할 것이 없다(11-19). 칸을 비운다
+  if (item.status === 'NONE' || item.expectedTotal == null) return null;
+  const total = item.expectedTotal;
+  const done = item.expectedSubmitted ?? 0;
+  const left = Math.max(total - done, 0);
+  const label = item.status === 'SUBMITTED' ? '제출' : `${left}건 ${STATUS_LABEL[item.status]}`;
+  return (
+    <div className="flex min-w-[13rem] items-center justify-between gap-3">
+      <div className="flex min-w-0 flex-col gap-1">
+        <div className="flex items-center gap-2">
+          <span
+            className="bg-muted h-1.5 w-14 shrink-0 overflow-hidden rounded-full"
+            role="progressbar"
+            aria-valuemin={0}
+            aria-valuemax={total}
+            aria-valuenow={done}
+            aria-label={`${done}/${total}건 업로드`}
+          >
+            <span
+              className={cn('block h-full rounded-full', BAR_TONE[item.status])}
+              style={{ width: `${total ? Math.round((done / total) * 100) : 0}%` }}
+            />
+          </span>
+          <span className="tnum text-xs whitespace-nowrap">
+            {done}/{total}건 업로드
+          </span>
+          <span
+            className={cn(
+              'inline-block rounded px-1.5 py-0.5 text-xs font-medium whitespace-nowrap',
+              STATUS_TONE[item.status],
+            )}
+          >
+            {label}
+          </span>
+        </div>
+        <ReviewBadge item={item} />
+      </div>
+      <ReviewButton projectId={projectId} item={item} canReview={canReview} onChanged={onChanged} />
+    </div>
+  );
 }

@@ -345,6 +345,9 @@ class WbsDeliverableItem(BaseModel):
     taskKey: str | None = None  # noqa: N815  작업 정체(V46). 지정은 번호가 아니라 이것에 묶인다
     designated: list[DesignatedDeliverable] = []  # 발주기관 지정 항목(UC-033)
     review: list[DeliverableReview] = []  # 승인·반려할 제출본
+    # 예상 산출물 수와 그중 올라온 수. 화면 업로드 상태 칸의 n/m 이다(11-19)
+    expectedTotal: int | None = None  # noqa: N815
+    expectedSubmitted: int | None = None  # noqa: N815
 
 
 class WbsDeliverablesResponse(BaseModel):

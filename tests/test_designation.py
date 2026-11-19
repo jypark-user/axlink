@@ -396,6 +396,8 @@ def test_UC_033_S01_양식_올리기_반려_다시_올리기_승인(client, clie
     assert _req(row)[0]["status"] == "SUBMITTED"
     # WBS 산출물(시험결과서)도 예상 산출물이라 아직 다 낸 것이 아니다(11-19)
     assert (row["status"], row["ref"]) == ("OVERDUE", "예상 산출물 2건 중 1건 제출")
+    # 업로드 상태 칸의 n/m 은 판정과 같은 수다(11-19)
+    assert (row["expectedSubmitted"], row["expectedTotal"]) == (1, 2)
     assert [(r["documentId"], r["status"], r["name"]) for r in row["review"]] == [
         (doc1["id"], "SUBMITTED", "시험결과서")
     ]

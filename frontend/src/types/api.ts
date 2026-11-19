@@ -1786,6 +1786,9 @@ export interface WbsDeliverableItem {
   designated?: DesignatedDeliverable[];
   /** 발주기관이 승인·반려할 제출본(11-18). 양식이 있으면 양식마다 최근 제출본 */
   review?: DeliverableReview[];
+  /** 예상 산출물 수와 그중 올라온 수(업로드 상태 칸의 n/m). 판정하지 않으면 null */
+  expectedTotal?: number | null;
+  expectedSubmitted?: number | null;
 }
 
 /** 지정 항목의 제출본 하나. 확정해야 제출이다(DEC-14) */

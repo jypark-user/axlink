@@ -42,6 +42,9 @@ class Judgement:
     url: str | None = None
     # 올라온 문서가 확정한 산출물 버전이 있으면 그 id
     product_id: str | None = None
+    # 예상 산출물 수와 그중 올라온 수(업로드 상태 칸의 n/m, 11-19). 판정하지 않으면 None
+    expected_total: int | None = None
+    expected_submitted: int | None = None
 
 
 def _id(value: Any) -> str | None:
@@ -77,9 +80,13 @@ def judge(
             out.append(Judgement(
                 wbs_id, SUBMITTED, RULE_DESIGNATED, ref,
                 product_id=getattr(cover, "product_id", None),
+                expected_total=cover.total, expected_submitted=cover.submitted,
             ))
         else:
-            out.append(Judgement(wbs_id, OVERDUE if late else MISSING, RULE_DESIGNATED, ref))
+            out.append(Judgement(
+                wbs_id, OVERDUE if late else MISSING, RULE_DESIGNATED, ref,
+                expected_total=cover.total, expected_submitted=cover.submitted,
+            ))
     return out
 
 

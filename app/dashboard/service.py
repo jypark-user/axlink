@@ -813,6 +813,8 @@ def wbs_deliverables(
                 rule=j.rule if j else None,
                 ref=j.ref if j else None,
                 url=j.url if j else None,
+                expectedTotal=j.expected_total if j else None,
+                expectedSubmitted=j.expected_submitted if j else None,
                 productType=product_type,
                 documents=[
                     WbsDeliverableDocument(
