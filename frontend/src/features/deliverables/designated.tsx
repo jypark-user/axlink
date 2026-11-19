@@ -105,12 +105,27 @@ export interface DesignatedActions {
 }
 
 export type DesignationTarget =
-  | { mode: 'create'; taskKey: string; taskLabel: string; name?: string }
+  | { mode: 'create'; taskKey: string; taskLabel: string }
   | { mode: 'edit'; item: DesignatedDeliverable; taskLabel: string };
 
+/** 예상 산출물이 어디서 왔는지. WBS 산출물 열에서 온 것과 발주기관이 요청한 것을 가른다(11-19) */
+function OriginTag({ origin }: { origin: 'WBS' | 'REQUEST' }): ReactNode {
+  return (
+    <span
+      className={cn(
+        'shrink-0 rounded px-1 py-px text-[11px] leading-4 font-medium',
+        origin === 'WBS' ? 'bg-muted text-muted-foreground' : 'bg-primary/15 text-primary',
+      )}
+    >
+      {origin === 'WBS' ? 'WBS' : '요청'}
+    </span>
+  );
+}
+
 /**
- * 표의 「요청 산출물」 칸(11-18·11-19 사용자 지시). 발주기관은 없으면 [요청 등록], 있으면 「n건」을 눌러
- * 고친다. 용역사는 「n건」을 눌러 양식을 본다. 제출은 이 칸이 아니라 맨 오른쪽 [올리기]로만 한다.
+ * 표의 「예상 산출물」 칸(11-19 사용자 지시). 예상 산출물은 WBS 산출물 열의 이름(「WBS」)과
+ * 발주기관이 요청한 산출물(「요청 n건」)이다. 둘 다 있으면 둘 다 보이고 둘 다 센다. 발주기관은
+ * 요청이 없으면 [요청 등록], 있으면 「요청 n건」을 눌러 고친다. 제출은 맨 오른쪽 [올리기]로만 한다.
  */
 export function DesignatedCell({
   item,
@@ -121,59 +136,47 @@ export function DesignatedCell({
 }): ReactNode {
   const list = item.designated ?? [];
   const taskLabel = `${item.wbsId} ${item.name}`;
-  if (list.length === 0) {
-    // 등록이 없어도 WBS 산출물 열에 이름이 있으면 그것이 요청 산출물이다(11-19, 양식 파일 없음).
-    // 발주기관은 눌러 그 이름으로 요청을 등록하고 양식을 붙인다
-    const wbsName = item.deliverable?.trim();
-    if (wbsName) {
-      if (!actions.canDesignate || !item.taskKey) {
-        return (
-          <span className="block max-w-[10rem] truncate text-sm" title={wbsName}>
-            {wbsName}
-          </span>
-        );
-      }
-      return (
-        <button
-          type="button"
-          className="block max-w-[10rem] truncate text-left text-sm underline-offset-2 hover:underline"
-          title={wbsName}
-          onClick={() =>
-            actions.onEdit({
-              mode: 'create',
-              taskKey: item.taskKey as string,
-              taskLabel,
-              name: wbsName,
-            })
-          }
-        >
-          {wbsName}
-        </button>
-      );
-    }
-    if (!actions.canDesignate || !item.taskKey) {
-      return <span className="text-muted-foreground text-sm">-</span>;
-    }
-    return (
-      <Button
-        size="sm"
-        variant="outline"
-        onClick={() =>
-          actions.onEdit({ mode: 'create', taskKey: item.taskKey as string, taskLabel })
-        }
-      >
-        요청 등록
-      </Button>
-    );
+  const wbsName = item.deliverable?.trim();
+  const canAsk = actions.canDesignate && !!item.taskKey;
+  if (!wbsName && list.length === 0 && !canAsk) {
+    return <span className="text-muted-foreground text-sm">-</span>;
   }
   return (
-    <button
-      type="button"
-      className="text-primary text-sm whitespace-nowrap underline-offset-2 hover:underline"
-      onClick={() => actions.onOpen(item.wbsId)}
-    >
-      <span className="tnum font-medium">{list.length}</span>건
-    </button>
+    <div className="flex min-w-0 flex-col items-start gap-1">
+      {wbsName && (
+        <span className="flex max-w-[11rem] min-w-0 items-center gap-1.5 text-sm">
+          <OriginTag origin="WBS" />
+          <span className="truncate" title={wbsName}>
+            {wbsName}
+          </span>
+        </span>
+      )}
+      {list.length > 0 ? (
+        <button
+          type="button"
+          className="flex items-center gap-1.5 text-sm whitespace-nowrap underline-offset-2 hover:underline"
+          onClick={() => actions.onOpen(item.wbsId)}
+        >
+          <OriginTag origin="REQUEST" />
+          <span className="text-primary">
+            <span className="tnum font-medium">{list.length}</span>건
+          </span>
+        </button>
+      ) : (
+        canAsk && (
+          <Button
+            size="sm"
+            variant="outline"
+            className="h-7 px-2 text-xs"
+            onClick={() =>
+              actions.onEdit({ mode: 'create', taskKey: item.taskKey as string, taskLabel })
+            }
+          >
+            요청 등록
+          </Button>
+        )
+      )}
+    </div>
   );
 }
 
@@ -440,17 +443,33 @@ export function UploadDialog({
             ))}
           </ul>
         )}
-        {item && (
-          <div className="flex justify-end border-t pt-3">
-            <UploadMenu
-              hasRepo={actions.hasRepo}
-              variant="outline"
-              label="기타 산출물 올리기"
-              onFile={() => onUploadPlain(item.wbsId)}
-              onRepo={() => actions.onUploadRepo(item.wbsId)}
-            />
-          </div>
-        )}
+        {item &&
+          (item.deliverable?.trim() ? (
+            // WBS 예상 산출물. 요청에 매이지 않고 이 작업에 올리면 이것의 제출이다(11-19)
+            <div className="flex min-w-0 items-center justify-between gap-3 border-t pt-3">
+              <span className="flex min-w-0 items-center gap-1.5 text-sm">
+                <OriginTag origin="WBS" />
+                <span className="truncate font-medium" title={item.deliverable ?? ''}>
+                  {item.deliverable}
+                </span>
+              </span>
+              <UploadMenu
+                hasRepo={actions.hasRepo}
+                onFile={() => onUploadPlain(item.wbsId)}
+                onRepo={() => actions.onUploadRepo(item.wbsId)}
+              />
+            </div>
+          ) : (
+            <div className="flex justify-end border-t pt-3">
+              <UploadMenu
+                hasRepo={actions.hasRepo}
+                variant="outline"
+                label="기타 산출물 올리기"
+                onFile={() => onUploadPlain(item.wbsId)}
+                onRepo={() => actions.onUploadRepo(item.wbsId)}
+              />
+            </div>
+          ))}
       </DialogContent>
     </Dialog>
   );
@@ -557,9 +576,7 @@ export function DesignateDialog({
 }): ReactNode {
   const { toast } = useToast();
   const initial = target.mode === 'edit' ? target.item : null;
-  const [name, setName] = useState(
-    initial?.name ?? (target.mode === 'create' ? (target.name ?? '') : ''),
-  );
+  const [name, setName] = useState(initial?.name ?? '');
   const [description, setDescription] = useState(initial?.description ?? '');
   const [productType, setProductType] = useState(initial?.productType ?? '');
   const [guide, setGuide] = useState(initial?.guide ?? '');

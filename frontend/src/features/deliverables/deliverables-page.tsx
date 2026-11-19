@@ -324,8 +324,8 @@ function buildColumns(
     },
     {
       id: 'designated',
-      // 요청 산출물(UC-033, 옛 이름 산출물 양식). 등록이 없으면 WBS 산출물 열의 이름이다(11-19)
-      header: '요청 산출물',
+      // 예상 산출물(11-19): WBS 산출물 열의 이름과 발주기관이 요청한 산출물(UC-033)
+      header: '예상 산출물',
       cell: ({ row }) => <DesignatedCell item={row.original} actions={designatedActions} />,
     },
     {
@@ -333,7 +333,7 @@ function buildColumns(
       header: ({ column }) => <SortableHeader column={column}>판정</SortableHeader>,
       cell: ({ row }) => {
         const item = row.original;
-        // 요청 산출물이 없는 작업은 판정할 것이 없다(11-19). 칸을 비운다
+        // 예상 산출물이 없는 작업은 판정할 것이 없다(11-19). 칸을 비운다
         if (item.status === 'NONE') return null;
         const pill = (
           <span

@@ -243,7 +243,7 @@ SCHEDULE_COMPLIANCE_BASIS = (
     "기한이 기준일보다 앞선 마일스톤 중 기한 안에 닫힌 비율. 기한 없는 마일스톤과 기한 전 "
     "마일스톤은 세지 않는다"
 )
-DELIVERABLE_APPROVAL_BASIS = "요청 산출물 중 가장 최근 올라온 산출물이 승인된 비율"
+DELIVERABLE_APPROVAL_BASIS = "예상 산출물 중 가장 최근 올라온 산출물이 승인된 비율"
 
 
 def schedule_compliance_measure(achieved: int, evaluated: int) -> ProgressMeasure:
@@ -262,7 +262,7 @@ def schedule_compliance_measure(achieved: int, evaluated: int) -> ProgressMeasur
 
 
 def deliverable_approval_measure(approved: int, defined: int) -> ProgressMeasure:
-    """산출물 승인률(DEC-12). 분모는 요청 산출물이다. 없으면 산출 불가."""
+    """산출물 승인률(DEC-12). 분모는 예상 산출물이다. 없으면 산출 불가."""
     return ProgressMeasure(
         value=_ratio(approved, defined),
         numerator=approved,
@@ -272,16 +272,16 @@ def deliverable_approval_measure(approved: int, defined: int) -> ProgressMeasure
         kind=OBSERVED,
         note=DELIVERABLE_APPROVAL_BASIS
         if defined
-        else "산출 불가: 요청 산출물이 없습니다",
+        else "산출 불가: 예상 산출물이 없습니다",
     )
 
 
 def deliverable_units(cur: Any, project_id: str, at: date) -> tuple[int, int, int]:
     """산출물 진척의 셈: (제출 수, 승인 수, 셈 단위 수). 읽기만 한다.
 
-    요청 산출물 하나가 한 건이다(뷰 v_deliverable_unit, 시맨틱 지표와 같은 셈). 작업에 요청
-    산출물이 2개면 2건이고 하나만 올라와도 1건 제출이다. 등록이 없는 작업은 WBS 산출물 열의
-    이름이 한 건이다(11-19). 각 건은 가장 최근 올라온 산출물의 검토 상태를 본다. at 은 지금 쓰지
+    예상 산출물 하나가 한 건이다(뷰 v_deliverable_unit, 시맨틱 지표와 같은 셈). 예상 산출물은
+    WBS 산출물 열의 이름과 발주기관이 요청한 산출물이고, 한 작업에 둘 다 있으면 둘 다 센다(11-19).
+    각 건은 가장 최근 올라온 산출물의 검토 상태를 본다. at 은 지금 쓰지
     않는다(올라온 것의 상태는 지금 값이다).
     """
     row = fetch_one(
@@ -306,7 +306,7 @@ def deliverable_approval_now(cur: Any, project_id: str, at: date) -> tuple[int, 
 
 
 def deliverable_submission_measure(submitted: int, defined: int) -> ProgressMeasure:
-    """산출물 제출률. 요청 산출물 중 산출물이 올라온 비율."""
+    """산출물 제출률. 예상 산출물 중 산출물이 올라온 비율."""
     return ProgressMeasure(
         value=_ratio(submitted, defined),
         numerator=submitted,
@@ -314,9 +314,9 @@ def deliverable_submission_measure(submitted: int, defined: int) -> ProgressMeas
         label="산출물 제출률",
         unit="건",
         kind=OBSERVED,
-        note="요청 산출물 중 산출물이 올라온 비율. 반려된 것은 뺀다"
+        note="예상 산출물 중 산출물이 올라온 비율. 반려된 것은 뺀다"
         if defined
-        else "산출 불가: 요청 산출물이 없습니다",
+        else "산출 불가: 예상 산출물이 없습니다",
     )
 
 

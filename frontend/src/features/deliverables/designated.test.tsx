@@ -76,8 +76,8 @@ const renderCell = (item: WbsDeliverableItem, a: DesignatedActions) =>
     </ToasterProvider>,
   );
 
-describe('요청 산출물 칸', () => {
-  it('등록도 WBS 산출물도 없으면 발주기관에게만 [요청 등록]이 보인다', () => {
+describe('예상 산출물 칸', () => {
+  it('아무것도 없으면 발주기관에게만 [요청 등록]이 보인다', () => {
     const client = actions(true);
     renderCell({ ...row([]), deliverable: null }, client);
     fireEvent.click(screen.getByRole('button', { name: '요청 등록' }));
@@ -94,28 +94,17 @@ describe('요청 산출물 칸', () => {
     expect(screen.getByText('-')).toBeInTheDocument();
   });
 
-  it('등록이 없어도 WBS 산출물이 있으면 그 이름을 보이고, 발주기관은 눌러 그 이름으로 등록한다', () => {
-    renderCell(row([]), actions(false));
+  it('WBS 산출물은 「WBS」 표시와 이름으로, 요청은 「요청 n건」으로 둘 다 보인다', () => {
+    renderCell(row([entry]), actions(false));
+    expect(screen.getByText('WBS')).toBeInTheDocument();
     expect(screen.getByText('시험결과서')).toBeInTheDocument();
-    expect(screen.queryByRole('button')).toBeNull();
+    expect(screen.getByText('요청')).toBeInTheDocument();
   });
 
-  it('발주기관이 WBS 산출물 이름을 누르면 그 이름으로 요청 등록을 연다', () => {
-    const client = actions(true);
-    renderCell(row([]), client);
-    fireEvent.click(screen.getByRole('button', { name: '시험결과서' }));
-    expect(client.onEdit).toHaveBeenCalledWith({
-      mode: 'create',
-      taskKey: 'k1',
-      taskLabel: '2.1 통합 시험',
-      name: '시험결과서',
-    });
-  });
-
-  it('양식이 있으면 건수만 두고 누르면 옆 창을 연다', () => {
+  it('요청이 있으면 건수만 두고 누르면 옆 창을 연다', () => {
     const client = actions(true);
     renderCell(row([entry]), client);
-    const count = screen.getByRole('button', { name: '1건' });
+    const count = screen.getByRole('button', { name: '요청 1건' });
     expect(screen.queryByText(/양식 내려받기/)).toBeNull(); // 표 칸을 넓히지 않는다
     fireEvent.click(count);
     expect(client.onOpen).toHaveBeenCalledWith('2.1');

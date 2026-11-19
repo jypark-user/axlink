@@ -71,10 +71,11 @@ def test_지정이_있는_작업은_산출물_열_대신_지정_항목으로_판
     out = {j.wbs_id: j for j in deliverable.judge(
         items, documents=docs, today=TODAY, designated=cover
     )}
+    # 예상 산출물 = WBS 이름 1 + 요청 2(11-19)
     assert (out["1.1"].status, out["1.1"].rule) == ("MISSING", "DESIGNATED")
-    assert out["1.1"].ref == "지정 산출물 2건 중 1건 제출"
+    assert out["1.1"].ref == "예상 산출물 3건 중 1건 제출"
     assert out["1.2"].status == "OVERDUE"
-    assert (out["1.3"].status, out["1.3"].ref) == ("SUBMITTED", "지정 산출물 1건 중 1건 제출")
+    assert (out["1.3"].status, out["1.3"].ref) == ("SUBMITTED", "예상 산출물 1건 중 1건 제출")
     # 양식이 없으면 그 작업에 올라온 것으로만 본다. 이름이 같은 문서로 제출이 되지 않는다(11-19)
     plain = deliverable.judge(items[:1], documents=docs, today=TODAY)
     assert (plain[0].status, plain[0].rule) == ("MISSING", None)
@@ -393,7 +394,8 @@ def test_UC_033_S01_양식_올리기_반려_다시_올리기_승인(client, clie
     doc1 = _upload(client, pm, did, "통합시험결과-v1.xlsx", _xlsx("v1"))
     row = _row(_screen(client, po), "2.1")
     assert row["designated"][0]["status"] == "SUBMITTED"
-    assert (row["status"], row["ref"]) == ("SUBMITTED", "지정 산출물 1건 중 1건 제출")
+    # WBS 산출물(시험결과서)도 예상 산출물이라 아직 다 낸 것이 아니다(11-19)
+    assert (row["status"], row["ref"]) == ("OVERDUE", "예상 산출물 2건 중 1건 제출")
     assert [(r["documentId"], r["status"], r["name"]) for r in row["review"]] == [
         (doc1["id"], "SUBMITTED", "시험결과서")
     ]
@@ -420,7 +422,8 @@ def test_UC_033_S01_양식_올리기_반려_다시_올리기_승인(client, clie
 @requires_db
 def test_산출물_진척은_양식_기준으로_제출률과_승인률을_센다(client, client_token, env):
     """작업에 요청 산출물이 2개면 분모 2, 하나만 올라와도 1건 제출이다. 승인은 따로 센다.
-    요청 등록이 없는 작업은 WBS 산출물 열의 이름이 한 건이다(11-19, 1.2 「중간보고서.md」)."""
+    WBS 산출물 열의 이름도 한 건이다. 요청이 있는 작업도 둘 다 센다(11-19). BASE 는 세 작업 모두
+    WBS 산출물이 있어 3건 + 요청 3건 = 6건이다."""
     from app.dashboard import service as dashboard_service
 
     env.load(BASE)
@@ -433,11 +436,11 @@ def test_산출물_진척은_양식_기준으로_제출률과_승인률을_센�
         with tx() as cur:
             return dashboard_service.deliverable_units(cur, PID, TODAY)
 
-    assert units() == (0, 0, 4)
+    assert units() == (0, 0, 6)
     doc = _upload(client, pm, a, "결과.xlsx", _xlsx("결과"))
-    assert units() == (1, 0, 4)
+    assert units() == (1, 0, 6)
     assert _review(client, po, doc["id"], "approve").status_code == 204
-    assert units() == (1, 1, 4)
+    assert units() == (1, 1, 6)
 
     res = client.post(
         f"/api/projects/{PID}/documents",
@@ -447,9 +450,9 @@ def test_산출물_진척은_양식_기준으로_제출률과_승인률을_센�
     assert res.status_code == 201, res.text
     plain = _row(_screen(client, po), "1.2")["review"]
     assert [(r["status"], r["name"]) for r in plain] == [("SUBMITTED", "회의.xlsx")]
-    assert units() == (2, 1, 4)  # 1.2 의 WBS 산출물 한 건이 제출됐다
+    assert units() == (2, 1, 6)  # 1.2 의 WBS 산출물 한 건이 제출됐다
     assert _review(client, po, res.json()["id"], "approve").status_code == 204
-    assert units() == (2, 2, 4)
+    assert units() == (2, 2, 6)
 
     # 시맨틱 지표(카드)도 같은 셈이다
     def card(measure: str) -> float:
@@ -461,8 +464,8 @@ def test_산출물_진척은_양식_기준으로_제출률과_승인률을_센�
         row = body["rows"][0] if body["rows"] else body["total"]
         return float(row["values"]["value"])
 
-    assert card("deliverable_submission_rate") == 50.0
-    assert card("deliverable_approval_rate") == 50.0
+    assert card("deliverable_submission_rate") == 33.33
+    assert card("deliverable_approval_rate") == 33.33
 
 
 @requires_db
