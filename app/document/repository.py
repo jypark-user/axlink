@@ -155,23 +155,47 @@ def mark_failed(cur: Any, document_id: str, message: str) -> None:
     )
 
 
-def count_by_project(cur: Any, project_id: str) -> int:
+# 산출물과 무관한 일반 자료(11-19). 작업에도 예상 산출물에도 붙지 않은 문서다
+_GENERAL = "d.wbs_item_id is null and d.designated_deliverable_id is null"
+
+
+def _list_filter(general: bool, q: str | None) -> tuple[str, list[Any]]:
+    """목록 조건. general 이면 일반 자료만, q 가 있으면 파일명에 그 글자가 든 것만."""
+    sql, args = "", []
+    if general:
+        sql += f" and {_GENERAL}"
+    if q:
+        sql += " and d.original_filename ilike %s"
+        esc = q.replace("\\", "\\\\").replace("%", r"\%").replace("_", r"\_")
+        args.append(f"%{esc}%")
+    return sql, args
+
+
+def count_by_project(
+    cur: Any, project_id: str, *, general: bool = False, q: str | None = None
+) -> int:
+    cond, args = _list_filter(general, q)
     row = fetch_one(
-        cur, "select count(*) as n from document_upload where project_id = %s", (project_id,)
+        cur,
+        f"select count(*) as n from document_upload d where d.project_id = %s{cond}",
+        (project_id, *args),
     )
     return int(row["n"]) if row else 0
 
 
-def list_by_project(cur: Any, project_id: str, page: PageQuery) -> list[dict[str, Any]]:
+def list_by_project(
+    cur: Any, project_id: str, page: PageQuery, *, general: bool = False, q: str | None = None
+) -> list[dict[str, Any]]:
+    cond, args = _list_filter(general, q)
     return fetch_all(
         cur,
         f"""
         select {_COLUMNS} {_FROM}
-         where d.project_id = %s
+         where d.project_id = %s{cond}
          order by d.created_at desc
          limit %s offset %s
         """,
-        (project_id, page.size, page.offset),
+        (project_id, *args, page.size, page.offset),
     )
 
 

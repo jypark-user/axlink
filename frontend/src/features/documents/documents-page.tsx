@@ -1,9 +1,11 @@
 import { useEffect, useRef, useState, type ChangeEvent, type ReactNode } from 'react';
 import { Link } from 'react-router-dom';
+import { Upload } from 'lucide-react';
 import type { ColumnDef } from '@tanstack/react-table';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Progress } from '@/components/ui/progress';
+import { SearchInput } from '@/components/ui/search-input';
 import { DataTable, SortableHeader } from '@/components/ui/data-table';
 import { DataState } from '@/components/common/data-state';
 import { PaginationBar } from '@/components/common/pagination-bar';
@@ -77,11 +79,6 @@ const documentColumns = (projectId: string): ColumnDef<DocumentUploadResponse, u
         <Button asChild size="sm" variant="ghost">
           <Link to={`/p/${projectId}/documents/${row.original.id}`}>상세</Link>
         </Button>
-        {row.original.draftAvailable && (
-          <Button asChild size="sm" variant="outline">
-            <Link to={`/p/${projectId}/documents/${row.original.id}/draft`}>초안 확인</Link>
-          </Button>
-        )}
       </div>
     ),
   },
@@ -93,13 +90,24 @@ export function DocumentsPage(): ReactNode {
   const inputRef = useRef<HTMLInputElement>(null);
   const [page, setPage] = useState(0);
   const [progress, setProgress] = useState<number | null>(null);
+  const [search, setSearch] = useState('');
+  const [q, setQ] = useState('');
+  // 글자마다 부르지 않게 잠깐 멈췄을 때 검색한다
+  useEffect(() => {
+    const timer = window.setTimeout(() => {
+      setQ(search.trim());
+      setPage(0);
+    }, 300);
+    return () => window.clearTimeout(timer);
+  }, [search]);
 
+  // 자료 화면은 산출물과 무관한 일반 자료만 본다(11-19). 산출물은 산출물 화면에서 다룬다
   const state = useAsync<PageResponse<DocumentUploadResponse>>(
     () =>
       api.get<PageResponse<DocumentUploadResponse>>(
-        `/projects/${project.id}/documents${toQueryString({ page, size: 20 })}`,
+        `/projects/${project.id}/documents${toQueryString({ page, size: 20, general: true, q: q || undefined })}`,
       ),
-    [project.id, page],
+    [project.id, page, q],
   );
   const { data, reload } = state;
 
@@ -146,15 +154,14 @@ export function DocumentsPage(): ReactNode {
   return (
     <>
       <PageHeader
-        title="문서"
-        description="산출물 문서를 올리는 자리입니다. 올린 문서는 AI 가 읽어 색인하고 산출물 유형과 요구사항 초안을 뽑습니다. PDF · DOCX · XLSX · PPTX · HWP · HWPX · MD · TXT 를 받고, 같은 파일을 다시 올리면 다시 읽습니다. 특정 WBS 항목의 산출물로 올리려면 산출물 화면의 올리기를 쓰십시오."
+        title="자료"
         actions={
           <>
             <input
               ref={inputRef}
               type="file"
               className="hidden"
-              aria-label="문서 파일"
+              aria-label="자료 파일"
               accept={ALLOWED.join(',')}
               onChange={upload}
             />
@@ -163,7 +170,8 @@ export function DocumentsPage(): ReactNode {
               onClick={() => inputRef.current?.click()}
               disabled={progress !== null}
             >
-              문서 업로드
+              <Upload />
+              자료 업로드
             </Button>
           </>
         }
@@ -173,14 +181,25 @@ export function DocumentsPage(): ReactNode {
           <Progress value={progress} />
         </div>
       )}
-      <DataState state={state} onRetry={reload} empty={{ text: '업로드된 문서가 없습니다.' }}>
+      <SearchInput
+        value={search}
+        onValueChange={setSearch}
+        placeholder="파일명 검색"
+        aria-label="파일명 검색"
+        className="mb-3 max-w-xs"
+      />
+      <DataState
+        state={state}
+        onRetry={reload}
+        empty={{ text: q ? '찾는 자료가 없습니다.' : '올린 자료가 없습니다.' }}
+      >
         {(pageData) => (
           <>
             <DataTable<DocumentUploadResponse, unknown>
               columns={documentColumns(project.id)}
               data={pageData.content}
               paginated={false}
-              emptyText="업로드된 문서가 없습니다."
+              emptyText={q ? '찾는 자료가 없습니다.' : '올린 자료가 없습니다.'}
             />
             <PaginationBar page={pageData} onChange={setPage} />
           </>

@@ -59,11 +59,6 @@ const DocumentDetailPage = lazy(() =>
     default: m.DocumentDetailPage,
   })),
 );
-const StructuringDraftPage = lazy(() =>
-  import('@/features/documents/structuring-draft-page').then((m) => ({
-    default: m.StructuringDraftPage,
-  })),
-);
 const BaselinePage = lazy(() =>
   import('@/features/requirement-baseline/baseline-page').then((m) => ({
     default: m.BaselinePage,
@@ -270,14 +265,6 @@ export function AppRoutes(): ReactNode {
             element={
               <SuspenseShell>
                 <DocumentDetailPage />
-              </SuspenseShell>
-            }
-          />
-          <Route
-            path="documents/:documentId/draft"
-            element={
-              <SuspenseShell>
-                <StructuringDraftPage />
               </SuspenseShell>
             }
           />

@@ -293,3 +293,39 @@ def test_pptx_upload_is_parsed_and_stored(client, as_pm):
     assert body["status"] == "STRUCTURED" and body["error"] is None
     text = client.get(f"/api/documents/{body['id']}/text", headers=_auth(as_pm)).json()
     assert "| 마일스톤 | 목표일 |" in text["text"] and text["pageCount"] == 2
+
+
+@requires_db
+def test_자료_목록은_일반_자료만_거르고_파일명으로_찾는다(client, as_pm):
+    """자료 화면(11-19)은 산출물에 붙지 않은 자료만 본다. 파일명 검색은 %·_ 를 글자로 본다."""
+    from app.db import tx
+
+    _upload(client, as_pm, "회의록_10월.xlsx", _xlsx_bytes("회의"))
+    _upload(client, as_pm, "참고 100%.xlsx", _xlsx_bytes("참고"))
+    linked = _upload(client, as_pm, "설계서.xlsx", _xlsx_bytes("설계")).json()["id"]
+    with tx() as cur:
+        # 산출물 화면에서 작업에 붙여 올린 문서처럼 만든다. 시험이 끝나면 작업 줄도 지운다
+        cur.execute(
+            "insert into wbs_item (project_id, wbs_id, name, active) "
+            "values (%s, '99.98', '자료 시험 작업', false) returning id",
+            (PID,),
+        )
+        item_id = cur.fetchone()["id"]
+        cur.execute(
+            "update document_upload set wbs_item_id = %s where id = %s", (item_id, linked)
+        )
+
+    def names(query: str) -> list[str]:
+        res = client.get(f"/api/projects/{PID}/documents?{query}", headers=_auth(as_pm))
+        assert res.status_code == 200, res.text
+        return sorted(d["fileName"] for d in res.json()["content"])
+
+    assert names("") == ["설계서.xlsx", "참고 100%.xlsx", "회의록_10월.xlsx"]
+    assert names("general=true") == ["참고 100%.xlsx", "회의록_10월.xlsx"]
+    assert names("general=true&q=회의") == ["회의록_10월.xlsx"]
+    assert names("general=true&q=%25") == ["참고 100%.xlsx"]
+    assert names("general=true&q=_") == ["회의록_10월.xlsx"]
+    assert names("general=true&q=설계") == []
+    with tx() as cur:
+        cur.execute("delete from document_upload where id = %s", (linked,))
+        cur.execute("delete from wbs_item where id = %s", (item_id,))

@@ -1,5 +1,4 @@
 import { useEffect, useRef, useState, type FormEvent, type ReactNode } from 'react';
-import { Link } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
 import {
   Dialog,
@@ -311,46 +310,12 @@ function DesignatedEntry({
               {v.rejectReason && (
                 <span className="text-destructive">반려 사유: {v.rejectReason}</span>
               )}
-              {uploading && v.state === 'REGISTERED' && (
-                <SubmitHint projectId={projectId} version={v} />
-              )}
             </li>
           ))}
         </ul>
       )}
       {!uploading && <History projectId={projectId} id={entry.id} />}
     </li>
-  );
-}
-
-/** 확정 전 제출본의 다음 할 일. 올리기만 하면 제출이 아니다(DEC-14). */
-function SubmitHint({
-  projectId,
-  version,
-}: {
-  projectId: string;
-  version: DesignatedVersion;
-}): ReactNode {
-  // 양식으로 올린 문서는 읽기가 끝나면 서버가 바로 제출로 확정한다(11-18). 여기 남는 것은
-  // 아직 읽는 중이거나, 분류를 정하지 못해 자동 제출을 못 한 경우뿐이다
-  if (version.submit === 'PROCESSING') return <span>읽는 중</span>;
-  if (version.submit === 'READY') {
-    return (
-      <Link
-        to={`/p/${projectId}/documents/${version.documentId}/draft`}
-        className="text-primary underline underline-offset-2"
-      >
-        분류를 정해 제출
-      </Link>
-    );
-  }
-  return (
-    <Link
-      to={`/p/${projectId}/documents/${version.documentId}`}
-      className="underline underline-offset-2"
-    >
-      읽지 못함 · 자료 상세
-    </Link>
   );
 }
 

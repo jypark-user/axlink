@@ -366,11 +366,14 @@ class _Heartbeat:
 
 
 def list_for_project(
-    cur: Any, principal: AuthPrincipal, project_id: str, page: PageQuery
+    cur: Any, principal: AuthPrincipal, project_id: str, page: PageQuery,
+    *, general: bool = False, q: str | None = None,
 ) -> PageResponse[DocumentUploadResponse]:
+    """사업의 문서 목록. general 이면 산출물에 붙지 않은 일반 자료만(자료 화면, 11-19)."""
     _require_project(cur, principal, project_id)
-    total = repository.count_by_project(cur, project_id)
-    rows = repository.list_by_project(cur, project_id, page)
+    q = (q or "").strip() or None
+    total = repository.count_by_project(cur, project_id, general=general, q=q)
+    rows = repository.list_by_project(cur, project_id, page, general=general, q=q)
     return PageResponse.of([_to_response(r) for r in rows], page, total)
 
 

@@ -35,10 +35,13 @@ def list_documents(
     principal: Principal,
     page: int = Query(default=0, ge=0),
     size: int = Query(default=20, ge=1, le=100),
+    # 자료 화면은 산출물에 붙지 않은 일반 자료만 본다(11-19)
+    general: bool = Query(default=False),
+    q: str | None = Query(default=None, max_length=200),
 ) -> PageResponse[DocumentUploadResponse]:
     with tx() as cur:
         return service.list_for_project(
-            cur, principal, project_id, PageQuery(page=page, size=size)
+            cur, principal, project_id, PageQuery(page=page, size=size), general=general, q=q
         )
 
 
