@@ -105,11 +105,11 @@ export interface DesignatedActions {
 }
 
 export type DesignationTarget =
-  | { mode: 'create'; taskKey: string; taskLabel: string }
+  | { mode: 'create'; taskKey: string; taskLabel: string; name?: string }
   | { mode: 'edit'; item: DesignatedDeliverable; taskLabel: string };
 
 /**
- * 표의 「산출물 양식」 칸(11-18 사용자 지시). 발주기관은 없으면 [등록], 있으면 「n건」을 눌러
+ * 표의 「요청 산출물」 칸(11-18·11-19 사용자 지시). 발주기관은 없으면 [요청 등록], 있으면 「n건」을 눌러
  * 고친다. 용역사는 「n건」을 눌러 양식을 본다. 제출은 이 칸이 아니라 맨 오른쪽 [올리기]로만 한다.
  */
 export function DesignatedCell({
@@ -122,6 +122,35 @@ export function DesignatedCell({
   const list = item.designated ?? [];
   const taskLabel = `${item.wbsId} ${item.name}`;
   if (list.length === 0) {
+    // 등록이 없어도 WBS 산출물 열에 이름이 있으면 그것이 요청 산출물이다(11-19, 양식 파일 없음).
+    // 발주기관은 눌러 그 이름으로 요청을 등록하고 양식을 붙인다
+    const wbsName = item.deliverable?.trim();
+    if (wbsName) {
+      if (!actions.canDesignate || !item.taskKey) {
+        return (
+          <span className="block max-w-[10rem] truncate text-sm" title={wbsName}>
+            {wbsName}
+          </span>
+        );
+      }
+      return (
+        <button
+          type="button"
+          className="block max-w-[10rem] truncate text-left text-sm underline-offset-2 hover:underline"
+          title={wbsName}
+          onClick={() =>
+            actions.onEdit({
+              mode: 'create',
+              taskKey: item.taskKey as string,
+              taskLabel,
+              name: wbsName,
+            })
+          }
+        >
+          {wbsName}
+        </button>
+      );
+    }
     if (!actions.canDesignate || !item.taskKey) {
       return <span className="text-muted-foreground text-sm">-</span>;
     }
@@ -133,7 +162,7 @@ export function DesignatedCell({
           actions.onEdit({ mode: 'create', taskKey: item.taskKey as string, taskLabel })
         }
       >
-        양식 등록
+        요청 등록
       </Button>
     );
   }
@@ -148,7 +177,7 @@ export function DesignatedCell({
   );
 }
 
-/** 한 작업의 산출물 양식 전체. 표의 「n건」을 누르면 옆 창으로 연다. 제출(올리기)은 여기서 하지 않는다. */
+/** 한 작업의 요청 산출물 전체. 표의 「n건」을 누르면 옆 창으로 연다. 제출(올리기)은 여기서 하지 않는다. */
 export function DesignatedSheet({
   item,
   actions,
@@ -167,7 +196,7 @@ export function DesignatedSheet({
           <>
             <SheetHeader className="gap-1 px-6 pt-6 pb-4">
               <SheetTitle className="pr-8">{taskLabel}</SheetTitle>
-              <SheetDescription>산출물 양식</SheetDescription>
+              <SheetDescription>요청 산출물</SheetDescription>
             </SheetHeader>
             <ul className="flex flex-col gap-4 px-6 pb-6">
               {list.map((d) => (
@@ -190,7 +219,7 @@ export function DesignatedSheet({
                     actions.onEdit({ mode: 'create', taskKey: item.taskKey as string, taskLabel })
                   }
                 >
-                  양식 추가 등록
+                  요청 추가 등록
                 </Button>
               </div>
             )}
@@ -528,7 +557,9 @@ export function DesignateDialog({
 }): ReactNode {
   const { toast } = useToast();
   const initial = target.mode === 'edit' ? target.item : null;
-  const [name, setName] = useState(initial?.name ?? '');
+  const [name, setName] = useState(
+    initial?.name ?? (target.mode === 'create' ? (target.name ?? '') : ''),
+  );
   const [description, setDescription] = useState(initial?.description ?? '');
   const [productType, setProductType] = useState(initial?.productType ?? '');
   const [guide, setGuide] = useState(initial?.guide ?? '');
@@ -569,7 +600,7 @@ export function DesignateDialog({
         form.append('file', file);
         await api.upload(`${base(projectId)}/${id}/template`, form);
       }
-      toast({ title: '산출물 양식을 저장했습니다.', variant: 'success' });
+      toast({ title: '요청 산출물을 저장했습니다.', variant: 'success' });
       onDone();
     } catch (err) {
       setError(isApiError(err) ? err.message : '저장하지 못했습니다.');
@@ -584,9 +615,7 @@ export function DesignateDialog({
       <DialogContent>
         <form onSubmit={submit} className="flex min-w-0 flex-col gap-4">
           <DialogHeader>
-            <DialogTitle>
-              {target.mode === 'create' ? '산출물 양식 등록' : '산출물 양식 수정'}
-            </DialogTitle>
+            <DialogTitle>{target.mode === 'create' ? '요청 등록' : '요청 산출물 수정'}</DialogTitle>
             <DialogDescription>{target.taskLabel}</DialogDescription>
           </DialogHeader>
           <div className="flex flex-col gap-1.5">

@@ -577,8 +577,7 @@ class Seeder:
         self._materialize_wbs()
         # 문서: 명세서(처리만), 요구사항정의서(3.1 산출물 v1 승인), 회의록
         self._upload("TD-ACC-V1", "TD-PRJ-1", "TD-DOC-1")
-        # 작업에 바로 올리면 읽은 뒤 자동 제출된다(11-18). 시험 자료는 유형·제목·버전을 정해 두어야
-        # 하므로 먼저 확정하고 작업에 붙인다
+        # 시험 자료는 22종 유형·제목·버전을 정해 두어야 하므로 먼저 확정하고 작업에 붙인다
         self._upload("TD-ACC-V1", "TD-PRJ-1", "TD-DOC-2")
         self._confirm_work_product(
             "TD-ACC-V1", "TD-DOC-2", "REQUIREMENTS_SPEC", "요구사항정의서", "v1"
@@ -587,6 +586,13 @@ class Seeder:
         self._ok(
             self.c.post(
                 f"/api/projects/{self.ids['TD-PRJ-1']}/work-products/{self.ids['TD-DOC-2:wp']}/approve",
+                headers=self._h("TD-ACC-C1"),
+            )
+        )
+        # 산출물 승인률은 작업에 올라온 산출물의 승인으로 센다(11-19). 산출물 화면에서도 승인한다
+        self._ok(
+            self.c.post(
+                f"/api/projects/{self.ids['TD-PRJ-1']}/documents/{self.ids['TD-DOC-2']}/approve",
                 headers=self._h("TD-ACC-C1"),
             )
         )

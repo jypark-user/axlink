@@ -243,7 +243,7 @@ SCHEDULE_COMPLIANCE_BASIS = (
     "기한이 기준일보다 앞선 마일스톤 중 기한 안에 닫힌 비율. 기한 없는 마일스톤과 기한 전 "
     "마일스톤은 세지 않는다"
 )
-DELIVERABLE_APPROVAL_BASIS = "WBS 가 정한 산출물 중 현행 버전이 승인된 비율"
+DELIVERABLE_APPROVAL_BASIS = "요청 산출물 중 가장 최근 올라온 산출물이 승인된 비율"
 
 
 def schedule_compliance_measure(achieved: int, evaluated: int) -> ProgressMeasure:
@@ -262,7 +262,7 @@ def schedule_compliance_measure(achieved: int, evaluated: int) -> ProgressMeasur
 
 
 def deliverable_approval_measure(approved: int, defined: int) -> ProgressMeasure:
-    """산출물 승인률(DEC-12). 분모는 WBS 가 정한 산출물이다. WBS 가 없으면 산출 불가."""
+    """산출물 승인률(DEC-12). 분모는 요청 산출물이다. 없으면 산출 불가."""
     return ProgressMeasure(
         value=_ratio(approved, defined),
         numerator=approved,
@@ -272,64 +272,31 @@ def deliverable_approval_measure(approved: int, defined: int) -> ProgressMeasure
         kind=OBSERVED,
         note=DELIVERABLE_APPROVAL_BASIS
         if defined
-        else "산출 불가: WBS 가 정한 산출물이 없습니다",
+        else "산출 불가: 요청 산출물이 없습니다",
     )
 
 
 def deliverable_units(cur: Any, project_id: str, at: date) -> tuple[int, int, int]:
-    """산출물 진척의 셈(V70): (제출 수, 승인 수, 셈 단위 수). 읽기만 한다.
+    """산출물 진척의 셈: (제출 수, 승인 수, 셈 단위 수). 읽기만 한다.
 
-    산출물 양식을 정한 사업은 양식 하나가 한 건이다. 작업에 양식이 2개면 2건이고 하나만
-    올라와도 1건 제출이다. 양식마다 가장 최근 올라온 산출물의 검토 상태를 본다(뷰
-    v_deliverable_unit, 시맨틱 지표와 같은 셈). 양식이 없는 사업은 WBS 산출물 열이 있는 말단
-    작업이 한 건이고, 판정을 지금 다시 해서(저장하지 않음) 문서를 붙인 직후에도 맞게 센다.
-    승인은 그 작업에 올린 산출물의 승인이나 현행 버전 승인이다.
+    요청 산출물 하나가 한 건이다(뷰 v_deliverable_unit, 시맨틱 지표와 같은 셈). 작업에 요청
+    산출물이 2개면 2건이고 하나만 올라와도 1건 제출이다. 등록이 없는 작업은 WBS 산출물 열의
+    이름이 한 건이다(11-19). 각 건은 가장 최근 올라온 산출물의 검토 상태를 본다. at 은 지금 쓰지
+    않는다(올라온 것의 상태는 지금 값이다).
     """
-    form = fetch_one(
+    row = fetch_one(
         cur,
         """
         select count(*) filter (where submitted) as submitted,
                count(*) filter (where approved) as approved, count(*) as total
           from v_deliverable_unit
-         where project_id = %s and basis = 'FORM'
+         where project_id = %s
         """,
         (project_id,),
     )
-    if form and form["total"]:
-        return int(form["submitted"]), int(form["approved"]), int(form["total"])
-
-    check = judge_deliverables(cur, project_id, at)
-    leaves = {
-        i["wbs_id"]: str(i["id"]) for i in check.items
-        if i.get("weight") is not None and (i.get("deliverable") or "").strip()
-    }
-    judged = [j for j in check.judgements if j.wbs_id in leaves]
-    status = repository.current_status_by_product(
-        cur, [j.product_id for j in judged if j.product_id]
-    )
-    reviewed = {
-        str(r["wbs_item_id"]): r["review_status"]
-        for r in fetch_all(
-            cur,
-            """
-            select distinct on (wbs_item_id) wbs_item_id, review_status
-              from document_upload
-             where project_id = %s and wbs_item_id is not null and review_status is not null
-             order by wbs_item_id, created_at desc
-            """,
-            (project_id,),
-        )
-    }
-    approved = sum(
-        1 for j in judged
-        if reviewed.get(leaves[j.wbs_id]) == "APPROVED"
-        or (j.product_id and status.get(j.product_id) == "APPROVED")
-    )
-    submitted = sum(
-        1 for j in judged
-        if j.status == deliverable.SUBMITTED and reviewed.get(leaves[j.wbs_id]) != "REJECTED"
-    )
-    return submitted, approved, len(leaves)
+    if row is None:
+        return 0, 0, 0
+    return int(row["submitted"]), int(row["approved"]), int(row["total"])
 
 
 def deliverable_approval_now(cur: Any, project_id: str, at: date) -> tuple[int, int]:
@@ -339,7 +306,7 @@ def deliverable_approval_now(cur: Any, project_id: str, at: date) -> tuple[int, 
 
 
 def deliverable_submission_measure(submitted: int, defined: int) -> ProgressMeasure:
-    """산출물 제출률(V70). 양식(없으면 WBS 산출물) 중 산출물이 올라온 비율."""
+    """산출물 제출률. 요청 산출물 중 산출물이 올라온 비율."""
     return ProgressMeasure(
         value=_ratio(submitted, defined),
         numerator=submitted,
@@ -347,9 +314,9 @@ def deliverable_submission_measure(submitted: int, defined: int) -> ProgressMeas
         label="산출물 제출률",
         unit="건",
         kind=OBSERVED,
-        note="산출물 양식(없으면 WBS 산출물) 중 산출물이 올라온 비율. 반려된 것은 뺀다"
+        note="요청 산출물 중 산출물이 올라온 비율. 반려된 것은 뺀다"
         if defined
-        else "산출 불가: 셀 산출물이 없습니다",
+        else "산출 불가: 요청 산출물이 없습니다",
     )
 
 

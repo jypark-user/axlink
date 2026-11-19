@@ -605,14 +605,14 @@ def test_UC_032_S10_가중치_기준_확인(target, s0, replay):
 
 
 def test_UC_031_S10_승인률(target, s0):
-    """S0 산출물 승인률 1/5 = 20.0%: 분모 = WBS 가 정한 산출물 5, 분자 = 현행 버전 승인(요구사항정의서 v1).
+    """S0 산출물 승인률 1/5 = 20.0%: 분모 = 요청 산출물 5(요청 등록이 없어 WBS 산출물 열), 분자 = 3.1 에 올라온 요구사항정의서 승인.
     사업수행계획서는 WBS 산출물 열에 없어 세지 않는다. 산출 근거 문장 (AC-031-9, DEC-12 (b), IM-009 7.2)."""
     pid = s0.ids["TD-PRJ-1"]
     c1 = auth(s0.tokens["TD-ACC-C1"])
     prog = target.get(f"/api/projects/{pid}/progress?at={d.T0.isoformat()}", headers=c1).json()
     ap = prog["deliverableApproval"]
     assert (ap["numerator"], ap["denominator"]) == (1, 5), ap
-    assert round(ap["value"], 4) == 0.2 and "WBS" in ap["note"], ap
+    assert round(ap["value"], 4) == 0.2 and "요청 산출물" in ap["note"], ap
     spec = {
         "template": "STAT_CARD", "title": "TST 승인률",
         "query": {"measure": "deliverable_approval_rate", "dimensions": [], "filters": [], "projectScope": [pid], "limit": None},

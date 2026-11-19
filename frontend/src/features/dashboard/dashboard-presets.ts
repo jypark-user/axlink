@@ -69,7 +69,7 @@ export const DEFAULT_PRESET: DashboardPreset = {
       measure: 'deliverable_submission_rate',
       dimensions: [],
       rationale:
-        '산출물 기준 진척(제출). 발주기관이 작업마다 정한 산출물 양식 중 산출물이 올라온 비율이다. 작업에 양식이 2개면 2건으로 세고, 하나만 올라와도 1건이 제출이다. 반려된 것은 뺀다. 양식을 정하지 않은 사업은 WBS 산출물 열을 기준으로 센다. 지금 값이다.',
+        '산출물 기준 진척(제출). 작업마다 정한 요청 산출물 중 산출물이 올라온 비율이다. 작업에 요청 산출물이 2개면 2건으로 세고, 하나만 올라와도 1건이 제출이다. 반려된 것은 뺀다. 요청을 등록하지 않은 작업은 WBS 산출물 열의 이름이 한 건이다. 지금 값이다.',
     },
     {
       template: 'STAT_CARD',
@@ -78,7 +78,7 @@ export const DEFAULT_PRESET: DashboardPreset = {
       measure: 'deliverable_approval_rate',
       dimensions: [],
       rationale:
-        '산출물 기준 진척(승인). 산출물 양식마다 가장 최근 올라온 산출물을 발주기관이 승인한 비율이다. 올리기만 하고 승인 전인 것은 넣지 않아서, 제출률이 높아도 이 값이 낮으면 아직 확인을 마치지 못한 결과물이 많다는 뜻이다. 지금 값이라 산출물 화면에서 승인하면 바로 바뀐다. 아래 일별 그래프는 하루 한 번 남긴 기록이라 다음 기록 때 따라온다.',
+        '산출물 기준 진척(승인). 요청 산출물마다 가장 최근 올라온 산출물을 발주기관이 승인한 비율이다. 올리기만 하고 승인 전인 것은 넣지 않아서, 제출률이 높아도 이 값이 낮으면 아직 확인을 마치지 못한 결과물이 많다는 뜻이다. 지금 값이라 산출물 화면에서 승인하면 바로 바뀐다. 아래 일별 그래프는 하루 한 번 남긴 기록이라 다음 기록 때 따라온다.',
     },
     {
       template: 'STAT_CARD',
@@ -404,7 +404,7 @@ export const DASHBOARD_PRESETS: DashboardPreset[] = [
       {
         template: 'STAT_CARD',
         title: '산출물 승인률',
-        intent: 'WBS 가 정한 산출물 중 현행 버전이 승인된 비율',
+        intent: '요청 산출물 중 가장 최근 올라온 산출물이 승인된 비율',
         measure: 'deliverable_approval_rate',
       },
       {

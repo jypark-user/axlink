@@ -419,8 +419,8 @@ def test_UC_033_S01_양식_올리기_반려_다시_올리기_승인(client, clie
 
 @requires_db
 def test_산출물_진척은_양식_기준으로_제출률과_승인률을_센다(client, client_token, env):
-    """V70: 작업에 양식이 2개면 분모 2, 하나만 올라와도 1건 제출이다. 승인은 따로 센다.
-    양식이 있는 사업에서 양식 없이 작업에 올린 것은 승인할 수 있지만 셈에는 들지 않는다."""
+    """작업에 요청 산출물이 2개면 분모 2, 하나만 올라와도 1건 제출이다. 승인은 따로 센다.
+    요청 등록이 없는 작업은 WBS 산출물 열의 이름이 한 건이다(11-19, 1.2 「중간보고서.md」)."""
     from app.dashboard import service as dashboard_service
 
     env.load(BASE)
@@ -433,11 +433,11 @@ def test_산출물_진척은_양식_기준으로_제출률과_승인률을_센�
         with tx() as cur:
             return dashboard_service.deliverable_units(cur, PID, TODAY)
 
-    assert units() == (0, 0, 3)
+    assert units() == (0, 0, 4)
     doc = _upload(client, pm, a, "결과.xlsx", _xlsx("결과"))
-    assert units() == (1, 0, 3)
+    assert units() == (1, 0, 4)
     assert _review(client, po, doc["id"], "approve").status_code == 204
-    assert units() == (1, 1, 3)
+    assert units() == (1, 1, 4)
 
     res = client.post(
         f"/api/projects/{PID}/documents",
@@ -447,8 +447,9 @@ def test_산출물_진척은_양식_기준으로_제출률과_승인률을_센�
     assert res.status_code == 201, res.text
     plain = _row(_screen(client, po), "1.2")["review"]
     assert [(r["status"], r["name"]) for r in plain] == [("SUBMITTED", "회의.xlsx")]
+    assert units() == (2, 1, 4)  # 1.2 의 WBS 산출물 한 건이 제출됐다
     assert _review(client, po, res.json()["id"], "approve").status_code == 204
-    assert units() == (1, 1, 3)  # 양식이 아니라 셈에 들지 않는다
+    assert units() == (2, 2, 4)
 
     # 시맨틱 지표(카드)도 같은 셈이다
     def card(measure: str) -> float:
@@ -460,8 +461,8 @@ def test_산출물_진척은_양식_기준으로_제출률과_승인률을_센�
         row = body["rows"][0] if body["rows"] else body["total"]
         return float(row["values"]["value"])
 
-    assert card("deliverable_submission_rate") == 33.33
-    assert card("deliverable_approval_rate") == 33.33
+    assert card("deliverable_submission_rate") == 50.0
+    assert card("deliverable_approval_rate") == 50.0
 
 
 @requires_db
