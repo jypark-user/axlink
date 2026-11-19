@@ -2,7 +2,7 @@ import { fireEvent, render, screen } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
 import { describe, expect, it, vi } from 'vitest';
 import { ToasterProvider } from '@/components/common/toaster';
-import { ReviewBadge, ReviewButton, reviewState } from '@/features/deliverables/review-button';
+import { ReviewBadge, ReviewButton, reviewCounts } from '@/features/deliverables/review-button';
 import type { DeliverableReview, WbsDeliverableItem } from '@/types/api';
 
 // 산출물 줄의 검토(11-18). 발주기관은 눌러 승인·반려하고, 용역사는 상태만 본다.
@@ -38,14 +38,20 @@ const item = (list: DeliverableReview[]): WbsDeliverableItem => ({
   review: list,
 });
 
-describe('검토 상태', () => {
-  it('하나라도 대기면 승인 대기, 모두 승인이면 승인, 그 밖은 반려', () => {
-    expect(reviewState([])).toBeNull();
-    expect(reviewState([review('APPROVED'), review('SUBMITTED', 'w2')])).toBe('SUBMITTED');
-    expect(reviewState([review('APPROVED'), review('APPROVED', 'w2')])).toBe('APPROVED');
-    expect(reviewState([review('APPROVED'), review('REJECTED', 'w2')])).toBe('REJECTED');
-    // 지난 판은 보지 않는다
-    expect(reviewState([review('APPROVED'), review('SUBMITTED', 'w0', false)])).toBe('APPROVED');
+describe('승인 현황', () => {
+  it('상태별로 세고 지난 판은 빼며 0건은 그리지 않는다', () => {
+    expect(reviewCounts([])).toEqual({ SUBMITTED: 0, APPROVED: 0, REJECTED: 0 });
+    expect(
+      reviewCounts([
+        review('APPROVED'),
+        review('SUBMITTED', 'w2'),
+        review('SUBMITTED', 'w0', false),
+      ]),
+    ).toEqual({ SUBMITTED: 1, APPROVED: 1, REJECTED: 0 });
+    render(<ReviewBadge item={item([review('APPROVED'), review('SUBMITTED', 'w2')])} />);
+    expect(screen.getByText('승인 대기 1건')).toBeTruthy();
+    expect(screen.getByText('승인 1건')).toBeTruthy();
+    expect(screen.queryByText(/반려/)).toBeNull();
   });
 });
 

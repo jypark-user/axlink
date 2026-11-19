@@ -30,31 +30,34 @@ const STATUS_TONE: Record<string, string> = {
 };
 
 /**
- * 작업의 검토 상태 한 마디. 지난 판(같은 양식에 다시 올린 것의 앞 판)은 보지 않는다.
- * 하나라도 승인 대기면 승인 대기, 모두 승인이면 승인, 아니면 반려
+ * 작업에 올라온 산출물을 상태별로 센다. 지난 판(같은 양식에 다시 올린 것의 앞 판)은 세지 않는다
  */
-export function reviewState(
+export function reviewCounts(
   list: DeliverableReview[],
-): 'SUBMITTED' | 'APPROVED' | 'REJECTED' | null {
-  const live = list.filter((r) => r.latest);
-  if (live.length === 0) return null;
-  if (live.some((r) => r.status === 'SUBMITTED')) return 'SUBMITTED';
-  if (live.every((r) => r.status === 'APPROVED')) return 'APPROVED';
-  return 'REJECTED';
+): Record<DeliverableReview['status'], number> {
+  const counts = { SUBMITTED: 0, APPROVED: 0, REJECTED: 0 };
+  for (const r of list) if (r.latest) counts[r.status] += 1;
+  return counts;
 }
 
-/** 판정 칸에 붙는 승인 상태 딱지. 올라온 산출물이 없으면 그리지 않는다 */
+const COUNT_TONE: Record<string, string> = {
+  SUBMITTED: 'text-sky-700 dark:text-sky-300',
+  APPROVED: 'text-emerald-700 dark:text-emerald-300',
+  REJECTED: 'text-destructive',
+};
+
+/** 판정 칸의 승인 현황(11-19). 「승인 대기 n건」「승인 m건」「반려 k건」, 0건은 그리지 않는다 */
 export function ReviewBadge({ item }: { item: WbsDeliverableItem }): ReactNode {
-  const state = reviewState(item.review ?? []);
-  if (state === null) return null;
+  const counts = reviewCounts(item.review ?? []);
+  const shown = (['SUBMITTED', 'APPROVED', 'REJECTED'] as const).filter((k) => counts[k] > 0);
+  if (shown.length === 0) return null;
   return (
-    <span
-      className={cn(
-        'inline-block rounded px-1.5 py-0.5 text-xs font-medium whitespace-nowrap',
-        STATUS_TONE[state],
-      )}
-    >
-      {STATUS_TEXT[state]}
+    <span className="flex flex-wrap gap-x-2 text-xs font-medium">
+      {shown.map((k) => (
+        <span key={k} className={cn('whitespace-nowrap', COUNT_TONE[k])}>
+          {STATUS_TEXT[k]} {counts[k]}건
+        </span>
+      ))}
     </span>
   );
 }
