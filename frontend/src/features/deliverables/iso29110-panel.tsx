@@ -1,5 +1,7 @@
-import { type ReactNode } from 'react';
+import { type ReactNode, useState } from 'react';
 import { DataState } from '@/components/common/data-state';
+import { Button } from '@/components/ui/button';
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { useAsync } from '@/lib/use-async';
 import { api } from '@/lib/http';
 import { cn } from '@/lib/utils';
@@ -35,28 +37,40 @@ function StatusPill({ status }: { status: Iso29110Status }): ReactNode {
 }
 
 /**
- * ISO/IEC 29110 산출물 22종 충족 현황(11-19 사용자 결정, 인도 점검표 대신). 22종마다 예상
- * 산출물(WBS 자동 + 발주사 요청)에 계획됐는지와 제출·승인을 네 상태로 보인다. 읽기만 한다.
- * version 은 위 표가 다시 읽힐 때(올리기·승인 뒤) 함께 다시 읽으려고 받는다.
+ * ISO/IEC 29110 산출물 22종 충족 현황(11-19 사용자 결정, 인도 점검표 대신). 화면 머리 오른쪽
+ * 버튼으로 열고 창에서 본다. 22종마다 예상 산출물(WBS 자동 + 발주사 요청)에 계획됐는지와
+ * 제출·승인을 네 상태로 보인다. 읽기만 한다. 창을 열 때마다 새로 읽는다.
  */
-export function Iso29110Panel({
-  projectId,
-  version,
-}: {
-  projectId: string;
-  version: unknown;
-}): ReactNode {
+export function Iso29110Button({ projectId }: { projectId: string }): ReactNode {
+  const [open, setOpen] = useState(false);
+  return (
+    <>
+      <Button variant="outline" size="sm" onClick={() => setOpen(true)}>
+        ISO/IEC 29110 충족 현황
+      </Button>
+      <Dialog open={open} onOpenChange={setOpen}>
+        <DialogContent className="sm:max-w-4xl">
+          <DialogHeader>
+            <DialogTitle>ISO/IEC 29110 산출물 충족 현황</DialogTitle>
+          </DialogHeader>
+          {open && <Iso29110Body projectId={projectId} />}
+        </DialogContent>
+      </Dialog>
+    </>
+  );
+}
+
+function Iso29110Body({ projectId }: { projectId: string }): ReactNode {
   const state = useAsync<Iso29110Response>(
     () => api.get<Iso29110Response>(`/projects/${projectId}/wbs/iso29110`),
-    [projectId, version],
+    [projectId],
   );
   return (
-    <section className="mt-10">
-      <h2 className="text-base font-semibold">ISO/IEC 29110 산출물 충족 현황</h2>
+    <div className="max-h-[70vh] overflow-y-auto">
       <DataState state={state} empty={{ text: '22종 현황이 없습니다.' }}>
         {(data) => (
           <>
-            <p className="text-muted-foreground mt-1 mb-3 flex flex-wrap gap-x-3 text-sm">
+            <p className="text-muted-foreground mb-3 flex flex-wrap gap-x-3 text-sm">
               {ORDER.map((k) => (
                 <span key={k}>
                   {STATUS_TEXT[k]}{' '}
@@ -92,6 +106,6 @@ export function Iso29110Panel({
           </>
         )}
       </DataState>
-    </section>
+    </div>
   );
 }

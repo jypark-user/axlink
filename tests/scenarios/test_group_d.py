@@ -650,10 +650,12 @@ def _ui_UC_031_S01(screen, s0):
     sc.open(f"/p/{pid}/deliverables").see("SW설계서")
     row = sc.row("SW설계서")
     assert "제출" in row and "지연" not in row, row
-    sc.see("ISO/IEC 29110 산출물 충족 현황")
-    line = sc.page.locator("li", has_text="설계서").filter(has_text="3.2").first.inner_text()
+    sc.page.get_by_role("button", name="ISO/IEC 29110 충족 현황").click()
+    sc.see("ISO/IEC 29110 산출물 충족 현황", selector='[role="dialog"]')
+    line = sc.page.locator('[role="dialog"] li', has_text="설계서").filter(has_text="3.2").first.inner_text()
     assert "제출" in line or "승인" in line, line
     sc.shot("충족 현황")
+    sc.page.keyboard.press("Escape")
     # 완료 확인율은 화면이 소수 없이 「15%」로 쓴다
     sc.open(f"/p/{pid}/schedule").see(
         re.compile(r"보고 진척률\s*30\.0%"), re.compile(r"완료 확인율\s*15(\.0)?%")

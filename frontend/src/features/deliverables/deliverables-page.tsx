@@ -26,7 +26,7 @@ import {
 } from './designated';
 import { useTypeNames } from './use-type-names';
 import { ReviewBadge, ReviewButton } from './review-button';
-import { Iso29110Panel } from './iso29110-panel';
+import { Iso29110Button } from './iso29110-panel';
 import { RepoPickDialog, UploadMenu, type UploadTarget } from './repo-upload';
 import type {
   DeliverableStatus,
@@ -176,7 +176,7 @@ export function DeliverablesPage(): ReactNode {
 
   return (
     <>
-      <PageHeader title="산출물" />
+      <PageHeader title="산출물" actions={<Iso29110Button projectId={project.id} />} />
       <input
         ref={inputRef}
         type="file"
@@ -260,7 +260,6 @@ export function DeliverablesPage(): ReactNode {
         }}
       </DataState>
       {/* 인도 점검표 대신 22종 충족 현황(11-19). WBS 가 없어도 「계획 없음」으로 보인다 */}
-      <Iso29110Panel projectId={project.id} version={state.data} />
       {designating && (
         <DesignateDialog
           projectId={project.id}
