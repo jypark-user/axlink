@@ -111,6 +111,7 @@ describe('예상 산출물 옆 창', () => {
       </ToasterProvider>,
     );
     expect(screen.getByText('WBS 자동')).toBeInTheDocument();
+    expect(screen.getByText('발주사 요청')).toBeInTheDocument();
     expect(screen.getAllByText('양식 내려받기: 양식.xlsx')).toHaveLength(2);
     expect(screen.getAllByRole('button', { name: '고치기' })).toHaveLength(2);
     expect(screen.getByRole('button', { name: '산출물 요청 추가' })).toBeInTheDocument();

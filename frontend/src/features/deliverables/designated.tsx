@@ -243,11 +243,17 @@ function DesignatedEntry({
     <li className="border-border flex flex-col gap-1 border-l-2 pl-2">
       <div className="flex flex-wrap items-center gap-1.5">
         <span className="font-medium">{entry.name}</span>
-        {entry.origin === 'WBS' && (
-          <span className="bg-muted text-muted-foreground rounded px-1.5 py-px text-[11px] font-medium">
-            WBS 자동
-          </span>
-        )}
+        {/* 어디서 온 예상 산출물인지(11-19). WBS 자동과 발주사 요청을 같은 꼴로 가른다 */}
+        <span
+          className={cn(
+            'rounded px-1.5 py-px text-[11px] font-medium',
+            entry.origin === 'WBS'
+              ? 'bg-muted text-muted-foreground'
+              : 'bg-primary/15 text-primary',
+          )}
+        >
+          {entry.origin === 'WBS' ? 'WBS 자동' : '발주사 요청'}
+        </span>
         <Pill status={entry.status} />
         {entry.productType && (
           <span className="text-muted-foreground text-xs">
