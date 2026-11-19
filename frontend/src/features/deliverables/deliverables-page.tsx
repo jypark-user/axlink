@@ -387,7 +387,7 @@ function buildColumns(
 
 /**
  * 업로드 상태 칸(11-19). 예상 산출물 n/m 을 작은 막대로, 옆에 남은 건의 상태(「2건 지연」
- * 「1건 미제출」, 다 올라왔으면 「제출」)를 두고 바로 옆에 검토 단추. 수는 서버 판정이 준다.
+ * 「1건 미제출」, 다 올라왔으면 「제출」)를 둔다. 검토 단추는 맨 앞. 수는 서버 판정이 준다.
  * 승인 현황은 칸에 두지 않는다(11-19 사용자 결정). 검토 창에서 본다.
  */
 function UploadStatusCell({
@@ -409,9 +409,18 @@ function UploadStatusCell({
   const label = item.status === 'SUBMITTED' ? '제출' : `${left}건 ${STATUS_LABEL[item.status]}`;
   return (
     <div className="flex items-center gap-3">
+      {/* 검토는 맨 앞 고정 폭 자리에 둔다. 올라온 것이 없어 단추가 없어도 막대가 같은 자리에 선다 */}
+      <div className="w-14 shrink-0">
+        <ReviewButton
+          projectId={projectId}
+          item={item}
+          canReview={canReview}
+          onChanged={onChanged}
+        />
+      </div>
       <div className="flex min-w-0 items-center gap-2">
         <span
-          className="bg-muted h-1.5 w-14 shrink-0 overflow-hidden rounded-full"
+          className="bg-foreground/15 h-1.5 w-14 shrink-0 overflow-hidden rounded-full"
           role="progressbar"
           aria-valuemin={0}
           aria-valuemax={total}
@@ -435,7 +444,6 @@ function UploadStatusCell({
           {label}
         </span>
       </div>
-      <ReviewButton projectId={projectId} item={item} canReview={canReview} onChanged={onChanged} />
     </div>
   );
 }
