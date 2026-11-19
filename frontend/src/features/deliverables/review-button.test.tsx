@@ -54,7 +54,7 @@ const item = (list: DeliverableReview[]): WbsDeliverableItem => ({
 });
 
 describe('승인 현황', () => {
-  it('상태별로 세고 지난 판은 빼며 0건은 그리지 않는다', () => {
+  it('상태별로 세고 지난 버전은 빼며 0건은 그리지 않는다', () => {
     expect(reviewCounts([])).toEqual({ SUBMITTED: 0, APPROVED: 0, REJECTED: 0 });
     expect(
       reviewCounts([
@@ -93,7 +93,7 @@ describe('검토 단추', () => {
     expect(screen.getByText('내려받기')).toBeInTheDocument();
   });
 
-  it('지난 판은 목록에 없고 최신 판 상세보기에서 원문과 함께 고른다', async () => {
+  it('지난 버전은 목록에 없고 최신 버전 상세보기에서 원문과 함께 고른다', async () => {
     const list = [
       { ...review('SUBMITTED', 'new', true, 'f1'), fileName: '새판.pdf' },
       { ...review('REJECTED', 'old', false, 'f1'), fileName: '앞판.pdf' },
@@ -107,7 +107,7 @@ describe('검토 단추', () => {
     );
     fireEvent.click(screen.getByRole('button', { name: '검토' }));
     expect(screen.queryByText('앞판.pdf')).toBeNull();
-    expect(screen.getByText('지난 판 1개')).toBeInTheDocument();
+    expect(screen.getByText('지난 버전 1개')).toBeInTheDocument();
     fireEvent.click(screen.getByRole('button', { name: '상세보기' }));
     expect(await screen.findByText('원문 /documents/new/text')).toBeInTheDocument();
     fireEvent.click(screen.getByRole('button', { name: /앞판\.pdf/ }));

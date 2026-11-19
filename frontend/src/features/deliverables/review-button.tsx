@@ -32,7 +32,7 @@ const STATUS_TONE: Record<string, string> = {
 };
 
 /**
- * 작업에 올라온 산출물을 상태별로 센다. 지난 판(같은 양식에 다시 올린 것의 앞 판)은 세지 않는다
+ * 작업에 올라온 산출물을 상태별로 센다. 지난 버전(같은 양식에 다시 올린 것의 앞 판)은 세지 않는다
  */
 export function reviewCounts(
   list: DeliverableReview[],
@@ -64,7 +64,7 @@ export function ReviewBadge({ item }: { item: WbsDeliverableItem }): ReactNode {
   );
 }
 
-/** 같은 예상 산출물에 이어 올린 판들(최근 것이 앞). 예상 산출물 없이 올린 것은 그 하나뿐이다 */
+/** 같은 예상 산출물에 이어 올린 버전들(최근 것이 앞). 예상 산출물 없이 올린 것은 그 하나뿐이다 */
 function versionsOf(list: DeliverableReview[], r: DeliverableReview): DeliverableReview[] {
   return r.designatedId ? list.filter((x) => x.designatedId === r.designatedId) : [r];
 }
@@ -72,7 +72,7 @@ function versionsOf(list: DeliverableReview[], r: DeliverableReview): Deliverabl
 /**
  * 산출물 줄의 검토(11-18 사용자 결정: 승인 단위는 올라온 산출물). 올리기 왼쪽에 둔다. 발주기관은
  * 눌러 그 작업에 올라온 산출물 하나하나를 승인·반려한다. 용역사는 판정 칸의 상태만 본다.
- * 목록에는 최신 판만 둔다. 지난 판은 그 최신 판의 상세보기에서 원문과 함께 본다(11-19).
+ * 목록에는 최신 버전만 둔다. 지난 버전은 그 최신 버전의 상세보기에서 원문과 함께 본다(11-19).
  */
 export function ReviewButton({
   projectId,
@@ -212,7 +212,7 @@ function ReviewRow({
       <div className="flex min-w-0 flex-wrap items-center gap-2">
         <span className="font-medium">{r.name}</span>
         <StatusTag status={r.status} />
-        {older > 0 && <span className="text-muted-foreground text-xs">지난 판 {older}개</span>}
+        {older > 0 && <span className="text-muted-foreground text-xs">지난 버전 {older}개</span>}
       </div>
       <div className="flex min-w-0 flex-wrap items-center gap-x-3 gap-y-1 text-xs">
         <span className="min-w-0 truncate">{r.fileName}</span>
@@ -239,7 +239,7 @@ function ReviewRow({
   );
 }
 
-/** 상세보기. 위에 판 목록(최신이 앞), 아래에 고른 판의 원문. 읽기만 한다 */
+/** 상세보기. 위에 버전 목록(최신이 앞), 아래에 고른 버전의 원문. 읽기만 한다 */
 function ReviewDetail({
   versions,
   onBack,
@@ -277,7 +277,7 @@ function ReviewDetail({
               )}
             >
               <span className="text-muted-foreground w-12 shrink-0">
-                {i === 0 ? '최신' : '지난 판'}
+                {i === 0 ? '최신' : '지난 버전'}
               </span>
               <span className="min-w-0 truncate font-medium">{v.fileName}</span>
               <StatusTag status={v.status} />

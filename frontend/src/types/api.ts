@@ -1763,9 +1763,9 @@ export interface DeliverableReview {
   status: 'SUBMITTED' | 'APPROVED' | 'REJECTED';
   rejectReason: string | null;
   reviewedAt: string | null;
-  /** 같은 양식에 다시 올린 것이 있으면 앞의 것은 지난 판이다 */
+  /** 같은 양식에 다시 올린 것이 있으면 앞의 것은 지난 버전이다 */
   latest: boolean;
-  /** 이어 올린 예상 산출물. 같은 값의 지난 판은 최신 판 상세보기에서 본다 */
+  /** 이어 올린 예상 산출물. 같은 값의 지난 버전은 최신 버전 상세보기에서 본다 */
   designatedId?: string | null;
 }
 
