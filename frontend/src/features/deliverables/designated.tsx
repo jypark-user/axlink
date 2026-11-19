@@ -27,6 +27,7 @@ import { formatDate, formatDateTime } from '@/lib/format';
 import { api } from '@/lib/http';
 import { cn } from '@/lib/utils';
 import { ALLOWED, rejectReason } from '@/features/documents/upload';
+import { UploadMenu } from './repo-upload';
 import type {
   DesignatedDeliverable,
   DesignatedVersion,
@@ -93,6 +94,10 @@ export interface DesignatedActions {
   canDesignate: boolean;
   typeNames: Record<string, string>;
   onUpload: (wbsId: string, designatedId: string) => void;
+  /** 저장소 파일을 골라 올린다(11-19). 양식을 주지 않으면 그 작업의 기타 산출물이다 */
+  onUploadRepo: (wbsId: string, designatedId?: string) => void;
+  /** 고를 저장소 파일이 있는가. 없으면 올리기가 바로 파일을 고른다 */
+  hasRepo: boolean;
   onEdit: (target: DesignationTarget) => void;
   onChanged: () => void;
   /** 작업의 지정 산출물 옆 창 열기 */
@@ -259,9 +264,11 @@ function DesignatedEntry({
           <span className="text-muted-foreground">양식 없음</span>
         )}
         {uploading && wbsId && !entry.needsRedesignation && (
-          <Button size="sm" onClick={() => actions.onUpload(wbsId, entry.id)}>
-            올리기
-          </Button>
+          <UploadMenu
+            hasRepo={actions.hasRepo}
+            onFile={() => actions.onUpload(wbsId, entry.id)}
+            onRepo={() => actions.onUploadRepo(wbsId, entry.id)}
+          />
         )}
         {!uploading && canDesignate && (
           <>
@@ -406,9 +413,13 @@ export function UploadDialog({
         )}
         {item && (
           <div className="flex justify-end border-t pt-3">
-            <Button size="sm" variant="outline" onClick={() => onUploadPlain(item.wbsId)}>
-              기타 산출물 올리기
-            </Button>
+            <UploadMenu
+              hasRepo={actions.hasRepo}
+              variant="outline"
+              label="기타 산출물 올리기"
+              onFile={() => onUploadPlain(item.wbsId)}
+              onRepo={() => actions.onUploadRepo(item.wbsId)}
+            />
           </div>
         )}
       </DialogContent>

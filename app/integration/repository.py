@@ -358,6 +358,23 @@ def github_repo_tree(cur: Any, project_id: str) -> dict[str, Any] | None:
     return None if row is None else (row["payload"] or None)
 
 
+def github_tree_source(cur: Any, project_id: str) -> dict[str, Any] | None:
+    """가장 최근 수집한 저장소 트리와 그 연결. 저장소 파일을 산출물로 받을 때 쓴다."""
+    return fetch_one(
+        cur,
+        """
+        select ra.payload_jsonb as payload, tc.tool, tc.base_url, tc.target_resource,
+               tc.auth_encrypted
+          from raw_artifact ra
+          join tool_connection tc on tc.id = ra.tool_connection_id
+         where tc.project_id = %s and tc.tool = 'GITHUB' and ra.object_kind = 'tree'
+         order by ra.fetched_at desc
+         limit 1
+        """,
+        (project_id,),
+    )
+
+
 def redmine_issue_payloads(cur: Any, project_id: str) -> list[dict[str, Any]]:
     """사업에 연결된 Redmine 의 이슈 원시본. 일정 화면이 WBS 파일 없을 때 대체 원천으로 쓴다.
     표준 모델의 issue 에는 시작일·종료일이 없고 원시본에는 그대로 있다."""

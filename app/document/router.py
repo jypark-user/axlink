@@ -12,7 +12,7 @@ from pydantic import BaseModel
 from app.auth.deps import Principal
 from app.common.paging import PageQuery, PageResponse
 from app.db import tx
-from app.document import draft_service, service
+from app.document import draft_service, repo_source, service
 from app.document.models import (
     DocumentChunkResponse,
     DocumentDetailResponse,
@@ -63,6 +63,42 @@ def upload_document(
         return service.upload(
             cur, principal, project_id, file.filename or "", content, wbs_id=wbsId,
             designated_id=designatedId,
+        )
+
+
+class RepositoryFilesResponse(BaseModel):
+    paths: list[str]
+
+
+@router.get("/projects/{project_id}/repository-files", response_model=RepositoryFilesResponse)
+def repository_files(project_id: str, principal: Principal) -> RepositoryFilesResponse:
+    """산출물로 고를 수 있는 저장소 파일(11-19). 가장 최근 수집한 트리의 문서 형식 파일이다."""
+    with tx() as cur:
+        return RepositoryFilesResponse(paths=repo_source.list_paths(cur, principal, project_id))
+
+
+class RepositoryUploadRequest(BaseModel):
+    path: str
+    wbsId: str | None = None  # noqa: N815
+    designatedId: str | None = None  # noqa: N815
+
+
+@router.post(
+    "/projects/{project_id}/documents/from-repository",
+    response_model=DocumentUploadResponse,
+    status_code=201,
+)
+def upload_from_repository(
+    project_id: str, body: RepositoryUploadRequest, principal: Principal
+) -> DocumentUploadResponse:
+    """저장소 파일을 골라 작업(또는 양식)의 산출물로 올린다. 올린 문서와 똑같이 제출이 된다."""
+    with tx() as cur:
+        src = repo_source.prepare(cur, principal, project_id, body.path)
+    filename, content = repo_source.fetch(src)
+    with tx() as cur:
+        return service.upload(
+            cur, principal, project_id, filename, content, wbs_id=body.wbsId,
+            designated_id=body.designatedId,
         )
 
 

@@ -272,7 +272,15 @@ def test_AT5_AT8_근거가_개정돼도_기록은_남고_승인만으로는_안_
     env.load(BASE)
     rid = _confirmed(client, client_token, "1.1")
     before = _records(rid)[0]["evidence_json"]
-    # 확인 뒤 같은 이름의 산출물이 올라오고 발주기관이 승인했다
+    # 확인 뒤 그 작업에 산출물이 올라오고(11-19: 작업에 올라온 것만 근거다) 발주기관이 승인했다
+    up = client.post(
+        f"/api/projects/{PID}/documents",
+        files={"file": (f"착수보고서-{uuid.uuid4().hex[:6]}.md", "# 착수보고".encode(),
+                        "application/octet-stream")},
+        data={"wbsId": "1.1"}, headers=_auth(client_token("r3")),
+    )
+    assert up.status_code == 201, up.text
+    doc_id = up.json()["id"]
     with tx() as cur:
         wp = fetch_one(
             cur,
@@ -284,6 +292,14 @@ def test_AT5_AT8_근거가_개정돼도_기록은_남고_승인만으로는_안_
             "update work_product set status = 'APPROVED', title = '착수보고서', version = 'R2', "
             "approved_at = now() where id = %s",
             (wp["id"],),
+        )
+        # 그 문서로 확정한 산출물 버전이 이 산출물이다
+        cur.execute(
+            "insert into structuring_draft"
+            " (document_upload_id, draft_json, status, work_product_id)"
+            " values (%s, '{}', 'CONFIRMED', %s) on conflict (document_upload_id) do update"
+            " set status = 'CONFIRMED', work_product_id = excluded.work_product_id",
+            (doc_id, wp["id"]),
         )
     try:
         s = _summary(client, client_token("r2"))
@@ -299,6 +315,7 @@ def test_AT5_AT8_근거가_개정돼도_기록은_남고_승인만으로는_안_
         assert _item(s, "2.1")["completionStatus"] == "NONE"
     finally:
         with tx() as cur:
+            cur.execute("delete from document_upload where id = %s", (doc_id,))
             cur.execute(
                 "update work_product set status = %s, version = %s, title = %s, "
                 "approved_at = null where id = %s",

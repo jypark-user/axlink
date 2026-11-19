@@ -62,6 +62,8 @@ const actions = (canDesignate: boolean): DesignatedActions => ({
   canDesignate,
   typeNames: { TEST_REPORT: '시험 보고서' },
   onUpload: vi.fn(),
+  onUploadRepo: vi.fn(),
+  hasRepo: false,
   onEdit: vi.fn(),
   onChanged: vi.fn(),
   onOpen: vi.fn(),

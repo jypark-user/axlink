@@ -15,7 +15,6 @@ import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { DataState } from '@/components/common/data-state';
 import { useToast } from '@/components/common/toaster';
 import { PageHeader } from '@/components/layout/page-header';
-import { ServerLink } from '@/components/common/server-link';
 import { useProjectContext } from '@/components/layout/project-shell';
 import { api } from '@/lib/http';
 import { isApiError } from '@/lib/api-error';
@@ -36,6 +35,7 @@ import {
 } from './designated';
 import { useTypeNames } from './use-type-names';
 import { ReviewBadge, ReviewButton } from './review-button';
+import { RepoPickDialog, UploadMenu, type UploadTarget } from './repo-upload';
 import type {
   DeliverableStatus,
   DocumentUploadResponse,
@@ -73,14 +73,6 @@ const STATUS_TONE: Record<DeliverableStatus, string> = {
   OVERDUE: 'bg-destructive/15 text-destructive',
 };
 
-const RULE_LABEL: Record<string, string> = {
-  LINKED_DOC: '항목에 올린 문서',
-  REPO_PATH: '저장소 파일',
-  FILE_NAME: '같은 이름의 문서',
-  PRODUCT_TYPE: '같은 유형의 산출물',
-  DESIGNATED: '발주기관 지정 산출물',
-};
-
 const inFilter = (item: WbsDeliverableItem, filter: Filter): boolean => {
   // 산출물 열이 빈 작업(해당 없음)도 보인다. 발주기관이 거기에도 산출물을 지정할 수 있다
   if (filter === 'ALL') return true;
@@ -105,6 +97,13 @@ export function DeliverablesPage(): ReactNode {
   // 산출물 지정은 발주기관만. 관리자는 대신하지 않는다(DEC-05). 서버도 다시 본다
   const canDesignate = me?.role === 'CLIENT';
   const typeNames = useTypeNames(project.id);
+  // 산출물로 고를 수 있는 저장소 파일(11-19). 없으면 올리기가 바로 파일을 고른다
+  const repoFiles = useAsync<{ paths: string[] }>(
+    () => api.get<{ paths: string[] }>(`/projects/${project.id}/repository-files`),
+    [project.id],
+  );
+  const repoPaths = repoFiles.data?.paths ?? [];
+  const [repoTarget, setRepoTarget] = useState<UploadTarget | null>(null);
 
   const state = useAsync<WbsDeliverablesResponse>(
     () => api.get<WbsDeliverablesResponse>(`/projects/${project.id}/wbs/deliverables`),
@@ -165,6 +164,8 @@ export function DeliverablesPage(): ReactNode {
     canDesignate,
     typeNames,
     onUpload: pickFile,
+    onUploadRepo: (wbsId, designatedId) => setRepoTarget({ wbsId, designatedId }),
+    hasRepo: repoPaths.length > 0,
     onEdit: setDesignating,
     onChanged: reload,
     onOpen: setOpenWbsId,
@@ -181,15 +182,12 @@ export function DeliverablesPage(): ReactNode {
         typeNames,
       ),
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [project.id, uploadingFor, canDesignate, typeNames, reload],
+    [project.id, uploadingFor, canDesignate, typeNames, reload, repoPaths.length],
   );
 
   return (
     <>
-      <PageHeader
-        title="산출물"
-        description="WBS 가 정한 산출물이 올라왔는지 봅니다. 저장소에 있거나 여기서 올린 문서가 근거입니다."
-      />
+      <PageHeader title="산출물" />
       <input
         ref={inputRef}
         type="file"
@@ -257,6 +255,16 @@ export function DeliverablesPage(): ReactNode {
                 actions={designatedActions}
                 onClose={() => setUploadWbsId(null)}
                 onUploadPlain={(wbsId) => pickFile(wbsId)}
+              />
+              <RepoPickDialog
+                projectId={project.id}
+                target={repoTarget}
+                paths={repoPaths}
+                onClose={() => setRepoTarget(null)}
+                onDone={(wbsId) => {
+                  toast({ title: `${wbsId} 작업의 산출물로 제출했습니다.`, variant: 'success' });
+                  reload();
+                }}
               />
 
               <div className="mt-8">
@@ -335,42 +343,26 @@ function buildColumns(
             {STATUS_LABEL[item.status]}
           </span>
         );
-        const why = item.rule ? `${RULE_LABEL[item.rule] ?? item.rule}: ${item.ref ?? ''}` : null;
-        // 근거가 올린 문서면 자료 상세로, 저장소 파일이면 그 저장소(GitHub)로 간다
-        const docBacked = item.rule === 'LINKED_DOC' || item.rule === 'FILE_NAME';
-        const detailDoc = docBacked ? item.documents[0] : undefined;
+        // 판정 근거 문구는 두지 않는다(11-19). 올라온 것은 업로드 자료 칸에 보인다
+        const detailDoc = item.rule === 'LINKED_DOC' ? item.documents[0] : undefined;
         return (
           <span className="flex flex-col gap-0.5">
             {detailDoc ? (
               <Link to={`/p/${projectId}/documents/${detailDoc.id}`} className="w-fit">
                 {pill}
               </Link>
-            ) : item.url ? (
-              <ServerLink
-                url={item.url}
-                filename={item.deliverable ?? 'deliverable'}
-                className="w-fit"
-                title="저장소에서 보기"
-              >
-                {pill}
-              </ServerLink>
             ) : (
               <span className="w-fit">{pill}</span>
             )}
             {/* 올라온 산출물의 승인 현황(11-19). 제출과 승인은 다른 일이라 따로 보인다 */}
             <ReviewBadge item={item} />
-            {why && (
-              <span className="text-muted-foreground max-w-[11rem] truncate text-xs" title={why}>
-                {why}
-              </span>
-            )}
           </span>
         );
       },
     },
     {
       id: 'documents',
-      header: '올린 문서',
+      header: '업로드 자료',
       cell: ({ row }) => {
         const docs = row.original.documents;
         if (docs.length === 0) return <span className="text-muted-foreground text-sm">-</span>;
@@ -435,13 +427,19 @@ function buildColumns(
               canReview={designatedActions.canDesignate}
               onChanged={designatedActions.onChanged}
             />
-            <Button
-              size="sm"
-              disabled={busy}
-              onClick={() => (hasForm ? onOpenUpload(item.wbsId) : onUpload(item.wbsId))}
-            >
-              {busy ? '올리는 중…' : '올리기'}
-            </Button>
+            {hasForm ? (
+              <Button size="sm" disabled={busy} onClick={() => onOpenUpload(item.wbsId)}>
+                {busy ? '올리는 중…' : '올리기'}
+              </Button>
+            ) : (
+              <UploadMenu
+                hasRepo={designatedActions.hasRepo}
+                disabled={busy}
+                label={busy ? '올리는 중…' : '올리기'}
+                onFile={() => onUpload(item.wbsId)}
+                onRepo={() => designatedActions.onUploadRepo(item.wbsId)}
+              />
+            )}
           </div>
         );
       },

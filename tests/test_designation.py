@@ -69,15 +69,15 @@ def test_지정이_있는_작업은_산출물_열_대신_지정_항목으로_판
         "k3": designation.Coverage(1, 1),
     }
     out = {j.wbs_id: j for j in deliverable.judge(
-        items, tree=None, products=[], documents=docs, today=TODAY, designated=cover
+        items, documents=docs, today=TODAY, designated=cover
     )}
     assert (out["1.1"].status, out["1.1"].rule) == ("MISSING", "DESIGNATED")
     assert out["1.1"].ref == "지정 산출물 2건 중 1건 제출"
     assert out["1.2"].status == "OVERDUE"
     assert (out["1.3"].status, out["1.3"].ref) == ("SUBMITTED", "지정 산출물 1건 중 1건 제출")
-    # 지정이 없으면 예전 규칙 그대로
-    plain = deliverable.judge(items[:1], tree=None, products=[], documents=docs, today=TODAY)
-    assert (plain[0].status, plain[0].rule) == ("SUBMITTED", "FILE_NAME")
+    # 양식이 없으면 그 작업에 올라온 것으로만 본다. 이름이 같은 문서로 제출이 되지 않는다(11-19)
+    plain = deliverable.judge(items[:1], documents=docs, today=TODAY)
+    assert (plain[0].status, plain[0].rule) == ("MISSING", None)
 
 
 @pytest.mark.parametrize("role", ["SUPER_ADMIN", "CONTRACTOR"])
@@ -485,3 +485,67 @@ def test_저장소_WBS_가_있으면_올린_문서로_계획서를_바꾸지_않
             (PID,),
         )
         assert cur.fetchone()["source_kind"] == "TOOL"
+
+
+@requires_db
+def test_저장소_파일을_골라_올리면_그_작업의_산출물이_된다(client, client_token, env, monkeypatch):
+    """11-19: 저장소에 커밋한 산출물은 저절로 제출이 아니다. 올리기에서 골라야 제출이고, 고른
+    파일은 올린 문서와 똑같이 업로드 자료·승인 대상이 된다. 트리에 없는 경로는 받지 않는다."""
+    import base64
+    import json
+
+    from app.document import repo_source
+
+    env.load(BASE)
+    po, pm = client_token("r2"), client_token("r3")
+    data = _xlsx("저장소 설계서")
+    calls: list[tuple[str, str | None]] = []
+
+    class FakeConnector:
+        def fetch_file(self, base_url, target, secret, path, ref=None):
+            calls.append((path, ref))
+            return {"path": path, "content": base64.b64encode(data).decode("ascii")}
+
+    monkeypatch.setattr(repo_source.port, "get_connector", lambda tool: FakeConnector())
+    monkeypatch.setattr(repo_source.crypto, "decrypt", lambda value: "token")
+    cid = str(uuid.uuid4())
+    tree = {"sha": "t1", "commit": "c1", "paths": ["docs/설계서.xlsx", "app/main.py"]}
+    with tx() as cur:
+        org = fetch_all(cur, "select id from organization where type = 'CONTRACTOR' limit 1")[0]
+        cur.execute(
+            """
+            insert into tool_connection (id, project_id, contractor_org_id, tool, name, base_url,
+                                         target_resource, auth_encrypted, auth_hint, status)
+            values (%s, %s, %s, 'GITHUB', '저장소 고르기', 'https://api.github.invalid/', %s,
+                    'x', 'x', 'ACTIVE')
+            """,
+            (cid, PID, org["id"], f"pick/{cid}"),
+        )
+        cur.execute(
+            "insert into raw_artifact (tool_connection_id, external_id, object_kind, payload_jsonb,"
+            " content_hash) values (%s, 'tree:HEAD', 'tree', %s, %s)",
+            (cid, json.dumps(tree), "0" * 64),
+        )
+    try:
+        # 문서 형식만 고를 수 있다
+        res = client.get(f"/api/projects/{PID}/repository-files", headers=_auth(pm))
+        assert res.status_code == 200 and res.json()["paths"] == ["docs/설계서.xlsx"], res.text
+        # 커밋만 한 상태로는 제출이 아니다
+        assert _row(_screen(client, po), "1.2")["status"] in ("MISSING", "OVERDUE")
+
+        bad = client.post(f"/api/projects/{PID}/documents/from-repository",
+                          json={"path": "docs/없는.xlsx", "wbsId": "1.2"}, headers=_auth(pm))
+        assert bad.status_code == 400 and calls == []
+
+        res = client.post(f"/api/projects/{PID}/documents/from-repository",
+                          json={"path": "docs/설계서.xlsx", "wbsId": "1.2"}, headers=_auth(pm))
+        assert res.status_code == 201, res.text
+        assert calls == [("docs/설계서.xlsx", "c1")]  # 수집한 커밋의 본문이다
+        row = _row(_screen(client, po), "1.2")
+        assert row["status"] == "SUBMITTED"
+        assert [d["fileName"] for d in row["documents"]] == ["설계서.xlsx"]
+        review = [(r["status"], r["fileName"]) for r in row["review"]]
+        assert review == [("SUBMITTED", "설계서.xlsx")]
+    finally:
+        with tx() as cur:
+            cur.execute("delete from tool_connection where id = %s", (cid,))

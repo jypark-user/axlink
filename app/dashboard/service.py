@@ -737,8 +737,6 @@ def judge_deliverables(cur: Any, project_id: str, at: date) -> DeliverableCheck:
     live = {str(i["task_key"]) for i in items if i.get("task_key") and i.get("weight") is not None}
     judgements = deliverable.judge(
         items,
-        tree=tree,
-        products=wbs_repository.current_products(cur, project_id),
         documents=wbs_repository.project_documents(cur, project_id),
         today=at,
         designated=designation.coverage(cur, project_id, live),
@@ -806,12 +804,11 @@ def wbs_deliverables(
     live = {str(i["task_key"]) for i in items if i.get("task_key") and i.get("weight") is not None}
     designated_by_task, redesignation = designation.build(cur, project_id, live)
 
+    # 업로드 자료는 그 작업에 올라온 것만이다(11-19). 이름이 같다고 다른 문서를 끌어오지 않는다
     by_item: dict[str, list[dict]] = {}
-    by_stem: dict[str, list[dict]] = {}
     for d in documents:
         if d.get("wbs_item_id"):
             by_item.setdefault(str(d["wbs_item_id"]), []).append(d)
-        by_stem.setdefault(deliverable_stem(d["original_filename"]), []).append(d)
 
     # 작업마다 올라온 산출물(V70). 승인 단위다
     uploaded = _uploaded_by_item(cur, project_id)
@@ -822,10 +819,6 @@ def wbs_deliverables(
             continue
         j = judged.get(item["wbs_id"])
         docs = list(by_item.get(str(item["id"]), []))
-        if item.get("deliverable"):
-            for d in by_stem.get(deliverable_stem(item["deliverable"]), []):
-                if d not in docs:
-                    docs.append(d)
         # 확정된 유형 > 사람이 단 태그 > 초안 추정 순
         product_type = (
             next(
@@ -915,10 +908,6 @@ def _uploaded_by_item(cur: Any, project_id: str) -> dict[str, list[DeliverableRe
             latest=latest,
         ))
     return out
-
-
-def deliverable_stem(value: str) -> str:
-    return deliverable.stem_of(value)
 
 
 def linked_issues(cur: Any, project_id: str, plan: wbs.WbsPlan) -> dict[str, list[LinkedIssue]]:
