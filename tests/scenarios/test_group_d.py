@@ -231,7 +231,7 @@ def test_UC_031_S01_올려_제출하고_승인(target, s0, screen):
     assert check["SOFTWARE_DESIGN"]["status"] == "SUBMITTED" and check["SOFTWARE_DESIGN"]["version"] == "v1", check["SOFTWARE_DESIGN"]
     items = {i["wbsId"]: i for i in _deliverables(target, s0)["items"]}
     assert items["3.2"]["status"] == "SUBMITTED", items["3.2"]
-    assert items["3.2"]["rule"] == "LINKED_DOC", items["3.2"]
+    assert items["3.2"]["rule"] == "DESIGNATED", items["3.2"]  # WBS 자동 예상 산출물(V73)
     wp = s0.ids["TD-DOC-3:wp"]
     res = target.post(f"/api/projects/{s0.ids['TD-PRJ-1']}/work-products/{wp}/approve", headers=auth(s0.tokens["TD-ACC-C1"]))
     assert res.status_code == 204, res.text

@@ -115,6 +115,10 @@ def replace_plan(cur: Any, project_id: str, work_product_id: str | None, plan: w
         """,
         (project_id, seen),
     )
+    # WBS 산출물 열을 예상 산출물 행으로 맞춘다(V73)
+    from app.dashboard import designation_repository
+
+    designation_repository.sync_wbs_expected(cur, project_id)
 
 
 def _parent_of(wbs_id: str) -> str | None:

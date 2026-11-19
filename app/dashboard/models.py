@@ -281,6 +281,8 @@ class DesignatedDeliverable(BaseModel):
     status: str  # MISSING | REGISTERED | SUBMITTED | APPROVED | REJECTED
     needsRedesignation: bool  # noqa: N815  계획서 교체로 작업 정체가 끊겼다
     versions: list[DesignatedVersion]
+    # REQUEST: 발주기관 요청, WBS: WBS 산출물 열에서 저절로 만든 것(V73)
+    origin: str = "REQUEST"
 
 
 class DesignateRequest(BaseModel):

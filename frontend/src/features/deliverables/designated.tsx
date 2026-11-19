@@ -108,24 +108,10 @@ export type DesignationTarget =
   | { mode: 'create'; taskKey: string; taskLabel: string }
   | { mode: 'edit'; item: DesignatedDeliverable; taskLabel: string };
 
-/** 예상 산출물이 어디서 왔는지. WBS 산출물 열에서 온 것과 발주기관이 요청한 것을 가른다(11-19) */
-function OriginTag({ origin }: { origin: 'WBS' | 'REQUEST' }): ReactNode {
-  return (
-    <span
-      className={cn(
-        'shrink-0 rounded px-1 py-px text-[11px] leading-4 font-medium',
-        origin === 'WBS' ? 'bg-muted text-muted-foreground' : 'bg-primary/15 text-primary',
-      )}
-    >
-      {origin === 'WBS' ? 'WBS' : '요청'}
-    </span>
-  );
-}
-
 /**
- * 표의 「예상 산출물」 칸(11-19 사용자 지시). 예상 산출물은 WBS 산출물 열의 이름(「WBS」)과
- * 발주기관이 요청한 산출물(「요청 n건」)이다. 둘 다 있으면 둘 다 보이고 둘 다 센다. 발주기관은
- * 요청이 없으면 [요청 등록], 있으면 「요청 n건」을 눌러 고친다. 제출은 맨 오른쪽 [올리기]로만 한다.
+ * 표의 「예상 산출물」 칸(11-19 사용자 지시). 첫 산출물 이름과 「외 n건」만 두고, 아래 [관리]로
+ * 옆 창을 연다. 예상 산출물은 WBS 산출물 열에서 저절로 만든 것(「WBS 자동」)과 발주기관이 요청한
+ * 것이다. 용역사는 [보기]로 같은 창을 본다. 제출은 맨 오른쪽 [올리기]로만 한다.
  */
 export function DesignatedCell({
   item,
@@ -135,52 +121,36 @@ export function DesignatedCell({
   actions: DesignatedActions;
 }): ReactNode {
   const list = item.designated ?? [];
-  const taskLabel = `${item.wbsId} ${item.name}`;
-  const wbsName = item.deliverable?.trim();
-  const canAsk = actions.canDesignate && !!item.taskKey;
-  if (!wbsName && list.length === 0 && !canAsk) {
-    return <span className="text-muted-foreground text-sm">-</span>;
-  }
+  const [first, ...rest] = list;
   return (
     <div className="flex min-w-0 flex-col items-start gap-1">
-      {wbsName && (
-        <span className="flex max-w-[11rem] min-w-0 items-center gap-1.5 text-sm">
-          <OriginTag origin="WBS" />
-          <span className="truncate" title={wbsName}>
-            {wbsName}
+      {first ? (
+        <span className="flex max-w-[11rem] min-w-0 items-baseline gap-1 text-sm">
+          <span className="truncate" title={list.map((d) => d.name).join(', ')}>
+            {first.name}
           </span>
+          {rest.length > 0 && (
+            <span className="text-muted-foreground shrink-0 text-xs">외 {rest.length}건</span>
+          )}
         </span>
+      ) : (
+        <span className="text-muted-foreground text-sm">-</span>
       )}
-      {list.length > 0 ? (
-        <button
-          type="button"
-          className="flex items-center gap-1.5 text-sm whitespace-nowrap underline-offset-2 hover:underline"
+      {(actions.canDesignate ? !!item.taskKey : list.length > 0) && (
+        <Button
+          size="sm"
+          variant="outline"
+          className="h-7 px-2 text-xs"
           onClick={() => actions.onOpen(item.wbsId)}
         >
-          <OriginTag origin="REQUEST" />
-          <span className="text-primary">
-            <span className="tnum font-medium">{list.length}</span>건
-          </span>
-        </button>
-      ) : (
-        canAsk && (
-          <Button
-            size="sm"
-            variant="outline"
-            className="h-7 px-2 text-xs"
-            onClick={() =>
-              actions.onEdit({ mode: 'create', taskKey: item.taskKey as string, taskLabel })
-            }
-          >
-            요청 등록
-          </Button>
-        )
+          {actions.canDesignate ? '관리' : '보기'}
+        </Button>
       )}
     </div>
   );
 }
 
-/** 한 작업의 요청 산출물 전체. 표의 「n건」을 누르면 옆 창으로 연다. 제출(올리기)은 여기서 하지 않는다. */
+/** 한 작업의 예상 산출물 전체. 표의 [관리]로 옆 창을 연다. 제출(올리기)은 여기서 하지 않는다. */
 export function DesignatedSheet({
   item,
   actions,
@@ -199,7 +169,7 @@ export function DesignatedSheet({
           <>
             <SheetHeader className="gap-1 px-6 pt-6 pb-4">
               <SheetTitle className="pr-8">{taskLabel}</SheetTitle>
-              <SheetDescription>요청 산출물</SheetDescription>
+              <SheetDescription>예상 산출물</SheetDescription>
             </SheetHeader>
             <ul className="flex flex-col gap-4 px-6 pb-6">
               {list.map((d) => (
@@ -222,7 +192,7 @@ export function DesignatedSheet({
                     actions.onEdit({ mode: 'create', taskKey: item.taskKey as string, taskLabel })
                   }
                 >
-                  요청 추가 등록
+                  산출물 요청 추가
                 </Button>
               </div>
             )}
@@ -273,6 +243,11 @@ function DesignatedEntry({
     <li className="border-border flex flex-col gap-1 border-l-2 pl-2">
       <div className="flex flex-wrap items-center gap-1.5">
         <span className="font-medium">{entry.name}</span>
+        {entry.origin === 'WBS' && (
+          <span className="bg-muted text-muted-foreground rounded px-1.5 py-px text-[11px] font-medium">
+            WBS 자동
+          </span>
+        )}
         <Pill status={entry.status} />
         {entry.productType && (
           <span className="text-muted-foreground text-xs">
@@ -443,33 +418,18 @@ export function UploadDialog({
             ))}
           </ul>
         )}
-        {item &&
-          (item.deliverable?.trim() ? (
-            // WBS 예상 산출물. 요청에 매이지 않고 이 작업에 올리면 이것의 제출이다(11-19)
-            <div className="flex min-w-0 items-center justify-between gap-3 border-t pt-3">
-              <span className="flex min-w-0 items-center gap-1.5 text-sm">
-                <OriginTag origin="WBS" />
-                <span className="truncate font-medium" title={item.deliverable ?? ''}>
-                  {item.deliverable}
-                </span>
-              </span>
-              <UploadMenu
-                hasRepo={actions.hasRepo}
-                onFile={() => onUploadPlain(item.wbsId)}
-                onRepo={() => actions.onUploadRepo(item.wbsId)}
-              />
-            </div>
-          ) : (
-            <div className="flex justify-end border-t pt-3">
-              <UploadMenu
-                hasRepo={actions.hasRepo}
-                variant="outline"
-                label="기타 산출물 올리기"
-                onFile={() => onUploadPlain(item.wbsId)}
-                onRepo={() => actions.onUploadRepo(item.wbsId)}
-              />
-            </div>
-          ))}
+        {/* WBS 자동 항목이 있으면 요청 없이 올린 것은 그 항목에 이어진다. 그래서 기타는 그것이 없을 때만 */}
+        {item && !list.some((d) => d.origin === 'WBS') && (
+          <div className="flex justify-end border-t pt-3">
+            <UploadMenu
+              hasRepo={actions.hasRepo}
+              variant="outline"
+              label="기타 산출물 올리기"
+              onFile={() => onUploadPlain(item.wbsId)}
+              onRepo={() => actions.onUploadRepo(item.wbsId)}
+            />
+          </div>
+        )}
       </DialogContent>
     </Dialog>
   );
@@ -617,7 +577,7 @@ export function DesignateDialog({
         form.append('file', file);
         await api.upload(`${base(projectId)}/${id}/template`, form);
       }
-      toast({ title: '요청 산출물을 저장했습니다.', variant: 'success' });
+      toast({ title: '예상 산출물을 저장했습니다.', variant: 'success' });
       onDone();
     } catch (err) {
       setError(isApiError(err) ? err.message : '저장하지 못했습니다.');
@@ -632,7 +592,9 @@ export function DesignateDialog({
       <DialogContent>
         <form onSubmit={submit} className="flex min-w-0 flex-col gap-4">
           <DialogHeader>
-            <DialogTitle>{target.mode === 'create' ? '요청 등록' : '요청 산출물 수정'}</DialogTitle>
+            <DialogTitle>
+              {target.mode === 'create' ? '산출물 요청 추가' : '예상 산출물 수정'}
+            </DialogTitle>
             <DialogDescription>{target.taskLabel}</DialogDescription>
           </DialogHeader>
           <div className="flex flex-col gap-1.5">

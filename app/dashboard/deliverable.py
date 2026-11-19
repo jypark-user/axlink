@@ -51,53 +51,29 @@ def _id(value: Any) -> str | None:
 def judge(
     items: list[dict[str, Any]],
     *,
-    documents: list[dict[str, Any]],
     today: date,
     designated: dict[str, Any] | None = None,
 ) -> list[Judgement]:
-    """말단 항목마다 판정 하나. 묶음(weight 없음)과 산출물 열이 빈 항목은 NONE.
+    """말단 항목마다 판정 하나. 묶음(weight 없음)과 예상 산출물이 없는 작업은 NONE.
 
-    documents: 올린 문서. id · original_filename · wbs_item_id · designated_deliverable_id ·
-        work_product_id (최근 것이 앞)
-    designated: 작업 정체(task_key) → 발주기관 요청 산출물 현황(total · submitted).
+    designated: 작업 정체(task_key) → 예상 산출물 현황(total · submitted).
 
-    예상 산출물은 WBS 산출물 열의 이름 하나와 발주기관이 요청한 것들이다. 둘 다 있으면 둘 다
-    센다(11-19). WBS 쪽은 요청에 매이지 않고 그 작업에 올라온 문서가 있으면 제출이다.
+    예상 산출물은 WBS 산출물 열에서 저절로 만든 항목과 발주기관이 요청한 항목이다(V73, 11-19).
+    모두 올라왔으면 제출, 아니면 종료일이 지났으면 지연, 아니면 미제출. 예상 산출물이 없는 작업은
+    판정하지 않는다.
     """
     designated = designated or {}
-    plain: dict[str, dict] = {}
-    for d in documents:  # 최근 것이 앞에 온다. 항목마다 첫 것만 근거로 쓴다
-        key = str(d["wbs_item_id"]) if d.get("wbs_item_id") else None
-        if key and not d.get("designated_deliverable_id") and key not in plain:
-            plain[key] = d
-
     out: list[Judgement] = []
     for item in items:
         wbs_id = item["wbs_id"]
-        deliverable = (item.get("deliverable") or "").strip()
         cover = designated.get(str(item.get("task_key"))) if item.get("task_key") else None
-        asked = cover.total if cover is not None else 0
-        if item.get("weight") is None or (not deliverable and asked == 0):
+        if item.get("weight") is None or cover is None or cover.total == 0:
             out.append(Judgement(wbs_id, NONE))
             continue
         end = item.get("end_on")
         late = end is not None and end < today
-        doc = plain.get(str(item.get("id"))) if deliverable and item.get("id") else None
-
-        if asked == 0:
-            if doc is not None:
-                out.append(Judgement(
-                    wbs_id, SUBMITTED, RULE_LINK, doc["original_filename"],
-                    f"/api/documents/{doc['id']}/content", _id(doc.get("work_product_id")),
-                ))
-            else:
-                out.append(Judgement(wbs_id, OVERDUE if late else MISSING))
-            continue
-
-        total = asked + (1 if deliverable else 0)
-        done = cover.submitted + (1 if doc is not None else 0)
-        ref = f"예상 산출물 {total}건 중 {done}건 제출"
-        if done >= total:
+        ref = f"예상 산출물 {cover.total}건 중 {cover.submitted}건 제출"
+        if cover.submitted >= cover.total:
             out.append(Judgement(
                 wbs_id, SUBMITTED, RULE_DESIGNATED, ref,
                 product_id=getattr(cover, "product_id", None),

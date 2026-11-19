@@ -35,7 +35,7 @@ def test_상세는_정보와_설정을_주고_설정은_판정에_바로_반영�
         f"/api/projects/{PID}/wbs/deliverables?at=2026-09-22", headers=_auth(token)
     ).json()
     item = next(i for i in items["items"] if i["wbsId"] == "2.1")
-    assert item["status"] == "SUBMITTED" and item["rule"] == "LINKED_DOC"
+    assert item["status"] == "SUBMITTED" and item["rule"] == "DESIGNATED"  # WBS 자동 항목(V73)
     assert item["productType"] == "SOFTWARE_DESIGN"
     assert [d["id"] for d in item["documents"]] == [doc_id]
 

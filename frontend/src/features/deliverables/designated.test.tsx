@@ -77,49 +77,43 @@ const renderCell = (item: WbsDeliverableItem, a: DesignatedActions) =>
   );
 
 describe('예상 산출물 칸', () => {
-  it('아무것도 없으면 발주기관에게만 [요청 등록]이 보인다', () => {
+  it('없으면 「-」와 발주기관에게 [관리]가 보이고, 누르면 옆 창을 연다', () => {
     const client = actions(true);
-    renderCell({ ...row([]), deliverable: null }, client);
-    fireEvent.click(screen.getByRole('button', { name: '요청 등록' }));
-    expect(client.onEdit).toHaveBeenCalledWith({
-      mode: 'create',
-      taskKey: 'k1',
-      taskLabel: '2.1 통합 시험',
-    });
-  });
-
-  it('용역사에게는 아무것도 없으면 「-」다', () => {
-    renderCell({ ...row([]), deliverable: null }, actions(false));
-    expect(screen.queryByRole('button', { name: '요청 등록' })).toBeNull();
+    renderCell(row([]), client);
     expect(screen.getByText('-')).toBeInTheDocument();
-  });
-
-  it('WBS 산출물은 「WBS」 표시와 이름으로, 요청은 「요청 n건」으로 둘 다 보인다', () => {
-    renderCell(row([entry]), actions(false));
-    expect(screen.getByText('WBS')).toBeInTheDocument();
-    expect(screen.getByText('시험결과서')).toBeInTheDocument();
-    expect(screen.getByText('요청')).toBeInTheDocument();
-  });
-
-  it('요청이 있으면 건수만 두고 누르면 옆 창을 연다', () => {
-    const client = actions(true);
-    renderCell(row([entry]), client);
-    const count = screen.getByRole('button', { name: '요청 1건' });
-    expect(screen.queryByText(/양식 내려받기/)).toBeNull(); // 표 칸을 넓히지 않는다
-    fireEvent.click(count);
+    fireEvent.click(screen.getByRole('button', { name: '관리' }));
     expect(client.onOpen).toHaveBeenCalledWith('2.1');
   });
 
-  it('양식 옆 창에서는 올리지 않는다. 발주기관은 고치고 승인한다', () => {
+  it('용역사에게는 없으면 「-」만 보인다', () => {
+    renderCell(row([]), actions(false));
+    expect(screen.queryByRole('button')).toBeNull();
+    expect(screen.getByText('-')).toBeInTheDocument();
+  });
+
+  it('첫 산출물 이름과 「외 n건」을 보이고 양식은 칸에 두지 않는다', () => {
+    const wbs = { ...entry, id: 'w1', name: '착수보고서', origin: 'WBS' as const };
+    renderCell(row([wbs, entry]), actions(false));
+    expect(screen.getByText('착수보고서')).toBeInTheDocument();
+    expect(screen.getByText('외 1건')).toBeInTheDocument();
+    expect(screen.queryByText(/양식 내려받기/)).toBeNull();
+    expect(screen.getByRole('button', { name: '보기' })).toBeInTheDocument();
+  });
+});
+
+describe('예상 산출물 옆 창', () => {
+  it('올리지 않는다. 발주기관은 WBS 자동 항목도 고치고 요청을 더한다', () => {
     const client = actions(true);
+    const wbs = { ...entry, id: 'w1', name: '착수보고서', origin: 'WBS' as const };
     render(
       <ToasterProvider>
-        <DesignatedSheet item={row([entry])} actions={client} onClose={vi.fn()} />
+        <DesignatedSheet item={row([wbs, entry])} actions={client} onClose={vi.fn()} />
       </ToasterProvider>,
     );
-    expect(screen.getByText('양식 내려받기: 양식.xlsx')).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: '고치기' })).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: '양식 추가 등록' })).toBeInTheDocument();
+    expect(screen.getByText('WBS 자동')).toBeInTheDocument();
+    expect(screen.getAllByText('양식 내려받기: 양식.xlsx')).toHaveLength(2);
+    expect(screen.getAllByRole('button', { name: '고치기' })).toHaveLength(2);
+    expect(screen.getByRole('button', { name: '산출물 요청 추가' })).toBeInTheDocument();
     expect(screen.queryByRole('button', { name: '올리기' })).toBeNull();
   });
 });

@@ -26,7 +26,14 @@ from app.auth import repository as auth_repo
 from app.auth.deps import AuthPrincipal
 from app.common import clock, errors
 from app.config import settings
-from app.dashboard import deliverable, designation, repository, wbs, wbs_issue
+from app.dashboard import (
+    deliverable,
+    designation,
+    designation_repository,
+    repository,
+    wbs,
+    wbs_issue,
+)
 from app.dashboard.models import (
     OBSERVED,
     SELF_REPORTED,
@@ -704,7 +711,6 @@ def judge_deliverables(cur: Any, project_id: str, at: date) -> DeliverableCheck:
     live = {str(i["task_key"]) for i in items if i.get("task_key") and i.get("weight") is not None}
     judgements = deliverable.judge(
         items,
-        documents=wbs_repository.project_documents(cur, project_id),
         today=at,
         designated=designation.coverage(cur, project_id, live),
     )
@@ -763,6 +769,7 @@ def wbs_deliverables(
     # 행이 그 계획서 버전에서 왔는지부터 맞춘다. 없으면 파일을 한 번 읽어 남긴다
     plan_row = standard_repo.current_work_product(cur, project_id, PLAN_TYPE)
     _load_plan(cur, project_id, plan_row)
+    designation_repository.sync_wbs_expected(cur, project_id)  # WBS 산출물 → 예상 산출물(V73)
     judged = refresh_deliverables(cur, project_id, today)
     items = wbs_repository.list_items(cur, project_id)
     documents = wbs_repository.project_documents(cur, project_id)

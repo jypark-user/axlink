@@ -1816,6 +1816,8 @@ export interface DesignatedDeliverable {
   status: 'MISSING' | 'REGISTERED' | 'SUBMITTED' | 'APPROVED' | 'REJECTED';
   needsRedesignation: boolean;
   versions: DesignatedVersion[];
+  /** REQUEST: 발주기관 요청, WBS: WBS 산출물 열에서 저절로 만든 것(11-19) */
+  origin?: 'REQUEST' | 'WBS';
 }
 
 export interface DesignationEvent {

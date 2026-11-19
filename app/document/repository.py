@@ -84,19 +84,28 @@ def link_wbs_item(cur: Any, document_id: str, wbs_item_id: str | None) -> None:
     """문서를 작업에 붙이거나 뗀다. 작업에 붙은 문서는 산출물이라 검토 상태가 생긴다(V70).
 
     이미 승인·반려된 것은 그대로 둔다. 작업과 양식에서 모두 떼면 검토 상태도 지운다.
+    요청을 고르지 않고 작업에 붙이면 그 작업의 WBS 예상 산출물(V73)에 잇는다.
     """
     cur.execute(
         """
-        update document_upload
-           set wbs_item_id = %s,
+        update document_upload d
+           set wbs_item_id = %(w)s,
+               designated_deliverable_id = coalesce(d.designated_deliverable_id, (
+                 select dd.id
+                   from wbs_item w
+                   join wbs_designated_deliverable dd
+                     on dd.project_id = w.project_id and dd.task_key = w.task_key
+                    and dd.origin = 'WBS' and dd.active
+                  where w.id = %(w)s::uuid
+               )),
                review_status = case
-                 when %s::uuid is not null then coalesce(review_status, 'SUBMITTED')
-                 when designated_deliverable_id is not null then review_status
+                 when %(w)s::uuid is not null then coalesce(d.review_status, 'SUBMITTED')
+                 when d.designated_deliverable_id is not null then d.review_status
                end,
                updated_at = now()
-         where id = %s
+         where d.id = %(d)s
         """,
-        (wbs_item_id, wbs_item_id, document_id),
+        {"w": wbs_item_id, "d": document_id},
     )
 
 

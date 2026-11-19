@@ -135,7 +135,10 @@ def build(
             status=item_status([v.state for v in versions]),
             needsRedesignation=task_key not in live_task_keys,
             versions=versions,
+            origin=row.get("origin") or "REQUEST",
         )
+        if view.needsRedesignation and view.origin == "WBS":
+            continue  # WBS 에서 온 것은 그 작업이 없어지면 함께 없어진다. 재지정 대상이 아니다
         if view.needsRedesignation:
             orphans.append(view)
         else:
@@ -283,6 +286,11 @@ def update(
 
     if "taskKey" in sent and req.taskKey:
         leaf = _leaf(cur, project_id, _task_key(req.taskKey))
+        if str(leaf["task_key"]) != str(row["task_key"]) and row.get("origin") == "WBS":
+            raise errors.ApiError(
+                409, "WBS_EXPECTED_FIXED",
+                "WBS 에서 온 예상 산출물은 다른 작업으로 옮길 수 없습니다.",
+            )
         if str(leaf["task_key"]) != str(row["task_key"]):
             repo.update_fields(cur, designated_id, {
                 "task_key": str(leaf["task_key"]), "wbs_id_at": leaf["wbs_id"],

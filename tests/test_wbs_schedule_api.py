@@ -188,8 +188,9 @@ def test_용역사_WBS_파일이_그대로_작업_줄이_된다(client, client_t
         "wbsId": "1.2", "name": "중간보고", "level": 1, "owner": "", "deliverable": "중간보고서.md",
         "startDate": "2026-09-22", "endDate": "2026-09-30", "weight": 0.3,
         "progress": 50, "planned": 50, "externalUrl": None,
-        # 산출물 "중간보고서.md" 는 저장소에도 문서에도 없다. 종료일(09.30)이 안 지났으니 미제출
-        "deliverableStatus": "MISSING", "deliverableRule": None, "deliverableRef": None,
+        # 산출물 "중간보고서.md"(WBS 자동 예상 산출물)가 안 올라왔다. 종료일(09.30) 전이라 미제출
+        "deliverableStatus": "MISSING", "deliverableRule": "DESIGNATED",
+        "deliverableRef": "예상 산출물 1건 중 0건 제출",
         "deliverableUrl": None, "linkedIssues": [],
         # 실적 50% 는 격차 경고 문턱(80) 아래다(DEC-20)
         "gapWarning": None,

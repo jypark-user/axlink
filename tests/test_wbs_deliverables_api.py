@@ -83,16 +83,16 @@ def test_항목에_올린_문서는_이름이_달라도_제출이고_목록에_�
 
     after = client.get(f"/api/projects/{PID}/wbs/deliverables?at=2026-09-22", headers=_auth(token))
     item = next(i for i in after.json()["items"] if i["wbsId"] == "1.1")
-    assert item["status"] == "SUBMITTED" and item["rule"] == "LINKED_DOC"
-    assert item["ref"] == "2026-09 착수 보고 최종.xlsx"
-    assert item["url"] == f"/api/documents/{doc_id}/content"
+    # 요청 없이 작업에 올리면 그 작업의 WBS 자동 예상 산출물에 이어진다(V73)
+    assert item["status"] == "SUBMITTED" and item["rule"] == "DESIGNATED"
+    assert item["ref"] == "예상 산출물 1건 중 1건 제출"
     assert [d["id"] for d in item["documents"]] == [doc_id]
     assert after.json()["summary"] == {"submitted": 1, "missing": 1, "overdue": 0, "none": 0}
 
     # 일정 화면도 같은 판정을 본다. 두 화면이 다른 값을 보이면 안 된다
     schedule = client.get(f"/api/projects/{PID}/wbs?at=2026-09-22", headers=_auth(token))
     row = next(i for i in schedule.json()["items"] if i["wbsId"] == "1.1")
-    assert row["deliverableStatus"] == "SUBMITTED" and row["deliverableRule"] == "LINKED_DOC"
+    assert row["deliverableStatus"] == "SUBMITTED" and row["deliverableRule"] == "DESIGNATED"
 
 
 @requires_db
