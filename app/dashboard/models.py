@@ -499,3 +499,27 @@ class CompletionSummaryResponse(BaseModel):
     reported100Pending: int  # noqa: N815
     inProgressCount: int  # noqa: N815
     items: list[CompletionItem]
+
+
+class Iso29110Source(BaseModel):
+    """22종 한 분류에 닿은 예상 산출물 하나."""
+
+    wbsId: str  # noqa: N815
+    name: str
+    origin: str  # WBS | REQUEST
+    status: str  # PLANNED | SUBMITTED | APPROVED
+
+
+class Iso29110Item(BaseModel):
+    type: str
+    name: str
+    process: str  # PM | SI
+    status: str  # UNPLANNED | PLANNED | SUBMITTED | APPROVED
+    sources: list[Iso29110Source]
+
+
+class Iso29110Response(BaseModel):
+    """ISO/IEC 29110 22종 충족 현황(11-19). 진척 지표가 아니다."""
+
+    items: list[Iso29110Item]
+    counts: dict[str, int]

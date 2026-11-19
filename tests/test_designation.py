@@ -553,3 +553,32 @@ def test_저장소_파일을_골라_올리면_그_작업의_산출물이_된다(
     finally:
         with tx() as cur:
             cur.execute("delete from tool_connection where id = %s", (cid,))
+
+
+@requires_db
+def test_29110_충족_현황은_계획_여부와_제출_승인을_네_상태로_가른다(client, client_token, env):
+    """11-19: 인도 점검표 대신 22종 충족 현황. 예상 산출물에 없으면 「계획 없음」이다.
+    분류는 발주사가 정한 것 > 이름(22종 이름·별칭) > 올라온 문서 분류 순으로 본다."""
+    env.load(BASE)
+    po, pm = client_token("r2"), client_token("r3")
+    did = _designate(client, po, env.task_key("1.1"), name="착수 자료",
+                     productType="REQUIREMENTS_SPEC").json()["id"]
+
+    def coverage() -> dict[str, dict]:
+        res = client.get(f"/api/projects/{PID}/wbs/iso29110", headers=_auth(pm))
+        assert res.status_code == 200, res.text
+        body = res.json()
+        assert len(body["items"]) == 22 and sum(body["counts"].values()) == 22
+        return {i["type"]: i for i in body["items"]}
+
+    c = coverage()
+    assert c["TEST_REPORT"]["status"] == "PLANNED"  # 2.1 WBS 「시험결과서」 이름으로
+    assert [(s["wbsId"], s["origin"]) for s in c["TEST_REPORT"]["sources"]] == [("2.1", "WBS")]
+    assert c["REQUIREMENTS_SPEC"]["status"] == "PLANNED"  # 발주사 요청의 분류로
+    assert c["SOFTWARE_DESIGN"]["status"] == "UNPLANNED" and c["SOFTWARE_DESIGN"]["sources"] == []
+    assert c["REQUIREMENTS_SPEC"]["process"] == "SI" and c["PROJECT_PLAN"]["process"] == "PM"
+
+    doc = _upload(client, pm, did, "요구사항.xlsx", _xlsx("요구"))
+    assert coverage()["REQUIREMENTS_SPEC"]["status"] == "SUBMITTED"
+    assert _review(client, po, doc["id"], "approve").status_code == 204
+    assert coverage()["REQUIREMENTS_SPEC"]["status"] == "APPROVED"

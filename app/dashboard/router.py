@@ -12,12 +12,13 @@ from fastapi import APIRouter, File, Query, Response, UploadFile
 
 from app.auth.deps import Principal
 from app.common import clock
-from app.dashboard import completion, designation, service, snapshot
+from app.dashboard import completion, designation, iso29110, service, snapshot
 from app.dashboard.models import (
     CompletionSummaryResponse,
     DesignateRequest,
     DesignationEvent,
     DesignationUpdateRequest,
+    Iso29110Response,
     ProgressResponse,
     ProgressSnapshotResponse,
     WbsDeliverablesResponse,
@@ -82,6 +83,13 @@ def wbs_deliverables(
     """산출물 화면. WBS 가 정한 산출물과 제출 판정(ARC-016)."""
     with tx() as cur:
         return service.wbs_deliverables(cur, principal, project_id, at)
+
+
+@router.get("/{project_id}/wbs/iso29110", response_model=Iso29110Response)
+def iso29110_coverage(project_id: str, principal: Principal) -> Iso29110Response:
+    """ISO/IEC 29110 22종 충족 현황. 예상 산출물에 계획됐는지와 제출·승인을 본다(11-19)."""
+    with tx() as cur:
+        return iso29110.build(cur, principal, project_id)
 
 
 # ---- 작업별 지정 산출물·양식 (UC-033). 목록은 산출물 화면 응답(wbs/deliverables)에 함께 온다

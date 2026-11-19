@@ -1,12 +1,4 @@
-import {
-  useCallback,
-  useEffect,
-  useMemo,
-  useRef,
-  useState,
-  type ChangeEvent,
-  type ReactNode,
-} from 'react';
+import { useEffect, useMemo, useRef, useState, type ChangeEvent, type ReactNode } from 'react';
 import { Link } from 'react-router-dom';
 import type { ColumnDef } from '@tanstack/react-table';
 import { Button } from '@/components/ui/button';
@@ -23,7 +15,6 @@ import { useAsync } from '@/lib/use-async';
 import { cn } from '@/lib/utils';
 import { ALLOWED, rejectReason } from '@/features/documents/upload';
 import { useAuth } from '@/features/auth/auth-context';
-import { label } from '@/lib/labels';
 import {
   DesignateDialog,
   DesignatedCell,
@@ -35,14 +26,13 @@ import {
 } from './designated';
 import { useTypeNames } from './use-type-names';
 import { ReviewBadge, ReviewButton } from './review-button';
+import { Iso29110Panel } from './iso29110-panel';
 import { RepoPickDialog, UploadMenu, type UploadTarget } from './repo-upload';
 import type {
   DeliverableStatus,
   DocumentUploadResponse,
   WbsDeliverableItem,
   WbsDeliverablesResponse,
-  WorkProductChecklistResponse,
-  WorkProductResponse,
 } from '@/types/api';
 
 /**
@@ -84,7 +74,6 @@ export function DeliverablesPage(): ReactNode {
   const { project } = useProjectContext();
   const { toast } = useToast();
   const [filter, setFilter] = useState<Filter>('ALL');
-  const [showChecklist, setShowChecklist] = useState(false);
   const [uploadingFor, setUploadingFor] = useState<string | null>(null);
   const [designating, setDesignating] = useState<DesignationTarget | null>(null);
   const [openWbsId, setOpenWbsId] = useState<string | null>(null);
@@ -266,19 +255,12 @@ export function DeliverablesPage(): ReactNode {
                   reload();
                 }}
               />
-
-              <div className="mt-8">
-                <Button variant="ghost" size="sm" onClick={() => setShowChecklist((v) => !v)}>
-                  {showChecklist
-                    ? '인도 점검표 접기'
-                    : '인도 점검표 보기 (ISO/IEC 29110 산출물 22종)'}
-                </Button>
-                {showChecklist && <Checklist projectId={project.id} />}
-              </div>
             </>
           );
         }}
       </DataState>
+      {/* 인도 점검표 대신 22종 충족 현황(11-19). WBS 가 없어도 「계획 없음」으로 보인다 */}
+      <Iso29110Panel projectId={project.id} version={state.data} />
       {designating && (
         <DesignateDialog
           projectId={project.id}
@@ -447,168 +429,4 @@ function buildColumns(
       },
     },
   ];
-}
-
-/** 인도 점검표. 22종 분류로 무엇이 채워졌는지 본다. 사업의 산출물 목록은 위 WBS 표다. */
-function Checklist({ projectId }: { projectId: string }): ReactNode {
-  const { me } = useAuth();
-  const { toast } = useToast();
-  // 승인·반려는 발주기관만. 서버도 역할과 사업 접근을 다시 본다
-  const canApprove = me?.role === 'CLIENT'; // 관리자는 대신하지 않는다(DEC-05)
-  const state = useAsync<WorkProductChecklistResponse>(
-    () => api.get<WorkProductChecklistResponse>(`/projects/${projectId}/work-products`),
-    [projectId],
-  );
-  const { reload } = state;
-  const decide = useCallback(
-    async (wp: WorkProductResponse, action: 'approve' | 'reject') => {
-      const name = `${wp.title ?? wp.displayName} ${wp.version ?? ''}`.trim();
-      let body: { reason: string } | undefined;
-      if (action === 'reject') {
-        const reason = window.prompt(`${name} 을(를) 반려하는 사유를 적어 주세요.`)?.trim();
-        if (!reason) return;
-        body = { reason };
-      } else if (!window.confirm(`${name} 을(를) 승인합니다. 이 버전에만 붙습니다.`)) {
-        return;
-      }
-      try {
-        await api.post(`/projects/${projectId}/work-products/${wp.id}/${action}`, body ?? {});
-        toast({
-          title: action === 'approve' ? '승인했습니다.' : '반려했습니다.',
-          variant: 'success',
-        });
-        reload();
-      } catch (err) {
-        toast({
-          title: action === 'approve' ? '승인하지 못했습니다.' : '반려하지 못했습니다.',
-          description: isApiError(err) ? err.message : undefined,
-          variant: 'error',
-        });
-      }
-    },
-    [projectId, reload, toast],
-  );
-  const columns = useMemo<ColumnDef<WorkProductResponse, unknown>[]>(
-    () => [
-      {
-        accessorKey: 'type',
-        header: '분류',
-        cell: ({ row }) => (
-          <span className="text-muted-foreground text-xs" title={row.original.type}>
-            {row.original.displayName}
-          </span>
-        ),
-      },
-      {
-        id: 'title',
-        accessorFn: (wp) => wp.title ?? wp.displayName,
-        header: '제목',
-        cell: ({ row }) => (
-          <span
-            className={row.original.applicable ? 'text-foreground' : 'text-muted-foreground/60'}
-          >
-            {row.original.title ?? row.original.displayName}
-          </span>
-        ),
-      },
-      {
-        accessorKey: 'status',
-        header: '상태',
-        cell: ({ row }) => {
-          const wp = row.original;
-          return (
-            <div className="flex flex-col gap-0.5 text-sm">
-              <span>{label(wp.status)}</span>
-              {wp.status === 'APPROVED' && wp.approvedAt && (
-                <span className="text-muted-foreground text-xs">
-                  {wp.approvedBy ?? '-'} · {formatDate(wp.approvedAt)}
-                </span>
-              )}
-            </div>
-          );
-        },
-      },
-      {
-        accessorKey: 'version',
-        header: '버전',
-        cell: ({ row }) => {
-          const wp = row.original;
-          return (
-            <div className="flex flex-col gap-0.5 text-sm">
-              <span className="tnum">{wp.version ?? '-'}</span>
-              {wp.previousVersions.length > 0 && (
-                <details className="text-muted-foreground text-xs">
-                  <summary className="cursor-pointer">
-                    지난 버전 {wp.previousVersions.length}건
-                  </summary>
-                  <ul className="mt-1 flex flex-col gap-1">
-                    {wp.previousVersions.map((h) => (
-                      <li key={h.id}>
-                        <span className="tnum">{h.version ?? '-'}</span> · {label(h.status)}
-                        {h.decidedAt && (
-                          <>
-                            {' '}
-                            · {h.decidedBy ?? '-'} · {formatDate(h.decidedAt)}
-                          </>
-                        )}
-                        {h.rejectReason && <div>반려 사유: {h.rejectReason}</div>}
-                      </li>
-                    ))}
-                  </ul>
-                </details>
-              )}
-            </div>
-          );
-        },
-      },
-      {
-        id: 'activity',
-        accessorFn: (wp) => wp.pmActivity ?? wp.siActivity ?? '',
-        header: '활동',
-        cell: ({ row }) => row.original.pmActivity ?? row.original.siActivity ?? '-',
-      },
-      ...(canApprove
-        ? [
-            {
-              id: 'decide',
-              header: '승인',
-              cell: ({ row }: { row: { original: WorkProductResponse } }) => {
-                const wp = row.original;
-                if (wp.status !== 'SUBMITTED' && wp.status !== 'APPROVED') return null;
-                return (
-                  <div className="flex gap-1">
-                    {wp.status === 'SUBMITTED' && (
-                      <Button
-                        size="sm"
-                        variant="outline"
-                        onClick={() => void decide(wp, 'approve')}
-                      >
-                        승인
-                      </Button>
-                    )}
-                    <Button size="sm" variant="ghost" onClick={() => void decide(wp, 'reject')}>
-                      반려
-                    </Button>
-                  </div>
-                );
-              },
-            } satisfies ColumnDef<WorkProductResponse, unknown>,
-          ]
-        : []),
-    ],
-    [canApprove, decide],
-  );
-  return (
-    <DataState state={state} onRetry={state.reload}>
-      {(data) => (
-        <DataTable<WorkProductResponse, unknown>
-          columns={columns}
-          data={data.items}
-          paginated={false}
-          emptyText="항목이 없습니다."
-          className="mt-3"
-        />
-      )}
-    </DataState>
-  );
 }

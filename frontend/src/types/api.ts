@@ -2108,3 +2108,26 @@ export interface UnresolvedRefResponse {
   /** 가리킨 코드가 기준선의 상위 요구사항이면 그 명칭. 없는 ID 가 아니다 */
   parentTitle?: string | null;
 }
+
+/** ISO/IEC 29110 22종 충족 상태(11-19). 계획 없음 · 미제출(계획됨) · 제출 · 승인 */
+export type Iso29110Status = 'UNPLANNED' | 'PLANNED' | 'SUBMITTED' | 'APPROVED';
+
+export interface Iso29110Source {
+  wbsId: string;
+  name: string;
+  origin: 'WBS' | 'REQUEST';
+  status: Exclude<Iso29110Status, 'UNPLANNED'>;
+}
+
+export interface Iso29110Item {
+  type: string;
+  name: string;
+  process: 'PM' | 'SI';
+  status: Iso29110Status;
+  sources: Iso29110Source[];
+}
+
+export interface Iso29110Response {
+  items: Iso29110Item[];
+  counts: Partial<Record<Iso29110Status, number>>;
+}
