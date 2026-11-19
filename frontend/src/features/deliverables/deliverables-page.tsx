@@ -24,7 +24,7 @@ import {
   type DesignationTarget,
 } from './designated';
 import { useTypeNames } from './use-type-names';
-import { ReviewBadge, ReviewButton } from './review-button';
+import { ReviewButton } from './review-button';
 import { Iso29110Button } from './iso29110-panel';
 import { RepoPickDialog, UploadMenu, type UploadTarget } from './repo-upload';
 import type {
@@ -316,7 +316,7 @@ function buildColumns(
       cell: ({ row }) => <DesignatedCell item={row.original} actions={designatedActions} />,
     },
     {
-      // 판정과 업로드 자료를 한 칸으로(11-19). n/m 막대, 남은 건의 상태, 승인 현황, 검토
+      // 판정과 업로드 자료를 한 칸으로(11-19). n/m 막대, 남은 건의 상태, 검토
       accessorKey: 'status',
       header: '업로드 상태',
       cell: ({ row }) => (
@@ -387,7 +387,8 @@ function buildColumns(
 
 /**
  * 업로드 상태 칸(11-19). 예상 산출물 n/m 을 작은 막대로, 옆에 남은 건의 상태(「2건 지연」
- * 「1건 미제출」, 다 올라왔으면 「제출」)를 둔다. 아래에 승인 현황과 검토 단추. 수는 서버 판정이 준다.
+ * 「1건 미제출」, 다 올라왔으면 「제출」)를 두고 바로 옆에 검토 단추. 수는 서버 판정이 준다.
+ * 승인 현황은 칸에 두지 않는다(11-19 사용자 결정). 검토 창에서 본다.
  */
 function UploadStatusCell({
   projectId,
@@ -407,35 +408,32 @@ function UploadStatusCell({
   const left = Math.max(total - done, 0);
   const label = item.status === 'SUBMITTED' ? '제출' : `${left}건 ${STATUS_LABEL[item.status]}`;
   return (
-    <div className="flex min-w-[13rem] items-center justify-between gap-3">
-      <div className="flex min-w-0 flex-col gap-1">
-        <div className="flex items-center gap-2">
+    <div className="flex items-center gap-3">
+      <div className="flex min-w-0 items-center gap-2">
+        <span
+          className="bg-muted h-1.5 w-14 shrink-0 overflow-hidden rounded-full"
+          role="progressbar"
+          aria-valuemin={0}
+          aria-valuemax={total}
+          aria-valuenow={done}
+          aria-label={`${done}/${total}건 업로드`}
+        >
           <span
-            className="bg-muted h-1.5 w-14 shrink-0 overflow-hidden rounded-full"
-            role="progressbar"
-            aria-valuemin={0}
-            aria-valuemax={total}
-            aria-valuenow={done}
-            aria-label={`${done}/${total}건 업로드`}
-          >
-            <span
-              className={cn('block h-full rounded-full', BAR_TONE[item.status])}
-              style={{ width: `${total ? Math.round((done / total) * 100) : 0}%` }}
-            />
-          </span>
-          <span className="tnum text-xs whitespace-nowrap">
-            {done}/{total}건 업로드
-          </span>
-          <span
-            className={cn(
-              'inline-block rounded px-1.5 py-0.5 text-xs font-medium whitespace-nowrap',
-              STATUS_TONE[item.status],
-            )}
-          >
-            {label}
-          </span>
-        </div>
-        <ReviewBadge item={item} />
+            className={cn('block h-full rounded-full', BAR_TONE[item.status])}
+            style={{ width: `${total ? Math.round((done / total) * 100) : 0}%` }}
+          />
+        </span>
+        <span className="tnum text-xs whitespace-nowrap">
+          {done}/{total}건 업로드
+        </span>
+        <span
+          className={cn(
+            'inline-block rounded px-1.5 py-0.5 text-xs font-medium whitespace-nowrap',
+            STATUS_TONE[item.status],
+          )}
+        >
+          {label}
+        </span>
       </div>
       <ReviewButton projectId={projectId} item={item} canReview={canReview} onChanged={onChanged} />
     </div>

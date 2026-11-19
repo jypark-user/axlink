@@ -31,39 +31,6 @@ const STATUS_TONE: Record<string, string> = {
   REJECTED: 'bg-destructive/15 text-destructive',
 };
 
-/**
- * 작업에 올라온 산출물을 상태별로 센다. 지난 버전(같은 양식에 다시 올린 것의 앞 판)은 세지 않는다
- */
-export function reviewCounts(
-  list: DeliverableReview[],
-): Record<DeliverableReview['status'], number> {
-  const counts = { SUBMITTED: 0, APPROVED: 0, REJECTED: 0 };
-  for (const r of list) if (r.latest) counts[r.status] += 1;
-  return counts;
-}
-
-const COUNT_TONE: Record<string, string> = {
-  SUBMITTED: 'text-sky-700 dark:text-sky-300',
-  APPROVED: 'text-emerald-700 dark:text-emerald-300',
-  REJECTED: 'text-destructive',
-};
-
-/** 판정 칸의 승인 현황(11-19). 「승인 대기 n건」「승인 m건」「반려 k건」, 0건은 그리지 않는다 */
-export function ReviewBadge({ item }: { item: WbsDeliverableItem }): ReactNode {
-  const counts = reviewCounts(item.review ?? []);
-  const shown = (['SUBMITTED', 'APPROVED', 'REJECTED'] as const).filter((k) => counts[k] > 0);
-  if (shown.length === 0) return null;
-  return (
-    <span className="flex flex-wrap gap-x-2 text-xs font-medium">
-      {shown.map((k) => (
-        <span key={k} className={cn('whitespace-nowrap', COUNT_TONE[k])}>
-          {STATUS_TEXT[k]} {counts[k]}건
-        </span>
-      ))}
-    </span>
-  );
-}
-
 /** 같은 예상 산출물에 이어 올린 버전들(최근 것이 앞). 예상 산출물 없이 올린 것은 그 하나뿐이다 */
 function versionsOf(list: DeliverableReview[], r: DeliverableReview): DeliverableReview[] {
   return r.designatedId ? list.filter((x) => x.designatedId === r.designatedId) : [r];

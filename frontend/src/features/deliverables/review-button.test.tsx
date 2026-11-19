@@ -2,7 +2,7 @@ import { fireEvent, render, screen } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
 import { describe, expect, it, vi } from 'vitest';
 import { ToasterProvider } from '@/components/common/toaster';
-import { ReviewBadge, ReviewButton, reviewCounts } from '@/features/deliverables/review-button';
+import { ReviewButton } from '@/features/deliverables/review-button';
 import type { DeliverableReview, WbsDeliverableItem } from '@/types/api';
 
 // 산출물 줄의 검토(11-18). 발주기관은 눌러 승인·반려하고, 용역사는 상태만 본다.
@@ -55,23 +55,6 @@ const item = (list: DeliverableReview[]): WbsDeliverableItem => ({
   review: list,
 });
 
-describe('승인 현황', () => {
-  it('상태별로 세고 지난 버전은 빼며 0건은 그리지 않는다', () => {
-    expect(reviewCounts([])).toEqual({ SUBMITTED: 0, APPROVED: 0, REJECTED: 0 });
-    expect(
-      reviewCounts([
-        review('APPROVED'),
-        review('SUBMITTED', 'w2'),
-        review('SUBMITTED', 'w0', false),
-      ]),
-    ).toEqual({ SUBMITTED: 1, APPROVED: 1, REJECTED: 0 });
-    render(<ReviewBadge item={item([review('APPROVED'), review('SUBMITTED', 'w2')])} />);
-    expect(screen.getByText('승인 대기 1건')).toBeTruthy();
-    expect(screen.getByText('승인 1건')).toBeTruthy();
-    expect(screen.queryByText(/반려/)).toBeNull();
-  });
-});
-
 describe('검토 단추', () => {
   it('발주기관은 눌러 승인·반려 창을 연다', () => {
     render(
@@ -118,7 +101,7 @@ describe('검토 단추', () => {
   });
 
   it('용역사는 보기로 열어 보기만 하고 승인·반려 단추는 없다', () => {
-    const { container } = render(
+    render(
       <MemoryRouter>
         <ToasterProvider>
           <ReviewButton
@@ -127,11 +110,9 @@ describe('검토 단추', () => {
             canReview={false}
             onChanged={vi.fn()}
           />
-          <ReviewBadge item={item([review('REJECTED')])} />
         </ToasterProvider>
       </MemoryRouter>,
     );
-    expect(container).toHaveTextContent('반려');
     fireEvent.click(screen.getByRole('button', { name: '보기' }));
     expect(screen.getByRole('button', { name: '상세보기' })).toBeInTheDocument();
     expect(screen.queryByRole('button', { name: '승인' })).toBeNull();
