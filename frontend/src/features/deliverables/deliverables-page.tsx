@@ -10,7 +10,7 @@ import {
 import { Link } from 'react-router-dom';
 import type { ColumnDef } from '@tanstack/react-table';
 import { Button } from '@/components/ui/button';
-import { DataTable, SortableHeader } from '@/components/ui/data-table';
+import { DataTable } from '@/components/ui/data-table';
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { DataState } from '@/components/common/data-state';
 import { useToast } from '@/components/common/toaster';
@@ -315,7 +315,7 @@ function buildColumns(
       // 작업명만 둔다(11-18 사용자 지시)
       id: 'name',
       accessorKey: 'name',
-      header: ({ column }) => <SortableHeader column={column}>작업명</SortableHeader>,
+      header: '작업명',
       cell: ({ row }) => (
         <span className="block max-w-[17rem] truncate text-sm" title={row.original.name}>
           {row.original.name}
@@ -330,7 +330,7 @@ function buildColumns(
     },
     {
       accessorKey: 'status',
-      header: ({ column }) => <SortableHeader column={column}>판정</SortableHeader>,
+      header: '판정',
       cell: ({ row }) => {
         const item = row.original;
         // 예상 산출물이 없는 작업은 판정할 것이 없다(11-19). 칸을 비운다
@@ -403,7 +403,7 @@ function buildColumns(
     },
     {
       accessorKey: 'endDate',
-      header: ({ column }) => <SortableHeader column={column}>기한</SortableHeader>,
+      header: '기한',
       cell: ({ row }) => (
         <span className="text-muted-foreground tnum text-sm">
           {row.original.endDate ? formatDate(row.original.endDate) : '-'}
