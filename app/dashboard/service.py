@@ -880,6 +880,7 @@ def _uploaded_by_item(cur: Any, project_id: str) -> dict[str, list[DeliverableRe
             rejectReason=r["review_reason"] if r["review_status"] == "REJECTED" else None,
             reviewedAt=r["reviewed_at"].isoformat() if r["reviewed_at"] else None,
             latest=latest,
+            designatedId=form,
         ))
     return out
 

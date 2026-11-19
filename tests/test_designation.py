@@ -417,6 +417,8 @@ def test_UC_033_S01_양식_올리기_반려_다시_올리기_승인(client, clie
     assert [(r["documentId"], r["latest"]) for r in row["review"]] == [
         (doc2["id"], True), (doc1["id"], False)
     ]
+    # 두 판은 같은 예상 산출물로 묶인다. 화면은 지난 판을 최신 판 상세보기에서 보인다(11-19)
+    assert {r["designatedId"] for r in row["review"]} == {did}
 
 
 @requires_db

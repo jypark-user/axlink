@@ -7,12 +7,26 @@ import type { DeliverableReview, WbsDeliverableItem } from '@/types/api';
 
 // 산출물 줄의 검토(11-18). 발주기관은 눌러 승인·반려하고, 용역사는 상태만 본다.
 
-vi.mock('@/lib/http', () => ({ api: { post: vi.fn() }, download: vi.fn() }));
+vi.mock('@/lib/http', () => ({
+  api: {
+    post: vi.fn(),
+    get: vi.fn(async (url: string) => ({
+      id: url,
+      fileName: '',
+      status: 'STRUCTURED',
+      charCount: 4,
+      pageCount: null,
+      text: `원문 ${url}`,
+    })),
+  },
+  download: vi.fn(),
+}));
 
 const review = (
   status: DeliverableReview['status'],
   id = 'doc1',
   latest = true,
+  designatedId: string | null = null,
 ): DeliverableReview => ({
   documentId: id,
   name: '시험결과서',
@@ -22,6 +36,7 @@ const review = (
   rejectReason: status === 'REJECTED' ? '누락' : null,
   reviewedAt: null,
   latest,
+  designatedId,
 });
 
 const item = (list: DeliverableReview[]): WbsDeliverableItem => ({
@@ -72,12 +87,32 @@ describe('검토 단추', () => {
     fireEvent.click(screen.getByRole('button', { name: '검토' }));
     expect(screen.getByRole('button', { name: '승인' })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: '반려' })).toBeInTheDocument();
-    // 파일 이름을 누르면 원문(자료 상세)으로 가고, 내려받기도 있다
-    expect(screen.getByRole('link', { name: /결과\.xlsx/ })).toHaveAttribute(
-      'href',
-      '/p/p1/documents/doc1',
-    );
+    // 파일 이름은 링크가 아니다(11-19). 원문은 상세보기로, 내려받기는 옆 단추로
+    expect(screen.queryByRole('link', { name: /결과\.xlsx/ })).toBeNull();
+    expect(screen.getByRole('button', { name: '상세보기' })).toBeInTheDocument();
     expect(screen.getByText('내려받기')).toBeInTheDocument();
+  });
+
+  it('지난 판은 목록에 없고 최신 판 상세보기에서 원문과 함께 고른다', async () => {
+    const list = [
+      { ...review('SUBMITTED', 'new', true, 'f1'), fileName: '새판.pdf' },
+      { ...review('REJECTED', 'old', false, 'f1'), fileName: '앞판.pdf' },
+    ];
+    render(
+      <MemoryRouter>
+        <ToasterProvider>
+          <ReviewButton projectId="p1" item={item(list)} canReview onChanged={vi.fn()} />
+        </ToasterProvider>
+      </MemoryRouter>,
+    );
+    fireEvent.click(screen.getByRole('button', { name: '검토' }));
+    expect(screen.queryByText('앞판.pdf')).toBeNull();
+    expect(screen.getByText('지난 판 1개')).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: '상세보기' }));
+    expect(await screen.findByText('원문 /documents/new/text')).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: /앞판\.pdf/ }));
+    expect(await screen.findByText('원문 /documents/old/text')).toBeInTheDocument();
+    expect(screen.getByText('반려 사유: 누락')).toBeInTheDocument();
   });
 
   it('용역사에게는 단추가 없고, 상태는 판정 칸 딱지로 본다', () => {
