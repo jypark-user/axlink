@@ -118,7 +118,7 @@ const projectGroups = (base: string): NavGroup[] => [
   {
     label: '사업 설정',
     items: [
-      { to: base, label: '사업 정보', icon: Info, end: true },
+      { to: base, label: '사업 관리', icon: Info, end: true },
       { to: `${base}/assignments`, label: '용역사 할당', icon: HardHat, roles: ['CLIENT'] },
       { to: `${base}/connections`, label: '도구 연동', icon: Link2 },
       { to: `${base}/collection`, label: '동기화 이력', icon: RefreshCw },

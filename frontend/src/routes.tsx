@@ -92,7 +92,7 @@ const AskPage = lazy(() =>
   import('@/features/ax-query/ask-page').then((m) => ({ default: m.AskPage })),
 );
 
-/** 용역사(CONTRACTOR)는 사업 정보·연동·동기화 이력만 본다. 나머지 화면은 이 목록으로 막는다. */
+/** 용역사(CONTRACTOR)는 사업 관리·연동·동기화 이력만 본다. 나머지 화면은 이 목록으로 막는다. */
 const EXCEPT_CONTRACTOR: Role[] = ['SUPER_ADMIN', 'CLIENT'];
 
 function PageFallback(): ReactNode {
@@ -215,7 +215,7 @@ export function AppRoutes(): ReactNode {
             </RequireProject>
           }
         >
-          {/* 용역사도 볼 수 있는 화면 — 사업 정보 · 연동 · 동기화 이력 */}
+          {/* 용역사도 볼 수 있는 화면 — 사업 관리 · 연동 · 동기화 이력 */}
           <Route
             index
             element={

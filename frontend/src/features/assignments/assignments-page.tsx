@@ -26,7 +26,7 @@ import { InviteLinkDialog } from '@/features/assignments/invite-link-dialog';
 import { ParticipantsPanel } from '@/features/assignments/participants-panel';
 import type { AssignmentResponse, ParticipantResponse } from '@/types/api';
 
-/** `embedded` 면 사업 정보 화면 안에 들어간다 — 자체 화면 머리를 두지 않는다. */
+/** `embedded` 면 사업 관리 화면 안에 들어간다 — 자체 화면 머리를 두지 않는다. */
 export function AssignmentsPage({ embedded }: { embedded?: boolean } = {}): ReactNode {
   const { project } = useProjectContext();
   const { toast } = useToast();
