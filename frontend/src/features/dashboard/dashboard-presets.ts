@@ -2,7 +2,7 @@ import { DEFAULT_SIZE } from '@/features/dashboard/layout-mapper';
 import type { GridItem, WidgetFilter, WidgetSpec, WidgetTemplate } from '@/types/api';
 
 /**
- * 진행 상황 추천 구성 — 위젯 여러 개를 한 번에 배치하는 사전 구성.
+ * 대시보드 추천 구성 — 위젯 여러 개를 한 번에 배치하는 사전 구성.
  * 위젯은 코드가 아니라 데이터(spec)이므로 여기서는 명세만 정의하고
  * 검증은 서버 시맨틱 카탈로그(measure/dimension)가 한다.
  */
@@ -42,7 +42,7 @@ export interface DashboardPreset {
  * measure × dimension 은 서버 시맨틱 카탈로그가 허용한 짝만 쓴다.
  */
 /**
- * 진행 상황 기본 구성 (2026-11-18 사용자 지시). 처음 열었을 때와 「초기화」가 이 구성으로 놓는다.
+ * 대시보드 기본 구성 (2026-11-18 사용자 지시). 처음 열었을 때와 「초기화」가 이 구성으로 놓는다.
  * 위에서부터 ① 세 기준 진척률 ② 그 일별 추이 ③ 지금 하고 있는 일 ④ 요구사항·리스크 ⑤ 일정·품질 보조
  * 지표 순이다. FHD 화면 스크롤 두 쪽 남짓(격자 18줄)이다.
  */

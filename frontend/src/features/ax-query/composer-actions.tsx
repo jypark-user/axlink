@@ -11,7 +11,7 @@ import {
 import type { PanelView } from '@/features/ax-query/resource-panel';
 
 const ITEMS: { view: PanelView; label: string; icon: typeof Plus }[] = [
-  { view: 'dashboard', label: '진행 상황 펴기', icon: LayoutDashboard },
+  { view: 'dashboard', label: '대시보드 펴기', icon: LayoutDashboard },
   { view: 'traceability', label: '요구사항 추적 펴기', icon: Waypoints },
   { view: 'deliverables', label: '산출물 목록 펴기', icon: FileText },
 ];

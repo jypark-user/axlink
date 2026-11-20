@@ -100,7 +100,7 @@ const projectGroups = (base: string): NavGroup[] => [
   {
     label: '현황',
     items: [
-      { to: `${base}/dashboard`, label: '진행 상황', icon: LayoutDashboard },
+      { to: `${base}/dashboard`, label: '대시보드', icon: LayoutDashboard },
       { to: `${base}/schedule`, label: '일정(WBS)', icon: CalendarRange },
       { to: `${base}/snapshots`, label: '스냅샷', icon: Camera },
       { to: `${base}/traceability`, label: '요구사항', icon: Waypoints },
