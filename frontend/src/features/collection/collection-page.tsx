@@ -13,6 +13,7 @@ import { formatDateTime } from '@/lib/format';
 import { badgeVariantFor, label } from '@/lib/labels';
 import { toQueryString } from '@/lib/query';
 import { useAsync } from '@/lib/use-async';
+import { cn } from '@/lib/utils';
 import type { PageResponse, SyncJobResponse } from '@/types/api';
 
 const POLL_MS = 30_000;
@@ -23,6 +24,22 @@ const elapsed = (job: SyncJobResponse): string => {
   const sec = Math.max(0, Math.round((end.getTime() - new Date(job.startedAt).getTime()) / 1000));
   return `${sec}초`;
 };
+
+const NUM_COL = 'w-16 text-right whitespace-nowrap';
+
+const statColumn = (
+  key: keyof SyncJobResponse['stats'],
+  title: string,
+  tone?: (n: number) => string | undefined,
+): ColumnDef<SyncJobResponse, unknown> => ({
+  id: key,
+  header: title,
+  meta: { className: NUM_COL },
+  cell: ({ row }) => {
+    const n = Number(row.original.stats[key] ?? 0);
+    return <span className={cn('tnum', tone?.(n))}>{n}</span>;
+  },
+});
 
 const jobColumns = (reload: () => void): ColumnDef<SyncJobResponse, unknown>[] => [
   {
@@ -46,20 +63,11 @@ const jobColumns = (reload: () => void): ColumnDef<SyncJobResponse, unknown>[] =
       <Badge variant={badgeVariantFor(row.original.status)}>{label(row.original.status)}</Badge>
     ),
   },
-  {
-    id: 'stats',
-    header: '수집/반영/미매핑/색인',
-    cell: ({ row }) => {
-      const s = row.original.stats;
-      return (
-        <span className="tnum">
-          {s.fetched}/{s.upserted}/
-          <span className={s.unmapped > 0 ? 'text-warning' : undefined}>{s.unmapped}</span>/
-          {s.indexed}
-        </span>
-      );
-    },
-  },
+  // 수집 수치는 한 칸에 몰아 두면 읽기 어려워 네 칸으로 나눴다(11-20). 숫자만 들어가 폭을 좁힌다
+  statColumn('fetched', '수집'),
+  statColumn('upserted', '반영'),
+  statColumn('unmapped', '미매핑', (n) => (n > 0 ? 'text-warning' : undefined)),
+  statColumn('indexed', '색인'),
   {
     id: 'elapsed',
     header: '소요',
