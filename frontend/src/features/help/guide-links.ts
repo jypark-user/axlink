@@ -46,3 +46,6 @@ export function assetPathOf(src: string): string | null {
   if (!path.startsWith('images/')) return null;
   return `/help/assets/${path.split('/').map(encodeURIComponent).join('/')}`;
 }
+
+/** 기능 화면에서 설명서로 가는 링크는 새 탭으로 연다(11-20 사용자 지시). 하던 작업 화면을 잃지 않는다 */
+export const GUIDE_NEW_TAB = { target: '_blank', rel: 'noopener noreferrer' } as const;
