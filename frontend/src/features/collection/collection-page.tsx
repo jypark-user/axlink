@@ -1,5 +1,6 @@
 import { useEffect, useState, type ReactNode } from 'react';
 import type { ColumnDef } from '@tanstack/react-table';
+import { RotateCcw } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -27,6 +28,15 @@ import type { PageResponse, SyncJobResponse, ToolConnectionResponse } from '@/ty
 const POLL_MS = 30_000;
 const ALL = 'ALL';
 const STATUSES = ['SUCCEEDED', 'FAILED', 'RUNNING', 'QUEUED', 'CANCELLED'] as const;
+
+/** 날짜 칸 값(YYYY-MM-DD). 사업 시간대(Asia/Seoul) 기준 오늘에서 days 일 전 */
+const seoulDay = (daysAgo = 0): string =>
+  new Intl.DateTimeFormat('sv-SE', { timeZone: 'Asia/Seoul' }).format(
+    new Date(Date.now() - daysAgo * 86_400_000),
+  );
+
+/** 기본 기간은 최근 30일(오늘 포함, 11-20 사용자 지시). 필터 초기화도 여기로 돌아간다 */
+const defaultRange = (): { from: string; to: string } => ({ from: seoulDay(29), to: seoulDay() });
 
 const elapsed = (job: SyncJobResponse): string => {
   if (!job.startedAt) return '-';
@@ -116,9 +126,10 @@ export function CollectionPage(): ReactNode {
   // 연결·상태·시작 기간 필터(11-20). 쪽을 넘기므로 서버가 거른다. 바꾸면 첫 쪽으로 돌아간다
   const [connectionId, setConnectionId] = useState(ALL);
   const [status, setStatus] = useState(ALL);
-  const [from, setFrom] = useState('');
-  const [to, setTo] = useState('');
-  const filtered = connectionId !== ALL || status !== ALL || from !== '' || to !== '';
+  const [range] = useState(defaultRange);
+  const [from, setFrom] = useState(range.from);
+  const [to, setTo] = useState(range.to);
+  const filtered = connectionId !== ALL || status !== ALL || from !== range.from || to !== range.to;
   const reset =
     <T,>(set: (v: T) => void) =>
     (v: T) => {
@@ -211,21 +222,22 @@ export function CollectionPage(): ReactNode {
             aria-label="시작일까지"
           />
         </div>
-        {filtered && (
-          <Button
-            size="sm"
-            variant="ghost"
-            onClick={() => {
-              setConnectionId(ALL);
-              setStatus(ALL);
-              setFrom('');
-              setTo('');
-              setPage(0);
-            }}
-          >
-            필터 지우기
-          </Button>
-        )}
+        <Button
+          size="sm"
+          variant="outline"
+          disabled={!filtered}
+          onClick={() => {
+            const d = defaultRange();
+            setConnectionId(ALL);
+            setStatus(ALL);
+            setFrom(d.from);
+            setTo(d.to);
+            setPage(0);
+          }}
+        >
+          <RotateCcw className="size-4" />
+          필터 초기화
+        </Button>
       </div>
       <DataState
         state={state}
