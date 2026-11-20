@@ -1,4 +1,4 @@
-"""사용 설명서 API (SWFR.CON.006). 화면은 docs/40-manual 의 글을 그대로 받는다."""
+"""사용자 매뉴얼 API (SWFR.CON.006). 화면은 docs/40-manual 의 글을 그대로 받는다."""
 
 import re
 

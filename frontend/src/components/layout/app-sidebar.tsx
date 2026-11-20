@@ -81,7 +81,7 @@ const GLOBAL_GROUPS: NavGroup[] = [
     label: null,
     items: [
       { to: '/projects', label: '사업 목록', icon: FolderKanban },
-      { to: '/guide', label: '사용 설명서', icon: BookOpen },
+      { to: '/guide', label: '사용자 매뉴얼', icon: BookOpen },
       // 위젯과 AI 답변이 고르는 그림 23종의 입력 계약. 관리자만 본다 (ARC-012)
       { to: '/templates', label: '인포 템플릿', icon: LayoutTemplate, roles: ['SUPER_ADMIN'] },
       { to: '/admin/accounts', label: '발주기관·계정', icon: Building2, roles: ['SUPER_ADMIN'] },

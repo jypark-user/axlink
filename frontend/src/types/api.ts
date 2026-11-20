@@ -646,7 +646,7 @@ export interface RequirementSummaryResponse {
 }
 
 /** 사용 안내 문서. 원천은 docs/40-manual 의 마크다운이다. */
-/** 사용 설명서 목차 한 줄. file 은 문서끼리의 링크가 가리키는 파일 이름이다. */
+/** 사용자 매뉴얼 목차 한 줄. file 은 문서끼리의 링크가 가리키는 파일 이름이다. */
 export interface HelpEntryResponse {
   slug: string;
   title: string;

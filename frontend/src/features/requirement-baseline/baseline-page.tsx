@@ -82,7 +82,7 @@ const STATUS_WORD = {
   CONFIRMED: '확정',
 } as const;
 const PRIORITIES: Priority[] = ['MUST', 'SHOULD', 'COULD', 'WONT'];
-// 사용 설명서의 요구사항 등록 문서(docs/40-manual/요구사항-등록.md)
+// 사용자 매뉴얼의 요구사항 등록 문서(docs/40-manual/요구사항-등록.md)
 const GUIDE = '/guide/requirement-baseline';
 
 /**

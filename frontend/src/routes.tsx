@@ -144,7 +144,7 @@ export function AppRoutes(): ReactNode {
             </SuspenseShell>
           }
         />
-        {/* 사용 설명서 — 역할과 사업에 상관없이 본다. 각 화면이 /guide/<문서>#<절> 로 바로 연다 */}
+        {/* 사용자 매뉴얼 — 역할과 사업에 상관없이 본다. 각 화면이 /guide/<문서>#<절> 로 바로 연다 */}
         <Route
           path="/guide/:slug?"
           element={

@@ -15,7 +15,7 @@ import { GuideMarkdown } from '@/features/help/guide-markdown';
 const INDEX_SLUG = 'manual';
 
 /**
- * 사용 설명서. 글은 화면에 두지 않고 납품 문서(docs/40-manual)를 /api/help 로 받아 그린다.
+ * 사용자 매뉴얼. 글은 화면에 두지 않고 납품 문서(docs/40-manual)를 /api/help 로 받아 그린다.
  * 왼쪽에 문서 목록과 이 문서의 절, 오른쪽에 본문. 다른 화면은 `/guide/<문서>#<절>` 로 바로 연다.
  */
 export function GuidePage(): ReactNode {
@@ -42,7 +42,7 @@ export function GuidePage(): ReactNode {
         <>
           <PageHeader
             title={doc.title}
-            description={`사용 설명서 · 문서 갱신 ${formatDateTime(doc.updatedAt)}`}
+            description={`사용자 매뉴얼 · 문서 갱신 ${formatDateTime(doc.updatedAt)}`}
             actions={
               <>
                 <Button asChild variant="outline">
