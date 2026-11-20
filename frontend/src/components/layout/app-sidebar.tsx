@@ -9,7 +9,6 @@ import {
   ClipboardList,
   FileText,
   FolderKanban,
-  HardHat,
   Info,
   LayoutDashboard,
   LayoutTemplate,
@@ -60,7 +59,7 @@ const ASK_ROLES: Role[] = ['CLIENT'];
 /**
  * 용역사도 현황 화면을 본다(읽기 전용). 숫자는 용역사 자신의 데이터에서 나오고, 발주기관이
  * 무엇을 보고 요청하는지 미리 알아야 관리순환이 돈다. 편집은 서버가 발주기관·관리자로 가른다.
- * AI 질의와 용역사 할당만 발주기관 전용이다.
+ * AI 질의만 발주기관 전용이다(용역사 할당은 사업 관리 화면 안에 있다).
  */
 
 interface NavItem {
@@ -119,7 +118,6 @@ const projectGroups = (base: string): NavGroup[] => [
     label: '사업 설정',
     items: [
       { to: base, label: '사업 관리', icon: Info, end: true },
-      { to: `${base}/assignments`, label: '용역사 할당', icon: HardHat, roles: ['CLIENT'] },
       { to: `${base}/connections`, label: '도구 연동', icon: Link2 },
       { to: `${base}/collection`, label: '동기화 이력', icon: RefreshCw },
     ],

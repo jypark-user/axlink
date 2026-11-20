@@ -95,7 +95,7 @@ export function ProjectOverviewPage(): ReactNode {
         {canEdit && (
           <Tile span={12}>
             <Window title="용역사" hint="이 사업에 참여한 용역사 계정입니다.">
-              <AssignmentsPage embedded />
+              <AssignmentsPage />
             </Window>
           </Tile>
         )}

@@ -16,7 +16,6 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { DataTable, SortableHeader } from '@/components/ui/data-table';
 import { DataState } from '@/components/common/data-state';
 import { useToast } from '@/components/common/toaster';
-import { PageHeader } from '@/components/layout/page-header';
 import { useProjectContext } from '@/components/layout/project-shell';
 import { api } from '@/lib/http';
 import { isApiError } from '@/lib/api-error';
@@ -26,8 +25,8 @@ import { InviteLinkDialog } from '@/features/assignments/invite-link-dialog';
 import { ParticipantsPanel } from '@/features/assignments/participants-panel';
 import type { AssignmentResponse, ParticipantResponse } from '@/types/api';
 
-/** `embedded` 면 사업 관리 화면 안에 들어간다 — 자체 화면 머리를 두지 않는다. */
-export function AssignmentsPage({ embedded }: { embedded?: boolean } = {}): ReactNode {
+/** 사업 관리 화면의 용역사 칸. 따로 떨어진 용역사 할당 화면은 11-20 에 없앴다(사업 관리로 합침). */
+export function AssignmentsPage(): ReactNode {
   const { project } = useProjectContext();
   const { toast } = useToast();
   const [inviteOpen, setInviteOpen] = useState(false);
@@ -70,15 +69,7 @@ export function AssignmentsPage({ embedded }: { embedded?: boolean } = {}): Reac
 
   return (
     <>
-      {embedded ? (
-        <div className="flex justify-end pb-3">{addButton}</div>
-      ) : (
-        <PageHeader
-          title="용역사"
-          description="초대 링크를 전달하면 용역사가 직접 계정을 만들고 이 사업에 참여합니다."
-          actions={addButton}
-        />
-      )}
+      <div className="flex justify-end pb-3">{addButton}</div>
       {parts.data && (
         <div className="pb-4">
           <ParticipantsPanel

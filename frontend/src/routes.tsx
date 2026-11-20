@@ -36,9 +36,6 @@ const DashboardPage = lazy(() =>
 const ConnectionsPage = lazy(() =>
   import('@/features/connections/connections-page').then((m) => ({ default: m.ConnectionsPage })),
 );
-const AssignmentsPage = lazy(() =>
-  import('@/features/assignments/assignments-page').then((m) => ({ default: m.AssignmentsPage })),
-);
 const CollectionPage = lazy(() =>
   import('@/features/collection/collection-page').then((m) => ({ default: m.CollectionPage })),
 );
@@ -330,17 +327,6 @@ export function AppRoutes(): ReactNode {
               element={
                 <SuspenseShell>
                   <AskPage />
-                </SuspenseShell>
-              }
-            />
-          </Route>
-
-          <Route element={<RequireRole allow={['CLIENT']} />}>
-            <Route
-              path="assignments"
-              element={
-                <SuspenseShell>
-                  <AssignmentsPage />
                 </SuspenseShell>
               }
             />
