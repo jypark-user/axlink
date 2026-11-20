@@ -2,7 +2,7 @@
 
 import hashlib
 import json
-from datetime import datetime
+from datetime import date, datetime
 from typing import Any
 
 from psycopg.types.json import Jsonb
@@ -217,32 +217,61 @@ def find_sync_job(cur: Any, job_id: str) -> dict[str, Any] | None:
     )
 
 
-def list_sync_jobs(cur: Any, project_id: str, limit: int, offset: int) -> list[dict[str, Any]]:
+def _job_filter(
+    connection_id: str | None, status: str | None, started_from: date | None,
+    started_to: date | None,
+) -> tuple[str, list[Any]]:
+    """동기화 이력 조건(11-20). 시작 기간은 사업 시간대(Asia/Seoul)의 날짜로 양끝을 넣는다."""
+    sql, args = "", []
+    if connection_id:
+        sql += " and j.tool_connection_id = %s::uuid"
+        args.append(connection_id)
+    if status:
+        sql += " and j.status = %s"
+        args.append(status)
+    if started_from:
+        sql += " and (j.started_at at time zone 'Asia/Seoul')::date >= %s"
+        args.append(started_from)
+    if started_to:
+        sql += " and (j.started_at at time zone 'Asia/Seoul')::date <= %s"
+        args.append(started_to)
+    return sql, args
+
+
+def list_sync_jobs(
+    cur: Any, project_id: str, limit: int, offset: int, *, connection_id: str | None = None,
+    status: str | None = None, started_from: date | None = None, started_to: date | None = None,
+) -> list[dict[str, Any]]:
+    cond, args = _job_filter(connection_id, status, started_from, started_to)
     return fetch_all(
         cur,
-        """
+        f"""
         select j.id, j.tool_connection_id, j.kind, j.status, j.started_at, j.finished_at,
                j.stats_json, j.error, j.error_code, c.name as connection_name,
                c.tool, c.project_id
           from sync_job j
           join tool_connection c on c.id = j.tool_connection_id
-         where c.project_id = %s
+         where c.project_id = %s{cond}
          order by j.started_at desc nulls last, j.created_at desc
          limit %s offset %s
         """,
-        (project_id, limit, offset),
+        (project_id, *args, limit, offset),
     )
 
 
-def count_sync_jobs(cur: Any, project_id: str) -> int:
+def count_sync_jobs(
+    cur: Any, project_id: str, *, connection_id: str | None = None, status: str | None = None,
+    started_from: date | None = None, started_to: date | None = None,
+) -> int:
+    cond, args = _job_filter(connection_id, status, started_from, started_to)
     row = fetch_one(
         cur,
-        """
+        f"""
         select count(*) as cnt from sync_job j
           join tool_connection c on c.id = j.tool_connection_id
-         where c.project_id = %s
+         where c.project_id = %s{cond}
         """,
-        (project_id,),
+        (project_id, *args),
     )
     return int(row["cnt"]) if row else 0
 

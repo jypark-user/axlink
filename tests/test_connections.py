@@ -467,3 +467,42 @@ def test_같은_프로젝트_식별자도_서버가_다르면_따로_연결한�
     assert moved.status_code == 409, moved.text
     listed = client.get(url, headers=_auth(token)).json()
     assert {c["baseUrl"] for c in listed} == {"https://rm-a.example", "https://rm-b.example"}
+
+
+@requires_db
+def test_동기화_이력은_연결_상태_시작_기간으로_거른다(client, as_pm, monkeypatch):
+    """11-20: 동기화 이력 필터. 상태·연결·시작 기간(사업 시간대 날짜, 양끝 포함)."""
+    token, created = as_pm
+    from app.common import errors
+
+    cid = _verified_connection(client, token, created, monkeypatch)
+    monkeypatch.setattr(github, "fetch_file", lambda *a, **k: None)
+
+    def unreachable(*a, **k):
+        raise errors.ApiError(503, "TOOL_UNREACHABLE", "GitHub 에 닿지 못했습니다.")
+
+    monkeypatch.setattr(github, "fetch_items", unreachable)
+    failed = client.post(f"/api/connections/{cid}/sync", headers=_auth(token)).json()
+    monkeypatch.setattr(github, "fetch_items", lambda *a, **k: iter(()))
+    ok = client.post(f"/api/connections/{cid}/sync", headers=_auth(token)).json()
+
+    def ids(**q):
+        res = client.get("/api/sync-jobs", params={"projectId": PID, **q}, headers=_auth(token))
+        assert res.status_code == 200, res.text
+        return {j["id"] for j in res.json()["content"]}, res.json()["totalElements"]
+
+    assert {failed["id"], ok["id"]} <= ids()[0]
+    got, total = ids(status="FAILED")
+    assert failed["id"] in got and ok["id"] not in got and total == len(got)
+    assert {failed["id"], ok["id"]} <= ids(connectionId=cid)[0]
+    assert ids(connectionId="00000000-0000-0000-0000-000000000000")[0] == set()
+
+    from app.common.clock import today
+
+    d = today().isoformat()
+    assert {failed["id"], ok["id"]} <= ids(startedFrom=d, startedTo=d)[0]
+    assert ids(startedTo="2000-01-01")[0] == set()
+    bad = client.get(
+        "/api/sync-jobs", params={"projectId": PID, "status": "NOPE"}, headers=_auth(token)
+    )
+    assert bad.status_code in (400, 422)

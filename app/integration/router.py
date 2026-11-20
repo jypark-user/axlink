@@ -3,7 +3,9 @@
 경로가 /projects/{id}/connections 와 /connections/{id} 두 갈래라 라우터를 하나로 둔다.
 """
 
+from datetime import date
 from typing import Literal
+from uuid import UUID
 
 from fastapi import APIRouter, Query, Response
 from pydantic import BaseModel
@@ -127,6 +129,15 @@ def list_sync_jobs(
     projectId: str,  # noqa: N803 — 프런트 쿼리 파라미터명
     page: int = Query(default=0, ge=0),
     size: int = Query(default=20, ge=1, le=100),
+    connectionId: UUID | None = None,  # noqa: N803
+    status: Literal["QUEUED", "RUNNING", "SUCCEEDED", "FAILED", "CANCELLED"] | None = None,
+    startedFrom: date | None = None,  # noqa: N803
+    startedTo: date | None = None,  # noqa: N803
 ) -> PageResponse[SyncJobResponse]:
+    # 연결·상태·시작 기간으로 거른다(11-20). 기간은 사업 시간대 날짜, 양끝 포함
     with tx() as cur:
-        return service.list_jobs(cur, principal, projectId, PageQuery(page=page, size=size))
+        return service.list_jobs(
+            cur, principal, projectId, PageQuery(page=page, size=size),
+            connection_id=str(connectionId) if connectionId else None, status=status,
+            started_from=startedFrom, started_to=startedTo,
+        )
