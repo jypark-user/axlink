@@ -623,3 +623,14 @@ def test_지연_사유_질문의_지연은_종료일이_지나고_실적이_100�
     behind, _ = ask({"route": "INTENT", "intent": "BEHIND_TASKS"}, "[그림 1]")
     tasks = {r["values"]["task"] for r in behind["infographic"][0]["data"]["rows"]}
     assert {"1.2 중간보고", "2.1 연계 수집"} <= tasks
+
+
+def test_비율_집계는_나눈_항목_수를_적는다():
+    """11-20: 비율 지표는 더한 전체가 없다. 항목 수를 줘야 「작업은 n개」 가 근거를 얻는다."""
+    from app.rag import answer
+
+    rate = answer.aggregate_lines(_data("%", [("A", 50), ("B", 30)]))
+    cut = answer.aggregate_lines(_data("%", [("A", 50)], True))
+    count = answer.aggregate_lines(_data("건", [("A", 1), ("B", 2)]))
+    assert any(x.endswith(" 수: 2개") for x in rate)
+    assert not any(" 수: " in x for x in cut + count)

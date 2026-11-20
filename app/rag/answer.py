@@ -111,6 +111,10 @@ def aggregate_lines(data: WidgetDataResponse) -> list[str]:
         values = [row.values.get("value") for row in data.rows]
         if values and all(isinstance(v, int | float) for v in values):
             lines.append(f"- {data.measureLabel} 전체(항목 합): {format_value(sum(values))}{unit}")
+    # 나눈 항목이 몇 개인지(11-20). 비율 지표는 더한 전체가 없어 모델이 「진행 중인 작업은 17개」를
+    # 세어 쓰면 근거 없는 값으로 막혔다. 잘린 목록은 전체 수를 모르니 적지 않는다
+    if len(dim_cols) == 1 and data.rows and not data.truncated and unit != "건":
+        lines.append(f"- {dim_cols[0].label} 수: {len(data.rows)}개")
     if data.previousTotal is not None:
         previous = format_value(data.previousTotal.values.get("value"))
         lines.append(f"- 직전 구간 전체: {previous}{unit}")

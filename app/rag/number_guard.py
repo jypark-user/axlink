@@ -393,11 +393,14 @@ class Checker:
             return sum(1 for w in named if _overlap([w], label))
 
         mine = score(fact.label)
+        # 단위가 있는 값은 단위가 같은 값하고만 겨룬다. 단위 없는 숫자는 대개 번호다.
+        # 11-20: 「WBS 작업 6.1 대시보드·위젯: 90%」 의 6.1 이 작업 이름을 라벨로 가져가
+        # 「대시보드·위젯 작업이 90%」 를 막았다
         return any(
             score(other.label) > mine
             for other in self._labelled[fact.source]
             if other.value != fact.value
-            and (not other.unit or not fact.unit or other.unit == fact.unit)
+            and (other.unit == fact.unit if fact.unit else True)
         )
 
     def _clause_subject(self, clause: set[str]) -> set[str]:
