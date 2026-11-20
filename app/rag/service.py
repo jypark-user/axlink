@@ -562,7 +562,8 @@ def _resolve(
 
     if turn.reason is None:
         _listing_and_overview(cur, p, turn)
-        _search(cur, p, turn, query_vec, query_text)
+        if turn.reason is None:
+            _search(cur, p, turn, query_vec, query_text)
         _decide_reason(turn)
 
     if turn.reason not in (CLARIFY, OFF_TOPIC):
@@ -576,10 +577,24 @@ def _listing_and_overview(cur: Any, p: Prepared, turn: _Turn) -> None:
     # (ARC-013). 09.17 실측에서 닫힌 이슈가 "작업이 안 된" 목록에 섞였다.
     if decision.listing:
         entity = entity_table.FROM_SOURCE_TYPE.get(decision.listing)
+        # 「최근 5일 이내 작업된 요구사항」처럼 기간을 물으면 그 기간에 활동한 것만 꺼낸다.
+        # 기간은 질문 글자에서만 읽는다(모델이 고르지 않는다)
+        period = None
+        if entity and entity_table.supports_period(entity):
+            period = question_period.activity_range(p.question)
         if entity:
             turn.table = entity_table.build(
-                cur, entity, decision.listing_status, p.scope, settings.rag_list_limit
+                cur, entity, decision.listing_status, p.scope, settings.rag_list_limit, period
             )
+        if entity and period is not None and turn.table is None:
+            # 기간 안에 활동이 없다. 청크 목록으로 돌리면 기간과 무관한 것이 나온다. 서버가 말한다
+            label = entity_table.ENTITIES[entity].label
+            last = entity_table.last_activity(cur, entity, p.scope)
+            text = f"{period.label} 사이에 이슈가 생기거나 커밋·PR 이 붙은 {label} 항목이 없습니다."
+            if last:
+                text += f" 마지막 활동은 {last} 입니다."
+            turn.stop(NO_DATA, text)
+            return
         if turn.table is not None:
             turn.block_list.append(blocks.from_entity(len(turn.block_list) + 1, turn.table))
     # 전체 현황을 묻는 질문은 현황 그림으로 답한다(ARC-015). 다른 질문에는 붙이지 않는다
