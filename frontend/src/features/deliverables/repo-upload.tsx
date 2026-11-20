@@ -27,7 +27,7 @@ export interface UploadTarget {
 }
 
 /**
- * 올리기 단추(11-19 사용자 지시). 산출물은 파일을 직접 올리거나 저장소 파일을 골라 올린다.
+ * 업로드 단추(11-19 사용자 지시). 산출물은 파일을 직접 올리거나 저장소 파일을 골라 올린다.
  * 저장소 파일이 없는 사업은 바로 파일을 고른다.
  */
 export function UploadMenu({
@@ -35,7 +35,7 @@ export function UploadMenu({
   onFile,
   onRepo,
   disabled,
-  label = '올리기',
+  label = '업로드',
   variant = 'default',
 }: {
   hasRepo: boolean;
@@ -138,7 +138,7 @@ export function RepoPickDialog({
         </div>
         <DialogFooter>
           <Button disabled={!path || busy} onClick={() => void submit()}>
-            {busy ? '올리는 중…' : '올리기'}
+            {busy ? '업로드 중…' : '업로드'}
           </Button>
         </DialogFooter>
       </DialogContent>

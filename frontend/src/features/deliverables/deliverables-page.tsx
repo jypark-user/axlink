@@ -83,7 +83,7 @@ export function DeliverablesPage(): ReactNode {
   const [uploadingFor, setUploadingFor] = useState<string | null>(null);
   const [designating, setDesignating] = useState<DesignationTarget | null>(null);
   const [openWbsId, setOpenWbsId] = useState<string | null>(null);
-  // 양식이 있는 작업의 올리기 창
+  // 양식이 있는 작업의 업로드 창
   const [uploadWbsId, setUploadWbsId] = useState<string | null>(null);
   const inputRef = useRef<HTMLInputElement>(null);
   // 올릴 자리. 지정 산출물 항목을 골라 올리면 그 항목의 제출본이 된다(UC-033)
@@ -92,7 +92,7 @@ export function DeliverablesPage(): ReactNode {
   // 산출물 지정은 발주기관만. 관리자는 대신하지 않는다(DEC-05). 서버도 다시 본다
   const canDesignate = me?.role === 'CLIENT';
   const typeNames = useTypeNames(project.id);
-  // 산출물로 고를 수 있는 저장소 파일(11-19). 없으면 올리기가 바로 파일을 고른다
+  // 산출물로 고를 수 있는 저장소 파일(11-19). 없으면 업로드가 바로 파일을 고른다
   const repoFiles = useAsync<{ paths: string[] }>(
     () => api.get<{ paths: string[] }>(`/projects/${project.id}/repository-files`),
     [project.id],
@@ -358,7 +358,7 @@ function buildColumns(
       header: '',
       cell: ({ row }) => {
         const item = row.original;
-        // 산출물 제출은 이 [올리기]로만 한다(11-18 사용자 지시). 양식이 있으면 양식을 골라 올리는
+        // 산출물 제출은 이 [업로드]로만 한다(11-18 사용자 지시). 양식이 있으면 양식을 골라 올리는
         // 창을 열고, 없으면 바로 파일을 고른다
         const hasForm = (item.designated ?? []).some((d) => !d.needsRedesignation);
         if (!hasForm && item.status === 'NONE') return null;
@@ -367,13 +367,13 @@ function buildColumns(
           <div className="flex items-center justify-end gap-2">
             {hasForm ? (
               <Button size="sm" disabled={busy} onClick={() => onOpenUpload(item.wbsId)}>
-                {busy ? '올리는 중…' : '올리기'}
+                {busy ? '업로드 중…' : '업로드'}
               </Button>
             ) : (
               <UploadMenu
                 hasRepo={designatedActions.hasRepo}
                 disabled={busy}
-                label={busy ? '올리는 중…' : '올리기'}
+                label={busy ? '업로드 중…' : '업로드'}
                 onFile={() => onUpload(item.wbsId)}
                 onRepo={() => designatedActions.onUploadRepo(item.wbsId)}
               />

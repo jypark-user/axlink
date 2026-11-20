@@ -95,7 +95,7 @@ export interface DesignatedActions {
   onUpload: (wbsId: string, designatedId: string) => void;
   /** 저장소 파일을 골라 올린다(11-19). 양식을 주지 않으면 그 작업의 기타 산출물이다 */
   onUploadRepo: (wbsId: string, designatedId?: string) => void;
-  /** 고를 저장소 파일이 있는가. 없으면 올리기가 바로 파일을 고른다 */
+  /** 고를 저장소 파일이 있는가. 없으면 업로드가 바로 파일을 고른다 */
   hasRepo: boolean;
   onEdit: (target: DesignationTarget) => void;
   onChanged: () => void;
@@ -110,7 +110,7 @@ export type DesignationTarget =
 /**
  * 표의 「예상 산출물」 칸(11-19 사용자 지시). 첫 산출물 이름과 「외 n건」만 두고, 아래 [관리]로
  * 옆 창을 연다. 예상 산출물은 WBS 산출물 열에서 저절로 만든 것(「WBS 자동」)과 발주기관이 요청한
- * 것이다. 용역사는 [보기]로 같은 창을 본다. 제출은 맨 오른쪽 [올리기]로만 한다.
+ * 것이다. 용역사는 [보기]로 같은 창을 본다. 제출은 맨 오른쪽 [업로드]로만 한다.
  */
 export function DesignatedCell({
   item,
@@ -149,7 +149,7 @@ export function DesignatedCell({
   );
 }
 
-/** 한 작업의 예상 산출물 전체. 표의 [관리]로 옆 창을 연다. 제출(올리기)은 여기서 하지 않는다. */
+/** 한 작업의 예상 산출물 전체. 표의 [관리]로 옆 창을 연다. 제출(업로드)은 여기서 하지 않는다. */
 export function DesignatedSheet({
   item,
   actions,
@@ -203,7 +203,7 @@ export function DesignatedSheet({
 }
 
 /**
- * 양식 한 건. manage 는 양식 옆 창(발주기관 고치기·거두기·승인), upload 는 올리기 창(누구나
+ * 양식 한 건. manage 는 양식 옆 창(발주기관 고치기·거두기·승인), upload 는 업로드 창(누구나
  * 그 양식으로 올리고 「산출물로 제출」까지 간다).
  */
 function DesignatedEntry({
@@ -351,7 +351,7 @@ function History({ projectId, id }: { projectId: string; id: string }): ReactNod
 }
 
 /**
- * 올리기 창(11-18 사용자 지시). 양식이 등록된 작업에서 맨 오른쪽 [올리기]를 누르면 연다. 양식마다
+ * 업로드 창(11-18 사용자 지시). 양식이 등록된 작업에서 맨 오른쪽 [업로드]를 누르면 연다. 양식마다
  * 내려받고, 그 양식으로 올리고, 올린 것을 「산출물로 제출」까지 한다. 양식 고치기는 여기 없다.
  */
 export function UploadDialog({
@@ -372,7 +372,7 @@ export function UploadDialog({
     <Dialog open={item !== null} onOpenChange={(o) => !o && onClose()}>
       <DialogContent className="max-h-[85vh] overflow-y-auto sm:max-w-xl">
         <DialogHeader>
-          <DialogTitle>올리기</DialogTitle>
+          <DialogTitle>업로드</DialogTitle>
           <DialogDescription>{taskLabel}</DialogDescription>
         </DialogHeader>
         {item && (
@@ -395,7 +395,7 @@ export function UploadDialog({
             <UploadMenu
               hasRepo={actions.hasRepo}
               variant="outline"
-              label="기타 산출물 올리기"
+              label="기타 산출물 업로드"
               onFile={() => onUploadPlain(item.wbsId)}
               onRepo={() => actions.onUploadRepo(item.wbsId)}
             />

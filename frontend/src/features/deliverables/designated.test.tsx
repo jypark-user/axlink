@@ -10,7 +10,7 @@ import {
 } from '@/features/deliverables/designated';
 import type { DesignatedDeliverable, WbsDeliverableItem } from '@/types/api';
 
-// 산출물 양식(UC-033). 양식 등록·수정은 발주기관만, 제출은 [올리기] 창에서만 한다(11-18).
+// 산출물 양식(UC-033). 양식 등록·수정은 발주기관만, 제출은 [업로드] 창에서만 한다(11-18).
 
 vi.mock('@/lib/http', () => ({ api: {}, download: vi.fn() }));
 
@@ -115,11 +115,11 @@ describe('예상 산출물 옆 창', () => {
     expect(screen.getAllByText('양식 내려받기: 양식.xlsx')).toHaveLength(2);
     expect(screen.getAllByRole('button', { name: '고치기' })).toHaveLength(2);
     expect(screen.getByRole('button', { name: '산출물 요청 추가' })).toBeInTheDocument();
-    expect(screen.queryByRole('button', { name: '올리기' })).toBeNull();
+    expect(screen.queryByRole('button', { name: '업로드' })).toBeNull();
   });
 });
 
-describe('올리기 창', () => {
+describe('업로드 창', () => {
   it('용역사는 양식을 내려받고 그 양식으로 올리기만 한다', () => {
     const contractor = actions(false);
     render(
@@ -137,11 +137,11 @@ describe('올리기 창', () => {
     expect(screen.getByText(/반려 사유: 결함 목록 누락/)).toBeInTheDocument();
     expect(screen.queryByRole('button', { name: '고치기' })).toBeNull();
     expect(screen.queryByRole('button', { name: '거두기' })).toBeNull();
-    fireEvent.click(screen.getByRole('button', { name: '올리기' }));
+    fireEvent.click(screen.getByRole('button', { name: '업로드' }));
     expect(contractor.onUpload).toHaveBeenCalledWith('2.1', 'd1');
   });
 
-  it('기타 산출물 올리기는 양식 없이 그 작업에 올린다', () => {
+  it('기타 산출물 업로드는 양식 없이 그 작업에 올린다', () => {
     const plain = vi.fn();
     render(
       <MemoryRouter>
@@ -155,7 +155,7 @@ describe('올리기 창', () => {
         </ToasterProvider>
       </MemoryRouter>,
     );
-    fireEvent.click(screen.getByRole('button', { name: '기타 산출물 올리기' }));
+    fireEvent.click(screen.getByRole('button', { name: '기타 산출물 업로드' }));
     expect(plain).toHaveBeenCalledWith('2.1');
   });
 });
