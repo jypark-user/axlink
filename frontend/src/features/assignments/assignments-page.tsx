@@ -13,6 +13,7 @@ import {
   AlertDialogTitle,
 } from '@/components/ui/alert-dialog';
 import { Skeleton } from '@/components/ui/skeleton';
+import { SearchInput } from '@/components/ui/search-input';
 import { DataTable, SortableHeader } from '@/components/ui/data-table';
 import { DataState } from '@/components/common/data-state';
 import { useToast } from '@/components/common/toaster';
@@ -23,6 +24,7 @@ import { formatDateTime } from '@/lib/format';
 import { useAsync } from '@/lib/use-async';
 import { InviteLinkDialog } from '@/features/assignments/invite-link-dialog';
 import { ParticipantsPanel } from '@/features/assignments/participants-panel';
+import { filterAssignments } from '@/features/assignments/assignments-filter';
 import type { AssignmentResponse, ParticipantResponse } from '@/types/api';
 
 /** 사업 관리 화면의 용역사 칸. 따로 떨어진 용역사 할당 화면은 11-20 에 없앴다(사업 관리로 합침). */
@@ -32,6 +34,7 @@ export function AssignmentsPage(): ReactNode {
   const [inviteOpen, setInviteOpen] = useState(false);
   const [revokeTarget, setRevokeTarget] = useState<AssignmentResponse | null>(null);
   const [pendingId, setPendingId] = useState<string | null>(null);
+  const [query, setQuery] = useState('');
   const columns = useMemo(() => buildColumns(setRevokeTarget, pendingId), [pendingId]);
 
   const state = useAsync<AssignmentResponse[]>(
@@ -82,6 +85,16 @@ export function AssignmentsPage(): ReactNode {
           />
         </div>
       )}
+      <div className="flex flex-wrap items-end justify-between gap-3 pt-2 pb-3">
+        <h3 className="text-base font-semibold">용역사 계정</h3>
+        <SearchInput
+          value={query}
+          onValueChange={setQuery}
+          placeholder="업체명·이름·아이디 검색"
+          aria-label="용역사 계정 검색"
+          className="w-full max-w-xs"
+        />
+      </div>
       <DataState
         state={state}
         onRetry={state.reload}
@@ -97,9 +110,9 @@ export function AssignmentsPage(): ReactNode {
         {(rows) => (
           <DataTable<AssignmentResponse, unknown>
             columns={columns}
-            data={rows}
+            data={filterAssignments(rows, query)}
             paginated={false}
-            emptyText="아직 참여한 용역사가 없습니다."
+            emptyText={query.trim() ? '찾는 계정이 없습니다.' : '아직 참여한 용역사가 없습니다.'}
           />
         )}
       </DataState>
