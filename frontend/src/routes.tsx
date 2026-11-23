@@ -89,8 +89,8 @@ const AskPage = lazy(() =>
   import('@/features/ax-query/ask-page').then((m) => ({ default: m.AskPage })),
 );
 
-/** 용역사(CONTRACTOR)는 사업 관리·연동·동기화 이력만 본다. 나머지 화면은 이 목록으로 막는다. */
-const EXCEPT_CONTRACTOR: Role[] = ['SUPER_ADMIN', 'CLIENT'];
+/** AI 질의는 용역사도 쓴다(DEC-15 (a)). 배정되지 않은 사업은 서버가 거절한다. */
+const ASK_ROLES: Role[] = ['SUPER_ADMIN', 'CLIENT', 'CONTRACTOR'];
 
 function PageFallback(): ReactNode {
   return (
@@ -180,7 +180,7 @@ export function AppRoutes(): ReactNode {
             }
           />
         </Route>
-        <Route element={<RequireRole allow={EXCEPT_CONTRACTOR} />}>
+        <Route element={<RequireRole allow={ASK_ROLES} />}>
           {/* 한 라우트로 둔다 — 대화를 새로 열 때 화면이 다시 뜨면 쓰던 것이 다 날아간다. */}
           <Route
             path="/ask/:conversationId?"
@@ -321,7 +321,7 @@ export function AppRoutes(): ReactNode {
               </SuspenseShell>
             }
           />
-          <Route element={<RequireRole allow={EXCEPT_CONTRACTOR} />}>
+          <Route element={<RequireRole allow={ASK_ROLES} />}>
             <Route
               path="ask/:conversationId?"
               element={

@@ -53,8 +53,8 @@ import { cn } from '@/lib/utils';
 import { useAsync } from '@/lib/use-async';
 import type { ConversationResponse, PageResponse, Role } from '@/types/api';
 
-/** AI 질문은 발주사 전용 — 용역사는 LLM 기능을 쓰지 않는다. */
-const ASK_ROLES: Role[] = ['CLIENT'];
+/** AI 질문은 발주기관과 용역사가 쓴다(DEC-15 (a)). 용역사는 배정된 사업 범위만 서버가 받는다. */
+const ASK_ROLES: Role[] = ['CLIENT', 'CONTRACTOR'];
 
 /**
  * 용역사도 현황 화면을 본다(읽기 전용). 숫자는 용역사 자신의 데이터에서 나오고, 발주기관이

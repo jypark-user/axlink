@@ -834,18 +834,22 @@ def _ui_UC_021_S01(screen, s0):
 
 
 def _ui_UC_022_S01(screen, s0):
-    """화면: A 줄에 커밋(근거 메시지)·커스텀 필드 이슈 R1·R2·R9 가 링크로 보인다."""
+    """화면: A 줄을 열면 상세 창에 커밋(근거 메시지)·커스텀 필드 이슈 R1·R2·R9 가 링크로 보인다.
+
+    11-17 화면 개편(요구사항 상세에 이슈 표, 커밋·PR 은 이슈에 붙임) 뒤로 목록 줄에는 이슈 진행
+    건수만 있고, 이슈와 근거는 줄을 눌러 여는 상세 창에 있다."""
     if not screen:
         return
     sc = screen("TD-ACC-C1")
     sc.open(f"/p/{s0.ids['TD-PRJ-1']}/traceability").see("UR.PORT.001")
-    row = sc.page.locator("tr", has_text="UR.PORT.001").first
-    more = row.get_by_text(re.compile(r"외 \d+건 더 보기"))
-    if more.count():
-        more.first.click()
-    row_text = row.inner_text()
+    sc.page.locator("tr", has_text="UR.PORT.001").first.click()
+    sheet = sc.page.get_by_role("dialog")
+    sheet.get_by_text("UR.PORT.001").first.wait_for(timeout=15000)
+    sheet.get_by_text("RM-209").first.wait_for(timeout=15000)
+    sheet_text = sheet.inner_text()
     for want in ("[UR.PORT.001]", "RM-201", "RM-202", "RM-209"):
-        assert want in row_text, f"A 줄에 {want} 가 없다: {row_text!r}"
-    hrefs = [a.get_attribute("href") or "" for a in row.locator("a").all()]
+        assert want in sheet_text, f"A 상세에 {want} 가 없다: {sheet_text!r}"
+    hrefs = [a.get_attribute("href") or "" for a in sheet.locator("a").all()]
     assert sum(1 for h in hrefs if h.startswith("http")) >= 4, hrefs
+    sc.shot("A 상세")
     sc.done()

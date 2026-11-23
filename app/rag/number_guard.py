@@ -64,7 +64,7 @@ _NON_QUANTITY = [
 
 _NUMBER = re.compile(
     r"(?<![\d.])(\d+(?:,\d{3})*(?:\.\d+)?)\s*"
-    r"(%p|%|퍼센트포인트|퍼센트|포인트|개월|개|건|명|회|만원|억원|원|배|점|시간|분|초|주|쪽|"
+    r"(%p|%|퍼센트포인트|퍼센트|포인트|개월|개|건|명|회|만원|억원|원|배|점|시간|분|초|주|쪽|종|"
     r"페이지|줄|행|청크|자|TB|GB|MB|KB)?"
 )
 _UNIT_ALIAS = {"퍼센트": "%", "퍼센트포인트": "%p", "포인트": "%p", "페이지": "쪽"}
@@ -357,9 +357,8 @@ class Checker:
                 continue
             # 그 숫자를 가리키는 구절이 대상을 말했으면 그 대상으로 본다. 한 문장에 대상이 둘이면
             # ("산출물은 22종이고, 일반 이슈는 0건") 다른 대상의 근거로 숫자가 통과하지 않게 한다
-            reason = self._why_not(
-                value, unit, self._clause_subject(clause) or subject, cited, when, clause
-            )
+            named = self._clause_subject(clause)
+            reason = self._why_not(value, unit, named or subject, cited, when, clause, bool(named))
             if reason:
                 bad.append(Violation(value, unit, reason))
         return bad
@@ -416,7 +415,9 @@ class Checker:
         vocab = _canon(self.subjects)
         return {w for w in _canon(keywords(text)) if _overlap([w], vocab)}
 
-    def _why_not(self, value, unit, subject, cited, when, clause=frozenset()) -> str | None:
+    def _why_not(
+        self, value, unit, subject, cited, when, clause=frozenset(), named=False
+    ) -> str | None:
         same = [f for f in self.facts if f.value == value]
         if not same:
             return "근거에 없는 값"
@@ -424,10 +425,14 @@ class Checker:
         if not same:
             return "단위 불일치"
         if subject:  # 문장(또는 질문)이 대상을 말했으면 그 대상의 값이어야 한다
+            # 각주로 단 근거 원문은 문장이 다른 말로 불러도 받는다. 단 그 숫자를 가리키는 구절이
+            # 대상을 직접 말했으면 원문 문장도 그 대상을 말해야 한다. 11-23 폐쇄망 모델이
+            # 「납품 산출물은 22종이고, 일반 이슈는 22건 [1]」을 썼고, [1] 의 「22종」이
+            # 일반 이슈 22건의 근거로 통과했다(DEF-V064)
             same = [
                 f for f in same
                 if _overlap(subject, _canon(f.keywords))
-                or (f.chunk_no is not None and f.chunk_no in cited)
+                or (f.chunk_no is not None and f.chunk_no in cited and not named)
             ]
             if not same:
                 return "대상 불일치"
