@@ -1763,6 +1763,8 @@ export interface DeliverableReview {
   status: 'SUBMITTED' | 'APPROVED' | 'REJECTED';
   rejectReason: string | null;
   reviewedAt: string | null;
+  /** 승인·반려한 사람. 승인 대기면 없다 */
+  reviewedBy?: string | null;
   /** 같은 양식에 다시 올린 것이 있으면 앞의 것은 지난 버전이다 */
   latest: boolean;
   /** 이어 올린 예상 산출물. 같은 값의 지난 버전은 최신 버전 상세보기에서 본다 */

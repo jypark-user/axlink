@@ -419,7 +419,9 @@ def test_기간을_물으면_그_기간에_활동한_요구사항만_최근순�
     assert rows[1]["last_activity"] == "2020-01-07" and rows[1]["activity"] == "커밋·PR 2건"
     assert table.title == "2020-01-05~2020-01-10 활동이 있는 요구사항 목록"
     assert "전체 2건" in table.scope_line and "커밋·PR" in table.scope_line
-    assert "최근 활동 2020-01-08" in table.lines[0]
+    # 행 줄 앞에 범위 전체를 묶어 센 줄(종류·영역·상태)이 온다
+    row_lines = [line for line in table.lines if line.startswith("- 코드 ")]
+    assert "최근 활동 2020-01-08" in row_lines[0]
 
     with tx() as cur:
         none = entity_table.build(

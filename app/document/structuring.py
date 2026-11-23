@@ -159,6 +159,14 @@ def tables_and_lines(text: str) -> tuple[list[list[list[str]]], list[str]]:
     return tables, lines
 
 
+# 중요도 칸에 폐기를 적은 행. 번호는 남기되(재사용 금지) 요구사항으로 등록하지 않는다
+_RETIRED = re.compile(r"^\s*(?:폐기|deprecated)\s*$", re.IGNORECASE)
+
+
+def retired(cell: str) -> bool:
+    return bool(_RETIRED.match(cell or ""))
+
+
 def priority_of(cell: str) -> str:
     word = clean(cell).lower()
     if not word:
@@ -235,6 +243,8 @@ def requirements_from_tables(tables: list[list[list[str]]]) -> list[DraftRequire
         for row in rows:
             code = _cell(row, cols.code)
             if not _CODE_FULL.match(code) or code in seen:
+                continue
+            if retired(_cell(row, cols.priority)):
                 continue
             name = _cell(row, cols.name)
             if not name:
@@ -356,6 +366,8 @@ def spec_items(text: str) -> list[SpecItem]:
                 continue
             if not code:
                 continue  # 묶음 제목 같은 행. 코드 칸이 빈 행은 요구사항이 아니다
+            if retired(_cell(row, cols.priority)):
+                continue
             body = _cell(row, cols.body) or name
             items.append(SpecItem(
                 code=code, title=_title_of(name) if name else "", body=body[:MAX_BODY_CHARS],

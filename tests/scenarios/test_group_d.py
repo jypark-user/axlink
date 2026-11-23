@@ -373,6 +373,61 @@ def test_UC_031_S04_반려_뒤_재제출_이력(target, s0, screen):
     past = {h["version"]: h for h in now["previousVersions"]}
     assert past["v2"]["status"] == "REJECTED" and past["v2"]["rejectReason"] == "목차 누락", past
     assert past["v2"]["decidedBy"] and past["v2"]["decidedAt"], "반려한 사람·일자가 없다"
+    _review_window_history(target, s0, screen)
+
+
+def _review_window_history(target, s0, screen):
+    """산출물 검토 창(11-18·19 개편 뒤 승인 단위는 올라온 산출물): 3.2 양식에 올린 것을 반려
+    「목차 누락」 → 같은 양식에 새 파일 → 새 것이 최신·승인 대기, 상세보기에 지난 버전의 반려·사유·
+    처리자·처리 일시 (AC-031-4·5, IM-007 v0.2.29)."""
+    pid = s0.ids["TD-PRJ-1"]
+    v1, c1 = auth(s0.tokens["TD-ACC-V1"]), auth(s0.tokens["TD-ACC-C1"])
+    item = next(i for i in _deliverables(target, s0)["items"] if i["wbsId"] == "3.2")
+    form = next(dd for dd in item["designated"] if not dd.get("needsRedesignation"))
+    made: list[str] = []
+
+    def put(name: str, marker: str) -> str:
+        with open(_fresh_docx(s0, name, marker), "rb") as f:
+            res = target.post(
+                f"/api/projects/{pid}/documents", files={"file": (name, f, DOCX)},
+                data={"wbsId": "3.2", "designatedId": form["id"]}, headers=v1,
+            )
+        assert res.status_code in (200, 201, 202), res.text
+        s0.await_document("TD-ACC-V1", res.json()["id"])
+        made.append(res.json()["id"])
+        return res.json()["id"]
+
+    try:
+        first = put("SW설계서_검토1.docx", "검토 1차")
+        # 반려는 발주기관만, 사유가 있어야 한다
+        assert target.post(f"/api/projects/{pid}/documents/{first}/reject", json={"reason": "목차 누락"}, headers=v1).status_code == 403
+        assert target.post(f"/api/projects/{pid}/documents/{first}/reject", json={"reason": " "}, headers=c1).status_code in (400, 422)
+        res = target.post(f"/api/projects/{pid}/documents/{first}/reject", json={"reason": "목차 누락"}, headers=c1)
+        assert res.status_code == 204, res.text
+        second = put("SW설계서_검토2.docx", "검토 2차")
+        item = next(i for i in _deliverables(target, s0)["items"] if i["wbsId"] == "3.2")
+        review = {r["documentId"]: r for r in item["review"]}
+        assert review[second]["latest"] and review[second]["status"] == "SUBMITTED", review[second]
+        old = review[first]
+        assert not old["latest"] and old["status"] == "REJECTED" and old["rejectReason"] == "목차 누락", old
+        who = d.ACCOUNTS["TD-ACC-C1"].display
+        assert old["reviewedBy"] == who and old["reviewedAt"], old
+        if not screen:
+            return
+        sc = screen("TD-ACC-C1")
+        sc.open(f"/p/{pid}/deliverables").see("3.2")
+        sc.page.locator("tr", has_text="3.2").filter(has_text="설계").first.get_by_role("button", name="검토").click()
+        dialog = sc.page.get_by_role("dialog")
+        entry = dialog.locator("li", has_text="SW설계서_검토2.docx").first
+        entry.get_by_text("지난 버전 1개").wait_for(timeout=15000)
+        entry.get_by_role("button", name="상세보기").click()
+        dialog.get_by_role("button", name=re.compile("SW설계서_검토1.docx")).click()
+        sc.see("반려 사유: 목차 누락", who, selector='[role="dialog"]')
+        sc.shot("검토 창 지난 버전")
+        sc.done()
+    finally:
+        for doc in made:
+            target.delete(f"/api/documents/{doc}", headers=v1)
 
 
 def test_UC_031_S05b_지난_버전_승인(target, s0):

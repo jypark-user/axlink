@@ -175,7 +175,7 @@ UC-053-S03,UC-053,pass,C03-R0411,C03-R0411,api,,api,,17
 UC-053-S04,UC-053,not-run,C01-R0415,,mock,,browser,,2
 UC-060-S01,UC-060,pass,C03-R0684,C03-R0684,api,,live-model,,10
 UC-060-S02,UC-060,pass,C03-R0673,C03-R0673,api,,live-model,,13
-UC-060-S03,UC-060,fail,C03-R0674,C03-R0674,api,,live-model,,9
+UC-060-S03,UC-060,pass,C03-R0685,C03-R0685,api,,live-model,,10
 UC-060-S04,UC-060,pass,C03-R0412,C03-R0412,api,,,,10
 UC-060-S05a,UC-060,pass-ci-only,C02-R0786,,auto,,,,6
 UC-060-S05b,UC-060,pass,C03-R0675,C03-R0675,api,,live-model,,8
@@ -183,7 +183,7 @@ UC-060-S06a,UC-060,pass,C03-R0658,C03-R0658,api,,api·browser,,21
 UC-060-S06b,UC-060,pass,C03-R0659,C03-R0659,api,,api·browser,,5
 UC-060-S07,UC-060,pass,C03-R0676,C03-R0676,api,,live-model,,9
 UC-060-S08,UC-060,pass,C03-R0414,C03-R0414,api,,,,10
-UC-060-S09,UC-060,fail,C03-R0677,C03-R0677,api,,airgap·live-model,,8
+UC-060-S09,UC-060,pass,C03-R0686,C03-R0686,api,,airgap·live-model,,9
 UC-060-S10,UC-060,pass,C03-R0416,C03-R0416,api,,,,22
 UC-060-S11,UC-060,not-run,C01-R0435,,mock,,,,2
 UC-060-S12,UC-060,pass-ci-only,C02-R0791,,auto,,,,6

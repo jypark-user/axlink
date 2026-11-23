@@ -308,3 +308,60 @@ def test_결함을_물으면_결함만_꺼내고_없으면_없다고_한다(
     finally:
         with tx() as cur:
             cur.execute("delete from issue where id = %s", (iid,))
+
+
+@pytest.fixture
+def unmet():
+    """검증·인수 전 요구사항 셋(기능 둘, 품질 하나)과 검증된 것 하나."""
+    with tx() as cur:
+        ids = [
+            str(cur.execute(
+                "insert into requirement (project_id, code, title, status, source_kind)"
+                " values (%s, %s, %s, %s, 'MANUAL') returning id",
+                (PID, code, f"미달성 시험 {code}", status),
+            ).fetchone()["id"])
+            for code, status in (
+                ("SWFR.TST.981", "DEFINED"), ("SWFR.TST.982", "IMPLEMENTED"),
+                ("QUR.TST.983", "DEFINED"), ("SWFR.TST.984", "VERIFIED"),
+            )
+        ]
+    yield ids
+    with tx() as cur:
+        cur.execute("delete from requirement where id = any(%s::uuid[])", (ids,))
+
+
+@requires_db
+def test_미달성_요구사항_표는_검증_인수_전이고_묶음별_건수를_서버가_센다(unmet):
+    with tx() as cur:
+        table = entity_table.build(cur, "REQUIREMENT", entity_table.OPEN, [PID], 100)
+    assert table is not None and table.title == "검증·인수 전 요구사항"
+    codes = {r.values["code"] for r in table.data.rows}
+    assert {"SWFR.TST.981", "SWFR.TST.982", "QUR.TST.983"} <= codes
+    assert "SWFR.TST.984" not in codes
+    groups = [line for line in table.lines if line.startswith(("- 종류", "- 영역", "- 상태"))]
+    assert any(line.startswith("- 종류 품질: ") for line in groups), groups
+    # 묶음 건수는 한 줄에 하나다. 검문이 라벨을 섞지 않는다
+    assert all(line.count("건") == 1 for line in groups)
+    facts = number_guard.facts_from_lines(table.lines, "그림 1", subject=table.title)
+    n_quality = next(line for line in groups if line.startswith("- 종류 품질"))
+    value = n_quality.rsplit(": ", 1)[1].removesuffix("건")
+    checker = number_guard.Checker(facts, question="현재 미달성된 요구사항 정리")
+    assert checker.check(f"품질 요구사항은 {value}건입니다.") == []
+
+
+@requires_db
+def test_목록_질문에는_문서_조각을_답_재료로_넣지_않는다(
+    client, conversation, monkeypatch, unmet  # noqa: F811
+):
+    """11-23: 요구사항정의서 조각의 41건·14개를 끌어와 문장을 짓다 검문에 막혔다."""
+    scripted = _Scripted(
+        {"route": "DOCUMENT", "list": "REQUIREMENT", "listFilter": "OPEN", "query": "미달성"},
+        "검증·인수 전 요구사항 목록입니다.\n[그림 1]",
+    )
+    monkeypatch.setattr(ask_service, "llm_port", lambda: scripted)
+    conversation_id, token = conversation()
+    events = _ask(client, token, conversation_id, "현재 미달성된 요구사항 정리")
+    assert events[-1][1]["finishReason"] == "STOP"
+    sources = next(d for e, d in events if e == "sources")["sources"]
+    assert sources == []
+    assert "## 그림 1 (검증·인수 전 요구사항)" in scripted.prompts[0]

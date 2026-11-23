@@ -48,6 +48,12 @@ class EntitySpec:
     order_note: str | None = None
     # 활동 사건 (시각, 종류, 대상 id) 을 내는 SQL. 기간을 물은 목록만 쓴다. None 이면 기간을 못 건다
     activity_events: str | None = None
+    # 열린 것·닫힌 것을 부르는 말이 종류마다 다를 때. 없으면 「처리 중」「완료」
+    open_word: str | None = None
+    closed_word: str | None = None
+    # 범위 전체를 묶어 센 건수(열 이름, select 식). 표는 앞부분만 보이므로 「종류별로 몇 건」을
+    # 모델이 행을 세어 지어내지 않게 서버가 센다(11-23 「현재 미달성된 요구사항 정리」: 8건·32건)
+    groups: tuple[tuple[str, str], ...] = ()
     # 늘 거는 조건. 같은 수를 세는 지표와 범위를 맞춘다
     base_filter: str | None = None
     # 미제출만 고르는 조건. 이 조건이 있는 종류만 MISSING 을 받는다
@@ -164,6 +170,17 @@ ENTITIES: dict[str, EntitySpec] = {
         open_clause="e.status not in ('VERIFIED', 'ACCEPTED')",
         closed_clause="e.status in ('VERIFIED', 'ACCEPTED')",
         url_expr="e.external_url",
+        # 이행률 분자(검증·인수)에 들지 않은 것이 미달성이다.
+        # 「처리 중」은 정의 상태까지 담기에 흐리다
+        open_word="검증·인수 전",
+        closed_word="검증·인수된",
+        groups=(
+            ("종류", "case split_part(e.code, '.', 1) when 'SWFR' then '기능' "
+                    "when 'QUR' then '품질' when 'SER' then '보안·기타' "
+                    "when 'SFR' then '상위 기능' else '코드 없음' end"),
+            ("영역", "coalesce(nullif(split_part(e.code, '.', 2), ''), '코드 없음')"),
+            ("상태", "e.status"),
+        ),
     ),
     "RISK": EntitySpec(
         key="RISK",
@@ -240,7 +257,8 @@ class EntityTable:
 
     @property
     def title(self) -> str:
-        word = _STATUS_WORD[self.status]
+        word = {OPEN: self.spec.open_word, CLOSED: self.spec.closed_word}.get(self.status)
+        word = word or _STATUS_WORD[self.status]
         name = f"{self.spec.label} 목록" if self.status == ALL else f"{word} {self.spec.label}"
         if self.period is not None:
             return f"{self.period.label} 활동이 있는 {name}"
@@ -373,12 +391,37 @@ def build(
         truncated=total > len(rows),
         generatedAt=datetime.now(UTC).isoformat().replace("+00:00", "Z"),
     )
-    lines = [
+    lines = _group_lines(cur, spec, join, join_params, project_ids, clause) if total > 1 else []
+    lines += [
         "- " + " · ".join(f"{label} {r.get(key)}" for key, label, _ in columns_def) for r in rows
     ]
     return EntityTable(
         spec=spec, status=status, total=total, data=data, lines=lines, period=period
     )
+
+
+def _group_lines(
+    cur: Any,
+    spec: EntitySpec,
+    join: str,
+    join_params: tuple[Any, ...],
+    project_ids: list[str],
+    clause: str,
+) -> list[str]:
+    """범위 전체를 묶음마다 센 줄. 건수 하나에 한 줄이다(한 줄에 여럿이면 검문이 라벨을 섞는다)."""
+    out: list[str] = []
+    for label, expr in spec.groups:
+        rows = fetch_all(
+            cur,
+            f"select {expr} as v, count(*) as n from {spec.table}{join}"
+            f" where e.project_id = any(%s::uuid[]) {clause} group by 1 order by 2 desc, 1",
+            (*join_params, project_ids),
+        )
+        if len(rows) < 2 and label != "상태":
+            continue  # 한 묶음뿐이면 전체 건수와 같다
+        key = "status" if label == "상태" else label
+        out += [f"- {label} {_word(key, r['v'])}: {r['n']}건" for r in rows]
+    return out
 
 
 def last_activity(cur: Any, entity: str, project_ids: list[str]) -> str | None:

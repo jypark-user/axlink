@@ -265,6 +265,7 @@ function ReviewDetail({
         {current.reviewedAt && (
           <span className="text-muted-foreground tnum">
             {STATUS_TEXT[current.status]} {formatDateTime(current.reviewedAt)}
+            {current.reviewedBy ? ` · ${current.reviewedBy}` : ''}
           </span>
         )}
       </div>
