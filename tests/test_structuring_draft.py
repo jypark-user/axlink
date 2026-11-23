@@ -1,6 +1,6 @@
 """문서 정형화 초안 → 확정 (SWFR.CON.007 · SWFR.PIP.001 · SWFR.PIP.002).
 
-우리 요구사항정의서(IM-001)를 DOCX 로 만들어 올리면 41건이 초안으로 뽑히고,
+우리 요구사항정의서(IM-001)를 DOCX 로 만들어 올리면 유효한 40건(폐기 1건 제외)이 초안으로 뽑히고,
 확정하면 산출물 항목과 요구사항으로 적재된다. 모델은 fake 다. 실모델은
 test_structuring_live.py 가 따로 본다.
 """
@@ -21,6 +21,12 @@ from tests.conftest import requires_db
 PID = "c0000000-0000-4000-8000-000000000001"
 IM001 = Path(__file__).resolve().parent.parent / "docs/10-requirements/IM-001-요구사항정의서.md"
 ROW_RE = re.compile(r"^\|\s*((?:SWFR|QUR|SER)\.[A-Z]{3}\.\d{3})\s*\|", re.MULTILINE)
+# v0.4.2 에서 폐기한 요구사항. 표 행은 남아 있지만 등록하지 않는다
+RETIRED = {"SER.SEC.002"}
+
+
+def _live_rows() -> list[str]:
+    return [c for c in ROW_RE.findall(IM001.read_text(encoding="utf-8")) if c not in RETIRED]
 
 
 def _auth(token: str) -> dict[str, str]:
@@ -136,13 +142,13 @@ def _draft(client, token: str, doc_id: str) -> dict:
 
 @pytest.fixture
 def im001(client, as_pm) -> dict:
-    """IM-001 을 DOCX 로 올린 문서. 표 41행이 그대로 살아 있어야 한다."""
+    """IM-001 을 DOCX 로 올린 문서. 표 41행(폐기 1행 포함)이 그대로 살아 있어야 한다."""
     return _upload(client, as_pm, "IM-001-요구사항정의서.docx",
                    _md_to_docx(IM001.read_text(encoding="utf-8")))
 
 
 @requires_db
-def test_im001_upload_drafts_41_requirements(client, as_pm, im001):
+def test_im001_upload_drafts_40_requirements(client, as_pm, im001):
     assert im001["status"] == "STRUCTURED"
     assert im001["draftAvailable"] is True
     assert im001["workProductId"] is None
@@ -153,14 +159,14 @@ def test_im001_upload_drafts_41_requirements(client, as_pm, im001):
     assert draft["confidence"] > 0.5
     assert draft["rejectedTypeRaw"] is None
     assert draft["title"] == "AX Link 요구사항정의서 (IM-001)"
-    assert draft["version"] == "0.4.1"
+    assert draft["version"] == "0.4.2"
     assert draft["authoredDate"] == "2026-11-23"
     assert "pmActivity" not in draft and "siActivity" not in draft  # 활동은 유형이 정한다
 
     codes = [r["code"] for r in draft["requirements"]]
-    assert len(codes) == 41
+    assert len(codes) == 40
     # 문서에 적힌 코드와 정확히 같아야 한다. 규칙이 지어낸 코드가 있으면 여기서 걸린다.
-    assert codes == ROW_RE.findall(IM001.read_text(encoding="utf-8"))
+    assert codes == _live_rows()
     assert {r["priority"] for r in draft["requirements"]} == {"MUST"}
     assert all(r["title"] and r["body"] for r in draft["requirements"])
 
@@ -196,7 +202,7 @@ def test_confirm_places_work_product_but_not_requirements(client, as_pm, im001):
     items = client.get(f"/api/projects/{PID}/work-products", headers=_auth(as_pm)).json()["items"]
     spec = next(i for i in items if i["type"] == "REQUIREMENTS_SPEC")
     assert spec["id"] == body["workProductId"]
-    assert spec["version"] == "0.4.1" and spec["status"] == "SUBMITTED"
+    assert spec["version"] == "0.4.2" and spec["status"] == "SUBMITTED"
     assert spec["title"] == draft["title"]
     assert spec["fileUri"]  # 올린 원본을 가리킨다
     with tx() as cur:
@@ -222,7 +228,7 @@ def test_confirm_places_work_product_but_not_requirements(client, as_pm, im001):
     assert doc["workProductId"] == body["workProductId"]
     assert _draft(client, as_pm, im001["id"])["status"] == "CONFIRMED"
 
-    # 두 번 확정은 막는다. 같은 41건이 또 들어가면 안 된다.
+    # 두 번 확정은 막는다. 같은 40건이 또 들어가면 안 된다.
     again = client.post(
         f"/api/documents/{im001['id']}/draft/confirm",
         json=_confirm_body(draft),
@@ -471,7 +477,7 @@ def test_unknown_document_has_no_draft(client, as_pm):
 
 
 @requires_db
-def test_im001_명세서로_기준선을_만들면_41건이_위치와_함께_문제없이_나온다(
+def test_im001_명세서로_기준선을_만들면_40건이_위치와_함께_문제없이_나온다(
     client, client_token, as_pm, im001
 ):
     """실제 요구사항정의서로 기준선 1단계를 돈다(GH-139). 초안 확정을 거치지 않아도 된다."""
@@ -480,14 +486,14 @@ def test_im001_명세서로_기준선을_만들면_41건이_위치와_함께_문
     assert created.status_code == 201, created.text
     b = created.json()
     codes = [i["code"] for i in b["items"]]
-    assert codes == ROW_RE.findall(IM001.read_text(encoding="utf-8"))
+    assert codes == _live_rows()
     assert b["blockingCount"] == 0 and not any(i["problems"] for i in b["items"])
     assert all(i["location"].startswith("표 ") for i in b["items"])
-    assert b["sourceDocVersion"] == "0.4.1"
+    assert b["sourceDocVersion"] == "0.4.2"
 
     sub = client.post(f"{base}/{b['id']}/submit", headers=_auth(as_pm))
     assert sub.status_code == 200, sub.text
     done = client.post(f"{base}/{b['id']}/confirm", json={},
                        headers=_auth(client_token("r2")))
     assert done.status_code == 200, done.text
-    assert sum(done.json()["counts"].values()) == 41
+    assert sum(done.json()["counts"].values()) == 40

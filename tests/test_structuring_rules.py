@@ -11,15 +11,17 @@ from app.document import structuring as s
 IM001 = Path(__file__).resolve().parent.parent / "docs/10-requirements/IM-001-요구사항정의서.md"
 
 
-def test_요구사항정의서에서_41건이_그대로_나온다():
+def test_요구사항정의서에서_유효한_40건이_나온다():
+    """v0.4.2 에서 SER.SEC.002 를 폐기했다. 행은 남았지만 중요도 칸이 「폐기」라 등록하지 않는다."""
     text = IM001.read_text(encoding="utf-8")
     reqs = s.extract_requirements(text)
-    assert len(reqs) == 41
+    assert len(reqs) == 40
+    assert "SER.SEC.002" not in {r.code for r in reqs}
     assert reqs[0].code == "SWFR.CON.001"
     assert reqs[0].title.startswith("커넥터는 공통 인터페이스를 구현하며")
     assert reqs[-1].code == "SER.SEC.003"
     assert {r.priority for r in reqs} == {"MUST"}  # 문서의 중요도가 전부 "필수" 다
-    assert len({r.code for r in reqs}) == 41  # 같은 코드가 뒤 표(시나리오 연계)에 또 나와도 한 번
+    assert len({r.code for r in reqs}) == 40  # 같은 코드가 뒤 표(시나리오 연계)에 또 나와도 한 번
 
 
 def test_표_머리행으로_열을_정한다():
@@ -119,7 +121,7 @@ def test_단서가_엇비슷하면_정하지_않는다():
 def test_제목_버전_작성일은_문서_머리에서_읽는다():
     text = IM001.read_text(encoding="utf-8")
     assert s.guess_title(text) == "AX Link 요구사항정의서 (IM-001)"
-    assert s.guess_version(text) == "0.4.1"
+    assert s.guess_version(text) == "0.4.2"
     assert s.guess_authored_date(text) == "2026-11-23"
 
 
