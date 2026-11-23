@@ -17,6 +17,9 @@ vi.mock('@/features/templates/templates-page', () => ({
 vi.mock('@/features/admin/error-log-page', () => ({
   ErrorLogPage: () => <h1>오류 기록 화면</h1>,
 }));
+vi.mock('@/features/ax-query/ask-page', () => ({
+  AskPage: () => <h1>질의 화면</h1>,
+}));
 
 function signIn(role: Role): void {
   auth.me = {
@@ -58,5 +61,14 @@ describe('관리자 전용 화면', () => {
     signIn(role);
     visit(path);
     expect(await screen.findByRole('heading', { name: '접근 권한이 없습니다' })).toBeInTheDocument();
+  });
+});
+
+describe('AI 질의 화면', () => {
+  // DEC-15 (a): 용역사도 질의한다. 배정되지 않은 사업은 서버가 거절한다(UC-060-S06a)
+  it.each(['CLIENT', 'CONTRACTOR', 'SUPER_ADMIN'] as const)('%s 는 질의 화면에 들어간다', async (role) => {
+    signIn(role);
+    visit('/ask');
+    expect(await screen.findByRole('heading', { name: '질의 화면' })).toBeInTheDocument();
   });
 });
