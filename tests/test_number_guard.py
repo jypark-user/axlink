@@ -302,3 +302,23 @@ def test_작업_번호는_값의_라벨을_빼앗지_않는다():
     assert c.check("진행 중인 작업은 3개입니다.") == []
     assert [v.reason for v in c.check("대시보드·위젯 작업은 80%입니다.")] == ["지표 불일치"]
     assert [v.reason for v in c.check("진행 중인 작업은 4개입니다.")] == ["근거에 없는 값"]
+
+
+def test_각주를_단_원문의_종_수는_건수의_근거가_아니다():
+    """DEF-V064. 폐쇄망 모델이 「일반 이슈는 22건 [1]」을 썼고 [1] 의 「22종」이 근거로 통과했다."""
+    facts = g.facts_from_chunk(1, "납품 산출물은 22종이다.") + g.facts_from_lines(
+        ["- 전체: 9건"], "집계", subject="일반 이슈 건수"
+    )
+    c = g.Checker(facts, question="납품 산출물은 몇 종이고 일반 이슈는 몇 건이야")
+    wrong = c.check("납품 산출물은 22종이고, 일반 이슈는 22건입니다. [1]")
+    assert [v.value for v in wrong] == ["22"]
+    assert c.check("납품 산출물은 22종이고, 일반 이슈는 9건입니다. [1]") == []
+
+
+def test_구절이_대상을_말하면_각주_원문도_그_대상이어야_한다():
+    """각주 면제는 문장이 원문과 다른 말로 부를 때만이다. 구절이 대상을 직접 말했으면 원문도 그
+    대상을 말해야 한다(DEF-V064)."""
+    facts = g.facts_from_chunk(1, "제출 산출물 목록 합계 22")
+    c = g.Checker(facts, question="일반 이슈는 몇 건이야")
+    assert [v.reason for v in c.check("일반 이슈는 22건입니다. [1]")] == ["대상 불일치"]
+    assert c.check("산출물은 22건입니다. [1]") == []
