@@ -419,7 +419,8 @@ def _review_window_history(target, s0, screen):
         sc.page.locator("tr", has_text="3.2").filter(has_text="설계").first.get_by_role("button", name="검토").click()
         dialog = sc.page.get_by_role("dialog")
         entry = dialog.locator("li", has_text="SW설계서_검토2.docx").first
-        entry.get_by_text("지난 버전 1개").wait_for(timeout=15000)
+        # 같은 양식에 앞 시나리오(S01 등)가 올린 판도 지난 버전으로 센다. 수는 모듈 순서에 따라 다르다
+        entry.get_by_text(re.compile(r"지난 버전 \d+개")).wait_for(timeout=15000)
         entry.get_by_role("button", name="상세보기").click()
         dialog.get_by_role("button", name=re.compile("SW설계서_검토1.docx")).click()
         sc.see("반려 사유: 목차 누락", who, selector='[role="dialog"]')
