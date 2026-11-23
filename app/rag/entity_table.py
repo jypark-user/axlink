@@ -10,7 +10,7 @@
 """
 
 import re
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from datetime import UTC, datetime
 from typing import Any
 
@@ -18,12 +18,15 @@ from app.db import fetch_all, fetch_one
 from app.rag import vocab
 from app.rag.question_period import ActivityRange
 from app.semantic.models import WidgetColumn, WidgetDataResponse, WidgetRow
+from app.standard.work_product_type import DISPLAY_NAMES
 
 # 상태 필터. 모델은 이 셋 중 하나만 고른다.
 OPEN = "OPEN"
 CLOSED = "CLOSED"
 ALL = "ALL"
 STATUSES = (OPEN, CLOSED, ALL)
+# 산출물만. 질문 글자에 「미제출」이 있으면 서버가 고른다. 모델의 선택지에는 넣지 않는다
+MISSING = "MISSING"
 
 
 @dataclass(frozen=True)
@@ -45,6 +48,22 @@ class EntitySpec:
     order_note: str | None = None
     # 활동 사건 (시각, 종류, 대상 id) 을 내는 SQL. 기간을 물은 목록만 쓴다. None 이면 기간을 못 건다
     activity_events: str | None = None
+    # 늘 거는 조건. 같은 수를 세는 지표와 범위를 맞춘다
+    base_filter: str | None = None
+    # 미제출만 고르는 조건. 이 조건이 있는 종류만 MISSING 을 받는다
+    missing_clause: str | None = None
+
+
+def _quote(text: str) -> str:
+    return "'" + text.replace("'", "''") + "'"
+
+
+# 산출물 유형 코드를 화면과 같은 이름으로. 표 값이 코드면 모델도 코드로 말한다(11-23 실측)
+_PRODUCT_TYPE_NAME = (
+    "case e.type "
+    + " ".join(f"when {_quote(k)} then {_quote(v)}" for k, v in DISPLAY_NAMES.items())
+    + " else e.type end"
+)
 
 
 # 이행률 범위(DEC-11). app.standard.repository.in_rate_scope 와 같은 조건이다. 확정 전이면 전부 든다
@@ -112,6 +131,8 @@ ENTITIES: dict[str, EntitySpec] = {
             "최근 갱신순으로 둔다. 미지정은 위험 등급이 아니다"
         ),
         activity_events=f"{_SELF_CREATED} union all {_CHANGES_ON_SELF}",
+        # 일반 이슈는 결함을 뺀 값이다(DEC-02). 일반 이슈 수 지표와 같은 범위
+        base_filter="e.issue_kind = 'GENERAL'",
     ),
     "REQUIREMENT": EntitySpec(
         key="REQUIREMENT",
@@ -153,6 +174,8 @@ ENTITIES: dict[str, EntitySpec] = {
             ("status", "상태", "e.status"),
             ("severity", "심각도", "coalesce(e.severity, '-')"),
             ("owner", "담당", "coalesce(e.owner, '-')"),
+            # 착수보고 대표 질의 「리스크와 대응 상태」. 대응 계획은 리스크 도구의 대응 칸이다
+            ("mitigation", "대응", "coalesce(nullif(btrim(e.mitigation), ''), '-')"),
         ),
         order_by="e.identified_at desc nulls last, e.created_at desc",
         open_clause="e.status <> 'CLOSED'",
@@ -164,17 +187,34 @@ ENTITIES: dict[str, EntitySpec] = {
         label="산출물",
         table="work_product e",
         columns=(
-            ("type", "유형", "e.type"),
+            ("type", "유형", _PRODUCT_TYPE_NAME),
             ("title", "제목", "coalesce(e.title, '-')"),
-            ("status", "상태", "e.status"),
-            ("version", "버전", "coalesce(e.version, '-')"),
+            ("status", "상태", "case when e.status = 'NONE' then '미제출' else e.status end"),
+            # 미제출 항목의 버전 0 은 자리값이다. 버전으로 읽히지 않게 비운다
+            ("version", "버전", "case when e.status = 'NONE' then '-' "
+                               "else coalesce(e.version, '-') end"),
         ),
         order_by="e.type",
         open_clause="e.status <> 'APPROVED'",
         closed_clause="e.status = 'APPROVED'",
         url_expr="e.external_url",
+        # 미제출 산출물 수(work_product_missing_count)와 같은 범위. 지난 버전과 적용 제외를
+        # 빼지 않으면 표 24건, 카드 18건으로 어긋났다(11-23 실측)
+        scope_note="적용 대상인 현재 버전",
+        base_filter="e.is_current and e.applicable",
+        missing_clause="e.status = 'NONE'",
     ),
 }
+
+# 결함은 일반 이슈와 같은 표에 같은 칸으로 보이되 결함으로 분류된 것만 꺼낸다. 라우터의 목록
+# 종류에는 없다. 질문 글자에 「결함」이 있으면 서버가 일반 이슈 목록을 이것으로 바꾼다
+ENTITIES["DEFECT"] = replace(
+    ENTITIES["ISSUE"],
+    key="DEFECT",
+    label="결함",
+    scope_note=None,
+    base_filter="e.issue_kind = 'DEFECT'",
+)
 
 # 문서 청크의 source_type 과 표준 모델 종류를 잇는다. 라우터는 청크 종류로 말한다.
 FROM_SOURCE_TYPE = {
@@ -184,7 +224,7 @@ FROM_SOURCE_TYPE = {
     "DOCUMENT_UPLOAD": "WORK_PRODUCT",
 }
 
-_STATUS_WORD = {OPEN: "처리 중", CLOSED: "완료", ALL: "전체"}
+_STATUS_WORD = {OPEN: "처리 중", CLOSED: "완료", ALL: "전체", MISSING: "미제출"}
 
 
 @dataclass
@@ -256,11 +296,14 @@ def _activity_join(spec: EntitySpec) -> str:
 
 
 def _where(spec: EntitySpec, status: str) -> str:
+    base = f" and {spec.base_filter}" if spec.base_filter else ""
     if status == OPEN and spec.open_clause:
-        return f" and {spec.open_clause}"
+        return f"{base} and {spec.open_clause}"
     if status == CLOSED and spec.closed_clause:
-        return f" and {spec.closed_clause}"
-    return ""
+        return f"{base} and {spec.closed_clause}"
+    if status == MISSING and spec.missing_clause:
+        return f"{base} and {spec.missing_clause}"
+    return base
 
 
 def build(
@@ -279,7 +322,9 @@ def build(
     spec = ENTITIES.get(entity)
     if spec is None or not project_ids:
         return None
-    status = status if status in STATUSES else ALL
+    if status == MISSING and spec.missing_clause is None:
+        status = OPEN
+    status = status if status in (*STATUSES, MISSING) else ALL
     clause = _where(spec, status)
     if spec.activity_events is None:
         period = None

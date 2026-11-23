@@ -278,6 +278,16 @@ def empty_listing(label: str) -> str:
     )
 
 
+def no_defects(status_word: str = "") -> str:
+    """결함을 물었는데 그 조건의 결함이 없다. 결함은 연결 설정으로 가른다(DEC-02, V63)."""
+    head = f"{status_word} 결함" if status_word else "결함"
+    return (
+        f"사업 범위 안에 {head}으로 분류된 이슈가 없습니다. 결함은 도구 연동 설정의 결함 "
+        "트래커(Redmine)나 결함 라벨(GitHub)에 해당하는 이슈이고, 설정이 없으면 모든 이슈를 "
+        "일반 이슈로 셉니다."
+    )
+
+
 def off_topic() -> str:
     return (
         "이 도우미는 사업의 진척·이슈·요구사항·산출물·리스크와 관련 문서에 대해서만 답합니다. "

@@ -31,6 +31,11 @@ _FOOTNOTE = re.compile(r"\[(\d{1,2})\]")
 _DATE_FULL = re.compile(r"(\d{4})\s*[-./]\s*(\d{1,2})\s*[-./]\s*(\d{1,2})")
 _DATE_KO = re.compile(r"(?:(\d{4})\s*년)?\s*(?:(\d{1,2})\s*월)?\s*(?:(\d{1,2})\s*일)?")
 _DATE_MD = re.compile(r"(?<![\d.\-/])(\d{1,2})[-/](\d{1,2})(?![\d./\-])")
+# 「최근 7일」, 「7일 동안」 같은 기간 길이. 날짜(그달 7일)가 아니다. 11-23 실측에서 「지난 7일 동안
+# 문서 11건」의 7일을 기준 날짜로 읽어 오늘 집계한 값을 막았다
+_DURATION = re.compile(
+    r"(?:최근|지난)\s*\d{1,3}\s*일|\d{1,3}\s*일\s*(?:동안|간|전|이내|사이|째|만에)"
+)
 _DATE_MD_DOT = re.compile(r"(?<![\d.])(\d{1,2})\.(\d{1,2})(?=\s*(?:까지|부터|일|~|에\s|에$))")
 
 _NON_QUANTITY = [
@@ -106,7 +111,7 @@ def dates_in(text: str) -> set[DateKey]:
     found: set[DateKey] = set()
     for m in _DATE_FULL.finditer(text):
         found.add((int(m.group(1)), int(m.group(2)), int(m.group(3))))
-    rest = _DATE_FULL.sub(" ", text)
+    rest = _DURATION.sub(" ", _DATE_FULL.sub(" ", text))
     for m in _DATE_KO.finditer(rest):
         y, mo, d = m.group(1), m.group(2), m.group(3)
         if not (y or mo or d):

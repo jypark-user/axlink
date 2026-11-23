@@ -192,6 +192,28 @@ def list_by_source(
     )
 
 
+def chunks_of(
+    cur: Any, source_type: str, source_ids: list[str], project_ids: list[str]
+) -> list[RetrievedChunk]:
+    """적힌 ID 로 찾은 항목의 첫 조각. 질문이 그 항목을 글자로 가리켰으니 유사도는 1.0 이다."""
+    if not source_ids or not project_ids:
+        return []
+    rows = fetch_all(
+        cur,
+        """
+        select c.id::text as id, c.project_id::text as project_id, p.name as project_name,
+               c.source_type, c.source_id::text as source_id, c.source_title, c.source_uri,
+               c.chunk_index, c.content, c.meta_json, 1.0 as similarity
+          from doc_chunk c
+          join project p on p.id = c.project_id
+         where c.project_id = any(%s::uuid[]) and c.source_type = %s
+           and c.source_id = any(%s::uuid[]) and c.chunk_index = 0
+        """,
+        (project_ids, source_type, source_ids),
+    )
+    return [_chunk(r, 0.0) for r in rows]
+
+
 def _chunk(row: dict, score: float) -> RetrievedChunk:
     meta = row.get("meta_json") or {}
     heading = meta.get("headingPath") or []
