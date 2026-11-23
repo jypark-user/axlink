@@ -153,8 +153,8 @@ def test_im001_upload_drafts_41_requirements(client, as_pm, im001):
     assert draft["confidence"] > 0.5
     assert draft["rejectedTypeRaw"] is None
     assert draft["title"] == "AX Link 요구사항정의서 (IM-001)"
-    assert draft["version"] == "0.4"
-    assert draft["authoredDate"] == "2026-08-27"
+    assert draft["version"] == "0.4.1"
+    assert draft["authoredDate"] == "2026-11-23"
     assert "pmActivity" not in draft and "siActivity" not in draft  # 활동은 유형이 정한다
 
     codes = [r["code"] for r in draft["requirements"]]
@@ -196,7 +196,7 @@ def test_confirm_places_work_product_but_not_requirements(client, as_pm, im001):
     items = client.get(f"/api/projects/{PID}/work-products", headers=_auth(as_pm)).json()["items"]
     spec = next(i for i in items if i["type"] == "REQUIREMENTS_SPEC")
     assert spec["id"] == body["workProductId"]
-    assert spec["version"] == "0.4" and spec["status"] == "SUBMITTED"
+    assert spec["version"] == "0.4.1" and spec["status"] == "SUBMITTED"
     assert spec["title"] == draft["title"]
     assert spec["fileUri"]  # 올린 원본을 가리킨다
     with tx() as cur:
@@ -206,7 +206,7 @@ def test_confirm_places_work_product_but_not_requirements(client, as_pm, im001):
             (body["workProductId"],),
         )
         row = cur.fetchone()
-    assert row == {"source_kind": "DOCUMENT", "doc": im001["id"], "at": "2026-08-27"}
+    assert row == {"source_kind": "DOCUMENT", "doc": im001["id"], "at": "2026-11-23"}
 
     # 요구사항 목록에는 아무것도 들어가지 않았다
     page = client.get(
@@ -483,7 +483,7 @@ def test_im001_명세서로_기준선을_만들면_41건이_위치와_함께_문
     assert codes == ROW_RE.findall(IM001.read_text(encoding="utf-8"))
     assert b["blockingCount"] == 0 and not any(i["problems"] for i in b["items"])
     assert all(i["location"].startswith("표 ") for i in b["items"])
-    assert b["sourceDocVersion"] == "0.4"
+    assert b["sourceDocVersion"] == "0.4.1"
 
     sub = client.post(f"{base}/{b['id']}/submit", headers=_auth(as_pm))
     assert sub.status_code == 200, sub.text
