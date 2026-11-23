@@ -172,3 +172,12 @@ def seed_issue_requirements(
         )
         made[external_id] = str(cur.fetchone()["id"])
     return made
+
+
+@pytest.fixture(autouse=True)
+def _login_throttle_reset():
+    """로그인 실패 제한은 프로세스 메모리에 쌓인다. 앞 시험의 실패가 뒤 시험을 막지 않게 비운다."""
+    from app.auth import throttle
+
+    throttle.reset()
+    yield

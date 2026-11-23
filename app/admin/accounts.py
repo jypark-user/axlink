@@ -21,6 +21,7 @@ import psycopg
 from pydantic import BaseModel, Field
 
 from app.auth import repository as auth_repository
+from app.auth import throttle
 from app.auth.models import AuthPrincipal
 from app.common import errors
 from app.db import fetch_all, fetch_one
@@ -258,6 +259,7 @@ def reset_password(cur: Any, principal: AuthPrincipal, user_id: str) -> ClientUs
         (password_hash, user_id),
     )
     auth_repository.revoke_all_for_user(cur, user_id, datetime.now(UTC))
+    throttle.succeed(user["username"])  # 실패가 쌓여 잠긴 계정도 새 비밀번호로 바로 들어온다
     _history(cur, principal, "APP_USER", user_id, "password_reset", None, "임시 비밀번호 재발급")
     return ClientUserCreatedResponse(
         id=str(user["id"]),
