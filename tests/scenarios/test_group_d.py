@@ -415,29 +415,70 @@ def test_UC_031_S03_설정_경로_아닌_커밋(target, s0, replay):
     _restore_wbs(target, s0, replay)
 
 
-def test_UC_031_S02_설정_경로_커밋(target, s0, replay):
-    """설정 경로에 설계서 파일 커밋 → 수집 → 제출본 생성(버전 = 해시), 판정 「제출(저장소 경로)」 (AC-031-2).
+def test_UC_031_S02_저장소_파일_고르기(target, s0, replay, screen):
+    """V1 이 3.2 [업로드] → 저장소 파일 선택에서 설계서 파일 → 3.2 「제출」, 검토 창에 그 파일이 승인 대기.
+    고르지 않은 저장소 파일은 작업 판정에 들지 않는다 (AC-031-2).
 
-    설정 경로는 TD-CON-1 의 연결별 매핑 규칙 collectFiles 로 준다(DEF-V012 수정 뒤 연결별 설정).
-    서버 설정을 바꾸지 않아 원격(5174)에서도 같은 절차로 돈다. 끝에 원래 규칙으로 되돌린다."""
-    c1 = auth(s0.tokens["TD-ACC-C1"])
-    con = f"/api/connections/{s0.ids['TD-CON-1']}"
-    got = target.get(f"/api/projects/{s0.ids['TD-PRJ-1']}/connections", headers=c1)
-    assert got.status_code == 200, got.text
-    conn = next(c for c in got.json() if c["id"] == s0.ids["TD-CON-1"])
-    original = dict(conn.get("mappingRules") or {})
-    rules = {**original, "collectFiles": "docs/00-management/WBS.xlsx=PROJECT_PLAN,docs/20-design/SW설계서_v0.9.docx=SOFTWARE_DESIGN"}
-    res = target.patch(f"{con}/mapping", json={"mappingRules": rules}, headers=c1)
-    assert res.status_code == 200, res.text
+    11-19 개편(41bec3e)으로 저장소 파일 자동 판정이 없어지고 올리기에서 고르게 바뀌었다. 옛 시험은 설정
+    경로에 커밋하면 제출본이 생기는지를 봤다. 모듈을 이어 돌리면 앞 시나리오(S01)가 3.2 에 TD-DOC-3 을
+    올린 뒤라 「1/1건」 대신 고른 파일이 3.2 문서로 붙고 판정이 제출인지 본다."""
+    path = "docs/20-design/SW설계서_v0.9.docx"
+    name = path.rsplit("/", 1)[-1]
+    pid = s0.ids["TD-PRJ-1"]
+    v1 = auth(s0.tokens["TD-ACC-V1"])
+    made: list[str] = []
     try:
-        replay.faults = Faults(serve_design_file=True, extra_tree_paths=["docs/20-design/SW설계서_v0.9.docx"])
+        replay.faults = Faults(serve_design_file=True, extra_tree_paths=[path])
         _sync(target, s0)
-        with tx() as cur:
-            rows = fetch_all(cur, "select version, status, source_kind, is_current from work_product where project_id = %s and type = 'SOFTWARE_DESIGN' order by created_at", (s0.ids["TD-PRJ-1"],))
-        tool_rows = [r for r in rows if r["source_kind"] == "TOOL"]
-        assert tool_rows and tool_rows[-1]["status"] == "SUBMITTED" and tool_rows[-1]["version"].startswith("d3d3d3d3"), rows
+        listed = target.get(f"/api/projects/{pid}/repository-files", headers=v1)
+        assert listed.status_code == 200, listed.text
+        assert path in listed.json()["paths"], listed.json()
+        before = {i["wbsId"]: i for i in _deliverables(target, s0)["items"]}
+        if screen:
+            sc = screen("TD-ACC-V1")
+            sc.open(f"/p/{pid}/deliverables").see("3.2")
+            row = sc.page.locator("tr", has_text="3.2").filter(has_text="설계").first
+            # 3.2 에는 WBS 가 정한 양식이 있어 [업로드]가 양식 창을 열고, 저장소 파일은 그 안에서 고른다
+            row.get_by_role("button", name="업로드").click()
+            forms = sc.page.get_by_role("dialog").first
+            forms.get_by_role("button", name="업로드").first.click()
+            sc.page.get_by_role("menuitem", name="저장소 파일 선택").click()
+            dialog = sc.page.get_by_role("dialog").filter(has_text="저장소 파일 선택")
+            dialog.get_by_role("combobox").click()
+            sc.page.get_by_label("저장소 파일 찾기").fill("SW설계서")
+            sc.page.get_by_role("option", name=path).click()
+            dialog.get_by_role("button", name="업로드").click()
+            dialog.wait_for(state="hidden", timeout=30000)
+            sc.shot("저장소 파일 올림")
+        else:
+            res = target.post(
+                f"/api/projects/{pid}/documents/from-repository",
+                json={"path": path, "wbsId": "3.2"},
+                headers=v1,
+            )
+            assert res.status_code == 201, res.text
+        after = {i["wbsId"]: i for i in _deliverables(target, s0)["items"]}
+        docs = [x for x in after["3.2"]["documents"] if x["fileName"] == name]
+        assert docs, after["3.2"]["documents"]
+        made = [x["id"] for x in docs]
+        assert after["3.2"]["status"] == "SUBMITTED", after["3.2"]
+        changed = [w for w in before if w != "3.2" and before[w]["status"] != after[w]["status"]]
+        assert not changed, f"고르지 않은 작업의 판정이 바뀌었다: {changed}"
+        if screen:
+            sc.open(f"/p/{pid}/deliverables").see("3.2")
+            assert "제출" in sc.page.locator("tr", has_text="3.2").filter(has_text="설계").first.inner_text()
+            sc.done()
+            c1 = screen("TD-ACC-C1")
+            c1.open(f"/p/{pid}/deliverables").see("3.2")
+            c1.page.locator("tr", has_text="3.2").filter(has_text="설계").first.get_by_role(
+                "button", name="검토"
+            ).click()
+            c1.see(name, "승인 대기", selector='[role="dialog"]')
+            c1.shot("검토 창")
+            c1.done()
     finally:
-        target.patch(f"{con}/mapping", json={"mappingRules": original}, headers=c1)
+        for doc in made:
+            target.delete(f"/api/documents/{doc}", headers=v1)
         _restore_wbs(target, s0, replay)
 
 
