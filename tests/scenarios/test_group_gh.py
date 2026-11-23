@@ -251,7 +251,10 @@ def test_UC_060_S06b_배정된_용역사의_질의(target, s0, llm, screen):
     if not screen:
         return
     sc = screen("TD-ACC-V1")
-    sc.open(f"/p/{s0.ids['TD-PRJ-1']}/ask").see("새 질문")
+    # 질의 화면 본문(질문 입력)과 사이드바의 [새 질문]. [새 질문]은 본문(main) 밖 사이드바에 있다
+    sc.open(f"/p/{s0.ids['TD-PRJ-1']}/ask").see("무엇이든 물어보십시오")
+    sc.see("새 질문", selector="body")
+    sc.shot("용역사 질의 화면")
     sc.not_see("접근 권한이 없습니다")
     sc.done()
 

@@ -14,7 +14,7 @@ import json
 import logging
 import time
 from collections.abc import Iterator
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from datetime import datetime
 from typing import Any
 
@@ -237,7 +237,8 @@ def stream(p: Prepared) -> Iterator[bytes]:
             # 판정은 캐시를 먼저 본다(ARC-014). 값은 아래에서 매번 새로 뽑는다.
             with tx() as cur:
                 routed = route_cache.decide(cur, p.catalog, llm, p.question, p.previous)
-        decision = routed.decision
+        decision = routing.correct_document_part(p.catalog, routed.decision, p.question)
+        routed = replace(routed, decision=decision)
         query_text = decision.rewritten or p.question
         # 일정 질문은 표준 모델과 WBS 로 답한다. 문서 검색은 지연 사유만 쓴다
         searches = decision.type != routing.INTENT or decision.intent == intents.DELAY_CAUSE
