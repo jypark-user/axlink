@@ -12,6 +12,7 @@ DB 연결을 붙든 채 수십 초를 기다리지 않게 하려는 것이다.
 
 import json
 import logging
+import re
 import time
 from collections.abc import Iterator
 from dataclasses import dataclass, field, replace
@@ -671,6 +672,12 @@ def _listing_and_overview(cur: Any, p: Prepared, turn: _Turn) -> None:
         turn.block_list.extend(overview.build(cur, p.principal, p.scope, len(turn.block_list) + 1))
 
 
+# 질문이 문서 내용을 함께 묻는가. 목록 표만으로 답할 질문인지 가른다
+_ASKS_DOCUMENT = re.compile(
+    r"문서|정의서|명세서|과업지시서|계획서|보고서|회의록|설계서|지침|가이드|근거|출처|원문|어디에|적힌|나온"
+)
+
+
 def _search(
     cur: Any, p: Prepared, turn: _Turn, query_vec: list[float] | None, query_text: str
 ) -> None:
@@ -679,6 +686,11 @@ def _search(
     끊겼다. 표가 답이고, 청크는 주제가 닿는 것만 출처로 붙인다."""
     decision = turn.decision
     if decision.type == routing.INTENT and decision.intent != intents.DELAY_CAUSE:
+        return
+    if turn.table is not None and not _ASKS_DOCUMENT.search(p.question):
+        # 목록을 물었고 표가 그 답이다. 비슷한 문서 조각을 같이 주면 모델이 그 숫자로 문장을
+        # 짓는다(11-23 「현재 미달성된 요구사항 정리」: 요구사항정의서의 41건·14개를 끌어와
+        # 검문에 막힘). 문서를 함께 물은 질문만 검색한다
         return
     if query_vec is None:
         query_vec = embedding_port().embed([p.question])[0]
