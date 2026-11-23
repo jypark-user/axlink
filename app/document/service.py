@@ -160,6 +160,43 @@ def upload(
     return _to_response(repository.find_by_id(cur, document_id))
 
 
+def review(
+    cur: Any, principal: AuthPrincipal, project_id: str, document_id: str, status: str,
+    reason: str | None,
+) -> None:
+    """작업·양식에 올라온 산출물 하나를 승인·반려한다(V70). 승인 단위는 올라온 산출물이다.
+
+    22종 분류별 산출물 버전과 상관이 없어, 다른 작업이 같은 분류를 내도 이 산출물의 승인은
+    그대로다. 승인한 것도 반려할 수 있고, 반려한 것은 다시 승인할 수 있다.
+    """
+    from app.auth import duties
+
+    duties.require(principal, "PRODUCT_APPROVE")  # 관리자는 대신하지 않는다(DEC-05)
+    _require_project(cur, principal, project_id)
+    row = repository.find_by_id(cur, document_id)
+    if row is None or str(row["project_id"]) != project_id:
+        raise errors.not_found("문서", document_id)
+    if not row.get("review_status"):
+        raise errors.ApiError(
+            409, "NOT_A_DELIVERABLE",
+            "작업이나 산출물 양식에 올린 산출물만 승인·반려할 수 있습니다.",
+        )
+    reason = (reason or "").strip() or None
+    if status == "REJECTED" and not reason:
+        raise errors.validation_failed("반려 사유를 적어 주세요.")
+    repository.set_review(cur, document_id, status, principal.user_id, reason)
+    name = row["original_filename"]
+    approved = status == "APPROVED"
+    activity.record(
+        cur, project_id=project_id,
+        kind=activity.WORK_PRODUCT_APPROVED if approved else activity.WORK_PRODUCT_REJECTED,
+        audience=activity.CONTRACTOR,
+        summary=f"산출물 {'승인' if approved else '반려'}: {name}", actor=principal,
+        target_type="DOCUMENT", target_key=document_id,
+        detail={"reason": reason} if reason else None,
+    )
+
+
 def _link_designated(cur: Any, document_id: str, designated_id: str, wbs_item_id: str) -> None:
     from app.dashboard import designation_repository
 
@@ -329,11 +366,14 @@ class _Heartbeat:
 
 
 def list_for_project(
-    cur: Any, principal: AuthPrincipal, project_id: str, page: PageQuery
+    cur: Any, principal: AuthPrincipal, project_id: str, page: PageQuery,
+    *, general: bool = False, q: str | None = None,
 ) -> PageResponse[DocumentUploadResponse]:
+    """사업의 문서 목록. general 이면 산출물에 붙지 않은 일반 자료만(자료 화면, 11-19)."""
     _require_project(cur, principal, project_id)
-    total = repository.count_by_project(cur, project_id)
-    rows = repository.list_by_project(cur, project_id, page)
+    q = (q or "").strip() or None
+    total = repository.count_by_project(cur, project_id, general=general, q=q)
+    rows = repository.list_by_project(cur, project_id, page, general=general, q=q)
     return PageResponse.of([_to_response(r) for r in rows], page, total)
 
 

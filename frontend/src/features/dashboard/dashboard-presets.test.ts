@@ -1,5 +1,10 @@
 import { describe, expect, it } from 'vitest';
-import { DASHBOARD_PRESETS, packGrid, toWidgetSpec } from '@/features/dashboard/dashboard-presets';
+import {
+  DASHBOARD_PRESETS,
+  DEFAULT_PRESET,
+  packGrid,
+  toWidgetSpec,
+} from '@/features/dashboard/dashboard-presets';
 import { DEFAULT_SIZE } from '@/features/dashboard/layout-mapper';
 import { widgetRenderers } from '@/features/widgets/renderer-registry';
 
@@ -44,8 +49,12 @@ describe('dashboard-presets', () => {
       expect(grid).toHaveLength(preset.widgets.length);
       grid.forEach((item, i) => {
         expect(item.x + item.w).toBeLessThanOrEqual(12);
-        expect(item.w).toBeGreaterThanOrEqual(DEFAULT_SIZE[preset.widgets[i].template].w);
-        expect(item.h).toBeGreaterThanOrEqual(DEFAULT_SIZE[preset.widgets[i].template].h);
+        // 크기를 따로 준 위젯은 그 크기, 아니면 기본 크기보다 작아지지 않는다. 최소 크기는 늘 지킨다
+        const widget = preset.widgets[i];
+        const base = { ...DEFAULT_SIZE[widget.template], ...widget.size };
+        expect(item.w).toBeGreaterThanOrEqual(base.w);
+        expect(item.h).toBeGreaterThanOrEqual(base.h);
+        expect(item.w).toBeGreaterThanOrEqual(DEFAULT_SIZE[widget.template].minW);
         grid.slice(i + 1).forEach((other) => expect(overlaps(item, other)).toBe(false));
       });
     }
@@ -88,6 +97,41 @@ describe('dashboard-presets', () => {
   it('기존 위젯 아래에서 시작한다', () => {
     const grid = packGrid(DASHBOARD_PRESETS[0].widgets, 8);
     expect(Math.min(...grid.map((g) => g.y))).toBe(8);
+  });
+
+  // 처음 화면과 초기화가 놓는 구성 (11-18 사용자 지시)
+  it('기본 구성은 세 기준 진척률과 그 일별 추이, 진행 중 작업을 담고 위젯마다 근거가 있다', () => {
+    expect(DASHBOARD_PRESETS[0]).toBe(DEFAULT_PRESET);
+    const measures = DEFAULT_PRESET.widgets.map((w) => w.measure);
+    for (const m of [
+      'progress_wbs_pct',
+      'deliverable_submission_rate',
+      'deliverable_approval_rate',
+      'requirement_fulfillment_rate',
+      'wbs_task_actual_pct',
+    ]) {
+      expect(measures, m).toContain(m);
+    }
+    const trend = DEFAULT_PRESET.widgets.find((w) => w.measure === 'progress_metric_pct');
+    expect(trend?.template).toBe('LINE_CHART');
+    expect(trend?.dimensions).toEqual(['period_day', 'progress_metric']);
+    for (const w of DEFAULT_PRESET.widgets) {
+      expect(w.rationale?.length ?? 0, w.title).toBeGreaterThan(20);
+      expect(toWidgetSpec(w, 'prj-1').rationale).toBe(w.rationale);
+    }
+    // FHD 스크롤 두 쪽 남짓. 격자 한 줄은 80px + 간격 16px 이다
+    const grid = packGrid(DEFAULT_PRESET.widgets);
+    const height = Math.max(...grid.map((g) => g.y + g.h));
+    expect(height).toBeLessThanOrEqual(20);
+  });
+
+  it('필터와 읽을 줄 수를 준 위젯은 명세에 그대로 담는다', () => {
+    const commits = DEFAULT_PRESET.widgets.find((w) => w.measure === 'code_activity_count')!;
+    expect(toWidgetSpec(commits, 'prj-1').query.filters).toEqual([
+      { field: 'period', op: 'LAST_N_DAYS', value: 14 },
+    ]);
+    const trend = DEFAULT_PRESET.widgets.find((w) => w.measure === 'progress_metric_pct')!;
+    expect(toWidgetSpec(trend, 'prj-1').query.limit).toBe(400);
   });
 
   it('spec 은 선택한 프로젝트 범위로만 조회한다', () => {

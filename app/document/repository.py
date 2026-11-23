@@ -17,7 +17,7 @@ _COLUMNS = """
     w.wbs_id, w.name as wbs_name,
     dd.name as designated_name, dd.active as designated_active,
     d.processing_state, d.processing_error, d.processing_attempts, d.processed_at,
-    d.processing_steps
+    d.processing_steps, d.review_status
 """
 _FROM = """
     from document_upload d
@@ -81,9 +81,45 @@ def insert(
 
 
 def link_wbs_item(cur: Any, document_id: str, wbs_item_id: str | None) -> None:
+    """문서를 작업에 붙이거나 뗀다. 작업에 붙은 문서는 산출물이라 검토 상태가 생긴다(V70).
+
+    이미 승인·반려된 것은 그대로 둔다. 작업과 양식에서 모두 떼면 검토 상태도 지운다.
+    요청을 고르지 않고 작업에 붙이면 그 작업의 WBS 예상 산출물(V73)에 잇는다.
+    """
     cur.execute(
-        "update document_upload set wbs_item_id = %s, updated_at = now() where id = %s",
-        (wbs_item_id, document_id),
+        """
+        update document_upload d
+           set wbs_item_id = %(w)s,
+               designated_deliverable_id = coalesce(d.designated_deliverable_id, (
+                 select dd.id
+                   from wbs_item w
+                   join wbs_designated_deliverable dd
+                     on dd.project_id = w.project_id and dd.task_key = w.task_key
+                    and dd.origin = 'WBS' and dd.active
+                  where w.id = %(w)s::uuid
+               )),
+               review_status = case
+                 when %(w)s::uuid is not null then coalesce(d.review_status, 'SUBMITTED')
+                 when d.designated_deliverable_id is not null then d.review_status
+               end,
+               updated_at = now()
+         where d.id = %(d)s
+        """,
+        {"w": wbs_item_id, "d": document_id},
+    )
+
+
+def set_review(
+    cur: Any, document_id: str, status: str, user_id: str | None, reason: str | None
+) -> None:
+    cur.execute(
+        """
+        update document_upload
+           set review_status = %s, reviewed_by_user_id = %s, reviewed_at = now(),
+               review_reason = %s, updated_at = now()
+         where id = %s
+        """,
+        (status, user_id, reason, document_id),
     )
 
 
@@ -119,23 +155,47 @@ def mark_failed(cur: Any, document_id: str, message: str) -> None:
     )
 
 
-def count_by_project(cur: Any, project_id: str) -> int:
+# 산출물과 무관한 일반 자료(11-19). 작업에도 예상 산출물에도 붙지 않은 문서다
+_GENERAL = "d.wbs_item_id is null and d.designated_deliverable_id is null"
+
+
+def _list_filter(general: bool, q: str | None) -> tuple[str, list[Any]]:
+    """목록 조건. general 이면 일반 자료만, q 가 있으면 파일명에 그 글자가 든 것만."""
+    sql, args = "", []
+    if general:
+        sql += f" and {_GENERAL}"
+    if q:
+        sql += " and d.original_filename ilike %s"
+        esc = q.replace("\\", "\\\\").replace("%", r"\%").replace("_", r"\_")
+        args.append(f"%{esc}%")
+    return sql, args
+
+
+def count_by_project(
+    cur: Any, project_id: str, *, general: bool = False, q: str | None = None
+) -> int:
+    cond, args = _list_filter(general, q)
     row = fetch_one(
-        cur, "select count(*) as n from document_upload where project_id = %s", (project_id,)
+        cur,
+        f"select count(*) as n from document_upload d where d.project_id = %s{cond}",
+        (project_id, *args),
     )
     return int(row["n"]) if row else 0
 
 
-def list_by_project(cur: Any, project_id: str, page: PageQuery) -> list[dict[str, Any]]:
+def list_by_project(
+    cur: Any, project_id: str, page: PageQuery, *, general: bool = False, q: str | None = None
+) -> list[dict[str, Any]]:
+    cond, args = _list_filter(general, q)
     return fetch_all(
         cur,
         f"""
         select {_COLUMNS} {_FROM}
-         where d.project_id = %s
+         where d.project_id = %s{cond}
          order by d.created_at desc
          limit %s offset %s
         """,
-        (project_id, page.size, page.offset),
+        (project_id, *args, page.size, page.offset),
     )
 
 

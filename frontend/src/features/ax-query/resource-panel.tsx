@@ -29,7 +29,7 @@ const DeliverablesPage = lazy(() =>
 
 const SCREENS = {
   dashboard: {
-    label: '진행 상황',
+    label: '대시보드',
     detail: '진척 · 지표 · 리스크',
     render: () => <DashboardPage />,
   },

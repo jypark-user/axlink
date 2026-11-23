@@ -27,18 +27,64 @@ export function DialogOverlay({
   );
 }
 
+/** 머리(제목 줄)를 잡아 끌 때 무시할 것. 머리 안의 단추·입력은 끌기가 아니라 그대로 누른다 */
+const NO_DRAG = 'button, a, input, textarea, select, [role="button"], [contenteditable="true"]';
+
+/**
+ * 가운데 뜨는 창. 머리(DialogHeader)를 잡고 끌어 옮길 수 있다(11-19 사용자 지시). 옆에 붙는
+ * 창(Sheet)은 해당 없다. 닫으면 다음에 열 때 다시 가운데다.
+ */
 export function DialogContent({
   className,
   children,
   showCloseButton = true,
+  style,
+  onPointerDown,
+  onCloseAutoFocus,
   ...props
 }: React.ComponentProps<typeof DialogPrimitive.Content> & { showCloseButton?: boolean }) {
+  const [offset, setOffset] = React.useState({ x: 0, y: 0 });
+
+  const startDrag = (e: React.PointerEvent<HTMLDivElement>) => {
+    onPointerDown?.(e);
+    const target = e.target as HTMLElement;
+    if (e.button !== 0 || !target.closest('[data-slot="dialog-header"]')) return;
+    if (target.closest(NO_DRAG)) return;
+    e.preventDefault();
+    const from = { x: e.clientX - offset.x, y: e.clientY - offset.y };
+    // 창이 화면 밖으로 다 나가지 않게 가운데에서 화면 반 너비·높이까지만 옮긴다
+    const limit = { x: window.innerWidth / 2, y: window.innerHeight / 2 - 24 };
+    const move = (ev: PointerEvent) => {
+      setOffset({
+        x: Math.max(-limit.x, Math.min(limit.x, ev.clientX - from.x)),
+        y: Math.max(-limit.y, Math.min(limit.y, ev.clientY - from.y)),
+      });
+    };
+    const stop = () => {
+      window.removeEventListener('pointermove', move);
+      window.removeEventListener('pointerup', stop);
+    };
+    window.addEventListener('pointermove', move);
+    window.addEventListener('pointerup', stop);
+  };
+
+  const moved = offset.x !== 0 || offset.y !== 0;
   return (
     <DialogPortal>
       <DialogOverlay />
       <DialogPrimitive.Content
         data-slot="dialog-content"
         className={cn(CONTENT_BASE, className)}
+        style={
+          moved
+            ? { ...style, translate: `calc(-50% + ${offset.x}px) calc(-50% + ${offset.y}px)` }
+            : style
+        }
+        onPointerDown={startDrag}
+        onCloseAutoFocus={(e) => {
+          setOffset({ x: 0, y: 0 });
+          onCloseAutoFocus?.(e);
+        }}
         {...props}
       >
         {children}
@@ -57,7 +103,7 @@ export function DialogHeader({ className, ...props }: React.ComponentProps<'div'
   return (
     <div
       data-slot="dialog-header"
-      className={cn('flex flex-col gap-2 text-left', className)}
+      className={cn('flex cursor-move flex-col gap-2 text-left select-none', className)}
       {...props}
     />
   );

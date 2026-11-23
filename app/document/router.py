@@ -7,11 +7,12 @@ from typing import Annotated
 
 from fastapi import APIRouter, File, Form, Query, Response, UploadFile
 from fastapi.responses import FileResponse
+from pydantic import BaseModel
 
 from app.auth.deps import Principal
 from app.common.paging import PageQuery, PageResponse
 from app.db import tx
-from app.document import draft_service, service
+from app.document import draft_service, repo_source, service
 from app.document.models import (
     DocumentChunkResponse,
     DocumentDetailResponse,
@@ -34,10 +35,13 @@ def list_documents(
     principal: Principal,
     page: int = Query(default=0, ge=0),
     size: int = Query(default=20, ge=1, le=100),
+    # 자료 화면은 산출물에 붙지 않은 일반 자료만 본다(11-19)
+    general: bool = Query(default=False),
+    q: str | None = Query(default=None, max_length=200),
 ) -> PageResponse[DocumentUploadResponse]:
     with tx() as cur:
         return service.list_for_project(
-            cur, principal, project_id, PageQuery(page=page, size=size)
+            cur, principal, project_id, PageQuery(page=page, size=size), general=general, q=q
         )
 
 
@@ -65,11 +69,69 @@ def upload_document(
         )
 
 
+class RepositoryFilesResponse(BaseModel):
+    paths: list[str]
+
+
+@router.get("/projects/{project_id}/repository-files", response_model=RepositoryFilesResponse)
+def repository_files(project_id: str, principal: Principal) -> RepositoryFilesResponse:
+    """산출물로 고를 수 있는 저장소 파일(11-19). 가장 최근 수집한 트리의 문서 형식 파일이다."""
+    with tx() as cur:
+        return RepositoryFilesResponse(paths=repo_source.list_paths(cur, principal, project_id))
+
+
+class RepositoryUploadRequest(BaseModel):
+    path: str
+    wbsId: str | None = None  # noqa: N815
+    designatedId: str | None = None  # noqa: N815
+
+
+@router.post(
+    "/projects/{project_id}/documents/from-repository",
+    response_model=DocumentUploadResponse,
+    status_code=201,
+)
+def upload_from_repository(
+    project_id: str, body: RepositoryUploadRequest, principal: Principal
+) -> DocumentUploadResponse:
+    """저장소 파일을 골라 작업(또는 양식)의 산출물로 올린다. 올린 문서와 똑같이 제출이 된다."""
+    with tx() as cur:
+        src = repo_source.prepare(cur, principal, project_id, body.path)
+    filename, content = repo_source.fetch(src)
+    with tx() as cur:
+        return service.upload(
+            cur, principal, project_id, filename, content, wbs_id=body.wbsId,
+            designated_id=body.designatedId,
+        )
+
+
 @router.get("/documents/{document_id}", response_model=DocumentDetailResponse)
 def get_document(document_id: str, principal: Principal) -> DocumentDetailResponse:
     """자료 상세. 정보·설정과 추출 결과 링크."""
     with tx() as cur:
         return service.get_detail(cur, principal, document_id)
+
+
+class ReviewBody(BaseModel):
+    reason: str | None = None
+
+
+@router.post("/projects/{project_id}/documents/{document_id}/approve", status_code=204)
+def approve_deliverable(project_id: str, document_id: str, principal: Principal) -> Response:
+    """작업·양식에 올라온 산출물 하나를 승인한다(V70, 발주기관)."""
+    with tx() as cur:
+        service.review(cur, principal, project_id, document_id, "APPROVED", None)
+    return Response(status_code=204)
+
+
+@router.post("/projects/{project_id}/documents/{document_id}/reject", status_code=204)
+def reject_deliverable(
+    project_id: str, document_id: str, body: ReviewBody, principal: Principal
+) -> Response:
+    """올라온 산출물 하나를 반려한다. 사유가 필요하다."""
+    with tx() as cur:
+        service.review(cur, principal, project_id, document_id, "REJECTED", body.reason)
+    return Response(status_code=204)
 
 
 @router.patch("/documents/{document_id}", response_model=DocumentDetailResponse)

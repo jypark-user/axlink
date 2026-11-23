@@ -111,6 +111,10 @@ def aggregate_lines(data: WidgetDataResponse) -> list[str]:
         values = [row.values.get("value") for row in data.rows]
         if values and all(isinstance(v, int | float) for v in values):
             lines.append(f"- {data.measureLabel} 전체(항목 합): {format_value(sum(values))}{unit}")
+    # 나눈 항목이 몇 개인지(11-20). 비율 지표는 더한 전체가 없어 모델이 「진행 중인 작업은 17개」를
+    # 세어 쓰면 근거 없는 값으로 막혔다. 잘린 목록은 전체 수를 모르니 적지 않는다
+    if len(dim_cols) == 1 and data.rows and not data.truncated and unit != "건":
+        lines.append(f"- {dim_cols[0].label} 수: {len(data.rows)}개")
     if data.previousTotal is not None:
         previous = format_value(data.previousTotal.values.get("value"))
         lines.append(f"- 직전 구간 전체: {previous}{unit}")
@@ -271,6 +275,16 @@ def empty_listing(label: str) -> str:
     return (
         f"사업 범위 안에 색인된 {label}이(가) 없어 답변을 만들지 않았습니다. "
         "수집이나 사업 범위를 확인해 보십시오."
+    )
+
+
+def no_defects(status_word: str = "") -> str:
+    """결함을 물었는데 그 조건의 결함이 없다. 결함은 연결 설정으로 가른다(DEC-02, V63)."""
+    head = f"{status_word} 결함" if status_word else "결함"
+    return (
+        f"사업 범위 안에 {head}으로 분류된 이슈가 없습니다. 결함은 도구 연동 설정의 결함 "
+        "트래커(Redmine)나 결함 라벨(GitHub)에 해당하는 이슈이고, 설정이 없으면 모든 이슈를 "
+        "일반 이슈로 셉니다."
     )
 
 

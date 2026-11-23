@@ -355,7 +355,9 @@ def _requirement_issues(cur: Any, requirement_id: str) -> list[RequirementIssue]
     return [
         RequirementIssue(
             id=str(r["id"]), key=r["issue_key"], title=r["title"], status=r["status"],
-            kind=r["issue_kind"], url=r["external_url"],
+            kind=r["issue_kind"], url=r["external_url"], assignee=r["assignee"],
+            updatedAt=r["moved_at"].isoformat() if r["moved_at"] else None,
+            codeChangeCount=int(r["code_change_count"] or 0),
         )
         for r in rows
     ]

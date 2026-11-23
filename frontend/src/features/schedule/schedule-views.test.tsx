@@ -24,7 +24,12 @@ describe('WbsView 연결 이슈 (AC-041-4)', () => {
     const tasks = toScheduleTasks([
       item({
         linkedIssues: [
-          { key: 'RM-204', title: '조회 화면 구현', status: 'IN_PROGRESS', url: 'https://rm.example/issues/204' },
+          {
+            key: 'RM-204',
+            title: '조회 화면 구현',
+            status: 'IN_PROGRESS',
+            url: 'https://rm.example/issues/204',
+          },
         ],
       }),
       item({ wbsId: '3.3', name: '민원 등록 화면', progress: 20 }),

@@ -17,9 +17,11 @@ import {
   WbsView,
 } from '@/features/schedule/schedule-views';
 import { toScheduleTasks } from '@/features/schedule/wbs-tasks';
-import type { WbsScheduleResponse } from '@/types/api';
+import type { CompletionItem, CompletionSummaryResponse, WbsScheduleResponse } from '@/types/api';
 import { CompletionPanel } from '@/features/schedule/completion-panel';
 import { RecognitionPanel } from '@/features/schedule/recognition-panel';
+import { SourceFilePanel } from '@/features/schedule/source-file-panel';
+import { ScheduleWarnings } from '@/features/schedule/schedule-warnings';
 
 const VIEW_KEY = 'ax-link.schedule-view';
 
@@ -38,12 +40,6 @@ function readView(): ViewId {
   return VIEWS.some((v) => v.id === saved) ? (saved as ViewId) : 'gantt';
 }
 
-const SOURCE_DESCRIPTION: Record<WbsScheduleResponse['source'], string> = {
-  WBS_FILE: '용역사가 제출한 WBS 의 항목·기간·실적입니다. 계획선은 기간으로 다시 계산했습니다.',
-  REDMINE: 'Redmine 이슈의 시작일·종료일·진척률입니다. WBS 파일이 없어 이것으로 대신합니다.',
-  NONE: '일정을 읽을 WBS 파일도 Redmine 일정도 없습니다.',
-};
-
 export function SchedulePage(): ReactNode {
   const { project } = useProjectContext();
   const [view, setView] = useState<ViewId>(readView);
@@ -55,6 +51,16 @@ export function SchedulePage(): ReactNode {
     [project.id],
   );
 
+  const completion = useAsync<CompletionSummaryResponse>(
+    () => api.get<CompletionSummaryResponse>(`/projects/${project.id}/wbs/completion`),
+    [project.id],
+  );
+  // WBS 탭의 「작업 완료 확인」 칸. 작업 번호로 잇는다
+  const completionByWbs = useMemo(
+    () => new Map<string, CompletionItem>((completion.data?.items ?? []).map((i) => [i.wbsId, i])),
+    [completion.data],
+  );
+
   const pick = (next: string) => {
     setView(next as ViewId);
     window.localStorage.setItem(VIEW_KEY, next);
@@ -63,8 +69,6 @@ export function SchedulePage(): ReactNode {
   return (
     <>
       <PageHeader title="일정(WBS)" description="용역사 WBS 기준의 작업 일정과 진척입니다." />
-      <CompletionPanel projectId={project.id} />
-
       <DataState state={state} onRetry={state.reload}>
         {(data) => {
           const tasks = toScheduleTasks(data.items);
@@ -78,11 +82,23 @@ export function SchedulePage(): ReactNode {
             <RecognitionPanel recognition={data.recognition} shownLeaves={leaves.length} />
           ) : null;
 
+          // 원천 → 두 진척 카드 → 작업 일정 → 인식 결과 순이다. 실사용자가 먼저 볼 것은 작업
+          // 일정의 네 탭이라 인식 결과는 아래로 내렸다(11-18 사용자 지시). 다만 읽지 못한 판은
+          // 사유를 먼저 알아야 하므로 위에 둔다(AC-030-4)
+          const failed = data.recognition?.status === 'FAILED';
+          const head = (
+            <>
+              <SourceFilePanel data={data} />
+              <CompletionPanel state={completion} />
+            </>
+          );
+
           if (data.source === 'NONE') {
             return (
               <>
+                <CompletionPanel state={completion} />
                 {recognition}
-                <Window title="작업 일정" className="pt-0" bleed>
+                <Window title="작업 일정" className="pt-0" innerClassName="px-0" bleed>
                   <Alert variant="destructive" className="mb-4">
                     <AlertTitle>진척률 산정의 핵심 입력이 빠져 있습니다</AlertTitle>
                     <AlertDescription>{data.notice}</AlertDescription>
@@ -99,7 +115,8 @@ export function SchedulePage(): ReactNode {
 
           return (
             <>
-              {recognition}
+              {head}
+              {failed && recognition}
               <Window
                 title="작업 일정"
                 hint={
@@ -130,42 +147,23 @@ export function SchedulePage(): ReactNode {
                   </>
                 }
                 className="pt-0"
+                innerClassName="px-0"
                 action={<ScheduleLegend />}
                 bleed
               >
-                <p className="text-muted-foreground mb-3 text-sm">
-                  {SOURCE_DESCRIPTION[data.source]}{' '}
-                  {data.sourceUrl ? (
-                    <a
-                      href={data.sourceUrl}
-                      target="_blank"
-                      rel="noreferrer"
-                      className="text-primary underline-offset-2 hover:underline"
-                    >
-                      {data.sourceLabel}
-                    </a>
-                  ) : (
-                    <span>{data.sourceLabel}</span>
-                  )}
-                  {data.planVersion && <span className="tnum"> · 버전 {data.planVersion}</span>}
-                  <span className="tnum"> · 기준일 {data.baseDate}</span>
-                </p>
-
-                {data.warnings.map((w) => (
-                  <Alert key={w} className="mb-2">
-                    <AlertDescription>{w}</AlertDescription>
-                  </Alert>
-                ))}
-
                 <Tabs value={view} onValueChange={pick}>
-                  <TabsList aria-label="일정 보기 방식">
-                    {VIEWS.map((item) => (
-                      <TabsTrigger key={item.id} value={item.id}>
-                        <item.icon />
-                        {item.label}
-                      </TabsTrigger>
-                    ))}
-                  </TabsList>
+                  <div className="flex flex-wrap items-center justify-between gap-2">
+                    <TabsList aria-label="일정 보기 방식">
+                      {VIEWS.map((item) => (
+                        <TabsTrigger key={item.id} value={item.id}>
+                          <item.icon />
+                          {item.label}
+                        </TabsTrigger>
+                      ))}
+                    </TabsList>
+                    {/* 경고는 버튼으로 접어 두고 누르면 연다(11-18 사용자 지시) */}
+                    <ScheduleWarnings warnings={data.warnings} />
+                  </div>
 
                   <TabsContent value="gantt" className="pt-2">
                     <GanttView tasks={tasks} today={today} />
@@ -177,10 +175,11 @@ export function SchedulePage(): ReactNode {
                     <CalendarView tasks={tasks} today={today} />
                   </TabsContent>
                   <TabsContent value="wbs" className="pt-2">
-                    <WbsView tasks={tasks} />
+                    <WbsView tasks={tasks} completion={completionByWbs} />
                   </TabsContent>
                 </Tabs>
               </Window>
+              {!failed && recognition && <div className="mt-4">{recognition}</div>}
             </>
           );
         }}

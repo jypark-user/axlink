@@ -283,3 +283,22 @@ def test_결함_포함_값을_일반_이슈라고_부르면_막는다():
         question="일반 이슈는 몇 건이야",
     )
     assert _reasons(general, "일반 이슈는 9건이다.") == []
+
+
+def test_작업_번호는_값의_라벨을_빼앗지_않는다():
+    """11-20 「최근 작업되고 있는 작업들」: 「WBS 작업 6.1 대시보드·위젯: 90%」 의 6.1 은 번호다.
+    단위 없는 번호가 작업 이름을 라벨로 가져가 맞는 문장을 막으면 안 되고,
+    다른 작업의 값은 막는다."""
+    lines = [
+        "- WBS 작업 6.1 대시보드·위젯: 90%",
+        "- WBS 작업 3.3 Redmine 커넥터: 80%",
+        "- WBS 작업 7.2 결함 조치: 10%",
+        "- WBS 작업 수: 3개",
+    ]
+    facts = g.facts_from_lines(lines, "그림 1", subject="진행 중 작업 실적")
+    c = g.Checker(facts, subjects=g.DOMAIN_TERMS | g.keywords("진행 중 작업 실적"))
+    assert c.check("대시보드·위젯 작업이 90%로 가장 앞서 있습니다.") == []
+    assert c.check("6.1 대시보드·위젯은 90%입니다.") == []
+    assert c.check("진행 중인 작업은 3개입니다.") == []
+    assert [v.reason for v in c.check("대시보드·위젯 작업은 80%입니다.")] == ["지표 불일치"]
+    assert [v.reason for v in c.check("진행 중인 작업은 4개입니다.")] == ["근거에 없는 값"]

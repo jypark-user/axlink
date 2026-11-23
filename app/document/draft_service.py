@@ -17,6 +17,7 @@ from app.ai.port import LlmPort
 from app.auth.models import AuthPrincipal
 from app.common import errors
 from app.config import settings
+from app.db import fetch_one
 from app.document import draft_repository, repository, structuring
 from app.document.access import require_project
 from app.document.models import (
@@ -225,6 +226,7 @@ def confirm(
     _require_proposed(row)
     rec = _validate(req)
     project_id = str(row["project_id"])
+    _guard_repository_plan(cur, project_id, rec["type"])
     rec["file_uri"] = row["stored_path"]
 
     work_product_id = standard_repo.place_document_work_product(
@@ -247,6 +249,33 @@ def confirm(
     )
 
 
+PLAN_TYPE = "PROJECT_PLAN"
+
+
+def _guard_repository_plan(cur: Any, project_id: str, product_type: str) -> None:
+    """저장소에서 읽는 WBS(사업수행계획서)가 있으면 올린 문서로 그 자리를 바꾸지 않는다.
+
+    사업수행계획서의 현행 버전이 곧 일정·진척의 원천이다. 산출물을 올리며 분류를 사업수행계획서로
+    고르면 저장소 WBS 가 현행에서 내려가 일정이 그 문서를 읽으려 든다. 저장소 WBS 를 바꾸려면 그
+    파일을 고쳐 커밋한다. 저장소 WBS 가 없는 사업은 올린 계획서가 원천이라 막지 않는다.
+    """
+    if product_type != PLAN_TYPE:
+        return
+    current = fetch_one(
+        cur,
+        "select source_kind from work_product where project_id = %s and type = %s and is_current",
+        (project_id, PLAN_TYPE),
+    )
+    if current is not None and current["source_kind"] == "TOOL":
+        raise errors.ApiError(
+            409, "PLAN_FROM_REPOSITORY",
+            "사업수행계획서(WBS)는 저장소 파일에서 읽고 있어 올린 문서로 바꿀 수 없습니다. "
+            "다른 분류를 고르세요.",
+        )
+
+
 def propose_for_upload(cur: Any, document_id: str, filename: str, text: str) -> None:
     """업로드 흐름에서 부른다. 구현체 선택은 llm_port 한 곳이다."""
     propose(cur, document_id, filename, text, llm_port)
+
+

@@ -646,7 +646,7 @@ export interface RequirementSummaryResponse {
 }
 
 /** 사용 안내 문서. 원천은 docs/40-manual 의 마크다운이다. */
-/** 사용 설명서 목차 한 줄. file 은 문서끼리의 링크가 가리키는 파일 이름이다. */
+/** 사용자 매뉴얼 목차 한 줄. file 은 문서끼리의 링크가 가리키는 파일 이름이다. */
 export interface HelpEntryResponse {
   slug: string;
   title: string;
@@ -690,6 +690,10 @@ export interface RequirementIssue {
   status: 'OPEN' | 'IN_PROGRESS' | 'RESOLVED' | 'CLOSED';
   kind: string;
   url: string | null;
+  /** 요구사항 상세의 이슈 표(11-18) */
+  assignee?: string | null;
+  updatedAt?: string | null;
+  codeChangeCount?: number;
 }
 
 export interface TraceabilityRowResponse {
@@ -822,6 +826,27 @@ export interface IssueResponse {
   relations?: IssueRelation[];
   /** GENERAL 일반 이슈 · DEFECT 결함 (DEC-02) */
   kind?: 'GENERAL' | 'DEFECT';
+  /** 이어진 요구사항(제목·본문의 요구사항 코드로 만든 추적 연결). 비면 매핑 안 됨 */
+  requirements?: IssueRequirement[];
+  /** 이어진 커밋·PR(커밋·PR 의 GH-n·RM-n 참조). 최근 것이 앞 */
+  codeChanges?: IssueCodeChange[];
+}
+
+export interface IssueCodeChange {
+  id: string;
+  kind: string;
+  title: string;
+  refName: string | null;
+  state: string;
+  author: string | null;
+  occurredAt: string;
+  url: string | null;
+}
+
+export interface IssueRequirement {
+  id: string;
+  code: string | null;
+  title: string;
 }
 
 export interface IssueRelation {
@@ -1162,6 +1187,8 @@ export interface WidgetSpec {
   options: WidgetOptions | null;
   /** 만들 때 적은 의도. 고칠 때 다시 보여 준다. 값은 query 가 정한다 */
   prompt?: string | null;
+  /** 이 위젯을 둔 근거. 기본 구성이 채우고 고칠 때 읽기 전용으로 보인다 */
+  rationale?: string | null;
 }
 
 export interface WidgetColumn {
@@ -1520,6 +1547,13 @@ export interface ProgressSnapshotResponse {
   representativeBasisLabel?: string | null;
   issueEstimatePct?: number | null;
   issueEstimateMissingCount?: number | null;
+  /** 지표별 진척률(11-18). 그날 센 건수에서 대시보드 카탈로그와 같은 식으로 낸다. 분모가 없으면 null */
+  deliverableApprovedCount?: number | null;
+  deliverableTotalCount?: number | null;
+  deliverableSubmittedCount?: number | null;
+  deliverableSubmissionPct?: number | null;
+  deliverableApprovalPct?: number | null;
+  requirementFulfillmentPct?: number | null;
   createdAt: string;
 }
 
@@ -1720,6 +1754,21 @@ export interface WbsDeliverableDocument {
   confirmed: boolean;
 }
 
+export interface DeliverableReview {
+  /** 작업에 올라온 산출물 하나(V70). 승인 단위다 */
+  documentId: string;
+  name: string;
+  fileName: string;
+  uploadedAt: string;
+  status: 'SUBMITTED' | 'APPROVED' | 'REJECTED';
+  rejectReason: string | null;
+  reviewedAt: string | null;
+  /** 같은 양식에 다시 올린 것이 있으면 앞의 것은 지난 버전이다 */
+  latest: boolean;
+  /** 이어 올린 예상 산출물. 같은 값의 지난 버전은 최신 버전 상세보기에서 본다 */
+  designatedId?: string | null;
+}
+
 export interface WbsDeliverableItem {
   wbsId: string;
   name: string;
@@ -1735,6 +1784,11 @@ export interface WbsDeliverableItem {
   taskKey?: string | null;
   /** 발주기관이 이 작업에 정한 산출물 항목(UC-033) */
   designated?: DesignatedDeliverable[];
+  /** 발주기관이 승인·반려할 제출본(11-18). 양식이 있으면 양식마다 최근 제출본 */
+  review?: DeliverableReview[];
+  /** 예상 산출물 수와 그중 올라온 수(업로드 상태 칸의 n/m). 판정하지 않으면 null */
+  expectedTotal?: number | null;
+  expectedSubmitted?: number | null;
 }
 
 /** 지정 항목의 제출본 하나. 확정해야 제출이다(DEC-14) */
@@ -1767,6 +1821,8 @@ export interface DesignatedDeliverable {
   status: 'MISSING' | 'REGISTERED' | 'SUBMITTED' | 'APPROVED' | 'REJECTED';
   needsRedesignation: boolean;
   versions: DesignatedVersion[];
+  /** REQUEST: 발주기관 요청, WBS: WBS 산출물 열에서 저절로 만든 것(11-19) */
+  origin?: 'REQUEST' | 'WBS';
 }
 
 export interface DesignationEvent {
@@ -1799,6 +1855,19 @@ export interface WbsScheduleResponse {
   notice: string | null;
   /** 계획서 인식 결과(UC-030 3단계, DEC-04 (b)). 계획서가 없으면 null */
   recognition?: WbsRecognitionResponse | null;
+  /** 수치를 읽어 온 원천 파일. WBS 파일일 때만 */
+  sourceFile?: WbsSourceFile | null;
+}
+
+export interface WbsSourceFile {
+  origin: 'REPOSITORY' | 'UPLOAD' | 'OTHER';
+  path: string | null;
+  url: string | null;
+  tool: string | null;
+  repository: string | null;
+  revision: string | null;
+  readAt: string | null;
+  lastSyncedAt: string | null;
 }
 
 export interface WbsRecognitionColumn {
@@ -2043,4 +2112,27 @@ export interface UnresolvedRefResponse {
   evidenceUrl: string | null;
   /** 가리킨 코드가 기준선의 상위 요구사항이면 그 명칭. 없는 ID 가 아니다 */
   parentTitle?: string | null;
+}
+
+/** ISO/IEC 29110 22종 충족 상태(11-19). 계획 없음 · 미제출(계획됨) · 제출 · 승인 */
+export type Iso29110Status = 'UNPLANNED' | 'PLANNED' | 'SUBMITTED' | 'APPROVED';
+
+export interface Iso29110Source {
+  wbsId: string;
+  name: string;
+  origin: 'WBS' | 'REQUEST';
+  status: Exclude<Iso29110Status, 'UNPLANNED'>;
+}
+
+export interface Iso29110Item {
+  type: string;
+  name: string;
+  process: 'PM' | 'SI';
+  status: Iso29110Status;
+  sources: Iso29110Source[];
+}
+
+export interface Iso29110Response {
+  items: Iso29110Item[];
+  counts: Partial<Record<Iso29110Status, number>>;
 }

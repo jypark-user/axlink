@@ -37,35 +37,17 @@ def _auth(token: str) -> dict[str, str]:
 # ---------------------------------------------------------------- 순수 규칙
 
 
-def test_확정해야_제출이고_항목_상태는_최근_제출본이_정한다():
-    registered = {"draft_status": "PROPOSED", "work_product_id": None}
-    submitted = {"draft_status": "CONFIRMED", "work_product_id": "w", "wp_status": "SUBMITTED"}
-    rejected = {"draft_status": "CONFIRMED", "work_product_id": "w", "wp_status": "REJECTED"}
-    # 제안과 다른 유형으로 확정해도 확정이다(CI 에서 잡힌 것: 시험결과서를 TEST_REPORT 로 확정)
-    overridden = {"draft_status": "MANUAL_OVERRIDE", "work_product_id": "w",
-                  "wp_status": "SUBMITTED"}
-    assert designation.version_state(overridden) == "SUBMITTED"
-    assert designation.version_state(registered) == "REGISTERED"
-    assert designation.version_state(submitted) == "SUBMITTED"
-    assert designation.version_state(rejected) == "REJECTED"
+def test_올라오면_제출이고_항목_상태는_가장_최근_것이_정한다():
+    """V70: 승인 단위는 올라온 산출물이다. 양식 자리에 올라오면 제출, 발주기관이 승인·반려한다."""
+    assert designation.version_state({"review_status": None}) == "SUBMITTED"
+    assert designation.version_state({"review_status": "SUBMITTED"}) == "SUBMITTED"
+    assert designation.version_state({"review_status": "APPROVED"}) == "APPROVED"
+    assert designation.version_state({"review_status": "REJECTED"}) == "REJECTED"
     assert designation.item_status([]) == "MISSING"
-    assert designation.item_status(["REGISTERED"]) == "REGISTERED"
-    # 새로 올린 것이 확정 전이면 그 앞의 제출본 상태가 남는다
-    assert designation.item_status(["REGISTERED", "REJECTED", "APPROVED"]) == "REJECTED"
-    assert not designation.is_submitted("REGISTERED")
-
-
-def test_확정_전_제출본은_다음_할_일을_알려_준다():
-    """「냈는데 왜 미제출이냐」를 막는다. 초안이 있으면 제출하러 가고, 읽는 중이면 기다린다."""
-    ready = {"draft_status": "PROPOSED", "work_product_id": None, "processing_state": "DONE"}
-    reading = {"draft_status": None, "work_product_id": None, "processing_state": "RUNNING"}
-    broken = {"draft_status": None, "work_product_id": None, "processing_state": "DONE"}
-    done = {"draft_status": "CONFIRMED", "work_product_id": "w", "wp_status": "SUBMITTED"}
-    assert designation.submit_readiness(ready) == "READY"
-    assert designation.submit_readiness(reading) == "PROCESSING"
-    assert designation.submit_readiness(broken) == "NO_DRAFT"
-    assert designation.submit_readiness(done) is None
-    assert designation.is_submitted("REJECTED")
+    assert designation.item_status(["SUBMITTED", "REJECTED"]) == "SUBMITTED"
+    assert designation.item_status(["APPROVED", "REJECTED"]) == "APPROVED"
+    assert designation.submit_readiness({"review_status": None}) is None
+    assert designation.is_submitted("REJECTED") and not designation.is_submitted("MISSING")
 
 
 def _item(wbs_id: str, deliverable_text: str | None, end: date, key: str) -> dict:
@@ -73,29 +55,25 @@ def _item(wbs_id: str, deliverable_text: str | None, end: date, key: str) -> dic
             "end_on": end, "task_key": key}
 
 
-def test_지정이_있는_작업은_산출물_열_대신_지정_항목으로_판정한다():
-    """산출물 열에 맞는 파일이 있어도 지정 항목이 다 안 왔으면 제출이 아니다(UC-033 4단계)."""
+def test_예상_산출물_항목으로_판정한다():
+    """예상 산출물(WBS 자동 + 요청)이 다 안 왔으면 제출이 아니다(UC-033 4단계, 11-19)."""
     items = [
         _item("1.1", "착수보고서", date(2026, 9, 30), "k1"),
-        _item("1.2", None, date(2026, 9, 1), "k2"),  # 산출물 열이 비어도 지정으로 판정한다
+        _item("1.2", None, date(2026, 9, 1), "k2"),  # 산출물 열이 비어도 요청으로 판정한다
         _item("1.3", None, date(2026, 9, 30), "k3"),
+        _item("1.4", "보고서", date(2026, 9, 30), "k4"),  # 예상 산출물 행이 없으면 판정 없음
     ]
-    docs = [{"id": "d", "original_filename": "착수보고서.hwpx", "wbs_item_id": None}]
     cover = {
-        "k1": designation.Coverage(2, 1),
+        "k1": designation.Coverage(3, 1),
         "k2": designation.Coverage(1, 0),
         "k3": designation.Coverage(1, 1),
     }
-    out = {j.wbs_id: j for j in deliverable.judge(
-        items, tree=None, products=[], documents=docs, today=TODAY, designated=cover
-    )}
+    out = {j.wbs_id: j for j in deliverable.judge(items, today=TODAY, designated=cover)}
     assert (out["1.1"].status, out["1.1"].rule) == ("MISSING", "DESIGNATED")
-    assert out["1.1"].ref == "지정 산출물 2건 중 1건 제출"
+    assert out["1.1"].ref == "예상 산출물 3건 중 1건 제출"
     assert out["1.2"].status == "OVERDUE"
-    assert (out["1.3"].status, out["1.3"].ref) == ("SUBMITTED", "지정 산출물 1건 중 1건 제출")
-    # 지정이 없으면 예전 규칙 그대로
-    plain = deliverable.judge(items[:1], tree=None, products=[], documents=docs, today=TODAY)
-    assert (plain[0].status, plain[0].rule) == ("SUBMITTED", "FILE_NAME")
+    assert (out["1.3"].status, out["1.3"].ref) == ("SUBMITTED", "예상 산출물 1건 중 1건 제출")
+    assert out["1.4"].status == "NONE"
 
 
 @pytest.mark.parametrize("role", ["SUPER_ADMIN", "CONTRACTOR"])
@@ -279,7 +257,7 @@ def test_AC_033_1_발주기관만_지정하고_용역사_관리자는_거절된�
     assert res.status_code == 201, res.text
 
     row = _row(_screen(client, po), "2.1")
-    [item] = row["designated"]
+    [item] = _req(row)
     assert (item["name"], item["productType"], item["status"]) == (
         "시험결과서", "TEST_REPORT", "MISSING"
     )
@@ -289,64 +267,6 @@ def test_AC_033_1_발주기관만_지정하고_용역사_관리자는_거절된�
 
 
 # ---------------------------------------------------------------- AC-033-2 · AC-033-3
-
-
-@requires_db
-def test_UC_033_S01_지정_양식_제출_반려_재제출_승인(client, client_token, env):
-    env.load(BASE)
-    po, pm = client_token("r2"), client_token("r3")
-    did = _designate(client, po, env.task_key("2.1"), productType="TEST_REPORT").json()["id"]
-
-    # 양식: 발주기관만 올리고, 누구나 받는다. 제출본이 아니다
-    template = _xlsx("양식")
-    up = client.post(
-        f"{_base()}/{did}/template",
-        files={"file": ("시험결과서-양식.xlsx", template, "application/octet-stream")},
-        headers=_auth(pm),
-    )
-    assert up.status_code == 403
-    up = client.post(
-        f"{_base()}/{did}/template",
-        files={"file": ("시험결과서-양식.xlsx", template, "application/octet-stream")},
-        headers=_auth(po),
-    )
-    assert up.status_code == 204, up.text
-    got = client.get(f"{_base()}/{did}/template", headers=_auth(pm))
-    assert got.status_code == 200 and got.content == template
-    row = _row(_screen(client, pm), "2.1")
-    assert row["designated"][0]["templateFileName"] == "시험결과서-양식.xlsx"
-    assert row["designated"][0]["status"] == "MISSING" and row["status"] == "OVERDUE"
-    assert row["documents"] == []  # 양식은 문서 목록에도 없다
-
-    # 올리기만 하면 등록이다. 확정해야 제출이다(DEC-14)
-    doc1 = _upload(client, pm, did, "통합시험결과-v1.xlsx", _xlsx("v1"))
-    row = _row(_screen(client, pm), "2.1")
-    assert row["designated"][0]["status"] == "REGISTERED" and row["status"] == "OVERDUE"
-    assert row["designated"][0]["versions"][0]["submit"] == "READY"  # 제출하러 갈 수 있다
-    detail = client.get(f"/api/documents/{doc1['id']}", headers=_auth(pm)).json()
-    assert detail["designatedName"] == "시험결과서" and detail["draftStatus"] == "PROPOSED"
-    wp1 = _confirm(client, pm, doc1["id"], "1.0")
-    row = _row(_screen(client, po), "2.1")
-    assert row["designated"][0]["status"] == "SUBMITTED"
-    assert (row["status"], row["ref"]) == ("SUBMITTED", "지정 산출물 1건 중 1건 제출")
-    assert [d["confirmed"] for d in row["documents"]] == [True]  # 유형을 바꿔 확정해도 확정
-
-    # 반려 사유가 항목 버전에 보인다
-    res = client.post(f"/api/projects/{PID}/work-products/{wp1}/reject",
-                      json={"reason": "결함 목록 누락"}, headers=_auth(po))
-    assert res.status_code == 204, res.text
-    v = _row(_screen(client, pm), "2.1")["designated"][0]
-    assert v["status"] == "REJECTED" and v["versions"][0]["rejectReason"] == "결함 목록 누락"
-
-    doc2 = _upload(client, pm, did, "통합시험결과-v2.xlsx", _xlsx("v2"))
-    wp2 = _confirm(client, pm, doc2["id"], "1.1")
-    assert client.post(f"/api/projects/{PID}/work-products/{wp2}/approve",
-                       json={}, headers=_auth(po)).status_code == 204
-    item = _row(_screen(client, pm), "2.1")["designated"][0]
-    assert item["status"] == "APPROVED"
-    assert [x["state"] for x in item["versions"]] == ["APPROVED", "REJECTED"]
-    assert [x["version"] for x in item["versions"]] == ["1.1", "1.0"]
-    assert item["versions"][1]["rejectReason"] == "결함 목록 누락"  # 지난 사유도 남는다
 
 
 @requires_db
@@ -360,10 +280,9 @@ def test_UC_033_E2_다른_유형_제출은_막지_않고_항목_상태도_안_�
         data={"wbsId": "2.1"},
         headers=_auth(pm),
     )
-    assert res.status_code == 201, res.text
-    _confirm(client, pm, res.json()["id"], "9.0")
+    assert res.status_code == 201, res.text  # 작업에 올리면 읽은 뒤 바로 제출이다(11-18)
     row = _row(_screen(client, po), "2.1")
-    assert row["designated"][0]["status"] == "MISSING"
+    assert _req(row)[0]["status"] == "MISSING"
     assert row["status"] == "OVERDUE"  # 지정 항목이 안 왔으니 작업 판정도 제출이 아니다
 
 
@@ -374,19 +293,18 @@ def test_UC_033_E2_다른_유형_제출은_막지_않고_항목_상태도_안_�
 def test_UC_033_S02_정체가_이어지면_지정이_따라가고_끊기면_재지정_필요(client, client_token, env):
     env.load(BASE)
     po, pm = client_token("r2"), client_token("r3")
-    did = _designate(client, po, env.task_key("2.1")).json()["id"]
-    doc = _upload(client, pm, did, "통합시험결과-v1.xlsx", _xlsx("v1"))
-    _confirm(client, pm, doc["id"], "1.0")
+    did = _designate(client, po, env.task_key("2.1"), productType="TEST_REPORT").json()["id"]
+    _upload(client, pm, did, "통합시험결과-v1.xlsx", _xlsx("v1"))  # 올리면 제출이다(11-18)
 
     # 실적만 바뀐 재업로드: 정체가 이어진다
     env.load([BASE[0], BASE[1], ("2.1", "통합 시험", "시험결과서", 0.5, 0.4)])
     row = _row(_screen(client, po), "2.1")
-    assert [d["id"] for d in row["designated"]] == [did]
+    assert [d["id"] for d in _req(row)] == [did]
 
     # 작업명이 바뀌어 정체가 끊긴다: 지정은 지우지 않고 재지정 필요로 모은다
     env.load([BASE[0], BASE[1], ("2.1", "인수 시험", "시험결과서", 0.5, 0.0)])
     screen = _screen(client, po)
-    assert _row(screen, "2.1")["designated"] == []
+    assert _req(_row(screen, "2.1")) == []  # 새 작업에는 WBS 자동 항목만 생긴다
     [orphan] = screen["redesignation"]
     assert orphan["id"] == did and orphan["needsRedesignation"] is True
     assert orphan["taskNameAt"] == "통합 시험" and orphan["status"] == "SUBMITTED"
@@ -405,7 +323,7 @@ def test_UC_033_S02_정체가_이어지면_지정이_따라가고_끊기면_재�
     assert res.status_code == 204, res.text
     screen = _screen(client, pm)
     assert screen["redesignation"] == []
-    assert [d["id"] for d in _row(screen, "2.1")["designated"]] == [did]
+    assert [d["id"] for d in _req(_row(screen, "2.1"))] == [did]
     kinds = [e["kind"] for e in client.get(f"{_base()}/{did}/history", headers=_auth(pm)).json()]
     assert kinds == ["CREATED", "REASSIGNED"]
 
@@ -422,7 +340,7 @@ def test_지정을_거둬도_행과_제출_이력은_남는다(client, client_to
     assert client.delete(f"{_base()}/{did}", headers=_auth(po)).status_code == 204
 
     row = _row(_screen(client, po), "2.1")
-    assert row["designated"] == [] and row["rule"] != "DESIGNATED"
+    assert _req(row) == []  # WBS 자동 항목은 남는다
     events = client.get(f"{_base()}/{did}/history", headers=_auth(po)).json()
     assert [e["kind"] for e in events] == ["CREATED", "UPDATED", "REMOVED"]
     assert events[1]["detail"]["after"] == {"name": "시험결과서(최종)"}
@@ -434,3 +352,237 @@ def test_지정을_거둬도_행과_제출_이력은_남는다(client, client_to
         assert cur.fetchone()["n"] == 1
     assert client.delete(f"{_base()}/{did}", headers=_auth(po)).status_code == 404
     assert client.get(f"{_base()}/not-a-uuid/history", headers=_auth(po)).status_code == 404
+
+
+def _req(row: dict) -> list[dict]:
+    """발주기관이 요청한 항목만. WBS 산출물 열에서 저절로 만든 항목(V73)은 뺀다."""
+    return [d for d in row["designated"] if d.get("origin") != "WBS"]
+
+
+def _review(client, token, doc_id: str, action: str, reason: str | None = None):
+    body = {"reason": reason} if reason else {}
+    return client.post(f"/api/projects/{PID}/documents/{doc_id}/{action}", json=body,
+                       headers=_auth(token))
+
+
+@requires_db
+def test_UC_033_S01_양식_올리기_반려_다시_올리기_승인(client, client_token, env):
+    """V70: 양식 자리에 올리면 바로 제출이다. 발주기관은 올라온 산출물 하나하나를 승인·반려한다."""
+    env.load(BASE)
+    po, pm = client_token("r2"), client_token("r3")
+    did = _designate(client, po, env.task_key("2.1"), productType="TEST_REPORT").json()["id"]
+
+    # 양식: 발주기관만 올리고, 누구나 받는다. 제출본이 아니다
+    template = _xlsx("양식")
+    up = client.post(
+        f"{_base()}/{did}/template",
+        files={"file": ("시험결과서-양식.xlsx", template, "application/octet-stream")},
+        headers=_auth(pm),
+    )
+    assert up.status_code == 403
+    up = client.post(
+        f"{_base()}/{did}/template",
+        files={"file": ("시험결과서-양식.xlsx", template, "application/octet-stream")},
+        headers=_auth(po),
+    )
+    assert up.status_code == 204, up.text
+    assert client.get(f"{_base()}/{did}/template", headers=_auth(pm)).content == template
+    row = _row(_screen(client, pm), "2.1")
+    assert _req(row)[0]["status"] == "MISSING" and row["status"] == "OVERDUE"
+    assert row["documents"] == [] and row["review"] == []  # 양식은 산출물이 아니다
+
+    doc1 = _upload(client, pm, did, "통합시험결과-v1.xlsx", _xlsx("v1"))
+    row = _row(_screen(client, po), "2.1")
+    assert _req(row)[0]["status"] == "SUBMITTED"
+    # WBS 산출물(시험결과서)도 예상 산출물이라 아직 다 낸 것이 아니다(11-19)
+    assert (row["status"], row["ref"]) == ("OVERDUE", "예상 산출물 2건 중 1건 제출")
+    # 업로드 상태 칸의 n/m 은 판정과 같은 수다(11-19)
+    assert (row["expectedSubmitted"], row["expectedTotal"]) == (1, 2)
+    assert [(r["documentId"], r["status"], r["name"]) for r in row["review"]] == [
+        (doc1["id"], "SUBMITTED", "시험결과서")
+    ]
+
+    # 반려는 발주기관만, 사유가 필요하다
+    assert _review(client, pm, doc1["id"], "approve").status_code == 403
+    assert _review(client, po, doc1["id"], "reject").status_code == 400
+    assert _review(client, po, doc1["id"], "reject", "결함 목록 누락").status_code == 204
+    v = _req(_row(_screen(client, pm), "2.1"))[0]
+    assert v["status"] == "REJECTED" and v["versions"][0]["rejectReason"] == "결함 목록 누락"
+
+    # 다시 올리면 새 판이다. 지난 판은 latest 가 아니다
+    doc2 = _upload(client, pm, did, "통합시험결과-v2.xlsx", _xlsx("v2"))
+    assert _review(client, po, doc2["id"], "approve").status_code == 204
+    row = _row(_screen(client, pm), "2.1")
+    item = _req(row)[0]
+    assert item["status"] == "APPROVED"
+    assert [x["state"] for x in item["versions"]] == ["APPROVED", "REJECTED"]
+    assert [(r["documentId"], r["latest"]) for r in row["review"]] == [
+        (doc2["id"], True), (doc1["id"], False)
+    ]
+    # 두 판은 같은 예상 산출물로 묶인다. 화면은 지난 판을 최신 판 상세보기에서 보인다(11-19)
+    assert {r["designatedId"] for r in row["review"]} == {did}
+
+
+@requires_db
+def test_산출물_진척은_양식_기준으로_제출률과_승인률을_센다(client, client_token, env):
+    """작업에 요청 산출물이 2개면 분모 2, 하나만 올라와도 1건 제출이다. 승인은 따로 센다.
+    WBS 산출물 열의 이름도 한 건이다. 요청이 있는 작업도 둘 다 센다(11-19). BASE 는 세 작업 모두
+    WBS 산출물이 있어 3건 + 요청 3건 = 6건이다."""
+    from app.dashboard import service as dashboard_service
+
+    env.load(BASE)
+    po, pm = client_token("r2"), client_token("r3")
+    a = _designate(client, po, env.task_key("2.1"), name="시험결과서").json()["id"]
+    _designate(client, po, env.task_key("2.1"), name="결함 목록")
+    _designate(client, po, env.task_key("1.1"), name="착수보고서")
+
+    def units() -> tuple[int, int, int]:
+        with tx() as cur:
+            return dashboard_service.deliverable_units(cur, PID, TODAY)
+
+    assert units() == (0, 0, 6)
+    doc = _upload(client, pm, a, "결과.xlsx", _xlsx("결과"))
+    assert units() == (1, 0, 6)
+    assert _review(client, po, doc["id"], "approve").status_code == 204
+    assert units() == (1, 1, 6)
+
+    res = client.post(
+        f"/api/projects/{PID}/documents",
+        files={"file": ("회의.xlsx", _xlsx("회의"), "application/octet-stream")},
+        data={"wbsId": "1.2"}, headers=_auth(pm),
+    )
+    assert res.status_code == 201, res.text
+    plain = _row(_screen(client, po), "1.2")["review"]
+    assert [(r["status"], r["fileName"]) for r in plain] == [("SUBMITTED", "회의.xlsx")]
+    assert units() == (2, 1, 6)  # 요청 없이 작업에 올리면 1.2 의 WBS 자동 항목에 잇는다
+    assert _review(client, po, res.json()["id"], "approve").status_code == 204
+    assert units() == (2, 2, 6)
+
+    # 시맨틱 지표(카드)도 같은 셈이다
+    def card(measure: str) -> float:
+        body = client.post("/api/widgets/preview", json={"spec": {
+            "template": "STAT_CARD", "title": "t",
+            "query": {"measure": measure, "dimensions": [], "filters": [],
+                      "projectScope": [PID], "limit": None},
+            "options": None}}, headers=_auth(po)).json()
+        row = body["rows"][0] if body["rows"] else body["total"]
+        return float(row["values"]["value"])
+
+    assert card("deliverable_submission_rate") == 33.33
+    assert card("deliverable_approval_rate") == 33.33
+
+
+@requires_db
+def test_저장소_WBS_가_있으면_올린_문서로_계획서를_바꾸지_않는다(client, client_token, env):
+    """11-18 개발 DB 에서 산출물로 올린 발표자료가 사업수행계획서로 확정돼 저장소 WBS 가 현행에서
+    내려갔다. 저장소 WBS 가 원천이면 올린 문서를 사업수행계획서로 확정하지 않는다."""
+    env.load(BASE)
+    po, pm = client_token("r2"), client_token("r3")
+    did = _designate(client, po, env.task_key("2.1"), productType="PROJECT_PLAN").json()["id"]
+    doc = _upload(client, pm, did, "발표.xlsx", _xlsx("발표"))
+    res = client.post(
+        f"/api/documents/{doc['id']}/draft/confirm",
+        json={"type": "PROJECT_PLAN", "title": "발표", "version": "9.0", "requirements": []},
+        headers=_auth(pm),
+    )
+    assert res.status_code == 409 and res.json()["code"] == "PLAN_FROM_REPOSITORY", res.text
+    with tx() as cur:
+        cur.execute(
+            "select source_kind from work_product "
+            "where project_id = %s and type = 'PROJECT_PLAN' and is_current",
+            (PID,),
+        )
+        assert cur.fetchone()["source_kind"] == "TOOL"
+
+
+@requires_db
+def test_저장소_파일을_골라_올리면_그_작업의_산출물이_된다(client, client_token, env, monkeypatch):
+    """11-19: 저장소에 커밋한 산출물은 저절로 제출이 아니다. 올리기에서 골라야 제출이고, 고른
+    파일은 올린 문서와 똑같이 업로드 자료·승인 대상이 된다. 트리에 없는 경로는 받지 않는다."""
+    import base64
+    import json
+
+    from app.document import repo_source
+
+    env.load(BASE)
+    po, pm = client_token("r2"), client_token("r3")
+    data = _xlsx("저장소 설계서")
+    calls: list[tuple[str, str | None]] = []
+
+    class FakeConnector:
+        def fetch_file(self, base_url, target, secret, path, ref=None):
+            calls.append((path, ref))
+            return {"path": path, "content": base64.b64encode(data).decode("ascii")}
+
+    monkeypatch.setattr(repo_source.port, "get_connector", lambda tool: FakeConnector())
+    monkeypatch.setattr(repo_source.crypto, "decrypt", lambda value: "token")
+    cid = str(uuid.uuid4())
+    tree = {"sha": "t1", "commit": "c1", "paths": ["docs/설계서.xlsx", "app/main.py"]}
+    with tx() as cur:
+        org = fetch_all(cur, "select id from organization where type = 'CONTRACTOR' limit 1")[0]
+        cur.execute(
+            """
+            insert into tool_connection (id, project_id, contractor_org_id, tool, name, base_url,
+                                         target_resource, auth_encrypted, auth_hint, status)
+            values (%s, %s, %s, 'GITHUB', '저장소 고르기', 'https://api.github.invalid/', %s,
+                    'x', 'x', 'ACTIVE')
+            """,
+            (cid, PID, org["id"], f"pick/{cid}"),
+        )
+        cur.execute(
+            "insert into raw_artifact (tool_connection_id, external_id, object_kind, payload_jsonb,"
+            " content_hash) values (%s, 'tree:HEAD', 'tree', %s, %s)",
+            (cid, json.dumps(tree), "0" * 64),
+        )
+    try:
+        # 문서 형식만 고를 수 있다
+        res = client.get(f"/api/projects/{PID}/repository-files", headers=_auth(pm))
+        assert res.status_code == 200 and res.json()["paths"] == ["docs/설계서.xlsx"], res.text
+        # 커밋만 한 상태로는 제출이 아니다
+        assert _row(_screen(client, po), "1.2")["status"] in ("MISSING", "OVERDUE")
+
+        bad = client.post(f"/api/projects/{PID}/documents/from-repository",
+                          json={"path": "docs/없는.xlsx", "wbsId": "1.2"}, headers=_auth(pm))
+        assert bad.status_code == 400 and calls == []
+
+        res = client.post(f"/api/projects/{PID}/documents/from-repository",
+                          json={"path": "docs/설계서.xlsx", "wbsId": "1.2"}, headers=_auth(pm))
+        assert res.status_code == 201, res.text
+        assert calls == [("docs/설계서.xlsx", "c1")]  # 수집한 커밋의 본문이다
+        row = _row(_screen(client, po), "1.2")
+        assert row["status"] == "SUBMITTED"
+        assert [d["fileName"] for d in row["documents"]] == ["설계서.xlsx"]
+        review = [(r["status"], r["fileName"]) for r in row["review"]]
+        assert review == [("SUBMITTED", "설계서.xlsx")]
+    finally:
+        with tx() as cur:
+            cur.execute("delete from tool_connection where id = %s", (cid,))
+
+
+@requires_db
+def test_29110_충족_현황은_계획_여부와_제출_승인을_네_상태로_가른다(client, client_token, env):
+    """11-19: 인도 점검표 대신 22종 충족 현황. 예상 산출물에 없으면 「계획 없음」이다.
+    분류는 발주사가 정한 것 > 이름(22종 이름·별칭) > 올라온 문서 분류 순으로 본다."""
+    env.load(BASE)
+    po, pm = client_token("r2"), client_token("r3")
+    did = _designate(client, po, env.task_key("1.1"), name="착수 자료",
+                     productType="REQUIREMENTS_SPEC").json()["id"]
+
+    def coverage() -> dict[str, dict]:
+        res = client.get(f"/api/projects/{PID}/wbs/iso29110", headers=_auth(pm))
+        assert res.status_code == 200, res.text
+        body = res.json()
+        assert len(body["items"]) == 22 and sum(body["counts"].values()) == 22
+        return {i["type"]: i for i in body["items"]}
+
+    c = coverage()
+    assert c["TEST_REPORT"]["status"] == "PLANNED"  # 2.1 WBS 「시험결과서」 이름으로
+    assert [(s["wbsId"], s["origin"]) for s in c["TEST_REPORT"]["sources"]] == [("2.1", "WBS")]
+    assert c["REQUIREMENTS_SPEC"]["status"] == "PLANNED"  # 발주사 요청의 분류로
+    assert c["SOFTWARE_DESIGN"]["status"] == "UNPLANNED" and c["SOFTWARE_DESIGN"]["sources"] == []
+    assert c["REQUIREMENTS_SPEC"]["process"] == "SI" and c["PROJECT_PLAN"]["process"] == "PM"
+
+    doc = _upload(client, pm, did, "요구사항.xlsx", _xlsx("요구"))
+    assert coverage()["REQUIREMENTS_SPEC"]["status"] == "SUBMITTED"
+    assert _review(client, po, doc["id"], "approve").status_code == 204
+    assert coverage()["REQUIREMENTS_SPEC"]["status"] == "APPROVED"

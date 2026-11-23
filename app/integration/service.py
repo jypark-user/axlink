@@ -268,11 +268,12 @@ def retry_job(cur: Any, principal: AuthPrincipal, job_id: str) -> SyncJobRespons
 
 
 def list_jobs(
-    cur: Any, principal: AuthPrincipal, project_id: str, page: PageQuery
+    cur: Any, principal: AuthPrincipal, project_id: str, page: PageQuery, **filters: Any
 ) -> PageResponse[SyncJobResponse]:
+    """filters: connection_id, status, started_from, started_to (repository._job_filter)."""
     _require_project(cur, principal, project_id)
-    total = repository.count_sync_jobs(cur, project_id)
-    rows = repository.list_sync_jobs(cur, project_id, page.size, page.offset)
+    total = repository.count_sync_jobs(cur, project_id, **filters)
+    rows = repository.list_sync_jobs(cur, project_id, page.size, page.offset, **filters)
     content = [_to_job_response(r, r) for r in rows]
     return PageResponse.of(content, page, total)
 

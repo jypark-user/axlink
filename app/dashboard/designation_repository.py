@@ -11,7 +11,7 @@ from app.db import fetch_all, fetch_one
 _COLUMNS = """
     id, project_id, task_key, wbs_id_at, task_name_at, name, description, product_type, guide,
     template_filename, template_content_type, template_size, template_uploaded_at, active,
-    created_at, updated_at
+    created_at, updated_at, origin, wbs_name_at
 """
 
 
@@ -21,6 +21,74 @@ def list_active(cur: Any, project_id: str) -> list[dict[str, Any]]:
         f"select {_COLUMNS} from wbs_designated_deliverable "
         "where project_id = %s and active order by created_at, id",
         (project_id,),
+    )
+
+
+def sync_wbs_expected(cur: Any, project_id: str) -> None:
+    """WBS 산출물 열을 예상 산출물 행(origin WBS)으로 맞춘다(V73). 몇 번 불러도 같다.
+
+    말단 작업마다 하나다. 없으면 만들고, 있으면 번호·작업명과 (이름을 고치지 않았으면) 이름을
+    산출물 열에 맞춘다. 발주기관이 거둔 행은 비활성으로 남아 있어 다시 만들지 않는다.
+    산출물 열이 비면 행을 쉬게 한다(비활성 + wbs_name_at 비움). 열이 다시 차면 깨운다. 거둔 행은
+    wbs_name_at 이 남아 있어 쉬는 행과 갈린다.
+    """
+    cur.execute(
+        """
+        update wbs_designated_deliverable dd
+           set active = false, wbs_name_at = null, updated_at = now()
+          from wbs_item w
+         where dd.project_id = %(p)s and dd.origin = 'WBS' and dd.active
+           and w.project_id = dd.project_id and w.task_key = dd.task_key and w.active
+           and coalesce(btrim(w.deliverable), '') = ''
+        """,
+        {"p": project_id},
+    )
+    cur.execute(
+        """
+        update wbs_designated_deliverable dd
+           set active = true, updated_at = now()
+          from wbs_item w
+         where dd.project_id = %(p)s and dd.origin = 'WBS' and not dd.active
+           and dd.wbs_name_at is null
+           and w.project_id = dd.project_id and w.task_key = dd.task_key
+           and w.active and w.weight is not null and coalesce(btrim(w.deliverable), '') <> ''
+        """,
+        {"p": project_id},
+    )
+    cur.execute(
+        """
+        update wbs_designated_deliverable dd
+           set name = case when dd.wbs_name_at is null or dd.name = dd.wbs_name_at
+                           then left(btrim(w.deliverable), 300)
+                           else dd.name end,
+               wbs_name_at = left(btrim(w.deliverable), 300),
+               wbs_id_at = w.wbs_id, task_name_at = w.name, updated_at = now()
+          from wbs_item w
+         where dd.project_id = %(p)s and dd.origin = 'WBS' and dd.active
+           and w.project_id = dd.project_id and w.task_key = dd.task_key
+           and w.active and w.weight is not null and coalesce(btrim(w.deliverable), '') <> ''
+           and (dd.wbs_name_at is distinct from left(btrim(w.deliverable), 300)
+                or dd.wbs_id_at <> w.wbs_id or dd.task_name_at <> w.name)
+        """,
+        {"p": project_id},
+    )
+    cur.execute(
+        """
+        insert into wbs_designated_deliverable
+          (project_id, task_key, wbs_id_at, task_name_at, name, origin, wbs_name_at)
+        select w.project_id, w.task_key, w.wbs_id, w.name, left(btrim(w.deliverable), 300),
+               'WBS', left(btrim(w.deliverable), 300)
+          from wbs_item w
+         where w.project_id = %(p)s and w.active and w.weight is not null
+           and w.task_key is not null and coalesce(btrim(w.deliverable), '') <> ''
+           and not exists (
+             select 1 from wbs_designated_deliverable dd
+              where dd.project_id = w.project_id and dd.task_key = w.task_key
+                and dd.origin = 'WBS'
+           )
+        on conflict do nothing
+        """,
+        {"p": project_id},
     )
 
 
@@ -126,6 +194,7 @@ def submissions(cur: Any, project_id: str) -> list[dict[str, Any]]:
         """
         select d.id, d.designated_deliverable_id, d.original_filename, d.created_at,
                d.processing_state, s.status as draft_status, s.work_product_id,
+               d.review_status, d.review_reason, d.reviewed_at,
                wp.version as wp_version, wp.status as wp_status, wp.reject_reason,
                wp.approved_at, wp.submitted_at, wp.is_current
           from document_upload d
@@ -155,7 +224,8 @@ def link_document(cur: Any, document_id: str, designated_id: str, wbs_item_id: s
     cur.execute(
         """
         update document_upload
-           set designated_deliverable_id = %s, wbs_item_id = %s, updated_at = now()
+           set designated_deliverable_id = %s, wbs_item_id = %s,
+               review_status = coalesce(review_status, 'SUBMITTED'), updated_at = now()
          where id = %s
         """,
         (designated_id, wbs_item_id, document_id),

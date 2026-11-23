@@ -231,7 +231,7 @@ def test_UC_031_S01_올려_제출하고_승인(target, s0, screen):
     assert check["SOFTWARE_DESIGN"]["status"] == "SUBMITTED" and check["SOFTWARE_DESIGN"]["version"] == "v1", check["SOFTWARE_DESIGN"]
     items = {i["wbsId"]: i for i in _deliverables(target, s0)["items"]}
     assert items["3.2"]["status"] == "SUBMITTED", items["3.2"]
-    assert items["3.2"]["rule"] in ("LINKED_DOC", "LINKED", "PRODUCT_TYPE", "FILE_NAME"), items["3.2"]
+    assert items["3.2"]["rule"] == "DESIGNATED", items["3.2"]  # WBS 자동 예상 산출물(V73)
     wp = s0.ids["TD-DOC-3:wp"]
     res = target.post(f"/api/projects/{s0.ids['TD-PRJ-1']}/work-products/{wp}/approve", headers=auth(s0.tokens["TD-ACC-C1"]))
     assert res.status_code == 204, res.text
@@ -373,7 +373,6 @@ def test_UC_031_S04_반려_뒤_재제출_이력(target, s0, screen):
     past = {h["version"]: h for h in now["previousVersions"]}
     assert past["v2"]["status"] == "REJECTED" and past["v2"]["rejectReason"] == "목차 누락", past
     assert past["v2"]["decidedBy"] and past["v2"]["decidedAt"], "반려한 사람·일자가 없다"
-    _ui_UC_031_S04(screen, s0)
 
 
 def test_UC_031_S05b_지난_버전_승인(target, s0):
@@ -584,10 +583,12 @@ def test_UC_032_S10_가중치_기준_확인(target, s0, replay):
     assert job["status"] == "SUCCEEDED", job
     assert len([i for i in _wbs(target, s0, "TD-PRJ-9")["items"] if i["weight"] and i["level"] > 0]) == 6
     pid = s0.ids["TD-PRJ-9"]
-    doc = _upload(target, s0, "TD-PRJ-9", s0.files["TD-DOC-2"], "시험결과서.docx", DOCX, wbs_id="3.4")
+    # 작업에 바로 올리면 읽은 뒤 자동 제출된다(11-18). 유형·버전을 정해 확정한 뒤 작업에 붙인다
+    doc = _upload(target, s0, "TD-PRJ-9", s0.files["TD-DOC-2"], "시험결과서.docx", DOCX)
     res = _confirm(target, s0, doc, "TEST_REPORT", "시험결과서", "v1")
     assert res.status_code == 200, res.text
     wp = res.json()["workProductId"]
+    assert target.patch(f"/api/documents/{doc}", json={"wbsId": "3.4"}, headers=v1).status_code == 200
     req = target.post(f"/api/projects/{pid}/review-requests", json={
         "targetType": "WBS_ITEM", "targetKey": "3.4", "title": "3.4 완료 확인", "body": "", "purpose": "WBS_COMPLETION", "completionScope": "시험 완료",
     }, headers=auth(s0.tokens["TD-ACC-C1"]))
@@ -603,14 +604,14 @@ def test_UC_032_S10_가중치_기준_확인(target, s0, replay):
 
 
 def test_UC_031_S10_승인률(target, s0):
-    """S0 산출물 승인률 1/5 = 20.0%: 분모 = WBS 가 정한 산출물 5, 분자 = 현행 버전 승인(요구사항정의서 v1).
+    """S0 산출물 승인률 1/5 = 20.0%: 분모 = 예상 산출물 5(요청 없이 WBS 산출물 열), 분자 = 3.1 에 올라온 요구사항정의서 승인.
     사업수행계획서는 WBS 산출물 열에 없어 세지 않는다. 산출 근거 문장 (AC-031-9, DEC-12 (b), IM-009 7.2)."""
     pid = s0.ids["TD-PRJ-1"]
     c1 = auth(s0.tokens["TD-ACC-C1"])
     prog = target.get(f"/api/projects/{pid}/progress?at={d.T0.isoformat()}", headers=c1).json()
     ap = prog["deliverableApproval"]
     assert (ap["numerator"], ap["denominator"]) == (1, 5), ap
-    assert round(ap["value"], 4) == 0.2 and "WBS" in ap["note"], ap
+    assert round(ap["value"], 4) == 0.2 and "예상 산출물" in ap["note"], ap
     spec = {
         "template": "STAT_CARD", "title": "TST 승인률",
         "query": {"measure": "deliverable_approval_rate", "dimensions": [], "filters": [], "projectScope": [pid], "limit": None},
@@ -639,7 +640,9 @@ def test_UC_033_S03_용역사_지정_시도(target, s0):
 
 
 def _ui_UC_031_S01(screen, s0):
-    """화면: 3.2 판정 제출, 점검표 SW설계서 v1 승인·승인자, 일정 화면 진척 30.0%·완료 확인율 15.0%."""
+    """화면: 3.2 판정 제출, 29110 충족 현황 설계서 줄, 일정 화면 진척 30.0%·완료 확인율 15.0%.
+
+    인도 점검표(22종 버전 승인 화면)는 11-19 에 뺐다. 22종 쪽은 충족 현황으로 본다."""
     if not screen:
         return
     pid = s0.ids["TD-PRJ-1"]
@@ -647,9 +650,12 @@ def _ui_UC_031_S01(screen, s0):
     sc.open(f"/p/{pid}/deliverables").see("SW설계서")
     row = sc.row("SW설계서")
     assert "제출" in row and "지연" not in row, row
-    wp = _checklist_row(sc, "SOFTWARE_DESIGN").inner_text()
-    assert "v1" in wp and "승인" in wp and d.ACCOUNTS["TD-ACC-C1"].display in wp, wp
-    sc.shot("점검표")
+    sc.page.get_by_role("button", name="ISO/IEC 29110 충족 현황").click()
+    sc.see("ISO/IEC 29110 산출물 충족 현황", selector='[role="dialog"]')
+    line = sc.page.locator('[role="dialog"] li', has_text="설계서").filter(has_text="3.2").first.inner_text()
+    assert "제출" in line or "승인" in line, line
+    sc.shot("충족 현황")
+    sc.page.keyboard.press("Escape")
     # 완료 확인율은 화면이 소수 없이 「15%」로 쓴다
     sc.open(f"/p/{pid}/schedule").see(
         re.compile(r"보고 진척률\s*30\.0%"), re.compile(r"완료 확인율\s*15(\.0)?%")
@@ -657,24 +663,3 @@ def _ui_UC_031_S01(screen, s0):
     sc.done()
 
 
-def _ui_UC_031_S04(screen, s0):
-    """화면: 점검표 SW설계서 현행 v3, 지난 버전에 v2 반려·사유·결정자."""
-    if not screen:
-        return
-    sc = screen("TD-ACC-C1")
-    sc.open(f"/p/{s0.ids['TD-PRJ-1']}/deliverables")
-    row = _checklist_row(sc, "SOFTWARE_DESIGN")
-    row.get_by_text(re.compile(r"지난 버전 \d+건")).click()
-    text = row.inner_text()
-    for want in ("v3", "v2", "목차 누락", d.ACCOUNTS["TD-ACC-C1"].display):
-        assert want in text, f"점검표 SW설계서 줄에 {want} 가 없다: {text!r}"
-    sc.done()
-
-
-def _checklist_row(sc, product_type: str):
-    """산출물 화면의 인도 점검표(버전 열이 있는 표)를 펴고 그 유형 줄을 준다."""
-    sc.page.get_by_text("인도 점검표 보기").click()
-    table = sc.page.locator("table").filter(has=sc.page.locator("th", has_text="버전"))
-    row = table.locator("tbody tr", has_text=product_type).first
-    row.wait_for()
-    return row

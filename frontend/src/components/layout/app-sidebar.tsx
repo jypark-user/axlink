@@ -9,7 +9,6 @@ import {
   ClipboardList,
   FileText,
   FolderKanban,
-  HardHat,
   Info,
   LayoutDashboard,
   LayoutTemplate,
@@ -48,6 +47,7 @@ import {
 } from '@/components/ui/sidebar';
 import { useAuth } from '@/features/auth/auth-context';
 import { UserMenu } from '@/components/layout/user-menu';
+import { conversationPath, scopeLabel } from '@/components/layout/conversation-link';
 import { api } from '@/lib/http';
 import { cn } from '@/lib/utils';
 import { useAsync } from '@/lib/use-async';
@@ -59,7 +59,7 @@ const ASK_ROLES: Role[] = ['CLIENT'];
 /**
  * 용역사도 현황 화면을 본다(읽기 전용). 숫자는 용역사 자신의 데이터에서 나오고, 발주기관이
  * 무엇을 보고 요청하는지 미리 알아야 관리순환이 돈다. 편집은 서버가 발주기관·관리자로 가른다.
- * AI 질의와 용역사 할당만 발주기관 전용이다.
+ * AI 질의만 발주기관 전용이다(용역사 할당은 사업 관리 화면 안에 있다).
  */
 
 interface NavItem {
@@ -81,7 +81,7 @@ const GLOBAL_GROUPS: NavGroup[] = [
     label: null,
     items: [
       { to: '/projects', label: '사업 목록', icon: FolderKanban },
-      { to: '/guide', label: '사용 설명서', icon: BookOpen },
+      { to: '/guide', label: '사용자 매뉴얼', icon: BookOpen },
       // 위젯과 AI 답변이 고르는 그림 23종의 입력 계약. 관리자만 본다 (ARC-012)
       { to: '/templates', label: '인포 템플릿', icon: LayoutTemplate, roles: ['SUPER_ADMIN'] },
       { to: '/admin/accounts', label: '발주기관·계정', icon: Building2, roles: ['SUPER_ADMIN'] },
@@ -99,11 +99,11 @@ const projectGroups = (base: string): NavGroup[] => [
   {
     label: '현황',
     items: [
-      { to: `${base}/dashboard`, label: '진행 상황', icon: LayoutDashboard },
+      { to: `${base}/dashboard`, label: '대시보드', icon: LayoutDashboard },
       { to: `${base}/schedule`, label: '일정(WBS)', icon: CalendarRange },
       { to: `${base}/snapshots`, label: '스냅샷', icon: Camera },
-      { to: `${base}/issues`, label: '일반 이슈', icon: CircleDot },
       { to: `${base}/traceability`, label: '요구사항', icon: Waypoints },
+      { to: `${base}/issues`, label: '이슈', icon: CircleDot },
       { to: `${base}/reviews`, label: '확인 요청', icon: ClipboardList },
     ],
   },
@@ -117,8 +117,7 @@ const projectGroups = (base: string): NavGroup[] => [
   {
     label: '사업 설정',
     items: [
-      { to: base, label: '사업 정보', icon: Info, end: true },
-      { to: `${base}/assignments`, label: '용역사 할당', icon: HardHat, roles: ['CLIENT'] },
+      { to: base, label: '사업 관리', icon: Info, end: true },
       { to: `${base}/connections`, label: '도구 연동', icon: Link2 },
       { to: `${base}/collection`, label: '동기화 이력', icon: RefreshCw },
     ],
@@ -211,11 +210,24 @@ function AskSection({ role, onNavigate }: { role: Role; onNavigate: () => void }
               {list.map((c) => (
                 <SidebarMenuItem key={c.id}>
                   <SidebarMenuButton asChild tooltip={c.title} isActive={c.id === conversationId}>
-                    <Link to={`${base}/${c.id}`} onClick={onNavigate}>
+                    <Link
+                      to={conversationPath(c, projectId)}
+                      onClick={onNavigate}
+                      className={cn(
+                        !projectId && 'h-auto min-h-8 py-1.5 group-data-[collapsible=icon]:h-8',
+                      )}
+                    >
                       <MessageSquare className="size-4 shrink-0" />
-                      <span className="truncate">
-                        {c.pinned ? '📌 ' : ''}
-                        {c.title}
+                      <span className="flex min-w-0 flex-col gap-0.5">
+                        {!projectId && (
+                          <span className="text-sidebar-foreground/45 truncate text-[10.5px] leading-tight">
+                            {scopeLabel(c)}
+                          </span>
+                        )}
+                        <span className="truncate">
+                          {c.pinned ? '📌 ' : ''}
+                          {c.title}
+                        </span>
                       </span>
                     </Link>
                   </SidebarMenuButton>

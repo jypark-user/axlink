@@ -1,5 +1,5 @@
 import { useState, type ReactNode } from 'react';
-import { Check, LayoutTemplate, Loader2, RotateCcw, X } from 'lucide-react';
+import { Check, LayoutTemplate, Loader2, RotateCcw, Trash2, X } from 'lucide-react';
 import {
   AlertDialog,
   AlertDialogAction,
@@ -18,19 +18,18 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog';
-import { api } from '@/lib/http';
 import { isApiError } from '@/lib/api-error';
 import { label as labelOf } from '@/lib/labels';
 import { cn } from '@/lib/utils';
 import {
   DASHBOARD_PRESETS,
-  packGrid,
-  toWidgetSpec,
+  DEFAULT_PRESET,
   type DashboardPreset,
 } from '@/features/dashboard/dashboard-presets';
+import { applyPreset, clearWidgets } from '@/features/dashboard/preset-apply';
 import { WidgetSketch } from '@/features/dashboard/widget-sketch';
 import { widgetRenderers } from '@/features/widgets/renderer-registry';
-import type { WidgetCreateRequest, WidgetResponse, WidgetTemplate } from '@/types/api';
+import type { WidgetResponse, WidgetTemplate } from '@/types/api';
 
 /**
  * 위젯 팔레트의 순서 — 등록 순서(만든 순서)가 아니라 데이터 모양별로 묶는다.
@@ -72,16 +71,28 @@ const UNGROUPED = (Object.keys(widgetRenderers) as WidgetTemplate[]).filter(
 const CARD =
   'border-border hover:border-ring hover:bg-accent flex flex-col items-start justify-center gap-1 rounded-md border border-dashed p-3 text-left transition-colors disabled:opacity-50';
 
-/** 화면을 바꾸기 전에 확인받는 일들. */
-type Pending = { kind: 'preset'; preset: DashboardPreset } | { kind: 'reset' };
+/**
+ * 화면을 바꾸기 전에 확인받는 일들. 초기화는 기본 구성으로 되돌리는 것이고(11-18 사용자 지시),
+ * 위젯을 모두 치우기만 하는 것은 「전체 삭제」다.
+ */
+type Pending = { kind: 'preset'; preset: DashboardPreset } | { kind: 'reset' } | { kind: 'clear' };
 
-const scopedTo = (item: WidgetCreateRequest, projectId: string): WidgetCreateRequest => ({
-  ...item,
-  spec: { ...item.spec, query: { ...item.spec.query, projectScope: [projectId] } },
-});
+const CONFIRM: Record<Pending['kind'], { title: string; action: string }> = {
+  preset: { title: '이 구성으로 바꿀까요?', action: '바꾸기' },
+  reset: { title: '기본 구성으로 초기화할까요?', action: '초기화' },
+  clear: { title: '위젯을 모두 지울까요?', action: '전체 삭제' },
+};
+
+const confirmText = (pending: Pending | null, count: number): string => {
+  if (pending?.kind === 'clear') return `지금 놓인 위젯 ${count}개가 모두 사라집니다.`;
+  if (pending?.kind === 'reset') {
+    return `지금 놓인 위젯 ${count}개를 치우고 기본 구성(위젯 ${DEFAULT_PRESET.widgets.length}개)으로 바꿉니다.`;
+  }
+  return `지금 놓인 위젯 ${count}개를 치우고 새 구성으로 바꿉니다.`;
+};
 
 /**
- * 대시보드를 통째로 바꾸는 동작 — 초기화와 추천 구성 전환.
+ * 대시보드를 통째로 바꾸는 동작 — 초기화(기본 구성)·전체 삭제·추천 구성 전환.
  * 화면 전체에 일어나는 일이라 사이드바가 아니라 대시보드 머리줄에 놓는다.
  */
 export function DashboardApplyActions({
@@ -100,19 +111,6 @@ export function DashboardApplyActions({
   const [pending, setPending] = useState<Pending | null>(null);
   const [presetOpen, setPresetOpen] = useState(false);
 
-  /** 지금 놓인 위젯을 모두 치운다 — 전환과 초기화가 함께 쓴다. */
-  const clearWidgets = async () => {
-    for (const widget of widgets) {
-      await api.del<void>(`/widgets/${widget.id}`);
-    }
-  };
-
-  const place = async (items: WidgetCreateRequest[]) => {
-    for (const item of items) {
-      await api.post(`/dashboards/${dashboardId}/widgets`, scopedTo(item, projectId));
-    }
-  };
-
   const run = async (key: string, work: () => Promise<void>) => {
     setBusy(key);
     setError(null);
@@ -129,19 +127,14 @@ export function DashboardApplyActions({
 
   const confirmed = () => {
     if (!pending) return;
-    if (pending.kind === 'reset') {
-      void run('reset', clearWidgets);
+    if (pending.kind === 'clear') {
+      void run('clear', () => clearWidgets(widgets));
       return;
     }
-    const grid = packGrid(pending.preset.widgets, 0);
-    const items: WidgetCreateRequest[] = pending.preset.widgets.map((w, i) => ({
-      spec: toWidgetSpec(w, projectId),
-      gridItem: grid[i],
-    }));
-    void run(pending.preset.id, async () => {
-      await clearWidgets();
-      await place(items);
-    });
+    const preset = pending.kind === 'reset' ? DEFAULT_PRESET : pending.preset;
+    void run(pending.kind === 'reset' ? 'reset' : preset.id, () =>
+      applyPreset(dashboardId, projectId, widgets, preset),
+    );
   };
 
   return (
@@ -153,7 +146,7 @@ export function DashboardApplyActions({
         disabled={busy !== null}
         onClick={() => setPresetOpen(true)}
       >
-        {busy !== null && busy !== 'reset' ? (
+        {busy !== null && busy !== 'reset' && busy !== 'clear' ? (
           <Loader2 className="size-4 animate-spin" />
         ) : (
           <LayoutTemplate className="size-4" />
@@ -163,12 +156,30 @@ export function DashboardApplyActions({
       <Button
         size="sm"
         variant="outline"
-        className="text-destructive"
-        disabled={widgets.length === 0 || busy !== null}
+        disabled={busy !== null}
+        title="기본 구성으로 되돌립니다"
         onClick={() => setPending({ kind: 'reset' })}
       >
-        <RotateCcw className="size-4" />
+        {busy === 'reset' ? (
+          <Loader2 className="size-4 animate-spin" />
+        ) : (
+          <RotateCcw className="size-4" />
+        )}
         초기화
+      </Button>
+      <Button
+        size="sm"
+        variant="outline"
+        className="text-destructive"
+        disabled={widgets.length === 0 || busy !== null}
+        onClick={() => setPending({ kind: 'clear' })}
+      >
+        {busy === 'clear' ? (
+          <Loader2 className="size-4 animate-spin" />
+        ) : (
+          <Trash2 className="size-4" />
+        )}
+        전체 삭제
       </Button>
 
       <Dialog open={presetOpen} onOpenChange={setPresetOpen}>
@@ -216,19 +227,13 @@ export function DashboardApplyActions({
       <AlertDialog open={pending !== null} onOpenChange={(open) => !open && setPending(null)}>
         <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle>
-              {pending?.kind === 'reset' ? '대시보드를 비울까요?' : '이 구성으로 바꿀까요?'}
-            </AlertDialogTitle>
-            <AlertDialogDescription>
-              {pending?.kind === 'reset'
-                ? `지금 놓인 위젯 ${widgets.length}개가 모두 사라집니다.`
-                : `지금 놓인 위젯 ${widgets.length}개를 치우고 새 구성으로 바꿉니다.`}
-            </AlertDialogDescription>
+            <AlertDialogTitle>{pending && CONFIRM[pending.kind].title}</AlertDialogTitle>
+            <AlertDialogDescription>{confirmText(pending, widgets.length)}</AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
             <AlertDialogCancel>취소</AlertDialogCancel>
             <AlertDialogAction onClick={confirmed} disabled={busy !== null}>
-              {pending?.kind === 'reset' ? '비우기' : '바꾸기'}
+              {pending && CONFIRM[pending.kind].action}
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>

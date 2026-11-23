@@ -31,6 +31,11 @@ _FOOTNOTE = re.compile(r"\[(\d{1,2})\]")
 _DATE_FULL = re.compile(r"(\d{4})\s*[-./]\s*(\d{1,2})\s*[-./]\s*(\d{1,2})")
 _DATE_KO = re.compile(r"(?:(\d{4})\s*년)?\s*(?:(\d{1,2})\s*월)?\s*(?:(\d{1,2})\s*일)?")
 _DATE_MD = re.compile(r"(?<![\d.\-/])(\d{1,2})[-/](\d{1,2})(?![\d./\-])")
+# 「최근 7일」, 「7일 동안」 같은 기간 길이. 날짜(그달 7일)가 아니다. 11-23 실측에서 「지난 7일 동안
+# 문서 11건」의 7일을 기준 날짜로 읽어 오늘 집계한 값을 막았다
+_DURATION = re.compile(
+    r"(?:최근|지난)\s*\d{1,3}\s*일|\d{1,3}\s*일\s*(?:동안|간|전|이내|사이|째|만에)"
+)
 _DATE_MD_DOT = re.compile(r"(?<![\d.])(\d{1,2})\.(\d{1,2})(?=\s*(?:까지|부터|일|~|에\s|에$))")
 
 _NON_QUANTITY = [
@@ -106,7 +111,7 @@ def dates_in(text: str) -> set[DateKey]:
     found: set[DateKey] = set()
     for m in _DATE_FULL.finditer(text):
         found.add((int(m.group(1)), int(m.group(2)), int(m.group(3))))
-    rest = _DATE_FULL.sub(" ", text)
+    rest = _DURATION.sub(" ", _DATE_FULL.sub(" ", text))
     for m in _DATE_KO.finditer(rest):
         y, mo, d = m.group(1), m.group(2), m.group(3)
         if not (y or mo or d):
@@ -393,11 +398,14 @@ class Checker:
             return sum(1 for w in named if _overlap([w], label))
 
         mine = score(fact.label)
+        # 단위가 있는 값은 단위가 같은 값하고만 겨룬다. 단위 없는 숫자는 대개 번호다.
+        # 11-20: 「WBS 작업 6.1 대시보드·위젯: 90%」 의 6.1 이 작업 이름을 라벨로 가져가
+        # 「대시보드·위젯 작업이 90%」 를 막았다
         return any(
             score(other.label) > mine
             for other in self._labelled[fact.source]
             if other.value != fact.value
-            and (not other.unit or not fact.unit or other.unit == fact.unit)
+            and (other.unit == fact.unit if fact.unit else True)
         )
 
     def _clause_subject(self, clause: set[str]) -> set[str]:

@@ -488,11 +488,12 @@ def _ui_UC_002_S01(screen, s0):
     sc.open(f"/p/{pid}/traceability").see("요구사항이 없습니다")
     sc.shot("요구사항")
     sc.open(f"/p/{pid}/deliverables")
-    sc.page.get_by_text("인도 점검표 보기").click()
-    sc.see("사업수행계획서")
-    rows = sc.page.locator("tbody tr").filter(has_text="없음")
-    assert rows.count() == 22, f"점검표 미제출 줄 {rows.count()} (기대 22)"
-    sc.shot("점검표")
+    # 인도 점검표 대신 29110 충족 현황(11-19, 머리 버튼 → 창). WBS 가 없으니 22종 모두 계획 없음
+    sc.page.get_by_role("button", name="ISO/IEC 29110 충족 현황").click()
+    sc.see("ISO/IEC 29110 산출물 충족 현황", "사업수행계획서", selector='[role="dialog"]')
+    rows = sc.page.locator('[role="dialog"] li').filter(has_text="계획 없음")
+    assert rows.count() == 22, f"충족 현황 계획 없음 줄 {rows.count()} (기대 22)"
+    sc.shot("충족 현황")
     sc.open(f"/p/{pid}/reviews").see("확인 요청이 없습니다")
     sc.done()
 

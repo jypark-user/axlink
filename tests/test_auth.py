@@ -91,3 +91,34 @@ def test_password_check_survives_flaky_bcrypt():
     stored = bcrypt.hashpw(b"admin", bcrypt.gensalt(rounds=10)).decode()
     assert all(_verify_password("admin", stored) for _ in range(60))
     assert not any(_verify_password("nope", stored) for _ in range(20))
+
+
+def test_연속_실패가_문턱을_넘으면_잠그고_시간이_지나면_푼다():
+    from app.auth import throttle
+
+    for i in range(throttle.MAX_FAILURES - 1):
+        throttle.fail("Lock-Test", now=100.0 + i)
+    assert throttle.locked_for("lock-test", now=120.0) == 0
+    throttle.fail("lock-test", now=120.0)
+    assert throttle.locked_for("LOCK-TEST", now=121.0) > 0
+    assert throttle.locked_for("lock-test", now=120.0 + throttle.LOCK_SECONDS + 1) == 0
+    # 창 밖의 실패는 세지 않는다
+    for i in range(throttle.MAX_FAILURES - 1):
+        throttle.fail("slow", now=float(i * throttle.WINDOW_SECONDS))
+    later = float(throttle.MAX_FAILURES * throttle.WINDOW_SECONDS)
+    assert throttle.locked_for("slow", now=later) == 0
+
+
+@requires_db
+def test_로그인을_연속으로_틀리면_맞는_비밀번호도_잠시_받지_않는다(client):
+    from app.auth import throttle
+
+    for _ in range(throttle.MAX_FAILURES):
+        res = client.post("/api/auth/login", json={"username": "r2", "password": "nope"})
+        assert res.status_code == 401
+    res = client.post("/api/auth/login", json={"username": "r2", "password": "admin"})
+    assert res.status_code == 429 and res.json()["code"] == "LOGIN_LOCKED"
+    assert "분 뒤에" in res.json()["message"]
+    # 다른 아이디는 막히지 않는다
+    res = client.post("/api/auth/login", json={"username": "r3", "password": "admin"})
+    assert res.status_code == 200

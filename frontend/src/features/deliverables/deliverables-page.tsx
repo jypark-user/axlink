@@ -1,38 +1,37 @@
-import { useCallback, useMemo, useRef, useState, type ChangeEvent, type ReactNode } from 'react';
-import { Link } from 'react-router-dom';
+import { useEffect, useMemo, useRef, useState, type ChangeEvent, type ReactNode } from 'react';
 import type { ColumnDef } from '@tanstack/react-table';
 import { Button } from '@/components/ui/button';
-import { DataTable, SortableHeader } from '@/components/ui/data-table';
+import { DataTable } from '@/components/ui/data-table';
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { DataState } from '@/components/common/data-state';
 import { useToast } from '@/components/common/toaster';
 import { PageHeader } from '@/components/layout/page-header';
-import { ServerLink } from '@/components/common/server-link';
 import { useProjectContext } from '@/components/layout/project-shell';
 import { api } from '@/lib/http';
 import { isApiError } from '@/lib/api-error';
-import { formatDate, formatDateTime } from '@/lib/format';
+import { formatDate } from '@/lib/format';
 import { useAsync } from '@/lib/use-async';
 import { cn } from '@/lib/utils';
 import { ALLOWED, rejectReason } from '@/features/documents/upload';
 import { useAuth } from '@/features/auth/auth-context';
-import { label } from '@/lib/labels';
 import {
   DesignateDialog,
   DesignatedCell,
   DesignatedSheet,
   RedesignationPanel,
+  UploadDialog,
   type DesignatedActions,
   type DesignationTarget,
 } from './designated';
 import { useTypeNames } from './use-type-names';
+import { ReviewButton } from './review-button';
+import { Iso29110Button } from './iso29110-panel';
+import { RepoPickDialog, UploadMenu, type UploadTarget } from './repo-upload';
 import type {
   DeliverableStatus,
   DocumentUploadResponse,
   WbsDeliverableItem,
   WbsDeliverablesResponse,
-  WorkProductChecklistResponse,
-  WorkProductResponse,
 } from '@/types/api';
 
 /**
@@ -63,12 +62,11 @@ const STATUS_TONE: Record<DeliverableStatus, string> = {
   OVERDUE: 'bg-destructive/15 text-destructive',
 };
 
-const RULE_LABEL: Record<string, string> = {
-  LINKED_DOC: '항목에 올린 문서',
-  REPO_PATH: '저장소 파일',
-  FILE_NAME: '같은 이름의 문서',
-  PRODUCT_TYPE: '같은 유형의 산출물',
-  DESIGNATED: '발주기관 지정 산출물',
+const BAR_TONE: Record<DeliverableStatus, string> = {
+  NONE: 'bg-muted-foreground',
+  SUBMITTED: 'bg-emerald-500',
+  MISSING: 'bg-amber-500',
+  OVERDUE: 'bg-destructive',
 };
 
 const inFilter = (item: WbsDeliverableItem, filter: Filter): boolean => {
@@ -82,10 +80,11 @@ export function DeliverablesPage(): ReactNode {
   const { project } = useProjectContext();
   const { toast } = useToast();
   const [filter, setFilter] = useState<Filter>('ALL');
-  const [showChecklist, setShowChecklist] = useState(false);
   const [uploadingFor, setUploadingFor] = useState<string | null>(null);
   const [designating, setDesignating] = useState<DesignationTarget | null>(null);
   const [openWbsId, setOpenWbsId] = useState<string | null>(null);
+  // 양식이 있는 작업의 업로드 창
+  const [uploadWbsId, setUploadWbsId] = useState<string | null>(null);
   const inputRef = useRef<HTMLInputElement>(null);
   // 올릴 자리. 지정 산출물 항목을 골라 올리면 그 항목의 제출본이 된다(UC-033)
   const targetRef = useRef<{ wbsId: string; designatedId?: string } | null>(null);
@@ -93,12 +92,28 @@ export function DeliverablesPage(): ReactNode {
   // 산출물 지정은 발주기관만. 관리자는 대신하지 않는다(DEC-05). 서버도 다시 본다
   const canDesignate = me?.role === 'CLIENT';
   const typeNames = useTypeNames(project.id);
+  // 산출물로 고를 수 있는 저장소 파일(11-19). 없으면 업로드가 바로 파일을 고른다
+  const repoFiles = useAsync<{ paths: string[] }>(
+    () => api.get<{ paths: string[] }>(`/projects/${project.id}/repository-files`),
+    [project.id],
+  );
+  const repoPaths = repoFiles.data?.paths ?? [];
+  const [repoTarget, setRepoTarget] = useState<UploadTarget | null>(null);
 
   const state = useAsync<WbsDeliverablesResponse>(
     () => api.get<WbsDeliverablesResponse>(`/projects/${project.id}/wbs/deliverables`),
     [project.id],
   );
   const { reload } = state;
+  // 올린 문서를 읽는 중이면 몇 초마다 다시 받아, 끝나는 대로 「제출」로 바뀐 것을 보인다
+  const reading = (state.data?.items ?? []).some((i) =>
+    (i.designated ?? []).some((d) => d.versions.some((v) => v.submit === 'PROCESSING')),
+  );
+  useEffect(() => {
+    if (!reading) return;
+    const timer = window.setInterval(reload, 4000);
+    return () => window.clearInterval(timer);
+  }, [reading, reload]);
 
   const pickFile = (wbsId: string, designatedId?: string) => {
     targetRef.current = { wbsId, designatedId };
@@ -124,9 +139,7 @@ export function DeliverablesPage(): ReactNode {
     try {
       await api.upload<DocumentUploadResponse>(`/projects/${project.id}/documents`, form);
       toast({
-        title: designatedId
-          ? `${wbsId} 작업의 지정 산출물로 접수했습니다. 옆 창의 「산출물로 제출하러 가기」까지 해야 제출입니다.`
-          : `${wbsId} 항목의 산출물로 접수했습니다. 읽기·색인은 뒤에서 합니다.`,
+        title: `${wbsId} 작업의 산출물로 제출했습니다.`,
         variant: 'success',
       });
       reload();
@@ -146,23 +159,30 @@ export function DeliverablesPage(): ReactNode {
     canDesignate,
     typeNames,
     onUpload: pickFile,
+    onUploadRepo: (wbsId, designatedId) => setRepoTarget({ wbsId, designatedId }),
+    hasRepo: repoPaths.length > 0,
     onEdit: setDesignating,
     onChanged: reload,
     onOpen: setOpenWbsId,
   };
 
   const columns = useMemo(
-    () => buildColumns(project.id, pickFile, uploadingFor, designatedActions, typeNames),
+    () =>
+      buildColumns(
+        project.id,
+        pickFile,
+        setUploadWbsId,
+        uploadingFor,
+        designatedActions,
+        typeNames,
+      ),
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [project.id, uploadingFor, canDesignate, typeNames, reload],
+    [project.id, uploadingFor, canDesignate, typeNames, reload, repoPaths.length],
   );
 
   return (
     <>
-      <PageHeader
-        title="산출물"
-        description="WBS 가 정한 산출물이 올라왔는지 봅니다. 저장소에 있거나 여기서 올린 문서가 근거입니다."
-      />
+      <PageHeader title="산출물" actions={<Iso29110Button projectId={project.id} />} />
       <input
         ref={inputRef}
         type="file"
@@ -213,7 +233,7 @@ export function DeliverablesPage(): ReactNode {
                   columns={columns}
                   data={rows}
                   filterColumn="name"
-                  filterPlaceholder="작업이나 산출물 이름으로 찾기"
+                  filterPlaceholder="검색"
                   pageSize={50}
                   emptyText="해당하는 산출물이 없습니다."
                   className="mt-4"
@@ -225,19 +245,27 @@ export function DeliverablesPage(): ReactNode {
                 actions={designatedActions}
                 onClose={() => setOpenWbsId(null)}
               />
-
-              <div className="mt-8">
-                <Button variant="ghost" size="sm" onClick={() => setShowChecklist((v) => !v)}>
-                  {showChecklist
-                    ? '인도 점검표 접기'
-                    : '인도 점검표 보기 (ISO/IEC 29110 산출물 22종)'}
-                </Button>
-                {showChecklist && <Checklist projectId={project.id} />}
-              </div>
+              <UploadDialog
+                item={data.items.find((i) => i.wbsId === uploadWbsId) ?? null}
+                actions={designatedActions}
+                onClose={() => setUploadWbsId(null)}
+                onUploadPlain={(wbsId) => pickFile(wbsId)}
+              />
+              <RepoPickDialog
+                projectId={project.id}
+                target={repoTarget}
+                paths={repoPaths}
+                onClose={() => setRepoTarget(null)}
+                onDone={(wbsId) => {
+                  toast({ title: `${wbsId} 작업의 산출물로 제출했습니다.`, variant: 'success' });
+                  reload();
+                }}
+              />
             </>
           );
         }}
       </DataState>
+      {/* 인도 점검표 대신 22종 충족 현황(11-19). WBS 가 없어도 「계획 없음」으로 보인다 */}
       {designating && (
         <DesignateDialog
           projectId={project.id}
@@ -257,6 +285,7 @@ export function DeliverablesPage(): ReactNode {
 function buildColumns(
   projectId: string,
   onUpload: (wbsId: string) => void,
+  onOpenUpload: (wbsId: string) => void,
   uploadingFor: string | null,
   designatedActions: DesignatedActions,
   typeNames: Record<string, string>,
@@ -270,103 +299,34 @@ function buildColumns(
       ),
     },
     {
-      // 작업명 아래에 WBS 산출물 열에 적힌 이름을 작게 둔다. 찾기도 둘을 같이 본다
+      // 작업명만 둔다(11-18 사용자 지시)
       id: 'name',
-      accessorFn: (item) => `${item.name} ${item.deliverable ?? ''}`,
-      header: ({ column }) => <SortableHeader column={column}>작업 · WBS 산출물</SortableHeader>,
+      accessorKey: 'name',
+      header: '작업명',
       cell: ({ row }) => (
-        <span className="flex max-w-[17rem] flex-col">
-          <span className="truncate text-sm" title={row.original.name}>
-            {row.original.name}
-          </span>
-          <span
-            className={cn(
-              'truncate text-xs',
-              row.original.status === 'SUBMITTED'
-                ? 'text-muted-foreground'
-                : 'text-muted-foreground/70 italic',
-            )}
-            title={`WBS 에 적힌 산출물 이름: ${row.original.deliverable ?? '없음'}`}
-          >
-            {row.original.deliverable ?? 'WBS 산출물 없음'}
-          </span>
+        <span className="block max-w-[17rem] truncate text-sm" title={row.original.name}>
+          {row.original.name}
         </span>
       ),
     },
     {
       id: 'designated',
-      // 발주기관이 정한 항목(UC-033). 있으면 판정이 산출물 열 대신 이것을 본다
-      header: () => <span title="발주기관이 이 작업에 정한 산출물과 양식">발주기관 지정</span>,
+      // 예상 산출물(11-19): WBS 산출물 열의 이름과 발주기관이 요청한 산출물(UC-033)
+      header: '예상 산출물',
       cell: ({ row }) => <DesignatedCell item={row.original} actions={designatedActions} />,
     },
     {
+      // 판정과 업로드 자료를 한 칸으로(11-19). n/m 막대, 남은 건의 상태, 검토
       accessorKey: 'status',
-      header: ({ column }) => <SortableHeader column={column}>판정</SortableHeader>,
-      cell: ({ row }) => {
-        const item = row.original;
-        const pill = (
-          <span
-            className={cn(
-              'inline-block rounded px-1.5 py-0.5 text-xs font-medium whitespace-nowrap',
-              STATUS_TONE[item.status],
-            )}
-          >
-            {STATUS_LABEL[item.status]}
-          </span>
-        );
-        const why = item.rule ? `${RULE_LABEL[item.rule] ?? item.rule}: ${item.ref ?? ''}` : null;
-        // 근거가 올린 문서면 자료 상세로, 저장소 파일이면 그 저장소(GitHub)로 간다
-        const docBacked = item.rule === 'LINKED_DOC' || item.rule === 'FILE_NAME';
-        const detailDoc = docBacked ? item.documents[0] : undefined;
-        return (
-          <span className="flex flex-col gap-0.5">
-            {detailDoc ? (
-              <Link to={`/p/${projectId}/documents/${detailDoc.id}`} className="w-fit">
-                {pill}
-              </Link>
-            ) : item.url ? (
-              <ServerLink
-                url={item.url}
-                filename={item.deliverable ?? 'deliverable'}
-                className="w-fit"
-                title="저장소에서 보기"
-              >
-                {pill}
-              </ServerLink>
-            ) : (
-              <span className="w-fit">{pill}</span>
-            )}
-            {why && (
-              <span className="text-muted-foreground max-w-[11rem] truncate text-xs" title={why}>
-                {why}
-              </span>
-            )}
-          </span>
-        );
-      },
-    },
-    {
-      id: 'documents',
-      header: '올린 문서',
-      cell: ({ row }) => {
-        const docs = row.original.documents;
-        if (docs.length === 0) return <span className="text-muted-foreground text-sm">-</span>;
-        const [first, ...rest] = docs;
-        return (
-          <span className="flex max-w-[11rem] flex-col">
-            <Link
-              to={`/p/${projectId}/documents/${first.id}`}
-              className="truncate text-sm underline-offset-2 hover:underline"
-              title={docs.map((d) => `${d.fileName} · ${formatDateTime(d.uploadedAt)}`).join(', ')}
-            >
-              {first.fileName}
-            </Link>
-            {rest.length > 0 && (
-              <span className="text-muted-foreground text-xs">외 {rest.length}건</span>
-            )}
-          </span>
-        );
-      },
+      header: '업로드 상태',
+      cell: ({ row }) => (
+        <UploadStatusCell
+          projectId={projectId}
+          item={row.original}
+          canReview={designatedActions.canDesignate}
+          onChanged={designatedActions.onChanged}
+        />
+      ),
     },
     {
       accessorKey: 'productType',
@@ -386,7 +346,7 @@ function buildColumns(
     },
     {
       accessorKey: 'endDate',
-      header: ({ column }) => <SortableHeader column={column}>기한</SortableHeader>,
+      header: '기한',
       cell: ({ row }) => (
         <span className="text-muted-foreground tnum text-sm">
           {row.original.endDate ? formatDate(row.original.endDate) : '-'}
@@ -398,32 +358,26 @@ function buildColumns(
       header: '',
       cell: ({ row }) => {
         const item = row.original;
-        // 지정 산출물이 있는 작업은 항목을 골라 올려야 그 항목에 이어진다. 옆 창을 연다
-        if ((item.designated ?? []).length > 0) {
-          return (
-            <div className="flex justify-end">
-              <Button
-                size="sm"
-                variant="outline"
-                onClick={() => designatedActions.onOpen(item.wbsId)}
-              >
-                항목 골라 올리기
-              </Button>
-            </div>
-          );
-        }
-        if (item.status === 'NONE') return null;
+        // 산출물 제출은 이 [업로드]로만 한다(11-18 사용자 지시). 양식이 있으면 양식을 골라 올리는
+        // 창을 열고, 없으면 바로 파일을 고른다
+        const hasForm = (item.designated ?? []).some((d) => !d.needsRedesignation);
+        if (!hasForm && item.status === 'NONE') return null;
         const busy = uploadingFor === item.wbsId;
         return (
-          <div className="flex justify-end">
-            <Button
-              size="sm"
-              variant={item.status === 'SUBMITTED' ? 'ghost' : 'outline'}
-              disabled={busy}
-              onClick={() => onUpload(item.wbsId)}
-            >
-              {busy ? '올리는 중…' : item.status === 'SUBMITTED' ? '새 버전 올리기' : '올리기'}
-            </Button>
+          <div className="flex items-center justify-end gap-2">
+            {hasForm ? (
+              <Button size="sm" disabled={busy} onClick={() => onOpenUpload(item.wbsId)}>
+                {busy ? '업로드 중…' : '업로드'}
+              </Button>
+            ) : (
+              <UploadMenu
+                hasRepo={designatedActions.hasRepo}
+                disabled={busy}
+                label={busy ? '업로드 중…' : '업로드'}
+                onFile={() => onUpload(item.wbsId)}
+                onRepo={() => designatedActions.onUploadRepo(item.wbsId)}
+              />
+            )}
           </div>
         );
       },
@@ -431,166 +385,65 @@ function buildColumns(
   ];
 }
 
-/** 인도 점검표. 22종 분류로 무엇이 채워졌는지 본다. 사업의 산출물 목록은 위 WBS 표다. */
-function Checklist({ projectId }: { projectId: string }): ReactNode {
-  const { me } = useAuth();
-  const { toast } = useToast();
-  // 승인·반려는 발주기관만. 서버도 역할과 사업 접근을 다시 본다
-  const canApprove = me?.role === 'CLIENT'; // 관리자는 대신하지 않는다(DEC-05)
-  const state = useAsync<WorkProductChecklistResponse>(
-    () => api.get<WorkProductChecklistResponse>(`/projects/${projectId}/work-products`),
-    [projectId],
-  );
-  const { reload } = state;
-  const decide = useCallback(
-    async (wp: WorkProductResponse, action: 'approve' | 'reject') => {
-      const name = `${wp.title ?? wp.displayName} ${wp.version ?? ''}`.trim();
-      let body: { reason: string } | undefined;
-      if (action === 'reject') {
-        const reason = window.prompt(`${name} 을(를) 반려하는 사유를 적어 주세요.`)?.trim();
-        if (!reason) return;
-        body = { reason };
-      } else if (!window.confirm(`${name} 을(를) 승인합니다. 이 버전에만 붙습니다.`)) {
-        return;
-      }
-      try {
-        await api.post(`/projects/${projectId}/work-products/${wp.id}/${action}`, body ?? {});
-        toast({
-          title: action === 'approve' ? '승인했습니다.' : '반려했습니다.',
-          variant: 'success',
-        });
-        reload();
-      } catch (err) {
-        toast({
-          title: action === 'approve' ? '승인하지 못했습니다.' : '반려하지 못했습니다.',
-          description: isApiError(err) ? err.message : undefined,
-          variant: 'error',
-        });
-      }
-    },
-    [projectId, reload, toast],
-  );
-  const columns = useMemo<ColumnDef<WorkProductResponse, unknown>[]>(
-    () => [
-      {
-        accessorKey: 'type',
-        header: '분류',
-        cell: ({ row }) => (
-          <span className="text-muted-foreground text-xs" title={row.original.type}>
-            {row.original.displayName}
-          </span>
-        ),
-      },
-      {
-        id: 'title',
-        accessorFn: (wp) => wp.title ?? wp.displayName,
-        header: '제목',
-        cell: ({ row }) => (
-          <span
-            className={row.original.applicable ? 'text-foreground' : 'text-muted-foreground/60'}
-          >
-            {row.original.title ?? row.original.displayName}
-          </span>
-        ),
-      },
-      {
-        accessorKey: 'status',
-        header: '상태',
-        cell: ({ row }) => {
-          const wp = row.original;
-          return (
-            <div className="flex flex-col gap-0.5 text-sm">
-              <span>{label(wp.status)}</span>
-              {wp.status === 'APPROVED' && wp.approvedAt && (
-                <span className="text-muted-foreground text-xs">
-                  {wp.approvedBy ?? '-'} · {formatDate(wp.approvedAt)}
-                </span>
-              )}
-            </div>
-          );
-        },
-      },
-      {
-        accessorKey: 'version',
-        header: '버전',
-        cell: ({ row }) => {
-          const wp = row.original;
-          return (
-            <div className="flex flex-col gap-0.5 text-sm">
-              <span className="tnum">{wp.version ?? '-'}</span>
-              {wp.previousVersions.length > 0 && (
-                <details className="text-muted-foreground text-xs">
-                  <summary className="cursor-pointer">
-                    지난 버전 {wp.previousVersions.length}건
-                  </summary>
-                  <ul className="mt-1 flex flex-col gap-1">
-                    {wp.previousVersions.map((h) => (
-                      <li key={h.id}>
-                        <span className="tnum">{h.version ?? '-'}</span> · {label(h.status)}
-                        {h.decidedAt && (
-                          <>
-                            {' '}
-                            · {h.decidedBy ?? '-'} · {formatDate(h.decidedAt)}
-                          </>
-                        )}
-                        {h.rejectReason && <div>반려 사유: {h.rejectReason}</div>}
-                      </li>
-                    ))}
-                  </ul>
-                </details>
-              )}
-            </div>
-          );
-        },
-      },
-      {
-        id: 'activity',
-        accessorFn: (wp) => wp.pmActivity ?? wp.siActivity ?? '',
-        header: '활동',
-        cell: ({ row }) => row.original.pmActivity ?? row.original.siActivity ?? '-',
-      },
-      ...(canApprove
-        ? [
-            {
-              id: 'decide',
-              header: '승인',
-              cell: ({ row }: { row: { original: WorkProductResponse } }) => {
-                const wp = row.original;
-                if (wp.status !== 'SUBMITTED' && wp.status !== 'APPROVED') return null;
-                return (
-                  <div className="flex gap-1">
-                    {wp.status === 'SUBMITTED' && (
-                      <Button
-                        size="sm"
-                        variant="outline"
-                        onClick={() => void decide(wp, 'approve')}
-                      >
-                        승인
-                      </Button>
-                    )}
-                    <Button size="sm" variant="ghost" onClick={() => void decide(wp, 'reject')}>
-                      반려
-                    </Button>
-                  </div>
-                );
-              },
-            } satisfies ColumnDef<WorkProductResponse, unknown>,
-          ]
-        : []),
-    ],
-    [canApprove, decide],
-  );
+/**
+ * 업로드 상태 칸(11-19). 예상 산출물 n/m 을 작은 막대로, 옆에 남은 건의 상태(「2건 지연」
+ * 「1건 미제출」, 다 올라왔으면 「제출」)를 둔다. 검토 단추는 맨 앞. 수는 서버 판정이 준다.
+ * 승인 현황은 칸에 두지 않는다(11-19 사용자 결정). 검토 창에서 본다.
+ */
+function UploadStatusCell({
+  projectId,
+  item,
+  canReview,
+  onChanged,
+}: {
+  projectId: string;
+  item: WbsDeliverableItem;
+  canReview: boolean;
+  onChanged: () => void;
+}): ReactNode {
+  // 예상 산출물이 없는 작업은 판정할 것이 없다(11-19). 칸을 비운다
+  if (item.status === 'NONE' || item.expectedTotal == null) return null;
+  const total = item.expectedTotal;
+  const done = item.expectedSubmitted ?? 0;
+  const left = Math.max(total - done, 0);
+  const label = item.status === 'SUBMITTED' ? '제출' : `${left}건 ${STATUS_LABEL[item.status]}`;
   return (
-    <DataState state={state} onRetry={state.reload}>
-      {(data) => (
-        <DataTable<WorkProductResponse, unknown>
-          columns={columns}
-          data={data.items}
-          paginated={false}
-          emptyText="항목이 없습니다."
-          className="mt-3"
+    <div className="flex items-center gap-3">
+      {/* 검토는 맨 앞 고정 폭 자리에 둔다. 올라온 것이 없어 단추가 없어도 막대가 같은 자리에 선다 */}
+      <div className="w-14 shrink-0">
+        <ReviewButton
+          projectId={projectId}
+          item={item}
+          canReview={canReview}
+          onChanged={onChanged}
         />
-      )}
-    </DataState>
+      </div>
+      <div className="flex min-w-0 items-center gap-2">
+        <span
+          className="bg-foreground/15 h-1.5 w-14 shrink-0 overflow-hidden rounded-full"
+          role="progressbar"
+          aria-valuemin={0}
+          aria-valuemax={total}
+          aria-valuenow={done}
+          aria-label={`${done}/${total}건 업로드`}
+        >
+          <span
+            className={cn('block h-full rounded-full', BAR_TONE[item.status])}
+            style={{ width: `${total ? Math.round((done / total) * 100) : 0}%` }}
+          />
+        </span>
+        <span className="tnum text-xs whitespace-nowrap">
+          {done}/{total}건 업로드
+        </span>
+        <span
+          className={cn(
+            'inline-block rounded px-1.5 py-0.5 text-xs font-medium whitespace-nowrap',
+            STATUS_TONE[item.status],
+          )}
+        >
+          {label}
+        </span>
+      </div>
+    </div>
   );
 }

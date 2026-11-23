@@ -3,7 +3,6 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { Window } from '@/components/ui/window';
 import { useToast } from '@/components/common/toaster';
 import { api } from '@/lib/http';
 import { isApiError } from '@/lib/api-error';
@@ -63,10 +62,15 @@ export function ParticipantsPanel({
   };
 
   return (
-    <Window
-      title="참여 업체"
-      hint="공동 수급 업체입니다. 같은 사업의 업무 정보는 함께 보고, 도구 연결의 설정 변경·삭제는 그 연결의 소유 업체와 발주기관만 합니다. 대표사 표시는 권한과 상관없습니다."
-    >
+    // 사업 관리 화면의 용역사 칸 안에 들어간다. 칸 안에 칸을 또 두면 좌우 여백이 겹쳐 제목만 둔다(11-20)
+    <section className="flex flex-col gap-3">
+      <div className="flex flex-col gap-1">
+        <h3 className="text-base font-semibold">참여 업체</h3>
+        <p className="text-muted-foreground text-sm">
+          공동 수급 업체입니다. 같은 사업의 업무 정보는 함께 보고, 도구 연결의 설정 변경·삭제는 그
+          연결의 소유 업체와 발주기관만 합니다. 대표사 표시는 권한과 상관없습니다.
+        </p>
+      </div>
       <div className="flex flex-col gap-3 text-sm">
         {rows.length === 0 && <p className="text-muted-foreground">참여 업체가 없습니다.</p>}
         {rows.map((p) => (
@@ -146,6 +150,6 @@ export function ParticipantsPanel({
           </Button>
         </div>
       </div>
-    </Window>
+    </section>
   );
 }

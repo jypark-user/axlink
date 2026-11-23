@@ -36,9 +36,6 @@ const DashboardPage = lazy(() =>
 const ConnectionsPage = lazy(() =>
   import('@/features/connections/connections-page').then((m) => ({ default: m.ConnectionsPage })),
 );
-const AssignmentsPage = lazy(() =>
-  import('@/features/assignments/assignments-page').then((m) => ({ default: m.AssignmentsPage })),
-);
 const CollectionPage = lazy(() =>
   import('@/features/collection/collection-page').then((m) => ({ default: m.CollectionPage })),
 );
@@ -57,11 +54,6 @@ const DocumentsPage = lazy(() =>
 const DocumentDetailPage = lazy(() =>
   import('@/features/documents/document-detail-page').then((m) => ({
     default: m.DocumentDetailPage,
-  })),
-);
-const StructuringDraftPage = lazy(() =>
-  import('@/features/documents/structuring-draft-page').then((m) => ({
-    default: m.StructuringDraftPage,
   })),
 );
 const BaselinePage = lazy(() =>
@@ -97,7 +89,7 @@ const AskPage = lazy(() =>
   import('@/features/ax-query/ask-page').then((m) => ({ default: m.AskPage })),
 );
 
-/** 용역사(CONTRACTOR)는 사업 정보·연동·동기화 이력만 본다. 나머지 화면은 이 목록으로 막는다. */
+/** 용역사(CONTRACTOR)는 사업 관리·연동·동기화 이력만 본다. 나머지 화면은 이 목록으로 막는다. */
 const EXCEPT_CONTRACTOR: Role[] = ['SUPER_ADMIN', 'CLIENT'];
 
 function PageFallback(): ReactNode {
@@ -152,7 +144,7 @@ export function AppRoutes(): ReactNode {
             </SuspenseShell>
           }
         />
-        {/* 사용 설명서 — 역할과 사업에 상관없이 본다. 각 화면이 /guide/<문서>#<절> 로 바로 연다 */}
+        {/* 사용자 매뉴얼 — 역할과 사업에 상관없이 본다. 각 화면이 /guide/<문서>#<절> 로 바로 연다 */}
         <Route
           path="/guide/:slug?"
           element={
@@ -220,7 +212,7 @@ export function AppRoutes(): ReactNode {
             </RequireProject>
           }
         >
-          {/* 용역사도 볼 수 있는 화면 — 사업 정보 · 연동 · 동기화 이력 */}
+          {/* 용역사도 볼 수 있는 화면 — 사업 관리 · 연동 · 동기화 이력 */}
           <Route
             index
             element={
@@ -270,14 +262,6 @@ export function AppRoutes(): ReactNode {
             element={
               <SuspenseShell>
                 <DocumentDetailPage />
-              </SuspenseShell>
-            }
-          />
-          <Route
-            path="documents/:documentId/draft"
-            element={
-              <SuspenseShell>
-                <StructuringDraftPage />
               </SuspenseShell>
             }
           />
@@ -343,17 +327,6 @@ export function AppRoutes(): ReactNode {
               element={
                 <SuspenseShell>
                   <AskPage />
-                </SuspenseShell>
-              }
-            />
-          </Route>
-
-          <Route element={<RequireRole allow={['CLIENT']} />}>
-            <Route
-              path="assignments"
-              element={
-                <SuspenseShell>
-                  <AssignmentsPage />
                 </SuspenseShell>
               }
             />

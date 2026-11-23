@@ -17,7 +17,7 @@ import type { ProjectDetailResponse } from '@/types/api';
 
 /**
  * 사업 등록. 여기서는 기본 정보만 받는다 —
- * 제안요청서 같은 문서는 사업을 만든 뒤 사업 정보 화면에서 올린다.
+ * 제안요청서 같은 문서는 사업을 만든 뒤 자료 화면에서 올린다.
  */
 export function ProjectCreateDialog({
   open,
@@ -41,7 +41,7 @@ export function ProjectCreateDialog({
     if (values.contractorName.trim() && !match) {
       toast({
         title: '사업은 등록했지만 용역사 계정을 찾지 못했습니다.',
-        description: `'${values.contractorName.trim()}' 로 등록된 계정이 없습니다 · 계정이 만들어진 뒤 사업 정보 화면에서 할당하십시오.`,
+        description: `'${values.contractorName.trim()}' 로 등록된 계정이 없습니다 · 계정이 만들어진 뒤 사업 관리 화면에서 할당하십시오.`,
         variant: 'error',
       });
     } else if (match) {
@@ -50,7 +50,7 @@ export function ProjectCreateDialog({
       } catch (e) {
         toast({
           title: '사업은 등록했지만 용역사 할당에 실패했습니다.',
-          description: `${isApiError(e) ? e.message : '할당에 실패했습니다.'} · 사업 정보 화면에서 다시 할당하십시오.`,
+          description: `${isApiError(e) ? e.message : '할당에 실패했습니다.'} · 사업 관리 화면에서 다시 할당하십시오.`,
           variant: 'error',
         });
       }
@@ -69,8 +69,7 @@ export function ProjectCreateDialog({
         <DialogHeader className="px-6 pt-5 pb-4">
           <DialogTitle className="text-lg font-semibold tracking-tight">사업 등록</DialogTitle>
           <DialogDescription>
-            사업 기본 정보를 입력합니다. 제안요청서 같은 문서는 등록한 뒤 사업 정보 화면에서
-            올립니다.
+            사업 기본 정보를 입력합니다. 제안요청서 같은 문서는 등록한 뒤 자료 화면에서 올립니다.
           </DialogDescription>
         </DialogHeader>
 

@@ -1,6 +1,6 @@
 import { render, screen } from '@testing-library/react';
 import { describe, expect, it } from 'vitest';
-import { IssueList, IssueProgressCell } from '@/features/traceability/issue-progress';
+import { IssueProgressCell, IssueTable } from '@/features/traceability/issue-progress';
 
 // 요구사항에 이어진 이슈·일감의 진행(11-17). 용역사가 얼마나 등록해 얼마나 닫았는지 보인다.
 
@@ -16,9 +16,9 @@ describe('연관 이슈·일감', () => {
     expect(screen.getByText('등록된 이슈 없음')).toBeInTheDocument();
   });
 
-  it('상세 목록은 상태와 결함 표시를 붙인다', () => {
+  it('상세 표는 상태·담당·커밋·PR 수와 결함 표시를 보인다', () => {
     render(
-      <IssueList
+      <IssueTable
         issues={[
           {
             id: 'i1',
@@ -27,6 +27,9 @@ describe('연관 이슈·일감', () => {
             status: 'IN_PROGRESS',
             kind: 'GENERAL',
             url: null,
+            assignee: '김개발',
+            updatedAt: '2026-11-10T00:00:00Z',
+            codeChangeCount: 3,
           },
           {
             id: 'i2',
@@ -42,5 +45,8 @@ describe('연관 이슈·일감', () => {
     expect(screen.getByText('진행')).toBeInTheDocument();
     expect(screen.getByText('종료')).toBeInTheDocument();
     expect(screen.getByText('결함')).toBeInTheDocument();
+    expect(screen.getByText('김개발')).toBeInTheDocument();
+    expect(screen.getByRole('columnheader', { name: '커밋·PR' })).toBeInTheDocument();
+    expect(screen.getByText('3')).toBeInTheDocument();
   });
 });

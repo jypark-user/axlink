@@ -26,13 +26,21 @@ from app.auth import repository as auth_repo
 from app.auth.deps import AuthPrincipal
 from app.common import clock, errors
 from app.config import settings
-from app.dashboard import deliverable, designation, repository, wbs, wbs_issue
+from app.dashboard import (
+    deliverable,
+    designation,
+    designation_repository,
+    repository,
+    wbs,
+    wbs_issue,
+)
 from app.dashboard.models import (
     OBSERVED,
     SELF_REPORTED,
     WBS_SOURCE_FILE,
     WBS_SOURCE_NONE,
     WBS_SOURCE_REDMINE,
+    DeliverableReview,
     DeliverableSummary,
     LinkedIssue,
     ProgressMeasure,
@@ -44,7 +52,9 @@ from app.dashboard.models import (
     WbsRecognitionColumn,
     WbsRecognitionResponse,
     WbsScheduleResponse,
+    WbsSourceFile,
 )
+from app.db import fetch_all, fetch_one
 from app.integration import repository as integration_repo
 from app.standard import repository as standard_repo
 from app.standard import wbs_repository
@@ -207,7 +217,7 @@ def compute(cur: Any, project_id: str, at: date) -> ProgressResponse:
     achieved, evaluated = repository.schedule_compliance(cur, [project_id], at).get(
         project_id, (0, 0)
     )
-    approved, defined = deliverable_approval_now(cur, project_id, at)
+    submitted_units, approved, defined = deliverable_units(cur, project_id, at)
 
     return ProgressResponse(
         baseDate=at.isoformat(),
@@ -232,6 +242,7 @@ def compute(cur: Any, project_id: str, at: date) -> ProgressResponse:
         basisNote=note,
         scheduleCompliance=schedule_compliance_measure(achieved, evaluated),
         deliverableApproval=deliverable_approval_measure(approved, defined),
+        deliverableSubmission=deliverable_submission_measure(submitted_units, defined),
     )
 
 
@@ -239,7 +250,7 @@ SCHEDULE_COMPLIANCE_BASIS = (
     "기한이 기준일보다 앞선 마일스톤 중 기한 안에 닫힌 비율. 기한 없는 마일스톤과 기한 전 "
     "마일스톤은 세지 않는다"
 )
-DELIVERABLE_APPROVAL_BASIS = "WBS 가 정한 산출물 중 현행 버전이 승인된 비율"
+DELIVERABLE_APPROVAL_BASIS = "예상 산출물 중 가장 최근 올라온 산출물이 승인된 비율"
 
 
 def schedule_compliance_measure(achieved: int, evaluated: int) -> ProgressMeasure:
@@ -258,7 +269,7 @@ def schedule_compliance_measure(achieved: int, evaluated: int) -> ProgressMeasur
 
 
 def deliverable_approval_measure(approved: int, defined: int) -> ProgressMeasure:
-    """산출물 승인률(DEC-12). 분모는 WBS 가 정한 산출물이다. WBS 가 없으면 산출 불가."""
+    """산출물 승인률(DEC-12). 분모는 예상 산출물이다. 없으면 산출 불가."""
     return ProgressMeasure(
         value=_ratio(approved, defined),
         numerator=approved,
@@ -268,29 +279,52 @@ def deliverable_approval_measure(approved: int, defined: int) -> ProgressMeasure
         kind=OBSERVED,
         note=DELIVERABLE_APPROVAL_BASIS
         if defined
-        else "산출 불가: WBS 가 정한 산출물이 없습니다",
+        else "산출 불가: 예상 산출물이 없습니다",
     )
+
+
+def deliverable_units(cur: Any, project_id: str, at: date) -> tuple[int, int, int]:
+    """산출물 진척의 셈: (제출 수, 승인 수, 셈 단위 수). 읽기만 한다.
+
+    예상 산출물 하나가 한 건이다(뷰 v_deliverable_unit, 시맨틱 지표와 같은 셈). 예상 산출물은
+    WBS 산출물 열의 이름과 발주기관이 요청한 산출물이고, 한 작업에 둘 다 있으면 둘 다 센다(11-19).
+    각 건은 가장 최근 올라온 산출물의 검토 상태를 본다. at 은 지금 쓰지
+    않는다(올라온 것의 상태는 지금 값이다).
+    """
+    row = fetch_one(
+        cur,
+        """
+        select count(*) filter (where submitted) as submitted,
+               count(*) filter (where approved) as approved, count(*) as total
+          from v_deliverable_unit
+         where project_id = %s
+        """,
+        (project_id,),
+    )
+    if row is None:
+        return 0, 0, 0
+    return int(row["submitted"]), int(row["approved"]), int(row["total"])
 
 
 def deliverable_approval_now(cur: Any, project_id: str, at: date) -> tuple[int, int]:
-    """산출물 승인 수(DEC-12): (현행 버전이 승인된 수, WBS 가 정한 산출물 수). 읽기만 한다.
+    """산출물 승인 수(DEC-12, V70): (승인 수, 셈 단위 수). deliverable_units 의 승인 쪽이다."""
+    _, approved, total = deliverable_units(cur, project_id, at)
+    return approved, total
 
-    판정을 지금 다시 해서(저장하지 않음) 문서를 붙이거나 산출물을 확정한 직후에도 맞는다.
-    진척 산정은 스냅샷·확인 요청 상태 뜨기에도 쓰이므로 판정 저장·활동 기록을 남기면 안 된다.
-    분모·분자 조건은 시맨틱 지표 deliverable_approval_rate(V64)와 같다. 지표는 일정·산출물 화면이
-    남긴 판정(wbs_item.deliverable_product_id)을 읽는다.
-    """
-    check = judge_deliverables(cur, project_id, at)
-    leaves = {
-        i["wbs_id"] for i in check.items
-        if i.get("weight") is not None and (i.get("deliverable") or "").strip()
-    }
-    judged = [j for j in check.judgements if j.wbs_id in leaves]
-    status = repository.current_status_by_product(
-        cur, [j.product_id for j in judged if j.product_id]
+
+def deliverable_submission_measure(submitted: int, defined: int) -> ProgressMeasure:
+    """산출물 제출률. 예상 산출물 중 산출물이 올라온 비율."""
+    return ProgressMeasure(
+        value=_ratio(submitted, defined),
+        numerator=submitted,
+        denominator=defined,
+        label="산출물 제출률",
+        unit="건",
+        kind=OBSERVED,
+        note="예상 산출물 중 산출물이 올라온 비율. 반려된 것은 뺀다"
+        if defined
+        else "산출 불가: 예상 산출물이 없습니다",
     )
-    approved = sum(1 for j in judged if j.product_id and status.get(j.product_id) == "APPROVED")
-    return approved, len(leaves)
 
 
 def sync_product_links(cur: Any, project_id: str, at: date | None = None) -> None:
@@ -420,6 +454,7 @@ def schedule(cur: Any, project_id: str, at: date) -> WbsScheduleResponse:
                 none=counts[deliverable.NONE],
             ),
             recognition=_recognition(cur, project_id, plan),
+            sourceFile=_source_file(cur, plan_row),
         )
 
     issues = integration_repo.redmine_issue_payloads(cur, project_id)
@@ -588,6 +623,43 @@ def _previous_baseline(
     return plan, f"{reason} 직전에 읽은 계획서({label})의 작업을 이전 기준선으로 보입니다."
 
 
+def _source_file(cur: Any, plan_row: dict[str, Any]) -> WbsSourceFile:
+    """계획서 행이 어디서 왔는지. 저장소에서 수집했으면 연결·경로·커밋, 올렸으면 파일 이름."""
+    row = fetch_one(
+        cur,
+        """
+        select wp.file_uri, wp.external_url, wp.source_kind, wp.source_revision, wp.version,
+               wp.updated_at, tc.tool, tc.target_resource, tc.last_synced_at,
+               du.original_filename
+          from work_product wp
+          left join tool_connection tc on tc.id = wp.tool_connection_id
+          left join document_upload du on du.id = wp.document_upload_id
+         where wp.id = %s
+        """,
+        (plan_row["id"],),
+    )
+    if row is None:
+        row = {}
+    if row.get("tool"):
+        origin = "REPOSITORY"
+    elif row.get("original_filename"):
+        origin = "UPLOAD"
+    else:
+        origin = "OTHER"
+    read_at = row.get("updated_at")
+    synced = row.get("last_synced_at")
+    return WbsSourceFile(
+        origin=origin,
+        path=row.get("file_uri") or row.get("original_filename"),
+        url=row.get("external_url"),
+        tool=row.get("tool"),
+        repository=row.get("target_resource"),
+        revision=row.get("source_revision") or row.get("version"),
+        readAt=read_at.isoformat() if read_at else None,
+        lastSyncedAt=synced.isoformat() if synced else None,
+    )
+
+
 def _shown_plan_row(
     cur: Any, project_id: str, plan_row: dict[str, Any] | None
 ) -> dict[str, Any] | None:
@@ -639,9 +711,6 @@ def judge_deliverables(cur: Any, project_id: str, at: date) -> DeliverableCheck:
     live = {str(i["task_key"]) for i in items if i.get("task_key") and i.get("weight") is not None}
     judgements = deliverable.judge(
         items,
-        tree=tree,
-        products=wbs_repository.current_products(cur, project_id),
-        documents=wbs_repository.project_documents(cur, project_id),
         today=at,
         designated=designation.coverage(cur, project_id, live),
     )
@@ -700,6 +769,7 @@ def wbs_deliverables(
     # 행이 그 계획서 버전에서 왔는지부터 맞춘다. 없으면 파일을 한 번 읽어 남긴다
     plan_row = standard_repo.current_work_product(cur, project_id, PLAN_TYPE)
     _load_plan(cur, project_id, plan_row)
+    designation_repository.sync_wbs_expected(cur, project_id)  # WBS 산출물 → 예상 산출물(V73)
     judged = refresh_deliverables(cur, project_id, today)
     items = wbs_repository.list_items(cur, project_id)
     documents = wbs_repository.project_documents(cur, project_id)
@@ -708,12 +778,14 @@ def wbs_deliverables(
     live = {str(i["task_key"]) for i in items if i.get("task_key") and i.get("weight") is not None}
     designated_by_task, redesignation = designation.build(cur, project_id, live)
 
+    # 업로드 자료는 그 작업에 올라온 것만이다(11-19). 이름이 같다고 다른 문서를 끌어오지 않는다
     by_item: dict[str, list[dict]] = {}
-    by_stem: dict[str, list[dict]] = {}
     for d in documents:
         if d.get("wbs_item_id"):
             by_item.setdefault(str(d["wbs_item_id"]), []).append(d)
-        by_stem.setdefault(deliverable_stem(d["original_filename"]), []).append(d)
+
+    # 작업마다 올라온 산출물(V70). 승인 단위다
+    uploaded = _uploaded_by_item(cur, project_id)
 
     out: list[WbsDeliverableItem] = []
     for item in items:
@@ -721,10 +793,6 @@ def wbs_deliverables(
             continue
         j = judged.get(item["wbs_id"])
         docs = list(by_item.get(str(item["id"]), []))
-        if item.get("deliverable"):
-            for d in by_stem.get(deliverable_stem(item["deliverable"]), []):
-                if d not in docs:
-                    docs.append(d)
         # 확정된 유형 > 사람이 단 태그 > 초안 추정 순
         product_type = (
             next(
@@ -745,6 +813,8 @@ def wbs_deliverables(
                 rule=j.rule if j else None,
                 ref=j.ref if j else None,
                 url=j.url if j else None,
+                expectedTotal=j.expected_total if j else None,
+                expectedSubmitted=j.expected_submitted if j else None,
                 productType=product_type,
                 documents=[
                     WbsDeliverableDocument(
@@ -760,6 +830,7 @@ def wbs_deliverables(
                 ],
                 taskKey=str(item["task_key"]) if item.get("task_key") else None,
                 designated=designated_by_task.get(str(item.get("task_key")), []),
+                review=uploaded.get(str(item["id"]), []),
             )
         )
     counts = deliverable.summarize(list(judged.values()))
@@ -776,8 +847,44 @@ def wbs_deliverables(
     )
 
 
-def deliverable_stem(value: str) -> str:
-    return deliverable.stem_of(value)
+def _uploaded_by_item(cur: Any, project_id: str) -> dict[str, list[DeliverableReview]]:
+    """작업마다 올라온 산출물(V70). 최근 것이 앞이다. 양식마다 가장 최근 것만 latest 다.
+
+    작업에 바로 올린 것은 하나하나가 따로 낸 산출물이라 모두 latest 다. 같은 양식에 다시 올린 것은
+    새 판이라 앞의 것은 지난 판이다. 상태(승인 대기·승인·반려)는 latest 들로 정한다.
+    """
+    rows = fetch_all(
+        cur,
+        """
+        select d.id, d.wbs_item_id, d.designated_deliverable_id, dd.name as form_name,
+               d.original_filename, d.created_at, d.review_status, d.review_reason, d.reviewed_at
+          from document_upload d
+          left join wbs_designated_deliverable dd on dd.id = d.designated_deliverable_id
+         where d.project_id = %s and d.wbs_item_id is not null and d.review_status is not null
+           and d.status not in ('FAILED', 'REJECTED')
+         order by d.created_at desc, d.id
+        """,
+        (project_id,),
+    )
+    out: dict[str, list[DeliverableReview]] = {}
+    seen_forms: set[str] = set()
+    for r in rows:
+        form = str(r["designated_deliverable_id"]) if r["designated_deliverable_id"] else None
+        latest = form is None or form not in seen_forms
+        if form:
+            seen_forms.add(form)
+        out.setdefault(str(r["wbs_item_id"]), []).append(DeliverableReview(
+            documentId=str(r["id"]),
+            name=r["form_name"] or r["original_filename"],
+            fileName=r["original_filename"],
+            uploadedAt=r["created_at"].isoformat(),
+            status=r["review_status"],
+            rejectReason=r["review_reason"] if r["review_status"] == "REJECTED" else None,
+            reviewedAt=r["reviewed_at"].isoformat() if r["reviewed_at"] else None,
+            latest=latest,
+            designatedId=form,
+        ))
+    return out
 
 
 def linked_issues(cur: Any, project_id: str, plan: wbs.WbsPlan) -> dict[str, list[LinkedIssue]]:

@@ -9,7 +9,7 @@ from typing import Any
 
 import bcrypt
 
-from app.auth import jwt_codec, repository
+from app.auth import jwt_codec, repository, throttle
 from app.auth.models import (
     AcceptInvitationRequest,
     AuthPrincipal,
@@ -46,11 +46,21 @@ def _verify_password(raw: str, stored_hash: str | None) -> bool:
 
 
 def login(cur: Any, req: LoginRequest, user_agent: str | None) -> LoginResponse:
+    wait = throttle.locked_for(req.username)
+    if wait:
+        # 잠긴 동안은 비밀번호를 확인하지 않는다. 맞는지 틀린지 알려 주지 않기 위해서다
+        raise errors.ApiError(
+            429,
+            "LOGIN_LOCKED",
+            f"로그인 실패가 이어져 잠시 막았습니다. {(wait + 59) // 60}분 뒤에 다시 시도하십시오.",
+        )
     user = repository.find_user_by_username(cur, req.username)
     if user is None or not _verify_password(req.password, user["password_hash"]):
+        throttle.fail(req.username)
         raise errors.credentials_invalid()
     if user["status"] != "ACTIVE":
         raise errors.credentials_invalid()
+    throttle.succeed(req.username)
     now = datetime.now(UTC)
     repository.touch_last_login(cur, user["id"], now)
     return _issue(cur, user, now, user_agent)

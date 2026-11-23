@@ -4,7 +4,6 @@ import { ExternalLink } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { Card, CardContent } from '@/components/ui/card';
 import { DataTable, SortableHeader } from '@/components/ui/data-table';
-import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import {
   Select,
   SelectContent,
@@ -31,7 +30,8 @@ import { useAsync } from '@/lib/use-async';
 import { localToday, milestoneText } from '@/features/issues/milestone-text';
 import type {
   IssueKind,
-  IssueKindCounts,
+  IssueCodeChange,
+  IssueRequirement,
   IssueResponse,
   IssueSourceCount,
   IssueSummaryResponse,
@@ -41,22 +41,13 @@ import type {
 
 /** 이 화면이 세는 범위. 명세서 등록 전에 요구사항으로 만든 이슈는 요구사항 화면에 있다. */
 const GENERAL_ISSUE_SCOPE = '수집한 이슈입니다';
-const EMPTY_TEXT = '수집된 일반 이슈가 없습니다. 연동을 붙이면 도구의 이슈가 여기 쌓입니다.';
-const ALL_CONNECTIONS = 'ALL';
+const EMPTY_TEXT = '수집된 이슈가 없습니다. 연동을 붙이면 도구의 이슈가 여기 쌓입니다.';
 /**
- * 이슈 종류 (DEC-02). 전체 이슈(결함 포함) = 일반 이슈(결함 제외) + 결함.
- * 세 값은 서버가 각각 센 것이고, 화면은 이를 더해 하나의 합계로 만들지 않는다.
+ * 종류(일반·결함)와 심각도는 이 화면에서 뺐다(11-18 사용자 지시). 결함 매핑을 둔 연결이 없고
+ * 심각도는 원천에서 읽는 값이 없어 칸마다 같은 글자만 반복했다. 수집한 이슈 전체를 본다.
  */
-const KIND_TABS: { kind: IssueKind; label: string; count: (k: IssueKindCounts) => number }[] = [
-  { kind: 'GENERAL', label: '일반 이슈(결함 제외)', count: (k) => k.generalTotal },
-  { kind: 'DEFECT', label: '결함', count: (k) => k.defectTotal },
-  { kind: 'ALL', label: '전체 이슈(결함 포함)', count: (k) => k.allTotal },
-];
-const KIND_NOUN: Record<IssueKind, string> = {
-  GENERAL: '일반 이슈',
-  DEFECT: '결함',
-  ALL: '전체 이슈',
-};
+const KIND: IssueKind = 'ALL';
+const ALL_CONNECTIONS = 'ALL';
 const TOOL_NAME: Record<string, string> = {
   GITHUB: 'GitHub',
   REDMINE: 'Redmine',
@@ -78,35 +69,28 @@ export function IssuesPage(): ReactNode {
   // 같은 도구의 연결이 여럿이면 GH-5 가 둘일 수 있다. 연결을 골라 따로 본다(GH-140)
   const [connectionId, setConnectionId] = useState<string>(ALL_CONNECTIONS);
   const [selected, setSelected] = useState<IssueResponse | null>(null);
-  const [kind, setKind] = useState<IssueKind>('GENERAL');
   const filter = connectionId === ALL_CONNECTIONS ? undefined : connectionId;
 
   // 카드는 서버가 사업 전체(연결을 고르면 그 연결)를 센 값이다. 표가 받아 온 행 수와 상관없다.
   const summary = useAsync<IssueSummaryResponse>(
     () =>
       api.get<IssueSummaryResponse>(
-        `/projects/${project.id}/issues/summary${toQueryString({ connectionId: filter, kind })}`,
+        `/projects/${project.id}/issues/summary${toQueryString({ connectionId: filter, kind: KIND })}`,
       ),
-    [project.id, filter, kind],
+    [project.id, filter],
   );
   // 표는 검색·정렬을 손에서 하므로 끝까지 받는다.
   const list = useAsync<IssueResponse[]>(
     () =>
       fetchAllPages((page, size) =>
         api.get<PageResponse<IssueResponse>>(
-          `/projects/${project.id}/issues${toQueryString({ page, size, connectionId: filter, kind })}`,
+          `/projects/${project.id}/issues${toQueryString({ page, size, connectionId: filter, kind: KIND })}`,
         ),
       ),
-    [project.id, filter, kind],
+    [project.id, filter],
   );
 
   const columns = useMemo(() => buildColumns(), []);
-  const emptyText =
-    kind !== 'DEFECT'
-      ? EMPTY_TEXT
-      : summary.data?.kinds?.defectMapped
-        ? '결함으로 분류된 이슈가 없습니다.'
-        : '결함 구분 설정이 없어 결함을 가르지 않았습니다. 연결 설정에 결함 트래커·결함 라벨을 넣으면 다음 수집 때 갈립니다.';
   // 고르기 목록은 연결을 골라도 사업 전체 연결이 온다. 도구에서 오지 않은 묶음은 고를 수 없다
   const connections = (summary.data?.sources ?? []).filter(
     (s): s is IssueSourceCount & { connectionId: string } => s.connectionId !== null,
@@ -115,8 +99,8 @@ export function IssuesPage(): ReactNode {
   return (
     <>
       <PageHeader
-        title="일반 이슈"
-        description={`${GENERAL_ISSUE_SCOPE}. 리스크와 예전에 요구사항으로 만든 이슈는 들지 않습니다. 결함은 연결 설정의 결함 트래커·결함 라벨로 가릅니다.`}
+        title="이슈"
+        description={`${GENERAL_ISSUE_SCOPE}. 리스크와 예전에 요구사항으로 만든 이슈는 들지 않습니다.`}
       />
       <div className="@container flex flex-col gap-5">
         {connections.length > 0 && (
@@ -138,40 +122,10 @@ export function IssuesPage(): ReactNode {
           </div>
         )}
 
-        <Tabs value={kind} onValueChange={(v) => setKind(v as IssueKind)}>
-          <TabsList aria-label="이슈 종류">
-            {KIND_TABS.map((tab) => (
-              <TabsTrigger key={tab.kind} value={tab.kind}>
-                {tab.label}
-                {summary.data?.kinds && (
-                  <span className="text-muted-foreground text-xs font-semibold tracking-wide tnum ml-1.5">
-                    {tab.count(summary.data.kinds)}
-                  </span>
-                )}
-              </TabsTrigger>
-            ))}
-          </TabsList>
-        </Tabs>
-        {summary.data?.kinds && <KindRelation kinds={summary.data.kinds} />}
-
         <DataState state={summary} onRetry={summary.reload}>
           {(n) => (
-            <div className="grid grid-cols-2 gap-3 @2xl:grid-cols-4">
-              <MetricCard
-                term={`열린 ${KIND_NOUN[kind]}`}
-                value={n.open}
-                hint={`${KIND_NOUN[kind]} ${n.total}건 중`}
-              />
-              <MetricCard
-                term="심각·높음"
-                value={n.heavyOpen}
-                hint={
-                  n.unspecifiedOpen > 0
-                    ? `열린 것 중 · 심각도 미지정 ${n.unspecifiedOpen}건 별도`
-                    : '열린 것 중'
-                }
-                tone={n.heavyOpen > 0 ? 'text-destructive' : undefined}
-              />
+            <div className="grid grid-cols-1 gap-3 @2xl:grid-cols-3">
+              <MetricCard term="열린 이슈" value={n.open} hint={`이슈 ${n.total}건 중`} />
               <MetricCard
                 term="담당 없음"
                 value={n.unassignedOpen}
@@ -191,7 +145,7 @@ export function IssuesPage(): ReactNode {
           state={list}
           onRetry={list.reload}
           // 배열이 비면 DataState 가 표 대신 이 문구를 낸다
-          empty={{ text: emptyText }}
+          empty={{ text: EMPTY_TEXT }}
         >
           {(rows) => (
             <DataTable<IssueResponse, unknown>
@@ -200,7 +154,7 @@ export function IssuesPage(): ReactNode {
               filterColumn="title"
               filterPlaceholder="이슈 제목으로 찾기"
               pageSize={25}
-              emptyText={emptyText}
+              emptyText={EMPTY_TEXT}
               onRowClick={setSelected}
             />
           )}
@@ -208,29 +162,6 @@ export function IssuesPage(): ReactNode {
       </div>
       <IssueDetailSheet issue={selected} onClose={() => setSelected(null)} />
     </>
-  );
-}
-
-/**
- * 포함 관계 한 줄 (DEC-02). 숫자는 서버가 종류별로 센 값을 그대로 쓴다.
- * 결함 매핑이 없으면 결함을 가르지 못했다는 것과 결함 처리율 산출 불가 이유를 적는다.
- */
-function KindRelation({ kinds }: { kinds: IssueKindCounts }): ReactNode {
-  const rate =
-    kinds.defectRate === null
-      ? (kinds.defectNote ?? '산출 불가')
-      : `${(kinds.defectRate * 100).toFixed(1)}% (해결·종료 ${kinds.defectClosed}건 / 결함 ${kinds.defectTotal}건)`;
-  return (
-    <div
-      className="text-muted-foreground flex flex-col gap-0.5 text-sm"
-      data-testid="issue-kind-relation"
-    >
-      <p>
-        <span className="text-foreground font-medium">전체 이슈(결함 포함) {kinds.allTotal}건</span>
-        {' = '}일반 이슈(결함 제외) {kinds.generalTotal}건 + 결함 {kinds.defectTotal}건
-      </p>
-      <p>결함 처리율: {rate}</p>
-    </div>
   );
 }
 
@@ -308,20 +239,17 @@ function IssueDetailSheet({
                   '-'
                 )}
               </DetailRow>
-              <DetailRow term="심각도">
-                {issue.severity ? label(issue.severity) : '미지정'}
-                {issue.sourcePriority && (
-                  <span className="text-muted-foreground">
-                    {' '}
-                    · 도구 우선순위 {issue.sourcePriority}
-                  </span>
-                )}
-              </DetailRow>
+              {issue.sourcePriority && (
+                <DetailRow term="도구 우선순위">{issue.sourcePriority}</DetailRow>
+              )}
               <DetailRow term="마일스톤">
                 <MilestoneCell issue={issue} />
               </DetailRow>
               <DetailRow term="담당">{issue.assignee ?? '-'}</DetailRow>
               {issue.tracker && <DetailRow term="트래커">{issue.tracker}</DetailRow>}
+              <DetailRow term="관련 요구사항">
+                <RequirementsCell items={issue.requirements ?? []} full />
+              </DetailRow>
               {(issue.requirementRefs?.length ?? 0) > 0 && (
                 <DetailRow term="요구사항 ID">{issue.requirementRefs?.join(', ')}</DetailRow>
               )}
@@ -339,10 +267,60 @@ function IssueDetailSheet({
                 </DetailRow>
               )}
             </dl>
+            <section className="flex flex-col gap-2 px-6 pb-8 text-sm">
+              <h3 className="font-semibold">관련 커밋·PR {issue.codeChanges?.length ?? 0}건</h3>
+              <CodeChangeList items={issue.codeChanges ?? []} />
+            </section>
           </>
         )}
       </SheetContent>
     </Sheet>
+  );
+}
+
+const CHANGE_KIND: Record<string, string> = { COMMIT: '커밋', MERGE_REQUEST: 'PR' };
+
+/** 이슈에 이어진 커밋·PR. 커밋·PR 메시지에 이슈 번호(GH-n·RM-n)를 적으면 수집이 잇는다. */
+function CodeChangeList({ items }: { items: IssueCodeChange[] }): ReactNode {
+  if (items.length === 0) {
+    return (
+      <p className="text-muted-foreground">
+        이어진 커밋·PR 이 없습니다. 커밋·PR 메시지에 이 이슈 번호를 적으면 다음 수집 때 이어집니다.
+      </p>
+    );
+  }
+  return (
+    <ul className="flex flex-col gap-1.5">
+      {items.map((c) => (
+        <li key={c.id} className="flex min-w-0 items-start gap-2">
+          <Badge variant="outline" className="shrink-0">
+            {CHANGE_KIND[c.kind] ?? c.kind}
+          </Badge>
+          <span className="flex min-w-0 flex-col">
+            {c.url ? (
+              <a
+                className="truncate underline-offset-2 hover:underline"
+                href={c.url}
+                target="_blank"
+                rel="noreferrer"
+                title={c.title}
+              >
+                {c.title}
+              </a>
+            ) : (
+              <span className="truncate" title={c.title}>
+                {c.title}
+              </span>
+            )}
+            <span className="text-muted-foreground tnum text-xs">
+              {c.refName ? `${c.kind === 'COMMIT' ? c.refName.slice(0, 7) : c.refName} · ` : ''}
+              {c.author ? `${c.author} · ` : ''}
+              {formatDateTime(c.occurredAt)}
+            </span>
+          </span>
+        </li>
+      ))}
+    </ul>
   );
 }
 
@@ -379,6 +357,31 @@ function DetailRow({ term, children }: { term: string; children: ReactNode }): R
   );
 }
 
+/** 이어진 요구사항 코드. 없으면 「-」. full 이면 이름까지 적는다(상세) */
+function RequirementsCell({
+  items,
+  full = false,
+}: {
+  items: IssueRequirement[];
+  full?: boolean;
+}): ReactNode {
+  if (items.length === 0) return <span className="text-muted-foreground">-</span>;
+  return (
+    <div className="flex flex-col items-start gap-0.5">
+      {items.map((r) => (
+        <span
+          key={r.id}
+          className="font-mono text-xs whitespace-nowrap"
+          title={full ? undefined : r.title}
+        >
+          {r.code ?? r.title}
+          {full && r.code && <span className="ml-1.5 font-sans">{r.title}</span>}
+        </span>
+      ))}
+    </div>
+  );
+}
+
 function buildColumns(): ColumnDef<IssueResponse, unknown>[] {
   return [
     {
@@ -398,37 +401,23 @@ function buildColumns(): ColumnDef<IssueResponse, unknown>[] {
       ),
     },
     {
-      accessorKey: 'kind',
-      header: ({ column }) => <SortableHeader column={column}>종류</SortableHeader>,
-      cell: ({ row }) =>
-        row.original.kind === 'DEFECT' ? (
-          <Badge variant="destructive">결함</Badge>
-        ) : (
-          <span className="text-muted-foreground text-xs">일반 이슈</span>
-        ),
+      // 이슈 제목·본문에 요구사항 코드가 있으면 그 요구사항에 붙은 이슈다(11-18 사용자 지시)
+      id: 'requirements',
+      header: '관련 요구사항',
+      cell: ({ row }) => <RequirementsCell items={row.original.requirements ?? []} />,
     },
     {
-      accessorKey: 'severity',
-      header: ({ column }) => <SortableHeader column={column}>심각도</SortableHeader>,
-      cell: ({ row }) => (
-        <div className="flex flex-col items-start gap-0.5">
-          {row.original.severity ? (
-            <Badge variant={badgeVariantFor(row.original.severity)}>
-              {label(row.original.severity)}
-            </Badge>
-          ) : (
-            // 도구에 심각도가 없다. 낮다는 뜻이 아니다
-            <Badge variant="muted" title="도구에 심각도 값이 없어 비워 두었습니다">
-              미지정
-            </Badge>
-          )}
-          {row.original.sourcePriority && (
-            <span className="text-muted-foreground text-xs">
-              도구 우선순위 {row.original.sourcePriority}
-            </span>
-          )}
-        </div>
-      ),
+      // 커밋·PR 은 요구사항이 아니라 이슈에 붙여 본다(11-18 사용자 지시)
+      id: 'codeChanges',
+      header: '커밋·PR',
+      cell: ({ row }) => {
+        const n = row.original.codeChanges?.length ?? 0;
+        return n === 0 ? (
+          <span className="text-muted-foreground">-</span>
+        ) : (
+          <span className="tnum">{n}</span>
+        );
+      },
     },
     {
       accessorKey: 'status',

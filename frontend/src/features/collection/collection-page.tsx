@@ -1,7 +1,16 @@
 import { useEffect, useState, type ReactNode } from 'react';
 import type { ColumnDef } from '@tanstack/react-table';
+import { RotateCcw } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
 import { DataTable, SortableHeader } from '@/components/ui/data-table';
 import { DataState } from '@/components/common/data-state';
 import { PaginationBar } from '@/components/common/pagination-bar';
@@ -13,9 +22,21 @@ import { formatDateTime } from '@/lib/format';
 import { badgeVariantFor, label } from '@/lib/labels';
 import { toQueryString } from '@/lib/query';
 import { useAsync } from '@/lib/use-async';
-import type { PageResponse, SyncJobResponse } from '@/types/api';
+import { cn } from '@/lib/utils';
+import type { PageResponse, SyncJobResponse, ToolConnectionResponse } from '@/types/api';
 
 const POLL_MS = 30_000;
+const ALL = 'ALL';
+const STATUSES = ['SUCCEEDED', 'FAILED', 'RUNNING', 'QUEUED', 'CANCELLED'] as const;
+
+/** 날짜 칸 값(YYYY-MM-DD). 사업 시간대(Asia/Seoul) 기준 오늘에서 days 일 전 */
+const seoulDay = (daysAgo = 0): string =>
+  new Intl.DateTimeFormat('sv-SE', { timeZone: 'Asia/Seoul' }).format(
+    new Date(Date.now() - daysAgo * 86_400_000),
+  );
+
+/** 기본 기간은 최근 30일(오늘 포함, 11-20 사용자 지시). 필터 초기화도 여기로 돌아간다 */
+const defaultRange = (): { from: string; to: string } => ({ from: seoulDay(29), to: seoulDay() });
 
 const elapsed = (job: SyncJobResponse): string => {
   if (!job.startedAt) return '-';
@@ -23,6 +44,22 @@ const elapsed = (job: SyncJobResponse): string => {
   const sec = Math.max(0, Math.round((end.getTime() - new Date(job.startedAt).getTime()) / 1000));
   return `${sec}초`;
 };
+
+const NUM_COL = 'w-16 text-right whitespace-nowrap';
+
+const statColumn = (
+  key: keyof SyncJobResponse['stats'],
+  title: string,
+  tone?: (n: number) => string | undefined,
+): ColumnDef<SyncJobResponse, unknown> => ({
+  id: key,
+  header: title,
+  meta: { className: NUM_COL },
+  cell: ({ row }) => {
+    const n = Number(row.original.stats[key] ?? 0);
+    return <span className={cn('tnum', tone?.(n))}>{n}</span>;
+  },
+});
 
 const jobColumns = (reload: () => void): ColumnDef<SyncJobResponse, unknown>[] => [
   {
@@ -46,20 +83,11 @@ const jobColumns = (reload: () => void): ColumnDef<SyncJobResponse, unknown>[] =
       <Badge variant={badgeVariantFor(row.original.status)}>{label(row.original.status)}</Badge>
     ),
   },
-  {
-    id: 'stats',
-    header: '수집/반영/미매핑/색인',
-    cell: ({ row }) => {
-      const s = row.original.stats;
-      return (
-        <span className="tnum">
-          {s.fetched}/{s.upserted}/
-          <span className={s.unmapped > 0 ? 'text-warning' : undefined}>{s.unmapped}</span>/
-          {s.indexed}
-        </span>
-      );
-    },
-  },
+  // 수집 수치는 한 칸에 몰아 두면 읽기 어려워 네 칸으로 나눴다(11-20). 숫자만 들어가 폭을 좁힌다
+  statColumn('fetched', '수집'),
+  statColumn('upserted', '반영'),
+  statColumn('unmapped', '미매핑', (n) => (n > 0 ? 'text-warning' : undefined)),
+  statColumn('indexed', '색인'),
   {
     id: 'elapsed',
     header: '소요',
@@ -95,12 +123,37 @@ const jobColumns = (reload: () => void): ColumnDef<SyncJobResponse, unknown>[] =
 export function CollectionPage(): ReactNode {
   const { project } = useProjectContext();
   const [page, setPage] = useState(0);
+  // 연결·상태·시작 기간 필터(11-20). 쪽을 넘기므로 서버가 거른다. 바꾸면 첫 쪽으로 돌아간다
+  const [connectionId, setConnectionId] = useState(ALL);
+  const [status, setStatus] = useState(ALL);
+  const [range] = useState(defaultRange);
+  const [from, setFrom] = useState(range.from);
+  const [to, setTo] = useState(range.to);
+  const filtered = connectionId !== ALL || status !== ALL || from !== range.from || to !== range.to;
+  const reset =
+    <T,>(set: (v: T) => void) =>
+    (v: T) => {
+      set(v);
+      setPage(0);
+    };
+  const connections = useAsync<ToolConnectionResponse[]>(
+    () => api.get<ToolConnectionResponse[]>(`/projects/${project.id}/connections`),
+    [project.id],
+  );
   const state = useAsync<PageResponse<SyncJobResponse>>(
     () =>
       api.get<PageResponse<SyncJobResponse>>(
-        `/sync-jobs${toQueryString({ projectId: project.id, page, size: 20 })}`,
+        `/sync-jobs${toQueryString({
+          projectId: project.id,
+          page,
+          size: 20,
+          connectionId: connectionId === ALL ? undefined : connectionId,
+          status: status === ALL ? undefined : status,
+          startedFrom: from || undefined,
+          startedTo: to || undefined,
+        })}`,
       ),
-    [project.id, page],
+    [project.id, page, connectionId, status, from, to],
   );
   const { reload } = state;
 
@@ -116,14 +169,81 @@ export function CollectionPage(): ReactNode {
         description="도구에서 가져온 수집 잡 이력입니다. 30초마다 자동 갱신됩니다."
         actions={
           <>
-            <ScheduleSettingsDialog projectId={project.id} onSaved={reload} />
+            <ScheduleSettingsDialog projectId={project.id} part="sync" onSaved={reload} />
             <Button size="sm" variant="outline" onClick={reload}>
               새로고침
             </Button>
           </>
         }
       />
-      <DataState state={state} onRetry={reload} empty={{ text: '수집 이력이 없습니다.' }}>
+      <div className="flex flex-wrap items-center gap-2 pb-3">
+        <Select value={connectionId} onValueChange={reset(setConnectionId)}>
+          <SelectTrigger className="w-56" aria-label="연결로 거르기">
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value={ALL}>전체 연결</SelectItem>
+            {(connections.data ?? []).map((c) => (
+              <SelectItem key={c.id} value={c.id}>
+                {c.name}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+        <Select value={status} onValueChange={reset(setStatus)}>
+          <SelectTrigger className="w-32" aria-label="상태로 거르기">
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value={ALL}>전체 상태</SelectItem>
+            {STATUSES.map((s) => (
+              <SelectItem key={s} value={s}>
+                {label(s)}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+        <div className="flex items-center gap-1.5">
+          <Input
+            type="date"
+            className="w-40"
+            value={from}
+            max={to || undefined}
+            onChange={(e) => reset(setFrom)(e.target.value)}
+            aria-label="시작일부터"
+          />
+          <span className="text-muted-foreground text-sm">~</span>
+          <Input
+            type="date"
+            className="w-40"
+            value={to}
+            min={from || undefined}
+            onChange={(e) => reset(setTo)(e.target.value)}
+            aria-label="시작일까지"
+          />
+        </div>
+        <Button
+          size="sm"
+          variant="outline"
+          disabled={!filtered}
+          onClick={() => {
+            const d = defaultRange();
+            setConnectionId(ALL);
+            setStatus(ALL);
+            setFrom(d.from);
+            setTo(d.to);
+            setPage(0);
+          }}
+        >
+          <RotateCcw className="size-4" />
+          필터 초기화
+        </Button>
+      </div>
+      <DataState
+        state={state}
+        onRetry={reload}
+        empty={{ text: filtered ? '조건에 맞는 수집 이력이 없습니다.' : '수집 이력이 없습니다.' }}
+      >
         {(data) => (
           <>
             <DataTable<SyncJobResponse, unknown>

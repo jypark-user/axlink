@@ -11,7 +11,8 @@
 """
 
 import re
-from datetime import date
+from dataclasses import dataclass
+from datetime import date, timedelta
 
 from app.common import clock
 from app.semantic.catalog import MeasureDef
@@ -21,6 +22,7 @@ _THIS_MONTH = re.compile(r"이번\s*달|금월|당월")
 _LAST_MONTH = re.compile(r"지난\s*달|전월|저번\s*달")
 _LAST_DAYS = re.compile(r"최근\s*(\d{1,3})\s*일")
 _LAST_WEEKS = re.compile(r"최근\s*(\d{1,2})\s*주")
+_TODAY = re.compile(r"오늘")
 
 
 def _previous_month(today: date) -> str:
@@ -51,6 +53,51 @@ def filter_for(
     m = _LAST_WEEKS.search(question)
     if m and int(m.group(1)) >= 1:
         add(m, "period__last_n_days", int(m.group(1)) * 7)
+    if not candidates:
+        return None
+    return min(candidates, key=lambda c: c[0])[1]
+
+
+@dataclass(frozen=True)
+class ActivityRange:
+    """목록 질문의 활동 기간. 양 끝 날짜를 포함한다(사업 시간대 날짜)."""
+
+    start: date
+    end: date
+
+    @property
+    def label(self) -> str:
+        if self.start == self.end:
+            return self.start.isoformat()
+        return f"{self.start.isoformat()}~{self.end.isoformat()}"
+
+
+def activity_range(question: str, today: date | None = None) -> ActivityRange | None:
+    """「최근 5일 이내 작업된 요구사항」 같은 목록 질문의 기간. 집계 필터와 같은 표현만 읽는다.
+
+    최근 N일은 집계 필터(period__last_n_days)와 같게 오늘에서 N일 전부터 오늘까지다. 같은 질문에
+    집계와 목록이 다른 기간을 쓰면 안 된다. 표현이 없으면 None(기간 조건 없음).
+    """
+    today = today or clock.today()
+    candidates: list[tuple[int, ActivityRange]] = []
+    m = _THIS_MONTH.search(question)
+    if m:
+        candidates.append((m.start(), ActivityRange(today.replace(day=1), today)))
+    m = _LAST_MONTH.search(question)
+    if m:
+        last_day = today.replace(day=1) - timedelta(days=1)
+        candidates.append((m.start(), ActivityRange(last_day.replace(day=1), last_day)))
+    m = _LAST_DAYS.search(question)
+    if m and int(m.group(1)) >= 1:
+        start = today - timedelta(days=int(m.group(1)))
+        candidates.append((m.start(), ActivityRange(start, today)))
+    m = _LAST_WEEKS.search(question)
+    if m and int(m.group(1)) >= 1:
+        days = int(m.group(1)) * 7
+        candidates.append((m.start(), ActivityRange(today - timedelta(days=days), today)))
+    m = _TODAY.search(question)
+    if m:
+        candidates.append((m.start(), ActivityRange(today, today)))
     if not candidates:
         return None
     return min(candidates, key=lambda c: c[0])[1]

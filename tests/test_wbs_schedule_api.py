@@ -176,6 +176,11 @@ def test_용역사_WBS_파일이_그대로_작업_줄이_된다(client, client_t
     assert body["source"] == "WBS_FILE"
     assert body["notice"] is None
     assert body["sourceUrl"] == "https://example.invalid/WBS.xlsx"
+    # 수치의 원천 파일(11-18). 연결 없이 넣은 행이라 저장소 수집으로 보지 않는다
+    source = body["sourceFile"]
+    assert source["path"] == "docs/WBS.xlsx"
+    assert source["url"] == "https://example.invalid/WBS.xlsx"
+    assert source["origin"] == "OTHER" and source["revision"] and source["readAt"]
     by_id = {i["wbsId"]: i for i in body["items"]}
     assert list(by_id) == ["1", "1.1", "1.2", "2", "2.1"]  # 번호 순, 상위 항목 포함
     assert by_id["1"]["level"] == 0 and by_id["1.1"]["level"] == 1
@@ -183,8 +188,9 @@ def test_용역사_WBS_파일이_그대로_작업_줄이_된다(client, client_t
         "wbsId": "1.2", "name": "중간보고", "level": 1, "owner": "", "deliverable": "중간보고서.md",
         "startDate": "2026-09-22", "endDate": "2026-09-30", "weight": 0.3,
         "progress": 50, "planned": 50, "externalUrl": None,
-        # 산출물 "중간보고서.md" 는 저장소에도 문서에도 없다. 종료일(09.30)이 안 지났으니 미제출
-        "deliverableStatus": "MISSING", "deliverableRule": None, "deliverableRef": None,
+        # 산출물 "중간보고서.md"(WBS 자동 예상 산출물)가 안 올라왔다. 종료일(09.30) 전이라 미제출
+        "deliverableStatus": "MISSING", "deliverableRule": "DESIGNATED",
+        "deliverableRef": "예상 산출물 1건 중 0건 제출",
         "deliverableUrl": None, "linkedIssues": [],
         # 실적 50% 는 격차 경고 문턱(80) 아래다(DEC-20)
         "gapWarning": None,

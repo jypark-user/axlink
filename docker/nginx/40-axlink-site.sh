@@ -25,6 +25,13 @@ esac
 # 화면·API 공통 위치. 앱 경로는 떼어 낸 뒤 이 위치들이 받는다.
 # $1 이 yes 면 앱 경로 없이 온 화면 주소(/login, /p/... 등)를 앱 경로를 붙여 돌려보낸다.
 # 앱 경로를 떼어 낸 내부 재요청과 구분하려고 원래 요청 주소($request_uri)를 본다.
+# 보안 응답 헤더(보안대책 3.4). nginx 는 location 안에 add_header 가 하나라도 있으면 바깥 것을
+# 물려받지 않아 Cache-Control 을 두는 location 마다 같이 넣는다. CSP 는 화면 검증 뒤 따로 정한다.
+sec_headers='
+        add_header X-Content-Type-Options "nosniff" always;
+        add_header X-Frame-Options "SAMEORIGIN" always;
+        add_header Referrer-Policy "same-origin" always;'
+
 locations() {
   redirect=""
   if [ "$1" = yes ] && [ -n "$prefix" ]; then
@@ -59,18 +66,18 @@ EOF
     # 빌드 산출물은 파일명에 해시가 붙어 오래 캐시해도 된다.
     location /assets/ {
         try_files \$uri =404;
-        add_header Cache-Control "public, max-age=31536000, immutable";
+        add_header Cache-Control "public, max-age=31536000, immutable";${sec_headers}
     }
 
     location = /version.json {
-        add_header Cache-Control "no-store";
+        add_header Cache-Control "no-store";${sec_headers}
         try_files \$uri =404;
     }
 
     # 화면 주소를 직접 열거나 새로고침해도 index.html 이 받는다(클라이언트 라우팅).
     location / {${redirect}
         try_files \$uri \$uri/ /index.html;
-        add_header Cache-Control "no-cache";
+        add_header Cache-Control "no-cache";${sec_headers}
     }
 EOF
 }
@@ -84,6 +91,7 @@ server {
     # 문서 업로드. API 쪽 제한보다 작으면 여기서 먼저 끊긴다.
     client_max_body_size 100m;
     absolute_redirect off;
+    server_tokens off;${sec_headers}
 EOF
   if [ "$2" = yes ] && [ -n "$prefix" ]; then
     echo "    location = / { return 302 ${prefix}/; }"

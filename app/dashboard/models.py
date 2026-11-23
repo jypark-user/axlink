@@ -58,6 +58,7 @@ class ProgressResponse(BaseModel):
     scheduleCompliance: ProgressMeasure | None = None  # noqa: N815
     # 산출물 승인률(DEC-12): WBS 가 정한 산출물 중 현행 버전이 승인된 것
     deliverableApproval: ProgressMeasure | None = None  # noqa: N815
+    deliverableSubmission: ProgressMeasure | None = None  # noqa: N815  산출물 제출률(V70)
 
 
 # ---------------------------------------------------------------- 대시보드 · 위젯
@@ -183,6 +184,14 @@ class ProgressSnapshotResponse(BaseModel):
     representativeBasisLabel: str | None = None  # noqa: N815
     issueEstimatePct: float | None = None  # noqa: N815
     issueEstimateMissingCount: int | None = None  # noqa: N815
+    # 지표별 진척률(11-18 사용자 지시). 계획·WBS 는 위 두 칸, 산출물·요구사항은 그날 센 건수에서
+    # 대시보드 카탈로그(snapshot_*_pct)와 같은 식으로 낸다. 분모가 없으면 null
+    deliverableApprovedCount: int | None = None  # noqa: N815
+    deliverableTotalCount: int | None = None  # noqa: N815
+    deliverableSubmittedCount: int | None = None  # noqa: N815  V70
+    deliverableSubmissionPct: float | None = None  # noqa: N815  V70
+    deliverableApprovalPct: float | None = None  # noqa: N815
+    requirementFulfillmentPct: float | None = None  # noqa: N815
 
 
 # ---------------------------------------------------------------- 일정 (WBS)
@@ -272,6 +281,8 @@ class DesignatedDeliverable(BaseModel):
     status: str  # MISSING | REGISTERED | SUBMITTED | APPROVED | REJECTED
     needsRedesignation: bool  # noqa: N815  계획서 교체로 작업 정체가 끊겼다
     versions: list[DesignatedVersion]
+    # REQUEST: 발주기관 요청, WBS: WBS 산출물 열에서 저절로 만든 것(V73)
+    origin: str = "REQUEST"
 
 
 class DesignateRequest(BaseModel):
@@ -300,6 +311,24 @@ class DesignationEvent(BaseModel):
     detail: dict
 
 
+class DeliverableReview(BaseModel):
+    """작업에 올라온 산출물 하나(V70, 2026-11-18 사용자 결정: 승인 단위는 올라온 산출물).
+
+    발주기관이 산출물 화면에서 승인·반려한다. 22종 분류별 산출물 버전과는 상관없다.
+    """
+
+    documentId: str  # noqa: N815
+    name: str  # 양식 이름, 양식 없이 올렸으면 파일 이름
+    fileName: str  # noqa: N815
+    uploadedAt: str  # noqa: N815
+    status: str  # SUBMITTED | APPROVED | REJECTED
+    rejectReason: str | None  # noqa: N815
+    reviewedAt: str | None  # noqa: N815
+    latest: bool  # 같은 양식에 다시 올린 것이 있으면 앞의 것은 지난 판이다
+    # 이어 올린 예상 산출물. 같은 값의 지난 판은 최신 판 상세보기에서 본다(11-19)
+    designatedId: str | None = None  # noqa: N815
+
+
 class WbsDeliverableItem(BaseModel):
     """산출물 화면의 한 줄. WBS 말단 작업이 정한 산출물과 그 판정(ARC-016)."""
 
@@ -315,6 +344,10 @@ class WbsDeliverableItem(BaseModel):
     documents: list[WbsDeliverableDocument]
     taskKey: str | None = None  # noqa: N815  작업 정체(V46). 지정은 번호가 아니라 이것에 묶인다
     designated: list[DesignatedDeliverable] = []  # 발주기관 지정 항목(UC-033)
+    review: list[DeliverableReview] = []  # 승인·반려할 제출본
+    # 예상 산출물 수와 그중 올라온 수. 화면 업로드 상태 칸의 n/m 이다(11-19)
+    expectedTotal: int | None = None  # noqa: N815
+    expectedSubmitted: int | None = None  # noqa: N815
 
 
 class WbsDeliverablesResponse(BaseModel):
@@ -363,6 +396,20 @@ class WbsRecognitionResponse(BaseModel):
     guidance: str
 
 
+class WbsSourceFile(BaseModel):
+    """일정·진척 수치를 읽어 온 원천 파일 (2026-11-18 사용자 지시). 수치가 바뀌려면 이 파일이 바뀌어
+    다시 수집돼야 한다. 용역사가 어느 파일을 고쳐야 하는지 헷갈리지 않게 화면에 그대로 보인다."""
+
+    origin: str  # REPOSITORY(저장소에서 수집) | UPLOAD(자료로 올림) | OTHER
+    path: str | None  # 저장소 안 경로 또는 올린 파일 이름
+    url: str | None  # 원본을 여는 주소
+    tool: str | None  # GITHUB | GITLAB | REDMINE ...
+    repository: str | None  # 저장소(owner/name) 또는 연결 대상
+    revision: str | None  # 읽은 판(커밋 등)
+    readAt: str | None  # noqa: N815 (이 판을 반영한 시각)
+    lastSyncedAt: str | None  # noqa: N815 (그 연결을 마지막으로 수집한 시각)
+
+
 class WbsScheduleResponse(BaseModel):
     source: str  # WBS_FILE | REDMINE | NONE
     sourceLabel: str  # noqa: N815
@@ -376,6 +423,7 @@ class WbsScheduleResponse(BaseModel):
     notice: str | None
     deliverables: DeliverableSummary = DeliverableSummary()
     recognition: WbsRecognitionResponse | None = None
+    sourceFile: WbsSourceFile | None = None  # noqa: N815
 
 
 # --- 인포 템플릿 카탈로그 (ARC-012) ----------------------------------------------
@@ -456,3 +504,27 @@ class CompletionSummaryResponse(BaseModel):
     reported100Pending: int  # noqa: N815
     inProgressCount: int  # noqa: N815
     items: list[CompletionItem]
+
+
+class Iso29110Source(BaseModel):
+    """22종 한 분류에 닿은 예상 산출물 하나."""
+
+    wbsId: str  # noqa: N815
+    name: str
+    origin: str  # WBS | REQUEST
+    status: str  # PLANNED | SUBMITTED | APPROVED
+
+
+class Iso29110Item(BaseModel):
+    type: str
+    name: str
+    process: str  # PM | SI
+    status: str  # UNPLANNED | PLANNED | SUBMITTED | APPROVED
+    sources: list[Iso29110Source]
+
+
+class Iso29110Response(BaseModel):
+    """ISO/IEC 29110 22종 충족 현황(11-19). 진척 지표가 아니다."""
+
+    items: list[Iso29110Item]
+    counts: dict[str, int]

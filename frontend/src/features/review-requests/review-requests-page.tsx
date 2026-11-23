@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState, type FormEvent, type ReactNode } from 'react';
 import { useSearchParams } from 'react-router-dom';
+import { SearchSelect } from '@/components/ui/search-select';
 import type { ColumnDef } from '@tanstack/react-table';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -113,7 +114,7 @@ const VALUE_WORDS: Record<string, Record<string, string>> = {
     PRODUCT_TYPE: '산출물 유형 일치',
   },
 };
-const FIELD = 'flex flex-col gap-1.5';
+const FIELD = 'flex min-w-0 flex-col gap-1.5';
 
 /** 상태 값 하나를 사람이 읽는 꼴로. 비율은 퍼센트, 없으면 하이픈. */
 function showValue(field: string, value: unknown): string {
@@ -359,7 +360,7 @@ function CreateDialog({
         <DialogHeader>
           <DialogTitle>확인 요청 등록</DialogTitle>
         </DialogHeader>
-        <form onSubmit={submit} className="flex flex-col gap-3">
+        <form onSubmit={submit} className="flex min-w-0 flex-col gap-3">
           <div className={FIELD}>
             <Label htmlFor="rrType">대상 종류</Label>
             <Select
@@ -385,22 +386,17 @@ function CreateDialog({
           </div>
           <div className={FIELD}>
             <Label htmlFor="rrTarget">대상</Label>
-            <Select value={targetKey} onValueChange={setTargetKey}>
-              <SelectTrigger id="rrTarget">
-                <SelectValue placeholder={targets.length ? '대상을 고르세요' : '대상이 없습니다'} />
-              </SelectTrigger>
-              <SelectContent>
-                {targets.map((t) => (
-                  <SelectItem key={t.key} value={t.key}>
-                    {t.label}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-            <p className="text-muted-foreground text-xs">
-              등록 시점의 상태(실적률·파일 대조·정식 제출·승인·이슈 상태·지표값)가 요청과 함께
-              저장됩니다.
-            </p>
+            {/* 누르면 펼쳐지고 검색 칸으로 거르는 고르기(11-18) */}
+            <SearchSelect
+              key={targetType}
+              id="rrTarget"
+              label="대상"
+              placeholder="대상을 고르세요"
+              emptyText="대상이 없습니다"
+              options={targets}
+              value={targetKey}
+              onChange={setTargetKey}
+            />
           </div>
           {targetType === 'WBS_ITEM' && (
             <div className={FIELD}>
@@ -414,10 +410,6 @@ function CreateDialog({
                   <SelectItem value="WBS_COMPLETION">작업 완료 확인 요청</SelectItem>
                 </SelectContent>
               </Select>
-              <p className="text-muted-foreground text-xs">
-                작업 완료 확인은 이 작업의 완료를 인정하는 확인 절차입니다. 확인되면 완료 확인율에
-                들어갑니다. 일반 확인 요청은 들어가지 않습니다.
-              </p>
             </div>
           )}
           {completion && (

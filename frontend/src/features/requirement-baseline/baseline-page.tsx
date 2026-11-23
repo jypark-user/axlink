@@ -1,6 +1,7 @@
 import { Fragment, useState, type ReactNode } from 'react';
 import { BookOpen, ExternalLink } from 'lucide-react';
 import { Link } from 'react-router-dom';
+import { GUIDE_NEW_TAB } from '@/features/help/guide-links';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -81,7 +82,7 @@ const STATUS_WORD = {
   CONFIRMED: '확정',
 } as const;
 const PRIORITIES: Priority[] = ['MUST', 'SHOULD', 'COULD', 'WONT'];
-// 사용 설명서의 요구사항 등록 문서(docs/40-manual/요구사항-등록.md)
+// 사용자 매뉴얼의 요구사항 등록 문서(docs/40-manual/요구사항-등록.md)
 const GUIDE = '/guide/requirement-baseline';
 
 /**
@@ -110,7 +111,7 @@ export function BaselinePage(): ReactNode {
         description="용역사가 요구사항 명세서를 등록하고, 발주기관이 검토해 사업의 요구사항 목록으로 확정합니다."
         actions={
           <Button asChild variant="outline">
-            <Link to={GUIDE}>
+            <Link to={GUIDE} {...GUIDE_NEW_TAB}>
               <BookOpen className="size-4" /> 설명서
             </Link>
           </Button>
@@ -243,7 +244,7 @@ function NoBaseline({
       ) : (
         <p className="text-muted-foreground text-sm">
           용역사가 명세서를 등록해 제출하면 여기서 확정합니다.{' '}
-          <Link to={`${GUIDE}#flow`} className="text-primary hover:underline">
+          <Link to={`${GUIDE}#flow`} {...GUIDE_NEW_TAB} className="text-primary hover:underline">
             진행 순서 보기
           </Link>
         </p>
@@ -271,6 +272,7 @@ function SpecCautions(): ReactNode {
         </ul>
         <Link
           to={`${GUIDE}#spec-format`}
+          {...GUIDE_NEW_TAB}
           className="text-primary mt-2 inline-block hover:underline"
         >
           명세서 형식 자세히 보기
@@ -366,7 +368,11 @@ function Working({
             <AlertDescription>
               ID 열이 있는 표나 ID 로 시작하는 줄이 없습니다. 항목을 직접 추가하거나, 등록을
               취소하고 다른 파일을 고르세요.{' '}
-              <Link to={`${GUIDE}#spec-format`} className="text-primary hover:underline">
+              <Link
+                to={`${GUIDE}#spec-format`}
+                {...GUIDE_NEW_TAB}
+                className="text-primary hover:underline"
+              >
                 읽는 명세서 형식
               </Link>
             </AlertDescription>

@@ -1,4 +1,5 @@
 import type { ReactNode } from 'react';
+import { formatDate } from '@/lib/format';
 import { cn } from '@/lib/utils';
 import type { IssueProgress, RequirementIssue } from '@/types/api';
 
@@ -61,8 +62,11 @@ export function IssueProgressCell({ progress }: { progress?: IssueProgress | nul
   );
 }
 
-/** 상세: 이어진 이슈·일감 하나하나. 열린 것이 앞에 온다. */
-export function IssueList({ issues }: { issues: RequirementIssue[] }): ReactNode {
+/**
+ * 상세: 이어진 이슈·일감 전부를 표로(11-18 사용자 지시). 상태·담당·커밋·PR 수·마지막 움직임을
+ * 같이 본다. 열린 것이 앞에 온다. 이슈 번호를 누르면 원문이 열린다.
+ */
+export function IssueTable({ issues }: { issues: RequirementIssue[] }): ReactNode {
   if (issues.length === 0) {
     return (
       <p className="text-muted-foreground">
@@ -72,39 +76,62 @@ export function IssueList({ issues }: { issues: RequirementIssue[] }): ReactNode
     );
   }
   return (
-    <ul className="flex flex-col gap-1.5">
-      {issues.map((i) => (
-        <li key={i.id} className="flex items-center gap-2">
-          <span
-            className={cn(
-              'shrink-0 rounded px-1.5 py-0.5 text-[11px] font-medium',
-              STATUS_TONE[i.status] ?? 'bg-muted',
-            )}
-          >
-            {STATUS_TEXT[i.status] ?? i.status}
-          </span>
-          {i.url ? (
-            <a
-              href={i.url}
-              target="_blank"
-              rel="noreferrer"
-              className="min-w-0 truncate underline-offset-2 hover:underline"
-              title={i.title}
-            >
-              {i.key && <span className="text-muted-foreground font-mono text-xs">{i.key} </span>}
-              {i.title}
-            </a>
-          ) : (
-            <span className="min-w-0 truncate" title={i.title}>
-              {i.key && <span className="text-muted-foreground font-mono text-xs">{i.key} </span>}
-              {i.title}
-            </span>
-          )}
-          {i.kind === 'DEFECT' && (
-            <span className="text-destructive shrink-0 text-[11px]">결함</span>
-          )}
-        </li>
-      ))}
-    </ul>
+    <div className="overflow-x-auto rounded-md border">
+      <table className="w-full text-sm" data-testid="requirement-issues">
+        <thead className="bg-muted/50 text-muted-foreground text-xs">
+          <tr>
+            <th className="px-3 py-2 text-left font-medium">상태</th>
+            <th className="px-3 py-2 text-left font-medium">이슈</th>
+            <th className="px-3 py-2 text-left font-medium">담당</th>
+            <th className="px-3 py-2 text-right font-medium">커밋·PR</th>
+            <th className="px-3 py-2 text-left font-medium">수정일</th>
+          </tr>
+        </thead>
+        <tbody>
+          {issues.map((i) => (
+            <tr key={i.id} className="border-t align-top">
+              <td className="px-3 py-2">
+                <span
+                  className={cn(
+                    'rounded px-1.5 py-0.5 text-[11px] font-medium whitespace-nowrap',
+                    STATUS_TONE[i.status] ?? 'bg-muted',
+                  )}
+                >
+                  {STATUS_TEXT[i.status] ?? i.status}
+                </span>
+              </td>
+              <td className="px-3 py-2">
+                <span className="flex min-w-0 flex-col">
+                  {i.key &&
+                    (i.url ? (
+                      <a
+                        href={i.url}
+                        target="_blank"
+                        rel="noreferrer"
+                        className="text-primary font-mono text-xs underline-offset-2 hover:underline"
+                      >
+                        {i.key}
+                      </a>
+                    ) : (
+                      <span className="text-muted-foreground font-mono text-xs">{i.key}</span>
+                    ))}
+                  <span className="line-clamp-2 break-keep" title={i.title}>
+                    {i.title}
+                    {i.kind === 'DEFECT' && (
+                      <span className="text-destructive ml-1 text-[11px]">결함</span>
+                    )}
+                  </span>
+                </span>
+              </td>
+              <td className="px-3 py-2 whitespace-nowrap">{i.assignee ?? '-'}</td>
+              <td className="tnum px-3 py-2 text-right">{i.codeChangeCount ?? 0}</td>
+              <td className="text-muted-foreground tnum px-3 py-2 whitespace-nowrap">
+                {i.updatedAt ? formatDate(i.updatedAt) : '-'}
+              </td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
   );
 }

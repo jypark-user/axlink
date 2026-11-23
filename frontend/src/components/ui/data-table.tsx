@@ -23,6 +23,15 @@ import {
   TableRow,
 } from '@/components/ui/table';
 import { cn } from '@/lib/utils';
+import type { RowData } from '@tanstack/react-table';
+
+declare module '@tanstack/react-table' {
+  // 칸 하나에만 주는 머리·본문 클래스(11-20). 좁은 숫자 칸의 폭과 정렬에 쓴다
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+  interface ColumnMeta<TData extends RowData, TValue> {
+    className?: string;
+  }
+}
 
 /**
  * shadcn 데이터 표(TanStack Table). 정렬·거르기·쪽 넘김을 표가 맡는다.
@@ -89,7 +98,10 @@ export function DataTable<TData, TValue>({
             {table.getHeaderGroups().map((group) => (
               <TableRow key={group.id}>
                 {group.headers.map((header) => (
-                  <TableHead key={header.id} className="px-3">
+                  <TableHead
+                    key={header.id}
+                    className={cn('px-3', header.column.columnDef.meta?.className)}
+                  >
                     {header.isPlaceholder
                       ? null
                       : flexRender(header.column.columnDef.header, header.getContext())}
@@ -128,7 +140,10 @@ export function DataTable<TData, TValue>({
                   className={onRowClick ? 'cursor-pointer' : undefined}
                 >
                   {row.getVisibleCells().map((cell) => (
-                    <TableCell key={cell.id} className="px-3 py-2.5">
+                    <TableCell
+                      key={cell.id}
+                      className={cn('px-3 py-2.5', cell.column.columnDef.meta?.className)}
+                    >
                       {flexRender(cell.column.columnDef.cell, cell.getContext())}
                     </TableCell>
                   ))}

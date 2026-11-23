@@ -5,11 +5,12 @@ import { ToasterProvider } from '@/components/common/toaster';
 import {
   DesignatedCell,
   DesignatedSheet,
+  UploadDialog,
   type DesignatedActions,
 } from '@/features/deliverables/designated';
 import type { DesignatedDeliverable, WbsDeliverableItem } from '@/types/api';
 
-// 발주기관 지정 산출물(UC-033). 지정은 발주기관만, 제출본 올리기는 항목을 골라서 한다.
+// 산출물 양식(UC-033). 양식 등록·수정은 발주기관만, 제출은 [업로드] 창에서만 한다(11-18).
 
 vi.mock('@/lib/http', () => ({ api: {}, download: vi.fn() }));
 
@@ -61,6 +62,8 @@ const actions = (canDesignate: boolean): DesignatedActions => ({
   canDesignate,
   typeNames: { TEST_REPORT: '시험 보고서' },
   onUpload: vi.fn(),
+  onUploadRepo: vi.fn(),
+  hasRepo: false,
   onEdit: vi.fn(),
   onChanged: vi.fn(),
   onOpen: vi.fn(),
@@ -73,73 +76,86 @@ const renderCell = (item: WbsDeliverableItem, a: DesignatedActions) =>
     </ToasterProvider>,
   );
 
-describe('발주기관 지정 산출물 칸', () => {
-  it('지정이 없으면 발주기관에게만 지정 버튼이 보인다', () => {
+describe('예상 산출물 칸', () => {
+  it('없으면 「-」와 발주기관에게 [관리]가 보이고, 누르면 옆 창을 연다', () => {
     const client = actions(true);
     renderCell(row([]), client);
-    fireEvent.click(screen.getByRole('button', { name: '산출물 지정' }));
-    expect(client.onEdit).toHaveBeenCalledWith({
-      mode: 'create',
-      taskKey: 'k1',
-      taskLabel: '2.1 통합 시험',
-    });
+    expect(screen.getByText('-')).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: '관리' }));
+    expect(client.onOpen).toHaveBeenCalledWith('2.1');
   });
 
-  it('지정이 있으면 표 칸에는 요약만 두고 누르면 옆 창을 연다', () => {
-    const contractor = actions(false);
-    renderCell(row([entry]), contractor);
-    expect(screen.queryByRole('button', { name: '산출물 지정' })).toBeNull();
-    const summary = screen.getByRole('button', { name: /내야 할 산출물/ });
-    expect(summary).toHaveTextContent('내야 할 산출물 1건');
-    expect(screen.queryByText(/양식 내려받기/)).toBeNull(); // 표 칸을 넓히지 않는다
-    fireEvent.click(summary);
-    expect(contractor.onOpen).toHaveBeenCalledWith('2.1');
+  it('용역사에게는 없으면 「-」만 보인다', () => {
+    renderCell(row([]), actions(false));
+    expect(screen.queryByRole('button')).toBeNull();
+    expect(screen.getByText('-')).toBeInTheDocument();
   });
 
-  it('옆 창에서 용역사는 양식·반려 사유를 보고 그 항목으로 올린다', () => {
+  it('첫 산출물 이름과 「외 n건」을 보이고 양식은 칸에 두지 않는다', () => {
+    const wbs = { ...entry, id: 'w1', name: '착수보고서', origin: 'WBS' as const };
+    renderCell(row([wbs, entry]), actions(false));
+    expect(screen.getByText('착수보고서')).toBeInTheDocument();
+    expect(screen.getByText('외 1건')).toBeInTheDocument();
+    expect(screen.queryByText(/양식 내려받기/)).toBeNull();
+    expect(screen.getByRole('button', { name: '보기' })).toBeInTheDocument();
+  });
+});
+
+describe('예상 산출물 옆 창', () => {
+  it('올리지 않는다. 발주기관은 WBS 자동 항목도 고치고 요청을 더한다', () => {
+    const client = actions(true);
+    const wbs = { ...entry, id: 'w1', name: '착수보고서', origin: 'WBS' as const };
+    render(
+      <ToasterProvider>
+        <DesignatedSheet item={row([wbs, entry])} actions={client} onClose={vi.fn()} />
+      </ToasterProvider>,
+    );
+    expect(screen.getByText('WBS 자동')).toBeInTheDocument();
+    expect(screen.getByText('발주사 요청')).toBeInTheDocument();
+    expect(screen.getAllByText('양식 내려받기: 양식.xlsx')).toHaveLength(2);
+    expect(screen.getAllByRole('button', { name: '고치기' })).toHaveLength(2);
+    expect(screen.getByRole('button', { name: '산출물 요청 추가' })).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: '업로드' })).toBeNull();
+  });
+});
+
+describe('업로드 창', () => {
+  it('용역사는 양식을 내려받고 그 양식으로 올리기만 한다', () => {
     const contractor = actions(false);
     render(
       <ToasterProvider>
-        <DesignatedSheet item={row([entry])} actions={contractor} onClose={vi.fn()} />
+        <UploadDialog
+          item={row([entry])}
+          actions={contractor}
+          onClose={vi.fn()}
+          onUploadPlain={vi.fn()}
+        />
       </ToasterProvider>,
     );
     expect(screen.getByText('양식 내려받기: 양식.xlsx')).toBeInTheDocument();
     expect(screen.getByText('시험 보고서')).toBeInTheDocument();
     expect(screen.getByText(/반려 사유: 결함 목록 누락/)).toBeInTheDocument();
     expect(screen.queryByRole('button', { name: '고치기' })).toBeNull();
-    expect(screen.queryByRole('button', { name: '산출물 더 지정' })).toBeNull();
-    fireEvent.click(screen.getByRole('button', { name: '새 버전 제출' }));
+    expect(screen.queryByRole('button', { name: '거두기' })).toBeNull();
+    fireEvent.click(screen.getByRole('button', { name: '업로드' }));
     expect(contractor.onUpload).toHaveBeenCalledWith('2.1', 'd1');
   });
 
-  it('올렸지만 확정 전이면 미제출과 나눠 「제출 확정 대기」로 보이고 제출하러 가는 버튼이 있다', () => {
-    const waiting: DesignatedDeliverable = {
-      ...entry,
-      status: 'REGISTERED',
-      versions: [
-        {
-          ...entry.versions[0],
-          documentId: 'doc9',
-          state: 'REGISTERED',
-          workProductId: null,
-          version: null,
-          rejectReason: null,
-          submit: 'READY',
-        },
-      ],
-    };
-    const contractor = actions(false);
+  it('기타 산출물 업로드는 양식 없이 그 작업에 올린다', () => {
+    const plain = vi.fn();
     render(
       <MemoryRouter>
         <ToasterProvider>
-          <DesignatedCell item={row([waiting])} actions={contractor} />
-          <DesignatedSheet item={row([waiting])} actions={contractor} onClose={vi.fn()} />
+          <UploadDialog
+            item={row([entry])}
+            actions={actions(false)}
+            onClose={vi.fn()}
+            onUploadPlain={plain}
+          />
         </ToasterProvider>
       </MemoryRouter>,
     );
-    expect(screen.getByText('제출 확정 대기 1')).toBeInTheDocument();
-    expect(screen.queryByText(/미제출/)).toBeNull();
-    const go = screen.getByRole('link', { name: '산출물로 제출하러 가기' });
-    expect(go).toHaveAttribute('href', '/p/p1/documents/doc9/draft');
+    fireEvent.click(screen.getByRole('button', { name: '기타 산출물 업로드' }));
+    expect(plain).toHaveBeenCalledWith('2.1');
   });
 });

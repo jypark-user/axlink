@@ -184,6 +184,33 @@ export function LineChartWidget(props: WidgetRendererProps): ReactElement {
   const { data } = props;
   const series = toSeries(data);
   if (data.rows.length === 0 || series.length === 0) return <NoData />;
+  // 축이 둘이면(기간 × 범주) 범주마다 선 하나다. 길게 온 줄을 펴지 않으면 선이 한 줄로 엉킨다.
+  // 어떤 날 한 범주만 값이 없으면 끊지 않고 잇는다(스냅샷에 그 기준 값이 없던 날)
+  const wide = pivot(data);
+  if (wide && wide.rows.length > 0) {
+    return (
+      <ChartContainer config={chartConfig(wide.series)} className="h-full w-full">
+        <LineChart data={wide.rows}>
+          <CartesianGrid vertical={false} />
+          <XAxis dataKey={wide.xKey} {...AXIS} />
+          <YAxis {...AXIS} width={40} />
+          {Tip}
+          <ChartLegend content={<ChartLegendContent />} />
+          {wide.series.map((s) => (
+            <Line
+              key={s.key}
+              type="monotone"
+              dataKey={s.key}
+              name={s.label}
+              stroke={s.color}
+              dot={wide.rows.length <= 31}
+              connectNulls
+            />
+          ))}
+        </LineChart>
+      </ChartContainer>
+    );
+  }
   return (
     <ChartContainer config={chartConfig(series)} className="h-full w-full">
       <LineChart data={rowValues(data.rows)}>

@@ -321,3 +321,142 @@ def test_목록_표의_상태_코드는_발주기관_어휘로_바꾼다():
     assert entity_table._word("title", "CLOSED") == "CLOSED"
     note = "출처 이슈 닫힘(구현 확인 아님)"
     assert entity_table._word("status", note) == note
+
+
+# ---------------------------------------------------------------- 기간을 물은 목록 (11-20)
+# 「최근 5일 이내 작업된 요구사항 목록」에 표가 기간을 몰라 "근거에 없다" 고 답했다. 사용자
+# 정의: 이슈가 생겼거나 그 이슈에 커밋·PR 이 붙었으면 작업한 것이고, 그 이슈가 요구사항에
+# 이어져 있으면 요구사항도 작업한 것이다.
+
+
+def test_질문의_기간을_활동_범위로_읽는다():
+    from datetime import date
+
+    from app.rag import question_period as qp
+
+    today = date(2026, 11, 20)
+    got = qp.activity_range("최근 5일이내 작업된 요구사항 목록", today)
+    # 집계 필터(period__last_n_days)와 같은 범위다
+    assert got == qp.ActivityRange(date(2026, 11, 15), today)
+    assert got.label == "2026-11-15~2026-11-20"
+    assert qp.activity_range("최근 2주 이슈", today).start == date(2026, 11, 6)
+    assert qp.activity_range("이번 달 작업한 이슈", today).start == date(2026, 11, 1)
+    last = qp.activity_range("지난달 요구사항", today)
+    assert (last.start, last.end) == (date(2026, 10, 1), date(2026, 10, 31))
+    assert qp.activity_range("오늘 작업한 이슈", today).label == "2026-11-20"
+    assert qp.activity_range("요구사항 목록", today) is None
+    assert entity_table.supports_period("REQUIREMENT") and entity_table.supports_period("ISSUE")
+    assert not entity_table.supports_period("RISK")
+
+
+@pytest.fixture
+def activity():
+    """요구사항 셋. 가는 이어진 이슈에 기간 안 커밋, 나는 직접 기간 안 커밋, 다는 기간 밖뿐."""
+    with tx() as cur:
+
+        def one(sql: str, params: tuple) -> str:
+            return str(cur.execute(sql + " returning id", params).fetchone()["id"])
+
+        req = {
+            name: one(
+                "insert into requirement (project_id, title, source_kind)"
+                " values (%s, %s, 'MANUAL')",
+                (PID, f"활동 시험 요구사항 {name}"),
+            )
+            for name in ("가", "나", "다")
+        }
+        issue = one(
+            "insert into issue (project_id, issue_key, title, source_kind, source_created_at)"
+            " values (%s, 'GH-8901', '활동 시험 이슈', 'MANUAL', '2019-12-01T00:00:00Z')",
+            (PID,),
+        )
+
+        def change(at: str) -> str:
+            return one(
+                "insert into code_change (project_id, kind, title, state, occurred_at)"
+                " values (%s, 'COMMIT', '활동 시험 커밋', 'MERGED', %s)",
+                (PID, at),
+            )
+
+        def link(from_type: str, from_id: str, to_type: str, to_id: str) -> None:
+            cur.execute(
+                "insert into trace_link (project_id, from_type, from_id, to_type, to_id,"
+                " link_kind, origin) values (%s, %s, %s, %s, %s, 'IMPLEMENTS', 'MANUAL')",
+                (PID, from_type, from_id, to_type, to_id),
+            )
+
+        link("ISSUE", issue, "REQUIREMENT", req["가"])
+        # 한국 시각 01-08 00:30 은 UTC 로 01-07. 날짜는 사업 시간대로 자른다
+        link("CODE_CHANGE", change("2020-01-07T15:30:00Z"), "ISSUE", issue)
+        link("CODE_CHANGE", change("2020-01-06T03:00:00Z"), "REQUIREMENT", req["나"])
+        link("CODE_CHANGE", change("2020-01-07T03:00:00Z"), "REQUIREMENT", req["나"])
+        link("CODE_CHANGE", change("2019-11-01T03:00:00Z"), "REQUIREMENT", req["다"])
+    yield req
+    with tx() as cur:
+        cur.execute("delete from trace_link where project_id = %s and from_id in "
+                    "(select id from code_change where title = '활동 시험 커밋') "
+                    "or to_id = any(%s::uuid[])", (PID, list(req.values())))
+        cur.execute("delete from code_change where title = '활동 시험 커밋'")
+        cur.execute("delete from issue where issue_key = 'GH-8901'")
+        cur.execute("delete from requirement where id = any(%s::uuid[])", (list(req.values()),))
+
+
+@requires_db
+def test_기간을_물으면_그_기간에_활동한_요구사항만_최근순으로(activity):
+    from datetime import date
+
+    from app.rag.question_period import ActivityRange
+
+    period = ActivityRange(date(2020, 1, 5), date(2020, 1, 10))
+    with tx() as cur:
+        table = entity_table.build(cur, "REQUIREMENT", entity_table.ALL, [PID], 50, period)
+    assert table is not None
+    rows = [r.values for r in table.data.rows]
+    titles = [r["title"] for r in rows]
+    assert titles == ["활동 시험 요구사항 가", "활동 시험 요구사항 나"]
+    # 이어진 이슈의 커밋으로 들었다. 이슈는 기간 밖에 생겼으니 세지 않는다
+    assert rows[0]["last_activity"] == "2020-01-08" and rows[0]["activity"] == "커밋·PR 1건"
+    assert rows[1]["last_activity"] == "2020-01-07" and rows[1]["activity"] == "커밋·PR 2건"
+    assert table.title == "2020-01-05~2020-01-10 활동이 있는 요구사항 목록"
+    assert "전체 2건" in table.scope_line and "커밋·PR" in table.scope_line
+    assert "최근 활동 2020-01-08" in table.lines[0]
+
+    with tx() as cur:
+        none = entity_table.build(
+            cur, "REQUIREMENT", entity_table.ALL, [PID], 50,
+            ActivityRange(date(2020, 2, 1), date(2020, 2, 3)),
+        )
+        plain = entity_table.build(cur, "REQUIREMENT", entity_table.ALL, [PID], 500)
+    assert none is None
+    # 기간이 없으면 예전과 같다. 활동 열이 붙지 않는다
+    assert plain is not None and "last_activity" not in [c.key for c in plain.data.columns]
+
+
+@requires_db
+def test_기간에_활동이_없으면_모델_없이_마지막_활동을_말한다(
+    client, conversation, monkeypatch, activity
+):
+    from datetime import date
+
+    from app.rag import question_period
+
+    monkeypatch.setattr(question_period.clock, "today", lambda at=None: date(2020, 1, 10))
+    scripted = _Scripted(
+        {"route": "DOCUMENT", "list": "REQUIREMENT", "listFilter": "ALL", "query": "요구사항"},
+        "최근 활동한 요구사항입니다.\n[그림 1]",
+    )
+    monkeypatch.setattr(ask_service, "llm_port", lambda: scripted)
+    conversation_id, token = conversation()
+
+    events = _ask(client, token, conversation_id, "최근 5일이내 작업된 요구사항 목록")
+    block = next(d for e, d in events if e == "infographic")
+    titles = [r["values"]["title"] for r in block["data"]["rows"]]
+    assert "활동 시험 요구사항 가" in titles and "활동 시험 요구사항 다" not in titles
+    assert "커밋·PR" in scripted.prompts[0]
+
+    monkeypatch.setattr(question_period.clock, "today", lambda at=None: date(2020, 3, 1))
+    events = _ask(client, token, conversation_id, "최근 3일이내 작업된 요구사항 목록")
+    assert events[-1][1]["finishReason"] == "NO_DATA"
+    text = "".join(d["text"] for e, d in events if e == "delta")
+    assert "2020-02-27~2020-03-01 사이에" in text and "마지막 활동은" in text
+    assert not any(e == "infographic" for e, _ in events)

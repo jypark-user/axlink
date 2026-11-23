@@ -1,8 +1,8 @@
 import { DEFAULT_SIZE } from '@/features/dashboard/layout-mapper';
-import type { GridItem, WidgetSpec, WidgetTemplate } from '@/types/api';
+import type { GridItem, WidgetFilter, WidgetSpec, WidgetTemplate } from '@/types/api';
 
 /**
- * 진행 상황 추천 구성 — 위젯 여러 개를 한 번에 배치하는 사전 구성.
+ * 대시보드 추천 구성 — 위젯 여러 개를 한 번에 배치하는 사전 구성.
  * 위젯은 코드가 아니라 데이터(spec)이므로 여기서는 명세만 정의하고
  * 검증은 서버 시맨틱 카탈로그(measure/dimension)가 한다.
  */
@@ -13,6 +13,13 @@ export interface PresetWidget {
   intent: string;
   measure: string;
   dimensions?: string[];
+  filters?: WidgetFilter[];
+  /** 읽을 줄 수. 일별 추이처럼 기본(50줄)으로 모자랄 때만 준다 */
+  limit?: number;
+  /** 기본 크기 대신 쓸 폭·높이 */
+  size?: { w: number; h: number };
+  /** 이 위젯을 둔 근거. 위젯을 고칠 때 읽기 전용으로 보인다 */
+  rationale?: string;
 }
 
 export interface DashboardPreset {
@@ -34,7 +41,169 @@ export interface DashboardPreset {
  *   초과 가로 막대 / 축 2개 누적 막대(칸 40 이하)·격자(초과) / 비율 8개 이하 방사형
  * measure × dimension 은 서버 시맨틱 카탈로그가 허용한 짝만 쓴다.
  */
+/**
+ * 대시보드 기본 구성 (2026-11-18 사용자 지시). 처음 열었을 때와 「초기화」가 이 구성으로 놓는다.
+ * 위에서부터 ① 세 기준 진척률 ② 그 일별 추이 ③ 지금 하고 있는 일 ④ 요구사항·리스크 ⑤ 일정·품질 보조
+ * 지표 순이다. FHD 화면 스크롤 두 쪽 남짓(격자 18줄)이다.
+ */
+export const DEFAULT_PRESET: DashboardPreset = {
+  id: 'default',
+  name: '기본 구성',
+  description:
+    'WBS·산출물·요구사항 세 기준 진척률과 그 일별 추이, 지금 진행 중인 작업, 요구사항·리스크·일정 보조 지표. 처음 화면과 초기화가 이 구성이다.',
+  widgets: [
+    // ① 세 기준 진척률. 셋 다 스냅샷 기준이라 아래 일별 그래프의 마지막 점과 같은 값이다
+    {
+      template: 'STAT_CARD',
+      title: 'WBS 진척률',
+      intent: '가장 최근 스냅샷의 WBS 진척률을 일별 추세와 함께 한 숫자로',
+      measure: 'progress_wbs_pct',
+      dimensions: ['period_day'],
+      rationale:
+        '일정 기준 진척. 용역사가 WBS 파일에 적은 작업별 실적을 가중치로 합친 값이다. 업체가 신고한 값이라 산출물·요구사항 기준과 나란히 놓고 벌어지는지를 본다. 일별 스냅샷의 가장 최근 값이며 아래 「일별 진척률」 그래프의 WBS 선 마지막 점과 같다.',
+    },
+    {
+      template: 'STAT_CARD',
+      title: '산출물 제출률',
+      intent: '지금 산출물 제출률을 한 숫자로',
+      measure: 'deliverable_submission_rate',
+      dimensions: [],
+      rationale:
+        '산출물 기준 진척(제출). 예상 산출물(WBS 산출물 열의 이름과 발주기관이 요청한 산출물) 중 산출물이 올라온 비율이다. 하나하나를 한 건으로 세고, 반려된 것은 뺀다. 지금 값이다.',
+    },
+    {
+      template: 'STAT_CARD',
+      title: '산출물 승인률',
+      intent: '지금 산출물 승인률을 한 숫자로',
+      measure: 'deliverable_approval_rate',
+      dimensions: [],
+      rationale:
+        '산출물 기준 진척(승인). 예상 산출물마다 가장 최근 올라온 산출물을 발주기관이 승인한 비율이다. 올리기만 하고 승인 전인 것은 넣지 않아서, 제출률이 높아도 이 값이 낮으면 아직 확인을 마치지 못한 결과물이 많다는 뜻이다. 지금 값이라 산출물 화면에서 승인하면 바로 바뀐다. 아래 일별 그래프는 하루 한 번 남긴 기록이라 다음 기록 때 따라온다.',
+    },
+    {
+      template: 'STAT_CARD',
+      title: '요구사항 이행률',
+      intent: '지금 요구사항 이행률을 한 숫자로',
+      measure: 'requirement_fulfillment_rate',
+      dimensions: [],
+      rationale:
+        '요구사항 승인 기준 진척. 요구사항 중 발주기관이 검증 또는 인수로 정한 비율이다(요구사항 화면의 상태 지정). 확정된 기준선이 있으면 그 기준선 안의 요구사항만 센다. 지금 값이라 상태를 지정하면 바로 바뀐다. 아래 일별 그래프는 하루 한 번 남긴 기록이다.',
+    },
+    // ② 세 기준을 한 그래프에. 기준끼리 벌어지는 시점이 보인다
+    {
+      template: 'LINE_CHART',
+      title: '일별 진척률 (WBS · 산출물 제출·승인 · 요구사항)',
+      intent:
+        '사업 시작부터 오늘까지 WBS 진척률·산출물 승인률·요구사항 이행률을 일별로 한 그래프에',
+      measure: 'progress_metric_pct',
+      dimensions: ['period_day', 'progress_metric'],
+      limit: 400,
+      size: { w: 12, h: 5 },
+      rationale:
+        '세 기준 진척률이 날마다 어떻게 움직였는지 한 그래프로 본다. 값은 매일 찍는 스냅샷에서 오고, 위 카드 셋과 같은 값이다. 스냅샷은 그날의 값을 그날 남기는 것이라 과거로 거슬러 만들 수 없다. 그래서 선은 사업 시작일이 아니라 첫 스냅샷을 찍은 날부터 그려진다. 스냅샷을 안 찍은 날은 앞뒤 점을 잇는다.',
+    },
+    // ③ 지금 하고 있는 일. 작업(WBS) · 이슈 · 형상 세 갈래로
+    {
+      template: 'PROGRESS_LIST',
+      title: '진행 중인 WBS 작업',
+      intent: '시작일이 지났는데 아직 끝나지 않은 WBS 작업과 각 실적',
+      measure: 'wbs_task_actual_pct',
+      dimensions: ['wbs_task'],
+      size: { w: 4, h: 5 },
+      rationale:
+        '지금 무엇을 하고 있는지를 일정 쪽에서 본다. WBS 말단 작업 중 시작일이 지났고 실적이 100% 가 아닌 작업이다. 기한이 지났는데 안 끝난 작업도 여기에 남는다. 막대는 용역사가 적은 실적이다.',
+    },
+    {
+      template: 'HORIZONTAL_BAR_CHART',
+      title: '담당자별 열린 일반 이슈',
+      intent: '담당자별로 아직 안 닫힌 일반 이슈가 몇 건인지',
+      measure: 'open_issue_count',
+      dimensions: ['assignee'],
+      size: { w: 4, h: 5 },
+      rationale:
+        '지금 무엇을 하고 있는지를 이슈 쪽에서 본다. 해결·종료되지 않은 일반 이슈(결함 제외)를 담당자별로 센다. 한 사람에게 몰려 있으면 그쪽 일이 밀릴 수 있다. GitHub 이슈에는 「진행 중」 상태가 없어서 열린 것 전체를 센다.',
+    },
+    {
+      template: 'HORIZONTAL_BAR_CHART',
+      title: '최근 2주 작성자별 커밋·PR',
+      intent: '최근 14일 동안 작성자별 커밋과 PR 건수',
+      measure: 'code_activity_count',
+      dimensions: ['author'],
+      filters: [{ field: 'period', op: 'LAST_N_DAYS', value: 14 }],
+      size: { w: 4, h: 5 },
+      rationale:
+        '지금 무엇을 하고 있는지를 형상관리 쪽에서 본다. 최근 14일 동안 저장소에 올라온 커밋·PR 을 작성자별로 센다. 작업은 진행 중인데 활동이 없으면 실적과 실제 작업이 맞는지 물어볼 근거가 된다.',
+    },
+    // ④ 요구사항과 리스크
+    {
+      template: 'STATUS_FLOW',
+      title: '요구사항 단계 분포',
+      intent: '요구사항이 정의·구현·검증·인수 단계에 각각 몇 건 있는지 흐름으로',
+      measure: 'requirement_count',
+      dimensions: ['requirement_status'],
+      size: { w: 6, h: 4 },
+      rationale:
+        '요구사항 이행률 뒤에 있는 건수다. 이행률이 낮을 때 아직 정의 단계에 많은지, 구현은 됐는데 검증을 못 받은 것인지 갈라 본다.',
+    },
+    {
+      template: 'BAR_CHART',
+      title: '심각도별 열린 리스크',
+      intent: '종료되지 않은 리스크가 심각도별로 몇 건인지',
+      measure: 'open_risk_count',
+      dimensions: ['risk_severity'],
+      size: { w: 6, h: 4 },
+      rationale:
+        '진척률에 아직 드러나지 않은 위험을 본다. 종료되지 않은 리스크를 심각도별로 센다. 리스크를 등록하지 않는 사업은 비어 있다.',
+    },
+    // ⑤ 일정·품질 보조 지표
+    {
+      template: 'STAT_CARD',
+      title: '지연 작업 수',
+      intent: '계획선보다 실적이 뒤진 WBS 작업 수',
+      measure: 'progress_behind_task_count',
+      dimensions: ['period_day'],
+      rationale:
+        '계획 대비 편차가 몇 개 작업에서 오는지 본다. 작업 기간으로 안분한 계획보다 실적이 낮은 WBS 말단 작업 수다. 스냅샷 기준이다.',
+    },
+    {
+      template: 'STAT_CARD',
+      title: '일정 준수율',
+      intent: '기한이 지난 마일스톤 중 기한 안에 닫힌 비율',
+      measure: 'schedule_compliance_rate',
+      rationale:
+        '마일스톤 단위로 약속한 날을 지켰는지 본다. 기한이 지난 마일스톤 중 기한 안에 닫힌 비율이다. WBS 편차와 달리 기한이 지난 것만 센다.',
+    },
+    {
+      template: 'STAT_CARD',
+      title: '일반 이슈 처리율',
+      intent: '해결·종료된 일반 이슈 비율을 월별 추세와 함께',
+      measure: 'issue_resolution_rate',
+      dimensions: ['period_month'],
+      rationale:
+        '등록된 일반 이슈(결함 제외) 중 해결·종료된 비율이다. 이슈가 쌓이기만 하는지 처리되고 있는지 본다.',
+    },
+    {
+      template: 'STAT_CARD',
+      title: '열린 결함 수',
+      intent: '아직 닫히지 않은 결함이 몇 건인지',
+      measure: 'open_defect_count',
+      rationale:
+        '품질 쪽 남은 일이다. 해결·종료되지 않은 결함 건수다. 진척률이 높아도 결함이 남아 있으면 인수 전에 처리해야 한다.',
+    },
+    {
+      template: 'STAT_CARD',
+      title: '계획 대비 편차',
+      intent: 'WBS 실적 진척이 계획 진척보다 몇 %p 앞서거나 뒤졌는지',
+      measure: 'progress_variance_pct',
+      dimensions: ['period_day'],
+      rationale:
+        'WBS 진척률만으로는 늦은지 빠른지 알 수 없어서 옆에 둔다. 작업 기간으로 안분한 계획 진척과 실적의 차이(%p)이고, 음수면 계획보다 뒤진 것이다.',
+    },
+  ],
+};
+
 export const DASHBOARD_PRESETS: DashboardPreset[] = [
+  DEFAULT_PRESET,
   {
     id: 'full',
     name: '전체 인포템플릿',
@@ -235,7 +404,7 @@ export const DASHBOARD_PRESETS: DashboardPreset[] = [
       {
         template: 'STAT_CARD',
         title: '산출물 승인률',
-        intent: 'WBS 가 정한 산출물 중 현행 버전이 승인된 비율',
+        intent: '예상 산출물 중 가장 최근 올라온 산출물이 승인된 비율',
         measure: 'deliverable_approval_rate',
       },
       {
@@ -390,12 +559,13 @@ export const toWidgetSpec = (widget: PresetWidget, projectId: string): WidgetSpe
   template: widget.template,
   title: widget.title,
   prompt: widget.intent,
+  rationale: widget.rationale ?? null,
   query: {
     measure: widget.measure,
     dimensions: widget.dimensions ?? [],
-    filters: [],
+    filters: widget.filters ?? [],
     projectScope: [projectId],
-    limit: null,
+    limit: widget.limit ?? null,
   },
   options: {
     unit: null,
@@ -428,7 +598,7 @@ export const packGrid = (widgets: PresetWidget[], startY = 0, cols = 12): GridIt
   let row: GridItem[] = [];
   let used = 0;
   for (const w of widgets) {
-    const size = DEFAULT_SIZE[w.template];
+    const size = { ...DEFAULT_SIZE[w.template], ...w.size };
     if (used + size.w > cols && row.length > 0) {
       rows.push(row);
       row = [];

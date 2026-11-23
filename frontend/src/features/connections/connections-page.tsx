@@ -1,5 +1,6 @@
 import { useState, type ReactNode } from 'react';
 import { Link } from 'react-router-dom';
+import { GUIDE_NEW_TAB } from '@/features/help/guide-links';
 import { BookOpen } from 'lucide-react';
 import {
   AlertDialog,
@@ -91,7 +92,7 @@ export function ConnectionsPage(): ReactNode {
         actions={
           <>
             <Button asChild variant="outline">
-              <Link to="/guide/tool-integration">
+              <Link to="/guide/tool-integration" {...GUIDE_NEW_TAB}>
                 <BookOpen className="size-4" /> 연동 가이드
               </Link>
             </Button>
@@ -115,7 +116,9 @@ export function ConnectionsPage(): ReactNode {
                   <CardTitle className="flex items-center gap-2">
                     <span className="truncate">{c.name}</span>
                     <Badge variant="outline">{c.tool}</Badge>
-                    <Badge variant={badgeVariantFor(c.status)}>{connectionStatusLabel(c.status)}</Badge>
+                    <Badge variant={badgeVariantFor(c.status)}>
+                      {connectionStatusLabel(c.status)}
+                    </Badge>
                   </CardTitle>
                 </CardHeader>
                 <CardContent className="flex flex-col gap-2 text-sm">

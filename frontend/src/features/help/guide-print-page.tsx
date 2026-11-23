@@ -108,7 +108,7 @@ export function GuidePrintPage(): ReactNode {
           const wanted = imagePaths(docs);
           const ready = [...wanted].every((p) => settled.has(p));
           const missing = [...wanted].filter((p) => settled.get(p) === false).length;
-          const title = doc === ALL ? 'AX Link 사용 설명서' : docs[0]?.title;
+          const title = doc === ALL ? 'AX Link 사용자 매뉴얼' : docs[0]?.title;
           const back = doc === ALL ? '/guide' : `/guide/${doc}`;
           return (
             <>

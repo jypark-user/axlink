@@ -32,9 +32,12 @@ from app.db import tx
 from app.rag import (
     answer,
     blocks,
+    changes,
     collection,
     entity_table,
     intents,
+    lookup,
+    milestones,
     number_guard,
     overview,
     question_period,
@@ -474,6 +477,7 @@ def _resolve(
     query_text: str,
 ) -> None:
     """판정대로 값을 뽑고 답의 종류를 정한다. 값은 전부 시맨틱 레이어·WBS·스냅샷에서 온다."""
+    _server_table(cur, p, turn)
     decision = turn.decision
     related = list(decision.related)
 
@@ -561,13 +565,65 @@ def _resolve(
                     )
 
     if turn.reason is None:
-        _listing_and_overview(cur, p, turn)
-        _search(cur, p, turn, query_vec, query_text)
+        found = _lookup(cur, p, turn)
+        if not found:
+            _listing_and_overview(cur, p, turn)
+        if turn.reason is None:
+            _search(cur, p, turn, query_vec, query_text)
+            if found:
+                # 적힌 ID 로 찾은 항목이 근거다. 유사도 검색 조각은 그 뒤에 붙인다
+                ids = {c.id for c in found.chunks}
+                rest = [c for c in turn.chunks if c.id not in ids]
+                turn.chunks = (found.chunks + rest)[: max(len(found.chunks), settings.rag_top_k)]
+                turn.gate_ok = True
         _decide_reason(turn)
 
     if turn.reason not in (CLARIFY, OFF_TOPIC):
         exclude = {routing.current_key(turn.decision)}
         turn.suggestions = suggest.build(cur, p.principal, p.scope, p.catalog, related, exclude)
+
+
+def _server_table(cur: Any, p: Prepared, turn: _Turn) -> bool:
+    """착수보고 대표 질의 중 모델 판정이 빗나가던 두 질문을 글자로 알아보고 서버가 표로 답한다.
+    「이번 달 마일스톤 현황」은 준수율 지표로, 「지난 보고 이후 변경 사항」은 지금 값 요약으로
+    갔다(11-23 실측). 목록 질문과 권장 질문을 누른 경우는 건드리지 않는다."""
+    decision = turn.decision
+    if decision.listing or p.target is not None:
+        return False
+    text = None
+    if milestones.asks(p.question):
+        block, text = milestones.build(cur, p.question, list(p.scope), 1)
+    elif changes.asks(p.question):
+        block = changes.build(cur, p.question, list(p.scope), 1)
+        if block is None:
+            return False
+    else:
+        return False
+    turn.decision = routing.RouteDecision(
+        type=routing.DOCUMENT, rewritten=decision.rewritten, related=decision.related
+    )
+    if block is None:
+        turn.stop(NO_DATA, text or answer.unsupported())
+    else:
+        turn.block_list.append(block)
+    return True
+
+
+def _lookup(cur: Any, p: Prepared, turn: _Turn) -> lookup.Found:
+    """질문에 적힌 이슈 번호·요구사항 코드를 글자 그대로 찾는다. 지표·일정 질문과 목록 질문은
+    그 경로가 답한다. 문서·현황 질문으로 판정된 것만 여기서 받는다."""
+    decision = turn.decision
+    if decision.listing or decision.type not in (
+        routing.DOCUMENT, routing.MIXED, routing.OVERVIEW, routing.OFF_TOPIC
+    ):
+        return lookup.Found()
+    found = lookup.find(cur, p.question, list(p.scope), len(turn.block_list) + 1)
+    if found:
+        turn.block_list.extend(found.blocks)
+        turn.decision = routing.RouteDecision(
+            type=routing.DOCUMENT, rewritten=decision.rewritten, related=decision.related
+        )
+    return found
 
 
 def _listing_and_overview(cur: Any, p: Prepared, turn: _Turn) -> None:
@@ -576,10 +632,37 @@ def _listing_and_overview(cur: Any, p: Prepared, turn: _Turn) -> None:
     # (ARC-013). 09.17 실측에서 닫힌 이슈가 "작업이 안 된" 목록에 섞였다.
     if decision.listing:
         entity = entity_table.FROM_SOURCE_TYPE.get(decision.listing)
+        # 「최근 5일 이내 작업된 요구사항」처럼 기간을 물으면 그 기간에 활동한 것만 꺼낸다.
+        # 기간은 질문 글자에서만 읽는다(모델이 고르지 않는다)
+        period = None
+        if entity and entity_table.supports_period(entity):
+            period = question_period.activity_range(p.question)
+        status = decision.listing_status
+        if entity == "ISSUE" and "결함" in p.question:
+            # 결함을 물었는데 일반 이슈 표를 주면 모델이 문서 속 숫자로 답한다(11-23 실측:
+            # 결함이 없는 사업에서 취약점 문서의 「HIGH 7건」을 결함 7건이라 했다)
+            entity = "DEFECT"
+        if entity == "WORK_PRODUCT" and "미제출" in p.question:
+            # 「미제출 산출물」은 처리 중(승인 전)과 다르다. 모델이 고르지 않고 글자에서 읽는다
+            status = entity_table.MISSING
         if entity:
             turn.table = entity_table.build(
-                cur, entity, decision.listing_status, p.scope, settings.rag_list_limit
+                cur, entity, status, p.scope, settings.rag_list_limit, period
             )
+        if entity and period is not None and turn.table is None:
+            # 기간 안에 활동이 없다. 청크 목록으로 돌리면 기간과 무관한 것이 나온다. 서버가 말한다
+            label = entity_table.ENTITIES[entity].label
+            last = entity_table.last_activity(cur, entity, p.scope)
+            text = f"{period.label} 사이에 이슈가 생기거나 커밋·PR 이 붙은 {label} 항목이 없습니다."
+            if last:
+                text += f" 마지막 활동은 {last} 입니다."
+            turn.stop(NO_DATA, text)
+            return
+        if entity == "DEFECT" and turn.table is None:
+            # 이슈 조각으로 내려가면 결함이 아닌 이슈로 답한다. 없다고 서버가 말한다
+            word = {entity_table.OPEN: "처리 중인", entity_table.CLOSED: "완료된"}.get(status, "")
+            turn.stop(NO_DATA, answer.no_defects(word))
+            return
         if turn.table is not None:
             turn.block_list.append(blocks.from_entity(len(turn.block_list) + 1, turn.table))
     # 전체 현황을 묻는 질문은 현황 그림으로 답한다(ARC-015). 다른 질문에는 붙이지 않는다
