@@ -857,9 +857,11 @@ def _uploaded_by_item(cur: Any, project_id: str) -> dict[str, list[DeliverableRe
         cur,
         """
         select d.id, d.wbs_item_id, d.designated_deliverable_id, dd.name as form_name,
-               d.original_filename, d.created_at, d.review_status, d.review_reason, d.reviewed_at
+               d.original_filename, d.created_at, d.review_status, d.review_reason, d.reviewed_at,
+               u.name as reviewer
           from document_upload d
           left join wbs_designated_deliverable dd on dd.id = d.designated_deliverable_id
+          left join app_user u on u.id = d.reviewed_by_user_id
          where d.project_id = %s and d.wbs_item_id is not null and d.review_status is not null
            and d.status not in ('FAILED', 'REJECTED')
          order by d.created_at desc, d.id
@@ -881,6 +883,7 @@ def _uploaded_by_item(cur: Any, project_id: str) -> dict[str, list[DeliverableRe
             status=r["review_status"],
             rejectReason=r["review_reason"] if r["review_status"] == "REJECTED" else None,
             reviewedAt=r["reviewed_at"].isoformat() if r["reviewed_at"] else None,
+            reviewedBy=r["reviewer"] if r["review_status"] in ("APPROVED", "REJECTED") else None,
             latest=latest,
             designatedId=form,
         ))
