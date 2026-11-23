@@ -2,16 +2,16 @@
  "generated": "2026-11-23",
  "sources": {
   "IM-001-요구사항정의서.md": {
-   "version": "v0.4.1",
-   "sha256": "b37c0ac7cea1037cc3d620a8a10e7d25632b508bb0307544213ff6e1486e5294"
+   "version": "v0.4.2",
+   "sha256": "8eb514e33943c883aa3c9c4164181d6cb7de52d78229fde159a614f5cffca1a2"
   },
   "IM-007-유스케이스명세서.md": {
-   "version": "v0.2.28",
-   "sha256": "8a00a5b4b4c39dc1ba84265dbcd361cbcbc31e356cf538bd31415733cc7ab186"
+   "version": "v0.2.29",
+   "sha256": "b706384b135d7c62932bd54e28a4ed6ea083eff323d27867b4824e31e1870183"
   },
   "IM-007A-요구사항-세부의무-대응표.md": {
-   "version": "v0.1.8",
-   "sha256": "cc7cd08d530742b95a23a353921477747b0c648be2be3eca95eda698a81d6e29"
+   "version": "v0.1.9",
+   "sha256": "a3cb8bec195f85adbaaaf0781f6abdb679cda64b9eb7ea11c6bafa0599d51090"
   },
   "IM-008-용어사전.md": {
    "version": "v0.2.4",
@@ -22,8 +22,8 @@
    "sha256": "0b18fc7d44757fc049ff515d9b56b8c1b82b178795ed5c93743c2c879de135a5"
   },
   "IM-005-시험계획및결과서.md": {
-   "version": "v0.3",
-   "sha256": "c55d2d5f857b539d4bb6df649f5333757e5eab6acb04dccfc6109450c585d296"
+   "version": "v0.3.1",
+   "sha256": "7e22947fe5c7c944e90dce6439fabc53bb525ad52f6dd201533f7b2c5f9565c7"
   },
   "구현-검증-대응표.md": {
    "version": "v0.1.2",
@@ -2114,7 +2114,7 @@
   "AC-031-5": {
    "id": "AC-031-5",
    "uc": "UC-031",
-   "text": "점검표에서 유형별 지난 버전 목록과 각 버전의 반려 사유·승인자·일자가 보인다",
+   "text": "산출물 검토 창의 상세보기에서 같은 산출물의 지난 버전 목록과 버전마다 상태·반려 사유·처리자·처리 일시가 보인다",
    "scenarios": [
     "UC-031-S04"
    ],
@@ -5483,8 +5483,8 @@
    "uc": "UC-031",
    "title": "반려 뒤 재제출·이력",
    "state": "S01 승인 전",
-   "input": "반려 「목차 누락」 → 새 파일 v2 제출 → 점검표",
-   "expected": "v1 반려(사유), v2 제출 현행, 이력에 v1·사유",
+   "input": "C1 이 3.2 검토 창에서 올라온 산출물을 반려 「목차 누락」 → V1 이 같은 양식에 새 파일을 올림 → C1 이 검토 창 상세보기",
+   "expected": "새 파일이 최신·승인 대기, 상세보기에 지난 버전(반려·사유 「목차 누락」·처리자·처리 일시)",
    "pass": "AC-031-4·5",
    "verify": "API·브라우저",
    "acs": [
@@ -7493,9 +7493,9 @@
   },
   "CC-06": {
    "id": "CC-06",
-   "text": "폐쇄망에서 설치·구동. 반입 요소 문서화",
-   "requirements": "SER.SEC.002 · QUR.RAG.001",
-   "verify": "폐쇄망 반입 목록 문서 · 인터넷 차단 환경에서 오프라인 설치 리허설 · 온프레미스 모델로 UC-060-S09 실행 | 설치 + 실모델"
+   "text": "폐쇄망에서 질의·응답(외부 클라우드 LLM 비의존). `SER.SEC.002`(설치·반입 문서화)는 IM-001 v0.4.2 에서 폐기",
+   "requirements": "QUR.RAG.001",
+   "verify": "인터넷 차단 환경에서 온프레미스 모델로 UC-060-S09 실행 | 실모델"
   },
   "CC-07": {
    "id": "CC-07",
@@ -10683,33 +10683,33 @@
   "SER.SEC.002-o1": {
    "id": "SER.SEC.002-o1",
    "requirement": "SER.SEC.002",
-   "text": "외부 인터넷 없이 설치·구동 (본문)",
-   "uc_flow": "CC-06 · IM-005 8절 설치 시험",
+   "text": "**폐기**(IM-001 v0.4.2). 외부 인터넷 없이 설치·구동 (본문)",
+   "uc_flow": "—",
    "acs": [],
-   "ac_text": "CC-06, IT-01~IT-10(IM-005 8.4)",
+   "ac_text": "—",
    "scenarios": [],
-   "data_expected": "반입 목록(IM-005 8.2)·차단 환경·판정 기준. 장비·OS 미정은 전제로",
-   "verify": "설치",
-   "link": "연결 완료(검증 정의 완료, 실행은 환경 대기)",
-   "decision": "확정",
+   "data_expected": "—",
+   "verify": "—",
+   "link": "폐기",
+   "decision": "폐기",
    "decs": [],
-   "execution": "환경 대기",
+   "execution": "폐기",
    "supplement": ""
   },
   "SER.SEC.002-o2": {
    "id": "SER.SEC.002-o2",
    "requirement": "SER.SEC.002",
-   "text": "반입 요소 문서화 (본문)",
-   "uc_flow": "CC-06",
+   "text": "**폐기**(IM-001 v0.4.2). 반입 요소 문서화 (본문)",
+   "uc_flow": "—",
    "acs": [],
-   "ac_text": "CC-06",
+   "ac_text": "—",
    "scenarios": [],
-   "data_expected": "`docs/40-manual/폐쇄망-반입-목록.md`",
-   "verify": "문서 검토",
-   "link": "연결 완료",
-   "decision": "확정",
+   "data_expected": "—",
+   "verify": "—",
+   "link": "폐기",
+   "decision": "폐기",
    "decs": [],
-   "execution": "미실행",
+   "execution": "폐기",
    "supplement": ""
   },
   "SER.SEC.003-o1": {
