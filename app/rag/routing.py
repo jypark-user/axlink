@@ -5,7 +5,8 @@
 카탈로그에 없으면 집계 경로를 포기하고 문서 경로로 내려간다. 억지로 맞추지 않는다.
 """
 
-from dataclasses import dataclass, field
+import re
+from dataclasses import dataclass, field, replace
 from typing import Any
 
 from app.ai.port import LlmPort
@@ -208,6 +209,51 @@ def decide(
     )
     choice = generation.parse_choice(result.text)
     return from_choice(catalog, choice)
+
+
+# 과업지시서·계약서에 적힌 납품 산출물의 종류·개수. 지표가 아니라 문서로 답한다(아래 지침).
+_DOC_PRODUCTS = re.compile(r"납품\s*산출물[^.?!,]{0,10}?(?:몇\s*(?:종|개|가지)|종류)")
+# 문서 쪽을 뺀 나머지가 묻는 건수. 앞에서부터 처음 맞는 것을 쓴다
+_COUNT_ASKS = (
+    (re.compile(r"결함"), "defect_count"),
+    (re.compile(r"리스크|위험"), "open_risk_count"),
+    (re.compile(r"요구\s*사항"), "requirement_count"),
+    (re.compile(r"이슈"), "issue_count"),
+)
+_PRODUCT_TABLES = ("work_product", "wbs_item")
+
+
+def correct_document_part(
+    catalog: Catalog, decision: "RouteDecision", question: str
+) -> "RouteDecision":
+    """문서와 지표를 함께 묻는 질문에서 모델이 문서 쪽 말로 지표를 고른 것을 바로잡는다.
+
+    지침은 「납품 산출물은 몇 종이고 일반 이슈는 몇 건이야」에서 지표 쪽(일반 이슈)을 고르라고
+    하지만, 11-23 폐쇄망 모델(qwen3:8b, qwen3.5:122b) 둘 다 산출물 건수를 골라 이슈 건수 없이
+    답했다. 납품 산출물의 종류·개수는 문서로 답하는 말이라 산출물 지표의 근거가 아니다.
+    나머지 구절이 다른 건수를 물으면 그 지표로, 아니면 문서 경로로 둔다.
+    """
+    if decision.type != AGGREGATE or decision.measure is None:
+        return decision
+    if decision.measure.base_table not in _PRODUCT_TABLES or not _DOC_PRODUCTS.search(question):
+        return decision
+    rest = _DOC_PRODUCTS.sub(" ", question)
+    for pattern, key in _COUNT_ASKS:
+        measure = catalog.measure(key) if pattern.search(rest) else None
+        if measure is not None:
+            return replace(
+                decision,
+                measure=measure,
+                dimensions=[],
+                template=generation._default_template([], catalog),
+                title=measure.label,
+                breakdown=False,
+                related=[k for k in decision.related if k != f"measure:{key}"],
+            )
+    return RouteDecision(
+        type=DOCUMENT, rewritten=decision.rewritten, follow_up=decision.follow_up,
+        related=decision.related,
+    )
 
 
 def user_content(question: str, previous: list[PreviousTurn] | None) -> str:

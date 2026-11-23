@@ -5,6 +5,7 @@ DB 를 타는 흐름은 test_ask_api.py, 실모델은 test_rag_live.py 가 본�
 """
 
 import json
+from dataclasses import replace
 
 import httpx
 
@@ -583,3 +584,36 @@ def test_산출_근거의_상태_코드_괄호는_빼고_화면_용어는_남긴
     text = "검증완료(VERIFIED) 또는 인수완료(ACCEPTED) 수를 일정(WBS) 대표(L1)로. 시험(TESTS) 링크"
     assert vocab.plain(text) == "검증완료 또는 인수완료 수를 일정(WBS) 대표(L1)로. 시험 링크"
     assert vocab.plain(None) is None
+
+
+def _with_products() -> Catalog:
+    catalog = _catalog()
+    catalog.measures["work_product_count"] = replace(
+        catalog.measures["issue_count"],
+        key="work_product_count", label="산출물 건수", base_table="work_product",
+        allowed_dimensions=(), default_dimension=None,
+    )
+    return catalog
+
+
+def test_납품_산출물_종류와_이슈를_함께_물으면_이슈_지표로_바로잡는다():
+    """폐쇄망 모델이 문서 쪽(납품 산출물 종류) 말로 산출물 지표를 골랐다(11-23, UC-060-S03)."""
+    catalog = _with_products()
+    q = "납품 산출물은 몇 종이고 일반 이슈는 몇 건이야"
+    wrong = routing.from_choice(catalog, {"route": "AGGREGATE", "measure": "work_product_count"})
+    fixed = routing.correct_document_part(catalog, wrong, q)
+    assert fixed.type == routing.AGGREGATE and fixed.measure.key == "issue_count"
+    assert fixed.dimensions == [] and fixed.template == "STAT_CARD"
+
+
+def test_납품_산출물_종류만_물으면_문서_경로다():
+    catalog = _with_products()
+    wrong = routing.from_choice(catalog, {"route": "AGGREGATE", "measure": "work_product_count"})
+    fixed = routing.correct_document_part(catalog, wrong, "납품 산출물은 총 몇 종이야")
+    assert fixed.type == routing.DOCUMENT
+
+
+def test_산출물_건수를_물으면_그대로_둔다():
+    catalog = _with_products()
+    right = routing.from_choice(catalog, {"route": "AGGREGATE", "measure": "work_product_count"})
+    assert routing.correct_document_part(catalog, right, "산출물은 몇 건 제출됐어") is right
