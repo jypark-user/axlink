@@ -6,10 +6,10 @@
 |---|---|
 | 합의된 전체 AC | 182 |
 | 공식 범위 제외(승인 기록 있음) | 1 |
-| 통과 AC | 166 |
-| **전체 완료율** (통과 AC ÷ 분모 181) | **91.7%** |
-| 실행한 시험(통과·실패) | 2710 |
-| **실행 시험 통과율** | **87.6%** |
+| 통과 AC | 168 |
+| **전체 완료율** (통과 AC ÷ 분모 181) | **92.8%** |
+| 실행한 시험(통과·실패) | 2772 |
+| **실행 시험 통과율** | **87.9%** |
 | 재검증 필요로 표시된 실행 | 276 |
 
 ## AC 상태별 건수 (별도 건수)
@@ -21,8 +21,8 @@
 | no-scenario | 4 |
 | not-run | 3 |
 | partial | 2 |
-| pass | 166 |
+| pass | 168 |
 | pass-ci-only | 2 |
-| pass-needs-evidence | 3 |
+| pass-needs-evidence | 1 |
 
 상태 뜻: pass 통과 · fail 실패 · blocked 실행 차단 · not-run 미실행 · decision-wait 결정 대기(미실행) · pass-decision-wait 근거는 통과했으나 결정 전(미완료) · auto-only 자동 시험만 통과, 명세 시나리오 미실행(미완료) · pass-ci-only 통과했으나 5174 실행 근거 없음(미완료) · revalidate 재검증 필요 · partial 일부만 · pass-needs-evidence 5174 통과했으나 필요한 증거 종류 없음(미완료) · pass-defect-open 통과했으나 걸린 결함이 열림·재확인 전(미완료) · excluded 공식 범위 제외 · no-scenario 시나리오 없음
