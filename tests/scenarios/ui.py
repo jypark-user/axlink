@@ -36,6 +36,7 @@ class Screen:
         self.failed: list[str] = []
         self.denied: list[str] = []  # 서버가 거절한 응답(403·404)
         self.allow_denied = False
+        self.allow_rejected = False
         self.injected: list[str] = []  # 시험이 일부러 실패시킨 요청 주소 조각
         page.on("console", lambda m: m.type == "error" and self.console.append(m.text))
         page.on("pageerror", lambda e: self.console.append(str(e)))
@@ -62,6 +63,11 @@ class Screen:
     def clear_injection(self, url_part: str) -> Screen:
         """주입을 거둔다. 그 뒤 요청은 서버로 간다(콘솔에 남은 주입 오류는 계속 무시한다)."""
         self.page.unroute(f"**{url_part}")
+        return self
+
+    def expect_rejected(self) -> Screen:
+        """입력 거절(400)을 기대하는 화면. 사유와 함께 온 400 을 콘솔 오류로 보지 않는다."""
+        self.allow_rejected = True
         return self
 
     def expect_denied(self) -> Screen:
@@ -130,6 +136,8 @@ class Screen:
         console = self.console
         if self.allow_denied:
             console = [c for c in console if not re.search(r"status of (403|404)", c)]
+        if self.allow_rejected:
+            console = [c for c in console if not re.search(r"status of 400", c)]
         if self.injected:
             console = [c for c in console if not re.search(r"status of 500", c)]
         assert not console, f"콘솔 오류: {console[:5]}"
