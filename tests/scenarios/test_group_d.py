@@ -217,6 +217,7 @@ def test_UC_030_S11_WBS_올리기_창구(target, s0, screen):
         assert sc.page.get_by_role("button", name=re.compile("WBS (새 버전 )?올리기")).count() == 0
         sc.shot("저장소 WBS 사업에는 버튼 없음")
         sc.open(f"/p/{s0.ids['TD-PRJ-9']}/schedule").see(v2.name)
+        sc.expect_rejected()
         sc.page.get_by_role("button", name="WBS 새 버전 올리기").click()
         dlg = sc.page.get_by_role("dialog")
         bad_file = v2.parent / "깨진-WBS.xlsx"
@@ -1001,7 +1002,7 @@ def test_UC_033_S05_산출물별_검토(target, s0, screen):
             c1.done()
             v1 = screen("TD-ACC-V1")
             v1.open(f"/p/{pid}/deliverables").see("3.4")
-            v1.page.locator("tr", has_text="3.4").filter(has_text="시험").first.get_by_role("button", name="보기").click()
+            v1.page.locator("tr", has_text="3.4").filter(has_text="시험").first.get_by_role("button", name="보기", exact=True).last.click()
             v1.see("통합시험결과서", selector=dlg)
             assert v1.page.get_by_role("dialog").get_by_role("button", name="승인").count() == 0
             v1.shot("용역사 보기 창")

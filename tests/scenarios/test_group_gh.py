@@ -718,14 +718,14 @@ def test_UC_070_S14_자료_목록과_검색(target, s0, screen):
         if screen:
             sc = screen("TD-ACC-V1")
             sc.open(f"/p/{pid}/documents").see("회의록_100%.docx")
-            assert "사용자매뉴얼-S14.docx" not in sc.page.locator("main").inner_text()
+            assert "사용자매뉴얼-S14.docx" not in sc.page.locator("main main").inner_text()
             sc.page.get_by_label("파일명 검색").fill("_1")
             sc.page.wait_for_timeout(800)
-            body = sc.page.locator("main").inner_text()
+            body = sc.page.locator("main main").inner_text()
             assert "회의록_100%.docx" in body and "회의록 1100.docx" not in body, body[:400]
             sc.shot("자료 검색")
             sc.open(f"/p/{pid}/documents/{made[1]}").see("회의록_100%.docx")
-            body = sc.page.locator("main").inner_text()
+            body = sc.page.locator("main main").inner_text()
             for word in ("WBS 연결", "유형 수정", "산출물로 제출"):
                 assert word not in body, f"자료 상세에 「{word}」 조작이 남아 있다"
             sc.shot("자료 상세")

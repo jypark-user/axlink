@@ -1026,12 +1026,13 @@ def _ui_UC_041_S02(screen, target, s0):
     rate = "산출 불가" if comp["completionRate"] is None else f"{_js_number(_js_round(comp['completionRate'] * 1000) / 10)}%"
     expect(panel).to_contain_text(reported)
     expect(panel).to_contain_text(rate)
+    sc.page.get_by_role("tab", name="WBS").click()
     for wid in ("3.1", "3.2"):
         ci = citems[wid]
         word = _COMPLETION_WORD[ci["completionStatus"]]
         if ci["completionStatus"] == "NONE" and ci.get("predecessorConfirmed"):
             word = "재확인 필요"
-        row = panel.locator("tr").filter(has_text=ci["name"]).filter(has_text=wid).first
+        row = sc.page.locator("tr").filter(has_text=ci["name"]).filter(has_text=wid).first
         expect(row).to_contain_text(word)
     sc.shot("완료_확인")
 
