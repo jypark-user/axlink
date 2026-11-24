@@ -830,6 +830,8 @@ export interface IssueResponse {
   requirements?: IssueRequirement[];
   /** 이어진 커밋·PR(커밋·PR 의 GH-n·RM-n 참조). 최근 것이 앞 */
   codeChanges?: IssueCodeChange[];
+  /** 마지막 전체 수집 응답에 없었다(AC-011-7). 삭제가 아니라 원천에서 확인하지 못한 것이다 */
+  sourceUnverified?: boolean;
 }
 
 export interface IssueCodeChange {

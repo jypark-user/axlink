@@ -114,6 +114,8 @@ class IssueResponse(BaseModel):
     requirements: list[IssueRequirement] = []
     # 이어진 커밋·PR. 최근 것이 앞이다
     codeChanges: list[IssueCodeChange] = []  # noqa: N815
+    # 마지막 전체 수집 응답에 없었다(AC-011-7, DEC-18 (b)). 삭제로 보지 않고 그대로 둔다
+    sourceUnverified: bool = False  # noqa: N815
 
 
 class IssueKindCounts(BaseModel):

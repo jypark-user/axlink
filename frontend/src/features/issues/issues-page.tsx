@@ -207,6 +207,7 @@ function IssueDetailSheet({
               <div className="flex items-center gap-2 pr-8">
                 <span className="text-muted-foreground font-mono text-xs">{issue.key}</span>
                 <Badge variant={badgeVariantFor(issue.status)}>{label(issue.status)}</Badge>
+                {issue.sourceUnverified && <SourceUnverified />}
               </div>
               <SheetTitle className="text-lg">{issue.title}</SheetTitle>
               <SheetDescription>
@@ -395,8 +396,11 @@ function buildColumns(): ColumnDef<IssueResponse, unknown>[] {
       accessorKey: 'title',
       header: ({ column }) => <SortableHeader column={column}>제목</SortableHeader>,
       cell: ({ row }) => (
-        <span className="block max-w-md truncate" title={row.original.title}>
-          {row.original.title}
+        <span className="flex max-w-md min-w-0 items-center gap-1.5">
+          <span className="truncate" title={row.original.title}>
+            {row.original.title}
+          </span>
+          {row.original.sourceUnverified && <SourceUnverified />}
         </span>
       ),
     },
@@ -478,4 +482,20 @@ function buildColumns(): ColumnDef<IssueResponse, unknown>[] {
       },
     },
   ];
+}
+
+/**
+ * 마지막 전체 수집 응답에 없던 이슈(AC-011-7, DEC-18 (b)). 404·응답 누락만으로는 삭제인지 권한 차이인지
+ * 알 수 없어 지우지 않고 남긴다. 다시 응답에 나오면 표시가 사라진다.
+ */
+function SourceUnverified(): ReactNode {
+  return (
+    <Badge
+      variant="outline"
+      className="text-muted-foreground shrink-0"
+      title="마지막 전체 수집에서 원천 도구가 이 항목을 돌려주지 않았습니다. 지우지 않고 남겨 둡니다."
+    >
+      원천 확인 불가
+    </Badge>
+  );
 }
