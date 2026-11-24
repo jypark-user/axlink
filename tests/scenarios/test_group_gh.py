@@ -669,6 +669,72 @@ def test_UC_070_S08_다른_사업(target, s0):
     assert res.status_code == 403, res.text
 
 
+def _docx_bytes(marker: str) -> bytes:
+    import io
+
+    from docx import Document
+
+    doc = Document()
+    doc.add_paragraph(f"자료 화면 시험 {marker}")
+    buf = io.BytesIO()
+    doc.save(buf)
+    return buf.getvalue()
+
+
+def test_UC_070_S14_자료_목록과_검색(target, s0, screen):
+    """작업(3.5)에 올린 산출물은 자료 목록에 나오지 않고 기타 자료만 나온다. 파일명 검색은 %·_ 를 글자 그대로
+    찾는다. 자료 상세에는 WBS 연결·유형 수정·산출물 제출 조작이 없다 (AC-070-11)."""
+    pid = s0.ids["TD-PRJ-1"]
+    v1 = auth(s0.tokens["TD-ACC-V1"])
+    made: list[str] = []
+    try:
+        task = target.post(
+            f"/api/projects/{pid}/documents",
+            files={"file": ("사용자매뉴얼-S14.docx", _docx_bytes("작업"), DOCX)}, data={"wbsId": "3.5"}, headers=v1,
+        )
+        assert task.status_code == 201, task.text
+        made.append(task.json()["id"])
+        s0.await_document("TD-ACC-V1", made[-1])
+        for name in ("회의록_100%.docx", "회의록 1100.docx", "착수 회의 메모.docx"):
+            res = _upload(target, s0, "TD-PRJ-1", _docx_bytes(name), name, DOCX)
+            assert res.status_code == 201, res.text
+            made.append(res.json()["id"])
+
+        def names(q: str | None = None) -> set[str]:
+            url = f"/api/projects/{pid}/documents?general=true&size=100" + (f"&q={q}" if q else "")
+            res = target.get(url, headers=v1)
+            assert res.status_code == 200, res.text
+            body = res.json()
+            return {x["fileName"] for x in (body.get("content") or body.get("items") or [])}
+
+        listed = names()
+        assert "사용자매뉴얼-S14.docx" not in listed, "작업에 올린 산출물이 자료 목록에 나왔다"
+        assert {"회의록_100%.docx", "회의록 1100.docx", "착수 회의 메모.docx"} <= listed
+        from urllib.parse import quote
+
+        assert names(quote("_1")) == {"회의록_100%.docx"}, names(quote("_1"))
+        assert names(quote("0%")) == {"회의록_100%.docx"}, names(quote("0%"))
+        assert names(quote("회의록")) >= {"회의록_100%.docx", "회의록 1100.docx"}
+        if screen:
+            sc = screen("TD-ACC-V1")
+            sc.open(f"/p/{pid}/documents").see("회의록_100%.docx")
+            assert "사용자매뉴얼-S14.docx" not in sc.page.locator("main").inner_text()
+            sc.page.get_by_label("파일명 검색").fill("_1")
+            sc.page.wait_for_timeout(800)
+            body = sc.page.locator("main").inner_text()
+            assert "회의록_100%.docx" in body and "회의록 1100.docx" not in body, body[:400]
+            sc.shot("자료 검색")
+            sc.open(f"/p/{pid}/documents/{made[1]}").see("회의록_100%.docx")
+            body = sc.page.locator("main").inner_text()
+            for word in ("WBS 연결", "유형 수정", "산출물로 제출"):
+                assert word not in body, f"자료 상세에 「{word}」 조작이 남아 있다"
+            sc.shot("자료 상세")
+            sc.done()
+    finally:
+        for doc in made:
+            target.delete(f"/api/documents/{doc}", headers=v1)
+
+
 def test_UC_070_S06_삭제(target, s0):
     """TD-DOC-2(산출물 v1 승인) 삭제 → 색인 0, 산출물 v1 기록 유지 (AC-070-6)."""
     did = s0.ids["TD-DOC-2"]

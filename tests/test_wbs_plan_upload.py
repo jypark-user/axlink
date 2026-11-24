@@ -77,10 +77,11 @@ def test_올린_WBS_가_곧바로_일정과_진척의_원천이_된다(client, c
     assert prog["representative"] == pytest.approx(0.4 * 1.0 + 0.6 * 0.5)
 
     # 올린 계획서는 산출물이라 기타 자료 목록에 두지 않는다
-    docs = client.get(
-        f"/api/projects/{PID}/documents?general=true&size=200", headers=_auth(token)
-    ).json()
+    res = client.get(f"/api/projects/{PID}/documents?general=true&size=100", headers=_auth(token))
+    assert res.status_code == 200, res.text
+    docs = res.json()
     items = docs.get("content") or docs.get("items") or []
+    assert docs["totalElements"] == len(items) or len(items) == 100
     assert body["documentId"] not in {d["id"] for d in items}
 
 
