@@ -156,7 +156,12 @@ def mark_failed(cur: Any, document_id: str, message: str) -> None:
 
 
 # 산출물과 무관한 일반 자료(11-19). 작업에도 예상 산출물에도 붙지 않은 문서다
-_GENERAL = "d.wbs_item_id is null and d.designated_deliverable_id is null"
+# 일정 화면에서 올린 WBS(사업수행계획서)도 산출물이라 자료 목록에 두지 않는다(11-24)
+_GENERAL = (
+    "d.wbs_item_id is null and d.designated_deliverable_id is null"
+    " and not exists (select 1 from work_product wp"
+    " where wp.document_upload_id = d.id and wp.type = 'PROJECT_PLAN')"
+)
 
 
 def _list_filter(general: bool, q: str | None) -> tuple[str, list[Any]]:

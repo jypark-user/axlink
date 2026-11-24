@@ -57,7 +57,10 @@ const ITEM_LABELS: Record<string, string> = {
 };
 
 /** 도구별 입력 예시. 박PM이 무엇을 넣는지 필드에서 바로 알게 한다. */
-const TOOL_HINTS: Record<ToolKind, { name: string; baseUrl: string; resource: string; token: string }> = {
+const TOOL_HINTS: Record<
+  ToolKind,
+  { name: string; baseUrl: string; resource: string; token: string }
+> = {
   GITHUB: {
     name: '예: 백엔드 저장소',
     baseUrl: 'https://api.github.com',
@@ -73,24 +76,14 @@ const TOOL_HINTS: Record<ToolKind, { name: string; baseUrl: string; resource: st
 };
 
 /**
- * 도구를 고르면 보이는 권한 안내(AC-010-6). 무엇을 읽고 무엇을 하지 않는지, 토큰·키에 어떤 권한을
- * 주는지를 도구별로 적는다. 문구 근거는 docs/40-manual/도구-연동-가이드.md 1·4.1·5.1절.
+ * 도구를 고르면 보이는 권한 안내(AC-010-6). 읽기 전용이라는 것과 토큰·키에 줄 권한만 한 줄로 둔다.
+ * 읽는 항목·설정 순서 같은 설명은 매뉴얼(docs/40-manual/도구-연동-가이드.md)에 있다(11-24 사용자 결정).
  */
-export const TOOL_GUIDE: Record<ToolKind, { readOnly: string; permission: string; reads: string }> = {
-  GITHUB: {
-    readOnly:
-      '읽기 전용으로 연결합니다. AX Link는 저장소에 아무것도 쓰지 않습니다 — 이슈·PR을 만들거나 바꾸지 않고 웹훅도 설치하지 않습니다.',
-    permission:
-      '필요 권한: Fine-grained 토큰으로 대상 저장소만 고르고 Metadata · Issues · Pull requests · Contents 를 읽기 전용(Read-only)으로 줍니다.',
-    reads: '읽는 것: 이슈 · 마일스톤 · 풀 리퀘스트 · 커밋 · 저장소 파일 목록(WBS 파일 포함)',
-  },
-  REDMINE: {
-    readOnly:
-      '읽기 전용으로 연결합니다. AX Link는 Redmine에 아무것도 쓰지 않습니다 — 일감을 만들거나 바꾸지 않고 플러그인도 설치하지 않습니다.',
-    permission:
-      '필요 권한: 관리 → 설정 → API 에서 REST 웹 서비스를 켜고, 「일감 보기」만 준 수집 전용 역할(일감 가시성 「모든 일감」)의 계정 API 키를 넣습니다.',
-    reads: '읽는 것: 일감(관계 포함) · 버전 · 트래커',
-  },
+export const TOOL_GUIDE: Record<ToolKind, string> = {
+  GITHUB:
+    '읽기 전용입니다. Metadata · Issues · Pull requests · Contents 를 Read-only 로 준 토큰을 넣습니다.',
+  REDMINE:
+    '읽기 전용입니다. REST 웹 서비스를 켜고 「일감 보기」 권한만 있는 계정의 API 키를 넣습니다.',
 };
 
 /** GitHub(Personal Access Token) · Redmine(API Key) 둘 다 토큰 하나만 쓴다. */
@@ -144,9 +137,7 @@ export function ConnectionFormDialog({
       const items = res.detectedItemTypes.map((t) => ITEM_LABELS[t] ?? t).join(' · ');
       const denied = (res.deniedItemTypes ?? []).map((t) => ITEM_LABELS[t] ?? t).join(' · ');
       const detail = items ? `\n읽을 수 있는 항목: ${items}` : '';
-      const warn = denied
-        ? `\n⚠ 권한 없음: ${denied} — 이 항목은 수집되지 않습니다`
-        : '';
+      const warn = denied ? `\n⚠ 권한 없음: ${denied} — 이 항목은 수집되지 않습니다` : '';
       setTestResult({
         ok: res.reachable,
         text: res.reachable
@@ -216,7 +207,9 @@ export function ConnectionFormDialog({
                 const next = v as ToolKind;
                 setTool(next);
                 // 사용자가 직접 넣은 주소는 지키고, 비었거나 자동으로 채운 값만 새 도구 기본값으로 바꾼다.
-                setBaseUrl((prev) => (prev === '' || AUTO_FILLED.has(prev) ? DEFAULT_BASE_URL[next] : prev));
+                setBaseUrl((prev) =>
+                  prev === '' || AUTO_FILLED.has(prev) ? DEFAULT_BASE_URL[next] : prev,
+                );
                 setToken('');
                 setTestResult(null);
               }}
@@ -233,12 +226,9 @@ export function ConnectionFormDialog({
                 ))}
               </SelectContent>
             </Select>
-            <div className="text-xs text-muted-foreground flex flex-col gap-1" data-testid="tool-guide">
-              <p>{guide.readOnly}</p>
-              <p>{guide.permission}</p>
-              <p>{guide.reads}</p>
-              <p>수집(동기화)은 다음 단계에서 열립니다.</p>
-            </div>
+            <p className="text-xs text-muted-foreground" data-testid="tool-guide">
+              {guide}
+            </p>
           </div>
           <div className={FIELD}>
             <Label htmlFor="connName">이름</Label>

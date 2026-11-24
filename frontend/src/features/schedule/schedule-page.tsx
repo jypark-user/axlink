@@ -21,6 +21,7 @@ import type { CompletionItem, CompletionSummaryResponse, WbsScheduleResponse } f
 import { CompletionPanel } from '@/features/schedule/completion-panel';
 import { RecognitionPanel } from '@/features/schedule/recognition-panel';
 import { SourceFilePanel } from '@/features/schedule/source-file-panel';
+import { PlanUploadButton } from '@/features/schedule/plan-upload-dialog';
 import { ScheduleWarnings } from '@/features/schedule/schedule-warnings';
 
 const VIEW_KEY = 'ax-link.schedule-view';
@@ -68,7 +69,22 @@ export function SchedulePage(): ReactNode {
 
   return (
     <>
-      <PageHeader title="일정(WBS)" description="용역사 WBS 기준의 작업 일정과 진척입니다." />
+      <PageHeader
+        title="일정(WBS)"
+        description="용역사 WBS 기준의 작업 일정과 진척입니다."
+        actions={
+          state.data?.planUpload ? (
+            <PlanUploadButton
+              projectId={project.id}
+              hasPlan={state.data.source === 'WBS_FILE'}
+              onUploaded={() => {
+                state.reload();
+                completion.reload();
+              }}
+            />
+          ) : null
+        }
+      />
       <DataState state={state} onRetry={state.reload}>
         {(data) => {
           const tasks = toScheduleTasks(data.items);

@@ -8,11 +8,11 @@ from datetime import date
 from typing import Annotated
 from urllib.parse import quote
 
-from fastapi import APIRouter, File, Query, Response, UploadFile
+from fastapi import APIRouter, File, Form, Query, Response, UploadFile
 
 from app.auth.deps import Principal
 from app.common import clock
-from app.dashboard import completion, designation, iso29110, service, snapshot
+from app.dashboard import completion, designation, iso29110, plan_upload, service, snapshot
 from app.dashboard.models import (
     CompletionSummaryResponse,
     DesignateRequest,
@@ -22,6 +22,7 @@ from app.dashboard.models import (
     ProgressResponse,
     ProgressSnapshotResponse,
     WbsDeliverablesResponse,
+    WbsPlanUploadResponse,
     WbsScheduleResponse,
 )
 from app.db import tx
@@ -168,3 +169,20 @@ def project_wbs(project_id: str, principal: Principal, at: BaseDate = None) -> W
     """
     with tx() as cur:
         return service.wbs_schedule(cur, principal, project_id, at)
+
+
+@router.post("/{project_id}/wbs/plan", response_model=WbsPlanUploadResponse, status_code=201)
+def upload_wbs_plan(
+    project_id: str,
+    principal: Principal,
+    file: Annotated[UploadFile, File()],
+    version: Annotated[str | None, Form()] = None,
+) -> WbsPlanUploadResponse:
+    """일정 화면에서 WBS 파일을 올린다(11-24). 곧바로 사업수행계획서의 현행 버전이 된다."""
+    from app.document import service as document_service
+
+    content = file.file.read(document_service.MAX_BYTES + 1)
+    with tx() as cur:
+        return plan_upload.upload_plan(
+            cur, principal, project_id, file.filename or "", content, version
+        )

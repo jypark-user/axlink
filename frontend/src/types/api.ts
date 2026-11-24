@@ -1859,6 +1859,17 @@ export interface WbsScheduleResponse {
   recognition?: WbsRecognitionResponse | null;
   /** 수치를 읽어 온 원천 파일. WBS 파일일 때만 */
   sourceFile?: WbsSourceFile | null;
+  /** 이 화면에서 WBS 파일을 올릴 수 있는가(11-24). 저장소에서 읽는 WBS 가 있으면 false */
+  planUpload?: boolean;
+}
+
+/** 일정 화면에서 올린 WBS. 곧바로 사업수행계획서의 현행 버전이 된다 */
+export interface WbsPlanUploadResponse {
+  workProductId: string;
+  documentId: string;
+  version: string;
+  leafCount: number;
+  warnings: string[];
 }
 
 export interface WbsSourceFile {

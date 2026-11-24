@@ -406,7 +406,8 @@ def _basis_note(
 
 _NO_WBS_NOTICE = (
     "일정과 진척률 산정의 핵심 입력인 WBS 가 없습니다. 용역사의 WBS 파일(사업수행계획서)을 "
-    "저장소에 두거나 산출물로 올리거나, Redmine 이슈에 시작일·종료일을 채우면 여기에 나타납니다. "
+    "저장소에 두거나 이 화면의 「WBS 올리기」로 올리거나, Redmine 이슈에 시작일·종료일을 채우면 "
+    "여기에 나타납니다. "
     "그전까지 진척률은 이슈·산출물 기준의 추정치입니다."
 )
 
@@ -425,6 +426,22 @@ def wbs_schedule(
 
 
 def schedule(cur: Any, project_id: str, at: date) -> WbsScheduleResponse:
+    response = _schedule(cur, project_id, at)
+    response.planUpload = plan_uploadable(cur, project_id)
+    return response
+
+
+def plan_uploadable(cur: Any, project_id: str) -> bool:
+    """일정 화면에서 WBS 를 올릴 수 있는가(11-24). 저장소에서 읽는 WBS 가 있으면 아니다.
+
+    올리기 자체는 plan_upload 가 한다. 그 모듈은 문서 처리(색인·모델)를 끌고 오므로 여기서
+    가져오지 않는다. 확인 요청 코드가 이 모듈을 거쳐 원천 도구에 닿으면 안 된다(QUR.WEB.003).
+    """
+    row = standard_repo.current_work_product(cur, project_id, PLAN_TYPE)
+    return row is None or row.get("source_kind") != "TOOL"
+
+
+def _schedule(cur: Any, project_id: str, at: date) -> WbsScheduleResponse:
     warnings: list[str] = []
     plan_row = standard_repo.current_work_product(cur, project_id, PLAN_TYPE)
     plan, plan_warning = _load_plan(cur, project_id, plan_row)
@@ -437,9 +454,10 @@ def schedule(cur: Any, project_id: str, at: date) -> WbsScheduleResponse:
         counts = deliverable.summarize(list(judged.values()))
         items = _items_from_plan(plan, at, judged, linked_issues(cur, project_id, plan))
         gaps = [f"격차 경고: {i.wbsId} {i.name} — {i.gapWarning}" for i in items if i.gapWarning]
+        source_file = _source_file(cur, plan_row)
         return WbsScheduleResponse(
             source=WBS_SOURCE_FILE,
-            sourceLabel=f"용역사 WBS ({plan_row.get('file_uri') or '사업수행계획서'})",
+            sourceLabel=f"용역사 WBS ({source_file.path or '사업수행계획서'})",
             sourceUrl=plan_row.get("external_url"),
             baseDate=at.isoformat(),
             planVersion=plan_row["version"],
@@ -454,7 +472,7 @@ def schedule(cur: Any, project_id: str, at: date) -> WbsScheduleResponse:
                 none=counts[deliverable.NONE],
             ),
             recognition=_recognition(cur, project_id, plan),
-            sourceFile=_source_file(cur, plan_row),
+            sourceFile=source_file,
         )
 
     issues = integration_repo.redmine_issue_payloads(cur, project_id)
@@ -650,7 +668,10 @@ def _source_file(cur: Any, plan_row: dict[str, Any]) -> WbsSourceFile:
     synced = row.get("last_synced_at")
     return WbsSourceFile(
         origin=origin,
-        path=row.get("file_uri") or row.get("original_filename"),
+        # 올린 파일은 보관 경로(해시) 대신 올린 이름을 보인다. 저장소 파일은 저장소 안 경로다
+        path=(row.get("file_uri") or row.get("original_filename"))
+        if origin != "UPLOAD"
+        else row.get("original_filename"),
         url=row.get("external_url"),
         tool=row.get("tool"),
         repository=row.get("target_resource"),
