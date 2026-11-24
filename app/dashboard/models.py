@@ -426,6 +426,18 @@ class WbsScheduleResponse(BaseModel):
     deliverables: DeliverableSummary = DeliverableSummary()
     recognition: WbsRecognitionResponse | None = None
     sourceFile: WbsSourceFile | None = None  # noqa: N815
+    # 이 화면에서 WBS 파일을 올릴 수 있는가(11-24). 저장소에서 읽는 WBS 가 있으면 false
+    planUpload: bool = False  # noqa: N815
+
+
+class WbsPlanUploadResponse(BaseModel):
+    """일정 화면에서 올린 WBS. 곧바로 사업수행계획서의 현행 버전이 된다."""
+
+    workProductId: str  # noqa: N815
+    documentId: str  # noqa: N815
+    version: str
+    leafCount: int  # noqa: N815
+    warnings: list[str]
 
 
 # --- 인포 템플릿 카탈로그 (ARC-012) ----------------------------------------------

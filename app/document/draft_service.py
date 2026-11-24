@@ -226,7 +226,7 @@ def confirm(
     _require_proposed(row)
     rec = _validate(req)
     project_id = str(row["project_id"])
-    _guard_repository_plan(cur, project_id, rec["type"])
+    guard_repository_plan(cur, project_id, rec["type"])
     rec["file_uri"] = row["stored_path"]
 
     work_product_id = standard_repo.place_document_work_product(
@@ -252,7 +252,7 @@ def confirm(
 PLAN_TYPE = "PROJECT_PLAN"
 
 
-def _guard_repository_plan(cur: Any, project_id: str, product_type: str) -> None:
+def guard_repository_plan(cur: Any, project_id: str, product_type: str) -> None:
     """저장소에서 읽는 WBS(사업수행계획서)가 있으면 올린 문서로 그 자리를 바꾸지 않는다.
 
     사업수행계획서의 현행 버전이 곧 일정·진척의 원천이다. 산출물을 올리며 분류를 사업수행계획서로
@@ -275,7 +275,16 @@ def _guard_repository_plan(cur: Any, project_id: str, product_type: str) -> None
 
 
 def propose_for_upload(cur: Any, document_id: str, filename: str, text: str) -> None:
-    """업로드 흐름에서 부른다. 구현체 선택은 llm_port 한 곳이다."""
+    """업로드 흐름에서 부른다. 구현체 선택은 llm_port 한 곳이다.
+
+    일정 화면에서 올린 WBS 는 올릴 때 이미 사업수행계획서로 확정했다. 초안을 만들면 확정할 것이
+    또 생긴 것처럼 보이므로 만들지 않는다.
+    """
+    placed = fetch_one(
+        cur, "select 1 from work_product where document_upload_id = %s limit 1", (document_id,)
+    )
+    if placed is not None:
+        return
     propose(cur, document_id, filename, text, llm_port)
 
 

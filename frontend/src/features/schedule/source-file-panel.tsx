@@ -24,7 +24,7 @@ export function SourceFilePanel({ data }: { data: WbsScheduleResponse }): ReactN
   if (data.source === 'REDMINE') {
     where = <span className="font-medium">Redmine 이슈의 시작일·종료일·진척률</span>;
     how =
-      'WBS 파일이 없어 Redmine 일정을 대신 씁니다. Redmine 이슈의 날짜·진척률을 고치면 다음 동기화 때 바뀝니다.';
+      'WBS 파일이 없어 Redmine 일정을 대신 씁니다. Redmine 이슈의 날짜·진척률을 고치면 다음 동기화 때 바뀝니다. WBS 엑셀이 있으면 위의 「WBS 올리기」로 올리세요.';
   } else if (f?.origin === 'REPOSITORY') {
     const tool = (f.tool && TOOL_NAME[f.tool]) ?? f.tool ?? '저장소';
     where = (
@@ -38,11 +38,11 @@ export function SourceFilePanel({ data }: { data: WbsScheduleResponse }): ReactN
   } else if (f?.origin === 'UPLOAD') {
     where = (
       <>
-        자료로 올린 <FileLink path={f.path} url={f.url} />
+        올린 파일 <FileLink path={f.path} url={f.url} />
       </>
     );
     how =
-      '같은 산출물(사업수행계획서)로 새 버전을 올리면 그 판으로 바뀝니다. 이 화면에서 고친 값은 반영되지 않습니다.';
+      '위의 「WBS 새 버전 올리기」로 고친 파일을 올리면 그 판으로 바뀝니다. 이 화면에서 고친 값은 반영되지 않습니다.';
   } else {
     where = <FileLink path={f?.path ?? data.sourceLabel} url={f?.url ?? data.sourceUrl} />;
     how = '원천 파일이 바뀌어 다시 수집되면 이 화면과 진척률이 바뀝니다.';
