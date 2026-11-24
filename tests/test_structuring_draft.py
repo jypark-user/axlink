@@ -18,6 +18,10 @@ from app.db import tx
 from app.document import draft_service
 from tests.conftest import requires_db
 
+# IM-001 머리의 판과 작성일. 문서 판을 올리면 같이 고친다(v0.4.3, 11-24 폐쇄망 범위 해석)
+IM001_VERSION = "0.4.3"
+IM001_DATE = "2026-11-24"
+
 PID = "c0000000-0000-4000-8000-000000000001"
 IM001 = Path(__file__).resolve().parent.parent / "docs/10-requirements/IM-001-요구사항정의서.md"
 ROW_RE = re.compile(r"^\|\s*((?:SWFR|QUR|SER)\.[A-Z]{3}\.\d{3})\s*\|", re.MULTILINE)
@@ -159,8 +163,8 @@ def test_im001_upload_drafts_40_requirements(client, as_pm, im001):
     assert draft["confidence"] > 0.5
     assert draft["rejectedTypeRaw"] is None
     assert draft["title"] == "AX Link 요구사항정의서 (IM-001)"
-    assert draft["version"] == "0.4.2"
-    assert draft["authoredDate"] == "2026-11-23"
+    assert draft["version"] == IM001_VERSION
+    assert draft["authoredDate"] == IM001_DATE
     assert "pmActivity" not in draft and "siActivity" not in draft  # 활동은 유형이 정한다
 
     codes = [r["code"] for r in draft["requirements"]]
@@ -202,7 +206,7 @@ def test_confirm_places_work_product_but_not_requirements(client, as_pm, im001):
     items = client.get(f"/api/projects/{PID}/work-products", headers=_auth(as_pm)).json()["items"]
     spec = next(i for i in items if i["type"] == "REQUIREMENTS_SPEC")
     assert spec["id"] == body["workProductId"]
-    assert spec["version"] == "0.4.2" and spec["status"] == "SUBMITTED"
+    assert spec["version"] == IM001_VERSION and spec["status"] == "SUBMITTED"
     assert spec["title"] == draft["title"]
     assert spec["fileUri"]  # 올린 원본을 가리킨다
     with tx() as cur:
@@ -212,7 +216,7 @@ def test_confirm_places_work_product_but_not_requirements(client, as_pm, im001):
             (body["workProductId"],),
         )
         row = cur.fetchone()
-    assert row == {"source_kind": "DOCUMENT", "doc": im001["id"], "at": "2026-11-23"}
+    assert row == {"source_kind": "DOCUMENT", "doc": im001["id"], "at": IM001_DATE}
 
     # 요구사항 목록에는 아무것도 들어가지 않았다
     page = client.get(
@@ -489,7 +493,7 @@ def test_im001_명세서로_기준선을_만들면_40건이_위치와_함께_문
     assert codes == _live_rows()
     assert b["blockingCount"] == 0 and not any(i["problems"] for i in b["items"])
     assert all(i["location"].startswith("표 ") for i in b["items"])
-    assert b["sourceDocVersion"] == "0.4.2"
+    assert b["sourceDocVersion"] == IM001_VERSION
 
     sub = client.post(f"{base}/{b['id']}/submit", headers=_auth(as_pm))
     assert sub.status_code == 200, sub.text

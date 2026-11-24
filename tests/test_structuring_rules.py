@@ -8,6 +8,10 @@ from pathlib import Path
 
 from app.document import structuring as s
 
+# IM-001 머리의 판과 작성일. 문서 판을 올리면 같이 고친다(v0.4.3, 11-24 폐쇄망 범위 해석)
+IM001_VERSION = "0.4.3"
+IM001_DATE = "2026-11-24"
+
 IM001 = Path(__file__).resolve().parent.parent / "docs/10-requirements/IM-001-요구사항정의서.md"
 
 
@@ -121,8 +125,8 @@ def test_단서가_엇비슷하면_정하지_않는다():
 def test_제목_버전_작성일은_문서_머리에서_읽는다():
     text = IM001.read_text(encoding="utf-8")
     assert s.guess_title(text) == "AX Link 요구사항정의서 (IM-001)"
-    assert s.guess_version(text) == "0.4.2"
-    assert s.guess_authored_date(text) == "2026-11-23"
+    assert s.guess_version(text) == IM001_VERSION
+    assert s.guess_authored_date(text) == IM001_DATE
 
 
 def test_첫_줄이_길면_제목으로_삼지_않는다():
