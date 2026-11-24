@@ -1,3 +1,4 @@
+# ruff: noqa: E501
 """실연동(Redmine) 시나리오: 실제 Redmine 프로젝트를 원천으로 수집한다 (AC-011-12).
 
 재생 서버를 쓰지 않는다. 원천은 시험용 Redmine(axlink-rm)의 프로젝트 하나다. IM-009 TD-CON-2 와
@@ -283,3 +284,130 @@ def test_UC_011_S12_Redmine_종류별_필드(target, live):
                 problems.append(f"이슈관계 {a} {rel['relation_type']} {b} 가 추적 링크에 없다")
 
     assert not problems, problems
+
+
+# ------------------------------------------------------------------ 11-24 추가
+
+RM_DB = os.environ.get("AXLINK_VERIFY_RM_DB_URL", "")
+WBS_PROJECT = os.environ.get("AXLINK_VERIFY_RM_WBS_PROJECT", "axlink-rm-test")
+
+
+def _rest_enabled(on: bool) -> None:
+    """시험용 Redmine 의 「REST 웹 서비스」 설정을 바꾼다. Redmine 은 설정 갱신 시각으로 캐시를 버린다."""
+    import psycopg
+
+    with psycopg.connect(RM_DB) as conn:
+        conn.execute(
+            "update settings set value = %s, updated_on = now() where name = 'rest_api_enabled'",
+            ("1" if on else "0",),
+        )
+
+
+def test_UC_010_S02_REST_비활성_실연동(target, live):
+    """실제 Redmine 의 REST 웹 서비스를 끄고 연결 확인 → 「REST 웹 서비스 비활성」 안내, 확인 전 상태.
+    같은 서버에 틀린 키로 확인하면 인증 실패로 다르게 안내한다. 끝나면 REST 를 다시 켠다 (AC-010-2)."""
+    if not RM_DB:
+        pytest.skip("AXLINK_VERIFY_RM_DB_URL(시험용 Redmine DB)이 없어 REST 설정을 바꿀 수 없다")
+    h = auth(live.tokens[OWNER])
+    pid = live.ids["TD-PRJ-1"]
+    made = target.post(f"/api/projects/{pid}/connections", json={
+        "tool": "REDMINE", "name": "REST 꺼진 실연동", "baseUrl": TARGET_RM_URL,
+        "targetResource": WBS_PROJECT, "credential": {"accessToken": KEY},
+    }, headers=h)
+    assert made.status_code == 201, made.text
+    cid = made.json()["id"]
+    try:
+        _rest_enabled(False)
+        try:
+            res = target.post(f"/api/connections/{cid}/test", headers=h)
+        finally:
+            _rest_enabled(True)
+        assert res.status_code >= 400, res.text
+        assert "REST" in res.text, f"REST 비활성을 구분해 안내하지 않는다: {res.text[:300]}"
+        listed = target.get(f"/api/projects/{pid}/connections", headers=h).json()
+        assert next(c for c in listed if c["id"] == cid)["status"] == "DRAFT"
+
+        wrong = target.post("/api/connections/test", json={
+            "tool": "REDMINE", "name": "틀린 키", "baseUrl": TARGET_RM_URL,
+            "targetResource": WBS_PROJECT, "credential": {"accessToken": "0" * 40},
+        }, headers=h)
+        text = wrong.text
+        assert "REST" not in text and ("인증" in text or "키" in text or "토큰" in text), text[:300]
+
+        # REST 를 다시 켜면 같은 연결이 확인된다(설정 하나만 바꿨다는 근거)
+        ok = target.post(f"/api/connections/{cid}/test", headers=h)
+        assert ok.status_code == 200 and ok.json()["reachable"] is True, ok.text
+    finally:
+        target.delete(f"/api/connections/{cid}", headers=h)
+
+
+def _xlsx_wbs(rows: list[list]) -> bytes:
+    import io
+
+    from openpyxl import Workbook
+
+    wb = Workbook()
+    ws = wb.active
+    ws.append(["Redmine 일감으로 만든 WBS(시험)"])
+    ws.append([])
+    ws.append(["WBS ID", "작업명", "산출물", "시작일", "종료일", "가중치", "실적"])
+    for r in rows:
+        ws.append(r)
+    buf = io.BytesIO()
+    wb.save(buf)
+    return buf.getvalue()
+
+
+def test_UC_030_S12_Redmine_사업_WBS_올리기(target, live):
+    """Redmine 만 쓰는 사업(저장소 없음): 상위·하위 일감과 예상 시간이 있는 시험 프로젝트를 붙이면 진척은
+    이슈 기반 추정(L3, 일반 일감 진척도 평균)이다. 같은 일감으로 만든 WBS 엑셀(말단 = 예상 시간이 있는
+    일감, 가중치 = 예상 시간 비율, 실적 = 진척도)을 일정 화면으로 올리면 L1 이 되고 값이 Redmine 간트의
+    예상 시간 가중 진척과 같다 (AC-030-8, AC-041-5)."""
+    c1 = auth(live.tokens["TD-ACC-C1"])
+    pid = live.ids["TD-PRJ-3"]
+    src = live.src.c
+    res = src.get("/issues.json", params={"project_id": WBS_PROJECT, "status_id": "*", "limit": 100})
+    res.raise_for_status()
+    issues = res.json()["issues"]
+    assert any(i.get("parent") for i in issues), "시험 프로젝트에 상위·하위 일감이 없다"
+    general = [i for i in issues if _name(i["tracker"]) != MAPPING["riskTracker"]]
+    want_l3 = sum(i.get("done_ratio") or 0 for i in general) / len(general) / 100
+    leaves = sorted((i for i in issues if i.get("estimated_hours")), key=lambda i: i["id"])
+    hours = sum(i["estimated_hours"] for i in leaves)
+    want_l1 = sum(i["estimated_hours"] * (i.get("done_ratio") or 0) for i in leaves) / hours / 100
+
+    made = target.post(f"/api/projects/{pid}/connections", json={
+        "tool": "REDMINE", "name": "Redmine 만 쓰는 사업", "baseUrl": TARGET_RM_URL,
+        "targetResource": WBS_PROJECT, "credential": {"accessToken": KEY},
+    }, headers=c1)
+    assert made.status_code == 201, made.text
+    cid = made.json()["id"]
+    try:
+        assert target.post(f"/api/connections/{cid}/test", headers=c1).status_code == 200
+        job = target.post(f"/api/connections/{cid}/sync", json={"kind": "BACKFILL"}, headers=c1).json()
+        assert job["status"] == "SUCCEEDED", job
+        sched = target.get(f"/api/projects/{pid}/wbs", headers=c1).json()
+        assert sched["source"] == "REDMINE" and sched["planUpload"] is True, sched["source"]
+        prog = target.get(f"/api/projects/{pid}/progress", headers=c1).json()
+        assert prog["level"] == "L3", prog["level"]
+        assert prog["representative"] == pytest.approx(want_l3, abs=1e-3), (prog["representative"], want_l3)
+
+        rows = []
+        total = 0.0
+        for n, i in enumerate(leaves, 1):
+            w = round(i["estimated_hours"] / hours, 4) if n < len(leaves) else round(1 - total, 4)
+            total += w
+            rows.append([f"1.{n}", i["subject"], "", i.get("start_date"), i.get("due_date"), w,
+                         (i.get("done_ratio") or 0) / 100])
+        up = target.post(f"/api/projects/{pid}/wbs/plan",
+                         files={"file": ("redmine-WBS.xlsx", _xlsx_wbs(rows), "application/octet-stream")},
+                         data={"version": "v1"}, headers=c1)
+        assert up.status_code == 201, up.text
+        assert up.json()["leafCount"] == len(leaves)
+        sched = target.get(f"/api/projects/{pid}/wbs", headers=c1).json()
+        assert sched["source"] == "WBS_FILE" and sched["sourceFile"]["path"] == "redmine-WBS.xlsx"
+        prog = target.get(f"/api/projects/{pid}/progress", headers=c1).json()
+        assert prog["level"] == "L1", prog["level"]
+        assert prog["representative"] == pytest.approx(want_l1, abs=2e-3), (prog["representative"], want_l1)
+    finally:
+        target.delete(f"/api/connections/{cid}", headers=c1)

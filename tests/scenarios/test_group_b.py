@@ -1,3 +1,4 @@
+# ruff: noqa: E501
 """B 그룹: 도구 연결·수집 (UC-010 ~ UC-012) 예제 시나리오.
 
 도구 원천은 재생기(tests/fixtures/im009/replay.py)다. 기록 모드는 replay 이고 실연동 검증을
@@ -139,6 +140,38 @@ def test_UC_010_S05_둘째_GitHub_연결_중복(target, s0, replay):
         headers=auth(s0.tokens["TD-ACC-V2"]),
     )
     assert dup.status_code == 409, dup.text
+
+
+def test_UC_010_S09_소유_업체_변경(target, s0):
+    """C1 이 TD-CON-1 의 소유 업체를 참여 업체 V2(라온시스템)로 바꾼다 → 목록에 새 소유 업체, 변경 이력.
+    용역사는 바꿀 수 없고, 참여하지 않는 업체(V3)로는 넘길 수 없다. 끝에 V1 로 되돌린다 (AC-010-8)."""
+    cid, pid = s0.ids["TD-CON-1"], s0.ids["TD-PRJ-1"]
+    c1 = auth(s0.tokens["TD-ACC-C1"])
+    v1_org, v2_org, v3_org = (s0.ids[k] for k in ("TD-ORG-V1", "TD-ORG-V2", "TD-ORG-V3"))
+    url = f"/api/connections/{cid}/owner"
+    denied = target.patch(url, json={"organizationId": v2_org}, headers=auth(s0.tokens["TD-ACC-V1"]))
+    assert denied.status_code == 403, denied.text
+    outsider = target.patch(url, json={"organizationId": v3_org}, headers=c1)
+    assert outsider.status_code == 400, outsider.text
+    try:
+        res = target.patch(url, json={"organizationId": v2_org}, headers=c1)
+        assert res.status_code == 200, res.text
+        assert (res.json()["ownerOrgId"], res.json()["ownerOrgName"]) == (v2_org, "라온시스템")
+        listed = target.get(f"/api/projects/{pid}/connections", headers=c1).json()
+        assert next(c for c in listed if c["id"] == cid)["ownerOrgName"] == "라온시스템"
+        with tx() as cur:
+            hist = fetch_one(
+                cur,
+                "select from_value, to_value, actor from entity_history "
+                "where entity_type = 'TOOL_CONNECTION' and entity_id = %s and field = 'owner_org' "
+                "order by created_at desc limit 1",
+                (cid,),
+            )
+        assert (hist["from_value"], hist["to_value"]) == (v1_org, v2_org), hist
+        assert hist["actor"], hist
+    finally:
+        back = target.patch(url, json={"organizationId": v1_org}, headers=c1)
+        assert back.status_code == 200, back.text
 
 
 def test_UC_010_S07_외부_장애(target, s0, replay):
@@ -404,6 +437,132 @@ def test_UC_011_S07d_증분_응답에_없음(target, s0, replay):
     g5_after = next(i for i in after["content"] if i["key"] == "GH-5")
     assert g5_after["status"] == g5["status"]
     assert "삭제" not in str(g5_after)
+
+
+def _source_state(cid: str, pid: str) -> dict:
+    """원천 확인 불가·실패 뒤 보존을 볼 표준 모델 상태. 행 수와 추적관계, 원본 커서."""
+    with tx() as cur:
+        row = fetch_one(
+            cur,
+            """
+            select (select count(*) from issue where tool_connection_id = %(c)s) as issues,
+                   (select count(*) from raw_artifact where tool_connection_id = %(c)s
+                     and object_kind = 'issue') as raw_issues,
+                   (select count(*) from trace_link where project_id = %(p)s) as links,
+                   (select last_sync_cursor from tool_connection where id = %(c)s) as cursor,
+                   (select last_synced_at from tool_connection where id = %(c)s) as synced
+            """,
+            {"c": cid, "p": pid},
+        )
+    return dict(row)
+
+
+def _g5(target, s0) -> dict:
+    res = target.get(
+        f"/api/projects/{s0.ids['TD-PRJ-1']}/issues?size=100", headers=auth(s0.tokens["TD-ACC-C1"])
+    ).json()
+    return next(i for i in res["content"] if i["key"] == "GH-5")
+
+
+def test_UC_011_S07a_실제_삭제(target, s0, replay):
+    """G5 가 원천에서 사라진 전체 수집. 삭제를 확정할 도구 근거(DEC-18)가 없으므로 G5 와
+    추적관계는 그대로 남고 삭제로 표시되지 않는다 (AC-011-7)."""
+    cid, pid = s0.ids["TD-CON-1"], s0.ids["TD-PRJ-1"]
+    before, g5 = _source_state(cid, pid), _g5(target, s0)
+    replay.faults = Faults(drop_issue_numbers={5})
+    try:
+        job = _sync(target, s0, "TD-CON-1", full=True)
+    finally:
+        replay.faults = Faults()
+    assert job["status"] == "SUCCEEDED", job
+    after = _source_state(cid, pid)
+    assert after["issues"] == before["issues"], (before, after)
+    assert after["links"] == before["links"], (before, after)
+    g5_after = _g5(target, s0)
+    assert g5_after["status"] == g5["status"]
+    assert "삭제" not in str(g5_after)
+    assert g5_after["sourceUnverified"] is True, "응답에 없던 G5 가 「원천 확인 불가」로 표시되지 않았다"
+    others = [i for i in target.get(
+        f"/api/projects/{pid}/issues?size=100", headers=auth(s0.tokens["TD-ACC-C1"])
+    ).json()["content"] if i["key"] != "GH-5"]
+    assert not any(i["sourceUnverified"] for i in others), "응답에 있던 이슈까지 표시됐다"
+    # 원천에 다시 나타나면 표시가 지워진다
+    assert _sync(target, s0, "TD-CON-1", full=True)["status"] == "SUCCEEDED"
+    assert _g5(target, s0)["sourceUnverified"] is False
+
+
+def test_UC_011_S07b_권한_부족_404(target, s0, replay):
+    """이슈 권한이 빠진 토큰으로 전체 수집 → 필수 대상 실패. 기존 이슈·추적관계는 보존되고
+    삭제 표시 없음 (AC-011-6b·7)."""
+    cid, pid = s0.ids["TD-CON-1"], s0.ids["TD-PRJ-1"]
+    before, g5 = _source_state(cid, pid), _g5(target, s0)
+    replay.faults = Faults(denied_kinds={"issue"})
+    try:
+        job = _sync(target, s0, "TD-CON-1", full=True)
+    finally:
+        replay.faults = Faults()
+    assert job["status"] == "FAILED", job
+    assert "issue" in (job["error"] or "") or "이슈" in (job["error"] or ""), job["error"]
+    after = _source_state(cid, pid)
+    assert (after["issues"], after["links"]) == (before["issues"], before["links"])
+    assert after["cursor"] == before["cursor"], "실패한 회차가 변경분 기준 시각을 옮겼다"
+    assert _g5(target, s0)["status"] == g5["status"]
+    assert _g5(target, s0)["sourceUnverified"] is False, "권한이 빠진 회차가 확인 불가로 표시했다"
+
+
+def test_UC_011_S07c_일시_조회_실패(target, s0, replay):
+    """원천 조회가 5xx 로 실패한 전체 수집 → 「실패」. 삭제 표시 없음, 데이터·기준 시각 보존
+    (AC-011-7)."""
+    cid, pid = s0.ids["TD-CON-1"], s0.ids["TD-PRJ-1"]
+    before, g5 = _source_state(cid, pid), _g5(target, s0)
+    replay.faults = Faults(unreachable=True)
+    try:
+        job = _sync(target, s0, "TD-CON-1", full=True)
+    finally:
+        replay.faults = Faults()
+    assert job["status"] == "FAILED", job
+    after = _source_state(cid, pid)
+    assert (after["issues"], after["links"]) == (before["issues"], before["links"])
+    assert after["cursor"] == before["cursor"]
+    assert "삭제" not in str(_g5(target, s0)) and _g5(target, s0)["status"] == g5["status"]
+    assert _g5(target, s0)["sourceUnverified"] is False, "실패한 회차가 확인 불가로 표시했다"
+
+
+def test_UC_011_S10_중간_실패_재시도(target, s0, replay):
+    """이슈 5건 중 4번째에서 응답이 끊김 → 1회차 「실패」, 기준 시각·대표 진척률 불변, 재개 지점(다시
+    시도)이 남는다. 다시 시도하면 중복·누락 없이 원천과 같다 (AC-011-9, DEC-16)."""
+    cid, pid = s0.ids["TD-CON-1"], s0.ids["TD-PRJ-1"]
+    c1 = auth(s0.tokens["TD-ACC-C1"])
+    prog = f"/api/projects/{pid}/progress?at={d.T0.isoformat()}"
+    before, before_prog = _source_state(cid, pid), target.get(prog, headers=c1).json()
+    replay.faults = Faults(cut_after=3)
+    try:
+        job = _sync(target, s0, "TD-CON-1", full=True)
+    finally:
+        replay.faults = Faults()
+    assert job["status"] == "FAILED", job
+    assert job["retryable"] is True, job
+    mid = _source_state(cid, pid)
+    assert mid["cursor"] == before["cursor"], "실패한 회차가 변경분 기준 시각을 옮겼다"
+    assert target.get(prog, headers=c1).json()["representative"] == before_prog["representative"]
+
+    res = target.post(f"/api/sync-jobs/{job['id']}/retry", headers=auth(s0.tokens["TD-ACC-V1"]))
+    assert res.status_code == 202, res.text
+    again = res.json()
+    assert again["status"] == "SUCCEEDED", again
+    after = _source_state(cid, pid)
+    # 원본은 원천의 이슈 수 그대로, 표준 모델(일반 이슈)은 회차 전과 같다
+    assert after["raw_issues"] == before["raw_issues"] == len(d.GITHUB_ISSUES_CON1), after
+    assert after["issues"] == before["issues"], (before, after)
+    with tx() as cur:
+        dup = fetch_one(
+            cur,
+            "select count(*) - count(distinct external_id) as n from issue "
+            "where tool_connection_id = %s",
+            (cid,),
+        )["n"]
+    assert dup == 0, "다시 시도 뒤 같은 원본이 두 번 들어갔다"
+    assert after["links"] == before["links"]
 
 
 def test_UC_011_S11_GitHub_종류별_필드(target, s0):

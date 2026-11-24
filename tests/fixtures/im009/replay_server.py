@@ -14,7 +14,7 @@
 흉내가 실제와 다를 수 있는 곳:
 - unreachable 은 연결 끊김이 아니라 502 응답이다. 어댑터는 둘 다 TOOL_UNREACHABLE 로 읽는다.
 - rest_disabled 는 REST 를 끈 Redmine 의 모든 API 가 403 이라고 가정한다(DEF-V014, 실연동 확인 전).
-- cut_after 는 쪽 크기(per_page·limit)가 n 이하일 때만 「n 건 뒤 끊김」이 된다.
+- cut_after 는 끊긴 쪽을 502 로 낸다. 쪽 크기가 n 이하면 앞쪽은 받고 끊긴 쪽부터 실패한다.
 
 실행: python -m tests.fixtures.im009.replay_server --port 18099 [--files <자료 폴더>]
 """
@@ -263,9 +263,10 @@ def create_app(source: ReplaySource) -> FastAPI:
                 if n >= page * size:
                     out.append(payload)
         except errors.ApiError as exc:
-            if not out or exc.code != "TOOL_UNREACHABLE":
+            if not out or exc.code != "TOOL_UNREACHABLE" or len(out) < size:
+                # 쪽 가운데서 끊긴 응답은 실패다. 받은 만큼만 내면 마지막 쪽처럼 보여 성공으로
+                # 끝난다(UC-011-S10). 쪽을 다 채운 뒤 끊겼을 때만 그 쪽을 내고 다음 쪽이 실패한다
                 return _error(exc)
-            # 쪽 가운데서 끊겼다. 받은 만큼만 낸다. 다음 쪽 요청이 실패한다
         return JSONResponse(wrap(out))
 
     return app
