@@ -13,21 +13,26 @@ describe('buildCredential', () => {
 });
 
 describe('TOOL_GUIDE (AC-010-6)', () => {
-  it('GitHub 은 필요한 읽기 권한 넷을 적는다', () => {
-    const g = TOOL_GUIDE.GITHUB;
-    for (const scope of ['Metadata', 'Issues', 'Pull requests', 'Contents', 'Read-only']) {
-      expect(g.permission).toContain(scope);
+  it('GitHub 은 읽기 전용과 토큰에 줄 읽기 권한 넷을 적는다', () => {
+    for (const scope of [
+      '읽기 전용',
+      'Metadata',
+      'Issues',
+      'Pull requests',
+      'Contents',
+      'Read-only',
+    ]) {
+      expect(TOOL_GUIDE.GITHUB).toContain(scope);
     }
-    expect(g.readOnly).toContain('아무것도 쓰지 않습니다');
   });
 
   it('Redmine 은 저장소·커밋·PR 대신 Redmine 의 말을 쓴다', () => {
-    const text = Object.values(TOOL_GUIDE.REDMINE).join(' ');
+    const text = TOOL_GUIDE.REDMINE;
     for (const word of ['저장소', '커밋', 'PR', '풀 리퀘스트']) {
       expect(text).not.toContain(word);
     }
-    expect(text).toContain('REST 웹 서비스');
-    expect(text).toContain('일감 보기');
-    expect(TOOL_GUIDE.REDMINE.readOnly).toContain('아무것도 쓰지 않습니다');
+    for (const word of ['읽기 전용', 'REST 웹 서비스', '일감 보기']) {
+      expect(text).toContain(word);
+    }
   });
 });
