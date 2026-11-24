@@ -28,6 +28,7 @@ UC-010-S05,UC-010,pass,C03-R0459,C03-R0459,api,,api,,17
 UC-010-S06,UC-010,pass,C03-R0500,C03-R0500,live,,live-tool,,2
 UC-010-S07,UC-010,pass,C03-R0460,C03-R0460,api,,,,17
 UC-010-S08,UC-010,pass,C03-R0461,C03-R0461,api,,api,,17
+UC-010-S09,UC-010,not-run,,,,,api,,0
 UC-011-S01,UC-011,pass,C03-R0496,C03-R0496,live,,live-tool,,2
 UC-011-S02,UC-011,pass,C03-R0499,C03-R0499,live,,,,19
 UC-011-S03,UC-011,pass,C03-R0503,C03-R0503,live,,live-tool,,2
@@ -90,7 +91,7 @@ UC-023-S04,UC-023,pass,C03-R0585,C03-R0585,api,,api,,16
 UC-023-S05,UC-023,pass,C03-R0586,C03-R0586,api,,api,,16
 UC-023-S06,UC-023,pass,C03-R0671,C03-R0671,api,,api·live-model,,9
 UC-030-S01,UC-030,pass,C03-R0718,C03-R0718,api,,,,19
-UC-030-S02,UC-030,pass,C03-R0719,C03-R0719,api,,api,,19
+UC-030-S02,UC-030,pass-needs-evidence,C03-R0719,C03-R0719,api,,api·browser,browser,19
 UC-030-S03,UC-030,pass,C03-R0740,C03-R0740,api,,,,19
 UC-030-S04,UC-030,pass,C03-R0741,C03-R0741,api,,,,19
 UC-030-S05,UC-030,pass,C03-R0745,C03-R0745,api,,,,19
@@ -99,6 +100,8 @@ UC-030-S07,UC-030,pass,C03-R0722,C03-R0722,api,,api·browser,,9
 UC-030-S08,UC-030,pass,C03-R0720,C03-R0720,api,,api,,19
 UC-030-S09,UC-030,pass,C03-R0746,C03-R0746,api,,,,19
 UC-030-S10,UC-030,pass,C03-R0721,C03-R0721,api,,api,,19
+UC-030-S11,UC-030,not-run,,,,,api·browser,,0
+UC-030-S12,UC-030,not-run,,,,,live-tool,,0
 UC-031-S01,UC-031,pass,C03-R0724,C03-R0724,api,,api·browser,,19
 UC-031-S02,UC-031,pass,C03-R0739,C03-R0739,api,,api·browser,,14
 UC-031-S03,UC-031,pass,C03-R0738,C03-R0738,api,,,,19
@@ -110,6 +113,7 @@ UC-031-S08,UC-031,pass,C03-R0726,C03-R0726,api,,api,,19
 UC-031-S09,UC-031,pass,C03-R0728,C03-R0728,api,,api,,19
 UC-031-S10,UC-031,pass,C03-R0748,C03-R0748,api,,api,,7
 UC-031-S11,UC-031,pass,C03-R0725,C03-R0725,api,,api,,19
+UC-031-S12,UC-031,not-run,,,,,api·browser,,0
 UC-032-S01,UC-032,pass,C03-R0730,C03-R0730,api,,api,,19
 UC-032-S02,UC-032,pass,C03-R0733,C03-R0733,api,,api,,19
 UC-032-S03,UC-032,pass,C03-R0729,C03-R0729,api,,api,,19
@@ -120,9 +124,11 @@ UC-032-S07,UC-032,pass,C03-R0335,C03-R0335,api,,,,6
 UC-032-S08,UC-032,pass,C03-R0732,C03-R0732,api,,api,,19
 UC-032-S09,UC-032,pass,C03-R0734,C03-R0734,api,,api,,19
 UC-032-S10,UC-032,pass,C03-R0747,C03-R0747,api,,api,,19
-UC-033-S01,UC-033,not-run,C01-R0367,,mock,,api·browser,,2
+UC-033-S01,UC-033,not-run,C01-R0367,,mock,,api,,2
 UC-033-S02,UC-033,not-run,C01-R0368,,mock,,,,2
 UC-033-S03,UC-033,not-run,C01-R0369,,mock,,api,,2
+UC-033-S04,UC-033,not-run,,,,,api·browser,,0
+UC-033-S05,UC-033,not-run,,,,,api·browser,,0
 UC-040-S01,UC-040,pass,C03-R0368,C03-R0368,api,,api·browser,,18
 UC-040-S02,UC-040,pass,C03-R0369,C03-R0369,api,,api,,18
 UC-040-S03,UC-040,pass,C03-R0370,C03-R0370,api,,api,,18
@@ -209,3 +215,4 @@ UC-070-S05,UC-070,pass,C03-R0434,C03-R0434,api,,,,6
 UC-070-S06,UC-070,pass,C03-R0429,C03-R0429,api,,,,19
 UC-070-S07,UC-070,pass,C02-R1393,C02-R1393,api,,,,4
 UC-070-S08,UC-070,pass,C03-R0428,C03-R0428,api,,api,,19
+UC-070-S14,UC-070,not-run,,,,,api·browser,,0

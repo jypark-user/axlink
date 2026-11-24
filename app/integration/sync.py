@@ -143,10 +143,14 @@ def run_sync(
     resume_before = {} if full else repository.last_success_resume(cur, cid)
     resume: dict[str, dict[str, str]] = {}
     limited: list[str] = []
+    # 종류별로 이번 회차에 받은 원본. 처음부터 다 읽은 종류는 받지 못한 원본을 「원천 확인 불가」로
+    # 표시한다(AC-011-7). 실패하면 아래 except 로 빠져 표시하지 않는다
+    seen: dict[str, set[str]] = {}
 
     def take(kind: str) -> Callable[[str, dict], None]:
         def put(external_id: str, payload: dict) -> None:
             stats["fetched"] += 1
+            seen.setdefault(kind, set()).add(external_id)
             _carry_files(cur, cid, external_id, kind, payload)
             # 원본이 이전과 같으면 적재하지 않는다. upserted 는 원본이 아니라
             # 표준 모델 반영 건수로 쓴다(화면 라벨이 "반영"이다).
@@ -181,6 +185,13 @@ def run_sync(
                 else:
                     raise
         _fail_if_core_denied(connector, denied)
+        for kind in connector.item_kinds:
+            if kind in denied:
+                continue
+            complete = since is None and not resume_before.get(kind) and kind not in limited
+            repository.mark_source_presence(
+                cur, cid, kind, seen.get(kind, set()), complete=complete
+            )
     except errors.ApiError as exc:
         finished = datetime.now(UTC)
         repository.finish_sync_job(

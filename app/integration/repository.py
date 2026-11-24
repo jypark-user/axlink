@@ -462,3 +462,29 @@ def count_changes_with_files(cur: Any, connection_id: str) -> int:
         (connection_id,),
     )
     return int(row["n"]) if row else 0
+
+
+def mark_source_presence(
+    cur: Any, connection_id: str, object_kind: str, seen: set[str], *, complete: bool
+) -> None:
+    """이번 회차에 받은 원본의 「원천 확인 불가」를 지운다. complete(이 종류를 처음부터 끝까지 다
+    읽었다)면 받지 못한 원본에 표시한다(AC-011-7, DEC-18 (b)). 지우지는 않는다."""
+    ids = sorted(seen)
+    if ids:
+        cur.execute(
+            """
+            update raw_artifact set source_missing_at = null
+             where tool_connection_id = %s and object_kind = %s and source_missing_at is not null
+               and external_id = any(%s)
+            """,
+            (connection_id, object_kind, ids),
+        )
+    if complete:
+        cur.execute(
+            """
+            update raw_artifact set source_missing_at = now()
+             where tool_connection_id = %s and object_kind = %s and source_missing_at is null
+               and not (external_id = any(%s))
+            """,
+            (connection_id, object_kind, ids),
+        )

@@ -445,6 +445,7 @@ def list_issues(
             kind=r["issue_kind"],
             requirements=linked.get(str(r["id"]), []),
             codeChanges=changes.get(str(r["id"]), []),
+            sourceUnverified=r.get("source_missing_at") is not None,
             **_source_details(r),
         )
         for r in rows

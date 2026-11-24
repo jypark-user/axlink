@@ -144,15 +144,88 @@ def test_UC_030_S01_저장소_WBS_인식(target, s0):
     assert prog["wbsDeclaredPlanned"] is not None  # 파일 계획 열은 참고값으로 따로
 
 
-def test_UC_030_S02_업로드_계획서(target, s0):
-    """TD-PRJ-9 에 TD-DOC-6 올려 「사업수행계획서」 확정 → 같은 인식 결과, L1 (AC-030-1)."""
-    doc = _upload(target, s0, "TD-PRJ-9", s0.files["TD-DOC-6"], "WBS.xlsx", XLSX)
-    res = _confirm(target, s0, doc, "PROJECT_PLAN", "사업수행계획서", "v1")
-    assert res.status_code == 200, res.text
+def _plan_upload(target, s0, prj: str, path, name: str, version: str | None = None, acc="TD-ACC-V1"):
+    """일정 화면의 WBS 올리기와 같은 요청(11-24). 올린 파일이 곧바로 사업수행계획서가 된다."""
+    with open(path, "rb") as f:
+        return target.post(
+            f"/api/projects/{s0.ids[prj]}/wbs/plan", files={"file": (name, f, XLSX)},
+            data={"version": version} if version else {}, headers=auth(s0.tokens[acc]),
+        )
+
+
+def test_UC_030_S02_업로드_계획서(target, s0, screen):
+    """저장소가 없는 TD-PRJ-9 에서 일정 화면 「WBS 올리기」로 TD-DOC-6 을 v1 으로 올림 → 같은 인식 결과, L1,
+    수치의 원천에 올린 파일 이름 (AC-030-1·8)."""
+    pid = s0.ids["TD-PRJ-9"]
+    if screen:
+        sc = screen("TD-ACC-V1")
+        sc.open(f"/p/{pid}/schedule").see("진척률 산정의 핵심 입력이 빠져 있습니다")
+        sc.page.get_by_role("button", name="WBS 올리기").click()
+        dlg = sc.page.get_by_role("dialog")
+        dlg.locator("#planFile").set_input_files(str(s0.files["TD-DOC-6"]))
+        dlg.locator("#planVersion").fill("v1")
+        dlg.get_by_role("button", name="올리기").click()
+        dlg.wait_for(state="hidden", timeout=60000)
+        sc.see("수치의 원천", "올린 파일", s0.files["TD-DOC-6"].name, selector="main", timeout=30000)
+        sc.page.get_by_role("button", name="WBS 새 버전 올리기").wait_for(timeout=15000)
+        sc.shot("WBS 올린 뒤 일정")
+        sc.done()
+    else:
+        res = _plan_upload(target, s0, "TD-PRJ-9", s0.files["TD-DOC-6"], s0.files["TD-DOC-6"].name, "v1")
+        assert res.status_code == 201, res.text
+        assert (res.json()["version"], res.json()["leafCount"]) == ("v1", 5), res.json()
     w = _wbs(target, s0, "TD-PRJ-9")
     leaves = [i for i in w["items"] if i["weight"] and i["level"] > 0]
     assert w["source"] == "WBS_FILE" and len(leaves) == 5, (w["source"], w["warnings"], len(leaves))
+    assert (w["planVersion"], w["sourceFile"]["origin"]) == ("v1", "UPLOAD"), (w["planVersion"], w["sourceFile"])
+    assert w["sourceFile"]["path"] == s0.files["TD-DOC-6"].name
+    assert w["planUpload"] is True
     assert _progress(target, s0, "TD-PRJ-9")["level"] == "L1"
+
+
+def test_UC_030_S11_WBS_올리기_창구(target, s0, screen):
+    """일정 화면 WBS 올리기의 규칙. 저장소에서 WBS 를 읽는 TD-PRJ-1 에는 버튼이 없고 API 도 거절한다. WBS 로
+    읽히지 않는 파일·엑셀이 아닌 파일은 받지 않고 현행 판이 그대로다. 새 버전(v2)을 올리면 그 판으로 바뀌고,
+    올린 계획서는 자료 목록에 나오지 않는다 (AC-030-8)."""
+    v1 = auth(s0.tokens["TD-ACC-V1"])
+    repo = _wbs(target, s0, "TD-PRJ-1")
+    assert repo["planUpload"] is False
+    refused = _plan_upload(target, s0, "TD-PRJ-1", s0.files["TD-DOC-6"], "WBS.xlsx")
+    assert refused.status_code == 409 and refused.json()["code"] == "PLAN_FROM_REPOSITORY", refused.text
+
+    bad = target.post(f"/api/projects/{s0.ids['TD-PRJ-9']}/wbs/plan",
+                      files={"file": ("WBS.xlsx", b"not a workbook", XLSX)}, headers=v1)
+    assert bad.status_code == 400 and "WBS 로 읽을 수 없습니다" in bad.json()["message"], bad.text
+    pdf = target.post(f"/api/projects/{s0.ids['TD-PRJ-9']}/wbs/plan",
+                      files={"file": ("WBS.pdf", b"%PDF-1.4", "application/pdf")}, headers=v1)
+    assert pdf.status_code == 400 and ".xlsx" in pdf.json()["message"], pdf.text
+    assert _wbs(target, s0, "TD-PRJ-9")["planVersion"] == "v1", "거절한 파일이 현행 판을 바꿨다"
+
+    v2 = files.wbs_v2(s0.files["TD-DOC-6"].parent / "WBS-S11-v2.xlsx")  # 말단 6건
+    res = _plan_upload(target, s0, "TD-PRJ-9", v2, v2.name, "v2")
+    assert res.status_code == 201, res.text
+    doc_id = res.json()["documentId"]
+    w = _wbs(target, s0, "TD-PRJ-9")
+    assert (w["planVersion"], w["sourceFile"]["path"]) == ("v2", v2.name), (w["planVersion"], w["sourceFile"])
+    assert len([i for i in w["items"] if i["weight"] and i["level"] > 0]) == 6
+    docs = target.get(f"/api/projects/{s0.ids['TD-PRJ-9']}/documents?general=true&size=100", headers=v1)
+    assert docs.status_code == 200, docs.text
+    assert doc_id not in {x["id"] for x in docs.json()["content"]}, "올린 계획서가 자료 목록에 나왔다"
+    if screen:
+        sc = screen("TD-ACC-V1")
+        sc.open(f"/p/{s0.ids['TD-PRJ-1']}/schedule").see("수치의 원천")
+        assert sc.page.get_by_role("button", name=re.compile("WBS (새 버전 )?올리기")).count() == 0
+        sc.shot("저장소 WBS 사업에는 버튼 없음")
+        sc.open(f"/p/{s0.ids['TD-PRJ-9']}/schedule").see(v2.name)
+        sc.page.get_by_role("button", name="WBS 새 버전 올리기").click()
+        dlg = sc.page.get_by_role("dialog")
+        bad_file = v2.parent / "깨진-WBS.xlsx"
+        bad_file.write_bytes(b"not a workbook")
+        dlg.locator("#planFile").set_input_files(str(bad_file))
+        dlg.get_by_role("button", name="올리기").click()
+        sc.see("WBS 로 읽을 수 없습니다", selector='[role="dialog"]')
+        sc.shot("못 읽는 파일 거절")
+        sc.done()
 
 
 def test_UC_030_S08_편집_시도(target, s0):
@@ -721,19 +794,245 @@ def test_UC_031_S10_승인률(target, s0):
     assert "WBS" in (body.get("basis") or ""), body.get("basis")
 
 
-@pytest.mark.skip(reason="DEC-10(협의 범위 코드·계약 범위) 결정 전. 지정 API 미구현")
-def test_UC_033_S01_지정_제출_승인(target, s0):
-    """작업별 산출물 항목·양식 지정 (AC-033-1~3)."""
+# ------------------------------------------------------------------ UC-033 (V70~V73, 11-18·11-19)
+
+_DESIG = "/api/projects/{pid}/wbs/designated-deliverables"
 
 
-@pytest.mark.skip(reason="DEC-10 결정 전")
-def test_UC_033_S02_교체_뒤_재지정(target, s0):
-    """계획서 교체 뒤 재지정 (AC-033-4)."""
+def _row(target, s0, wbs_id: str, acc="TD-ACC-C1") -> dict:
+    res = target.get(f"/api/projects/{s0.ids['TD-PRJ-1']}/wbs/deliverables?at={T0}", headers=auth(s0.tokens[acc]))
+    assert res.status_code == 200, res.text
+    return next(i for i in res.json()["items"] if i["wbsId"] == wbs_id)
 
 
-@pytest.mark.skip(reason="DEC-10 결정 전. 지정 API 가 없어 거절(403)과 미구현(404)을 가를 수 없다")
+def _requested(row: dict) -> list[dict]:
+    return [x for x in row["designated"] if x.get("origin") != "WBS"]
+
+
+def _designate(target, s0, wbs_id: str, acc="TD-ACC-C1", **body):
+    pid = s0.ids["TD-PRJ-1"]
+    key = _row(target, s0, wbs_id)["taskKey"]
+    return target.post(_DESIG.format(pid=pid), json={"taskKey": key, **body}, headers=auth(s0.tokens[acc]))
+
+
+def _xlsx_bytes(marker: str) -> bytes:
+    import io
+
+    from openpyxl import Workbook
+
+    wb = Workbook()
+    wb.active.append(["항목", marker])
+    buf = io.BytesIO()
+    wb.save(buf)
+    return buf.getvalue()
+
+
+def _submit(target, s0, designated_id: str, name: str, marker: str, acc="TD-ACC-V1") -> str:
+    res = target.post(
+        f"/api/projects/{s0.ids['TD-PRJ-1']}/documents",
+        files={"file": (name, _xlsx_bytes(marker), XLSX)},
+        data={"designatedId": designated_id}, headers=auth(s0.tokens[acc]),
+    )
+    assert res.status_code == 201, res.text
+    s0.await_document(acc, res.json()["id"])
+    return res.json()["id"]
+
+
+def _review(target, s0, doc_id: str, action: str, acc="TD-ACC-C1", reason: str | None = None):
+    return target.post(
+        f"/api/projects/{s0.ids['TD-PRJ-1']}/documents/{doc_id}/{action}",
+        json={"reason": reason} if reason else {}, headers=auth(s0.tokens[acc]),
+    )
+
+
+def _template(target, s0, designated_id: str, marker: str, acc="TD-ACC-C1"):
+    return target.post(
+        f"{_DESIG.format(pid=s0.ids['TD-PRJ-1'])}/{designated_id}/template",
+        files={"file": (f"양식-{marker}.xlsx", _xlsx_bytes(marker), XLSX)}, headers=auth(s0.tokens[acc]),
+    )
+
+
+def _undesignate(target, s0, designated_id: str, docs: list[str]) -> None:
+    pid = s0.ids["TD-PRJ-1"]
+    for doc in docs:
+        target.delete(f"/api/documents/{doc}", headers=auth(s0.tokens["TD-ACC-C1"]))
+    target.delete(f"{_DESIG.format(pid=pid)}/{designated_id}", headers=auth(s0.tokens["TD-ACC-C1"]))
+
+
 def test_UC_033_S03_용역사_지정_시도(target, s0):
-    """V1 지정 → 거절 (AC-033-1)."""
+    """V1 이 3.4 에 산출물 항목을 정하려 함 → 거절. 요청 항목이 생기지 않는다 (AC-033-1)."""
+    res = _designate(target, s0, "3.4", acc="TD-ACC-V1", name="통합시험결과서")
+    assert res.status_code == 403, res.text
+    assert _requested(_row(target, s0, "3.4")) == []
+
+
+def test_UC_033_S01_지정_제출_승인(target, s0):
+    """C1 이 3.4 에 「통합시험결과서」 항목·양식·안내를 정한다 → V1 양식 내려받기 → 제출 → C1 반려(사유) →
+    V1 다시 올림 → C1 승인. 양식은 제출본이 아니고, 판마다 상태가 남는다 (AC-033-1·3)."""
+    pid = s0.ids["TD-PRJ-1"]
+    res = _designate(target, s0, "3.4", name="통합시험결과서", productType="TEST_REPORT", guide="결함 목록을 붙인다")
+    assert res.status_code == 201, res.text
+    did = res.json()["id"]
+    docs: list[str] = []
+    try:
+        assert _template(target, s0, did, "S01", acc="TD-ACC-V1").status_code == 403
+        assert _template(target, s0, did, "S01").status_code == 204
+        got = target.get(f"{_DESIG.format(pid=pid)}/{did}/template", headers=auth(s0.tokens["TD-ACC-V1"]))
+        assert got.status_code == 200 and got.content[:2] == b"PK", got.status_code
+        row = _row(target, s0, "3.4")
+        [item] = _requested(row)
+        assert (item["name"], item["guide"], item["status"]) == ("통합시험결과서", "결함 목록을 붙인다", "MISSING")
+        assert item["templateFileName"] == "양식-S01.xlsx"
+        assert row["review"] == [], "양식이 제출본으로 잡혔다"
+
+        docs.append(_submit(target, s0, did, "통합시험결과-v1.xlsx", "v1"))
+        assert _requested(_row(target, s0, "3.4"))[0]["status"] == "SUBMITTED"
+        assert _review(target, s0, docs[0], "approve", acc="TD-ACC-V1").status_code == 403
+        assert _review(target, s0, docs[0], "reject").status_code == 400  # 사유 필수
+        assert _review(target, s0, docs[0], "reject", reason="결함 목록 누락").status_code == 204
+
+        docs.append(_submit(target, s0, did, "통합시험결과-v2.xlsx", "v2"))
+        assert _review(target, s0, docs[1], "approve").status_code == 204
+        row = _row(target, s0, "3.4", acc="TD-ACC-V1")
+        item = _requested(row)[0]
+        assert item["status"] == "APPROVED"
+        assert [v["state"] for v in item["versions"]] == ["APPROVED", "REJECTED"]
+        assert item["versions"][1]["rejectReason"] == "결함 목록 누락"
+        latest = {r["documentId"]: r["latest"] for r in row["review"]}
+        assert latest == {docs[1]: True, docs[0]: False}, row["review"]
+    finally:
+        _undesignate(target, s0, did, docs)
+
+
+def test_UC_033_S02_교체_뒤_재지정(target, s0, replay):
+    """3.3(구현)·3.4(시험) 에 요청 항목을 정한 뒤 3.4 를 3.4·3.5 로 쪼갠 v2 수집 → 그대로인 3.3 은
+    지정이 따라가고, 가중치가 옮겨 간 3.4 는 정체가 끊겨 「재지정 필요」로 모인다(지정·제출 이력 보존).
+    발주기관이 새 3.4 로 다시 정하면 그 작업에 붙는다 (AC-033-4)."""
+    pid = s0.ids["TD-PRJ-1"]
+    c1 = auth(s0.tokens["TD-ACC-C1"])
+    made = [
+        _designate(target, s0, "3.3", name="소스 목록", productType="SOFTWARE_COMPONENT"),
+        _designate(target, s0, "3.4", name="통합시험결과서", productType="TEST_REPORT"),
+    ]
+    ids = [r.json().get("id") for r in made if r.status_code == 201]
+    try:
+        assert [r.status_code for r in made] == [201, 201], [r.text for r in made]
+        keep, moved = ids
+        replay.faults = Faults(wbs_variant="TD-WBS-V2", wbs_sha="e2e2e2e2" + "3" * 32)
+        _sync(target, s0)
+        screen_ = target.get(f"/api/projects/{pid}/wbs/deliverables?at={T0}", headers=c1).json()
+        rows = {i["wbsId"]: i for i in screen_["items"]}
+        assert keep in [x["id"] for x in _requested(rows["3.3"])], "정체가 이어진 3.3 의 지정이 사라졌다"
+        orphans = {x["id"]: x for x in screen_["redesignation"]}
+        assert moved in orphans, screen_["redesignation"]
+        assert orphans[moved]["needsRedesignation"] is True and orphans[moved]["taskNameAt"] == "시험"
+        assert moved not in [x["id"] for x in _requested(rows["3.4"])]
+
+        res = target.patch(f"{_DESIG.format(pid=pid)}/{moved}", json={"taskKey": rows["3.4"]["taskKey"]}, headers=c1)
+        assert res.status_code == 204, res.text
+        again = target.get(f"/api/projects/{pid}/wbs/deliverables?at={T0}", headers=c1).json()
+        assert moved not in [x["id"] for x in again["redesignation"]]
+        assert moved in [x["id"] for x in _requested({i["wbsId"]: i for i in again["items"]}["3.4"])]
+        kinds = [e["kind"] for e in target.get(f"{_DESIG.format(pid=pid)}/{moved}/history", headers=c1).json()]
+        assert kinds == ["CREATED", "REASSIGNED"], kinds
+    finally:
+        _restore_wbs(target, s0, replay)
+        for x in ids:
+            _undesignate(target, s0, x, [])
+
+
+def test_UC_033_S04_예상_산출물_관리(target, s0, screen):
+    """3.4 에 요청 항목을 더하면 「예상 산출물」 칸에 첫 이름과 「외 1건」, [관리] 가 보이고, 관리 창에
+    「WBS 자동」 항목(시험결과서)과 요청 항목이 함께 나온다. WBS 자동 항목도 고칠 수 있다 (AC-033-2)."""
+    pid = s0.ids["TD-PRJ-1"]
+    res = _designate(target, s0, "3.4", name="결함 조치 보고서", productType="TEST_REPORT")
+    assert res.status_code == 201, res.text
+    did = res.json()["id"]
+    auto: dict = {}
+    try:
+        row = _row(target, s0, "3.4")
+        origins = sorted((x["origin"], x["name"]) for x in row["designated"])
+        assert origins == [("REQUEST", "결함 조치 보고서"), ("WBS", "시험결과서")], origins
+        auto = next(x for x in row["designated"] if x["origin"] == "WBS")
+        fix = target.patch(
+            f"{_DESIG.format(pid=pid)}/{auto['id']}", json={"guide": "시험 범위를 적는다"},
+            headers=auth(s0.tokens["TD-ACC-C1"]),
+        )
+        assert fix.status_code == 204, fix.text
+        fixed = next(x for x in _row(target, s0, "3.4")["designated"] if x["origin"] == "WBS")
+        assert fixed["guide"] == "시험 범위를 적는다"
+        if screen:
+            sc = screen("TD-ACC-C1")
+            sc.open(f"/p/{pid}/deliverables").see("3.4")
+            line = sc.page.locator("tr", has_text="3.4").filter(has_text="시험").first
+            assert "외 1건" in line.inner_text()
+            line.get_by_role("button", name="관리").click()
+            sc.see("WBS 자동", "발주사 요청", "결함 조치 보고서", "시험결과서", selector="body")
+            sc.shot("예상 산출물 관리 창")
+            sc.done()
+    finally:
+        if auto:
+            target.patch(f"{_DESIG.format(pid=pid)}/{auto['id']}", json={"guide": ""}, headers=auth(s0.tokens["TD-ACC-C1"]))
+        _undesignate(target, s0, did, [])
+
+
+def test_UC_033_S05_산출물별_검토(target, s0, screen):
+    """3.4 에 올라온 산출물이 검토 창에 하나씩 나오고 발주기관만 승인·반려 단추가 있다. 용역사는 같은
+    창을 「보기」로 연다. 양식은 올라온 산출물로 세지 않는다 (AC-033-3)."""
+    pid = s0.ids["TD-PRJ-1"]
+    did = _designate(target, s0, "3.4", name="통합시험결과서", productType="TEST_REPORT").json()["id"]
+    docs: list[str] = []
+    try:
+        assert _template(target, s0, did, "S05").status_code == 204
+        docs.append(_submit(target, s0, did, "통합시험결과-S05.xlsx", "S05"))
+        row = _row(target, s0, "3.4")
+        assert [r["documentId"] for r in row["review"]] == docs, row["review"]
+        assert row["review"][0]["status"] == "SUBMITTED"
+        assert _review(target, s0, docs[0], "approve", acc="TD-ACC-V1").status_code == 403
+        if screen:
+            dlg = '[role="dialog"]'
+            c1 = screen("TD-ACC-C1")
+            c1.open(f"/p/{pid}/deliverables").see("3.4")
+            c1.page.locator("tr", has_text="3.4").filter(has_text="시험").first.get_by_role("button", name="검토").click()
+            c1.see("통합시험결과서", "승인 대기", selector=dlg)
+            assert c1.page.get_by_role("dialog").get_by_role("button", name="승인").count() == 1
+            assert "양식-S05.xlsx" not in c1.page.get_by_role("dialog").inner_text()
+            c1.shot("발주기관 검토 창")
+            c1.done()
+            v1 = screen("TD-ACC-V1")
+            v1.open(f"/p/{pid}/deliverables").see("3.4")
+            v1.page.locator("tr", has_text="3.4").filter(has_text="시험").first.get_by_role("button", name="보기").click()
+            v1.see("통합시험결과서", selector=dlg)
+            assert v1.page.get_by_role("dialog").get_by_role("button", name="승인").count() == 0
+            v1.shot("용역사 보기 창")
+            v1.done()
+        assert _review(target, s0, docs[0], "reject", reason="서명 누락").status_code == 204
+        assert _requested(_row(target, s0, "3.4"))[0]["versions"][0]["rejectReason"] == "서명 누락"
+    finally:
+        _undesignate(target, s0, did, docs)
+
+
+def test_UC_031_S12_29110_충족_현황(target, s0, screen):
+    """산출물 화면 머리의 「ISO/IEC 29110 충족 현황」 → 22종이 PM·SI 로 나뉘고 줄마다 계획 없음·미제출·
+    제출·승인 중 하나와 근거 예상 산출물이 보인다. 3.1 요구사항정의서(승인)는 승인 (AC-031-10)."""
+    pid = s0.ids["TD-PRJ-1"]
+    res = target.get(f"/api/projects/{pid}/wbs/iso29110", headers=auth(s0.tokens["TD-ACC-C1"]))
+    assert res.status_code == 200, res.text
+    body = res.json()
+    assert len(body["items"]) == 22 and sum(body["counts"].values()) == 22, body["counts"]
+    assert {i["process"] for i in body["items"]} == {"PM", "SI"}
+    assert {i["status"] for i in body["items"]} <= {"UNPLANNED", "PLANNED", "SUBMITTED", "APPROVED"}
+    by = {i["type"]: i for i in body["items"]}
+    assert by["REQUIREMENTS_SPEC"]["status"] == "APPROVED", by["REQUIREMENTS_SPEC"]
+    assert [s["wbsId"] for s in by["REQUIREMENTS_SPEC"]["sources"]] == ["3.1"]
+    assert any(i["status"] == "UNPLANNED" and i["sources"] == [] for i in body["items"])
+    if screen:
+        sc = screen("TD-ACC-C1")
+        sc.open(f"/p/{pid}/deliverables").see("3.1")
+        sc.page.get_by_role("button", name="ISO/IEC 29110 충족 현황").click()
+        sc.see("ISO/IEC 29110 산출물 충족 현황", "프로젝트 관리(PM)", "소프트웨어 구현(SI)", "계획 없음", selector='[role="dialog"]')
+        sc.shot("29110 충족 현황")
+        sc.done()
 
 
 def _ui_UC_031_S01(screen, s0):

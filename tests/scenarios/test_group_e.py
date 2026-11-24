@@ -540,6 +540,109 @@ def test_UC_042_S01_추천_구성(target, s0, screen):
     _ui_UC_042_S01(screen, target, s0, board["id"])
 
 
+def test_UC_042_S05_기본_구성(target, s0, screen):
+    """스냅샷 3일(산출물 대상 없는 날 하나) → 세 기준 일별 추이는 산출물 선만 그날 비우고, 카드는 마지막 점과
+    같다. 화면: 편집 모드 「초기화」 → 기본 구성(세 기준 카드·일별 추이·진행 중인 WBS 작업), 위젯 수정 창에
+    만든 근거, 「전체 삭제」 → 빈 화면 (AC-042-6)."""
+    from app.db import tx
+
+    pid = s0.ids["TD-PRJ-1"]
+    c1 = auth(s0.tokens["TD-ACC-C1"])
+    days = (("2026-10-01", 40.0, (2, 10), (1, 4)), ("2026-10-02", 45.5, (3, 10), (2, 4)),
+            ("2026-10-03", 50.0, (0, 0), (2, 4)))
+    with tx() as cur:
+        saved = cur.execute(
+            "select * from progress_snapshot where project_id = %s", (pid,)
+        ).fetchall()
+        cur.execute("delete from progress_snapshot where project_id = %s", (pid,))
+        for day, wbs, dl, req in days:
+            cur.execute(
+                """
+                insert into progress_snapshot (project_id, snapshot_date, level, representative_pct,
+                       wbs_actual_pct, deliverable_approved_count, deliverable_total_count,
+                       requirement_verified_count, requirement_total_count)
+                values (%s, %s, 'L1', %s, %s, %s, %s, %s, %s)
+                """,
+                (pid, day, wbs, wbs, *dl, *req),
+            )
+    boards = _get(target, s0, f"/api/dashboards?projectId={pid}")
+    board = next(b for b in boards if b["isDefault"])
+    before = {w["id"] for w in _get(target, s0, f"/api/dashboards/{board['id']}")["widgets"]}
+    try:
+        def preview(template: str, measure: str, dims: list[str], limit: int | None = None) -> dict:
+            spec = _spec(measure, dims, [pid], template, "TST 기본 구성")
+            spec["query"]["limit"] = limit
+            res = target.post("/api/widgets/preview", json={"spec": spec}, headers=c1)
+            assert res.status_code == 200, res.text[:200]
+            return res.json()
+
+        line = preview("LINE_CHART", "progress_metric_pct", ["period_day", "progress_metric"], 400)
+        got = {(r["values"]["d0"], r["values"]["d1"]): float(r["values"]["value"]) for r in line["rows"]}
+        assert got[("2026-10-01", "산출물 승인률")] == 20.0 and got[("2026-10-02", "산출물 승인률")] == 30.0
+        assert ("2026-10-03", "산출물 승인률") not in got, "산출물 대상이 없는 날을 0 으로 그렸다"
+        assert got[("2026-10-03", "WBS 진척률")] == 50.0 and got[("2026-10-03", "요구사항 이행률")] == 50.0
+
+        def card(measure: str) -> float:
+            b = preview("STAT_CARD", measure, [])
+            row = b["rows"][0] if b["rows"] else b["total"]
+            return float(row["values"]["value"])
+
+        assert card("progress_wbs_pct") == got[("2026-10-03", "WBS 진척률")]
+        assert card("snapshot_requirement_fulfillment_pct") == got[("2026-10-03", "요구사항 이행률")]
+        assert card("snapshot_work_product_approval_pct") == got[("2026-10-02", "산출물 승인률")]
+        _ui_UC_042_S05(screen, target, s0, board["id"])
+    finally:
+        with tx() as cur:
+            cur.execute("delete from progress_snapshot where project_id = %s", (pid,))
+            for r in saved:
+                cols = list(r.keys())
+                cur.execute(
+                    f"insert into progress_snapshot ({', '.join(cols)}) values ({', '.join(['%s'] * len(cols))})",
+                    [r[c] for c in cols],
+                )
+        # 화면 단계가 위젯을 바꿨으면 시험 전 구성은 되살리지 못한다. 다음 시험은 기본 구성 위에서 돈다
+        _ = before
+
+
+def _ui_UC_042_S05(screen, target, s0, board_id: str):
+    """화면: 편집 모드 → 초기화 → 기본 구성 위젯(세 기준 카드·일별 추이·진행 중인 WBS 작업) → WBS 진척률 위젯
+    수정 창의 「만든 근거」 → 전체 삭제 → 빈 화면 → 기본 구성 놓기."""
+    if not screen:
+        return
+    from playwright.sync_api import expect
+
+    pid = s0.ids["TD-PRJ-1"]
+    sc = screen("TD-ACC-C1")
+    sc.open(f"/p/{pid}/dashboard").see("대시보드")
+    sc.page.get_by_role("button", name="편집 모드").first.click()
+    sc.page.get_by_role("button", name="초기화").click()
+    confirm = sc.page.get_by_role("alertdialog")
+    expect(confirm).to_contain_text("기본 구성으로 초기화할까요?")
+    confirm.get_by_role("button", name="초기화").click()
+    expect(confirm).to_be_hidden(timeout=60000)
+    sc.see("WBS 진척률", "산출물 승인률", "요구사항 이행률", "일별 진척률", "진행 중인 WBS 작업", selector="main", timeout=60000)
+    titles = [w["spec"]["title"] for w in _get(target, s0, f"/api/dashboards/{board_id}")["widgets"]]
+    assert {"WBS 진척률", "산출물 승인률", "요구사항 이행률", "진행 중인 WBS 작업"} <= set(titles), titles
+    sc.shot("기본 구성")
+
+    card = sc.page.locator(".react-grid-item", has_text="WBS 진척률").first
+    card.get_by_role("button", name="위젯 수정").click()
+    sc.see("만든 근거", "일정 기준 진척", selector='[role="dialog"]')
+    sc.shot("위젯 수정 창 근거")
+    sc.page.keyboard.press("Escape")
+
+    sc.page.get_by_role("button", name="전체 삭제").click()
+    confirm = sc.page.get_by_role("alertdialog")
+    expect(confirm).to_contain_text("위젯을 모두 지울까요?")
+    confirm.get_by_role("button", name="전체 삭제").click()
+    expect(confirm).to_be_hidden(timeout=60000)
+    sc.page.get_by_role("button", name="편집 모드 닫기").click()
+    sc.see("위젯이 없습니다", selector="main")
+    assert _get(target, s0, f"/api/dashboards/{board_id}")["widgets"] == []
+    sc.shot("전체 삭제 뒤 빈 화면")
+    sc.done()
+
+
 def test_UC_042_S02_없는_짝(target, s0):
     """지표 「없는키」 저장 → 거절 (AC-042-2)."""
     pid = s0.ids["TD-PRJ-1"]
