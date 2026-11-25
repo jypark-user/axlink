@@ -115,6 +115,8 @@ def scan_requirements() -> tuple[dict[str, str], dict[str, str]]:
 # 여기 올리는 것은 데이터 결함을 인정하는 기록이다. 새 위반을 덮는 데 쓰지 않는다.
 KNOWN_VIOLATIONS = {
     "f9fdca66": "2026-11-12 GitHub 웹에서 main 에 직접 커밋(README 마일스톤 표 삭제). 추적 ID 없음",
+    "d250d81b": "2026-11-24 #310 으로 main 에 들어간 커밋. scope 'scenarios' 가 허용 목록에 없다",
+    "5cc77b88": "2026-11-25 #315 로 main 에 들어간 커밋. scope 'scenarios' 가 허용 목록에 없다",
 }
 
 
