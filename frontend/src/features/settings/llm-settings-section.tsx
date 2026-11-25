@@ -19,6 +19,8 @@ import { formatDateTime } from '@/lib/format';
 import { useAsync } from '@/lib/use-async';
 import { cn } from '@/lib/utils';
 import type {
+  AnswerMode,
+  AnswerModeResponse,
   EmbeddingStatusResponse,
   LlmMeasureResponse,
   LlmModelListResponse,
@@ -55,6 +57,12 @@ export function LlmSettingsSection(): ReactNode {
   const state = useAsync<LlmSettingResponse>(() => api.get<LlmSettingResponse>('/ai/settings'), []);
   return (
     <div className="flex flex-col gap-2">
+      <SectionTitle
+        title="답변 방식"
+        hint="지표 기반은 질문을 지표·문서·목록 하나로 나눠 답하고, AI 판단은 사업 자원 전체를 보고 AI 가 판단해 답합니다."
+      />
+      <AnswerModePanel />
+      <Separator className="my-2" />
       <SectionTitle title="답변 모델" hint="질문을 해석하고 답과 문서 초안을 쓰는 모델입니다." />
       <DataState state={state} onRetry={state.reload}>
         {(setting) => (
@@ -81,6 +89,63 @@ function SectionTitle({ title, hint }: { title: string; hint: string }): ReactNo
       <h3 className="text-sm font-semibold">{title}</h3>
       <p className={HINT}>{hint}</p>
     </div>
+  );
+}
+
+const ANSWER_MODES: { value: AnswerMode; label: string }[] = [
+  { value: 'STRUCTURED', label: '지표 기반 (기본)' },
+  { value: 'AI_JUDGE', label: 'AI 판단' },
+];
+
+/** 답변 방식 (ARC-034). 고르면 바로 저장하고 다음 질문부터 적용된다. */
+function AnswerModePanel(): ReactNode {
+  const { toast } = useToast();
+  const state = useAsync<AnswerModeResponse>(
+    () => api.get<AnswerModeResponse>('/ai/answer-mode'),
+    [],
+  );
+  const [saving, setSaving] = useState(false);
+  const change = async (mode: AnswerMode): Promise<void> => {
+    setSaving(true);
+    try {
+      await api.put<AnswerModeResponse>('/ai/answer-mode', { mode });
+      toast({ title: '답변 방식을 바꿨습니다.', variant: 'success' });
+      state.reload();
+    } catch (e) {
+      toast({
+        title: '저장에 실패했습니다.',
+        description: isApiError(e) ? e.message : undefined,
+        variant: 'error',
+      });
+    } finally {
+      setSaving(false);
+    }
+  };
+  return (
+    <DataState state={state} onRetry={state.reload}>
+      {(m) => (
+        <div className={cn(FIELD, 'py-2')}>
+          <Label htmlFor="answer-mode">답변 방식</Label>
+          <Select
+            value={m.mode}
+            disabled={saving}
+            onValueChange={(v) => void change(v as AnswerMode)}
+          >
+            <SelectTrigger id="answer-mode" className="w-60">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              {ANSWER_MODES.map((o) => (
+                <SelectItem key={o.value} value={o.value}>
+                  {o.label}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+          {m.updatedAt && <p className={HINT}>바꾼 시각 {formatDateTime(m.updatedAt)}</p>}
+        </div>
+      )}
+    </DataState>
   );
 }
 
