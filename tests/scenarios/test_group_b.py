@@ -2,7 +2,7 @@
 """B 그룹: 도구 연결·수집 (UC-010 ~ UC-012) 예제 시나리오.
 
 도구 원천은 재생기(tests/fixtures/im009/replay.py)다. 기록 모드는 replay 이고 실연동 검증을
-대신하지 않는다. 기대 결과는 IM-007 v0.2.4 그대로라 현재 구현과 다른 곳은 실패로 남는다.
+대신하지 않는다. 기대 결과는 IM-002 v0.2.4 그대로라 현재 구현과 다른 곳은 실패로 남는다.
 """
 
 from __future__ import annotations
@@ -191,8 +191,11 @@ def test_UC_010_S07_외부_장애(target, s0, replay):
     assert next(c for c in rows if c["id"] == made["id"])["status"] == "DRAFT"
 
 
-def test_UC_010_S08_확인_전_활성화_교체_뒤_상태(target, s0, replay):
-    """저장만 한 연결 활성화 → 거절. 확인 뒤 토큰 교체 → 「확인 전」 (AC-010-7)."""
+def test_UC_010_S08_확인_전_활성화_교체_뒤_상태(target, s0, replay, screen):
+    """저장만 한 연결 활성화 → 거절. 확인 뒤 토큰 교체 → 「확인 전」 (AC-010-7).
+
+    브라우저가 있으면 이어서 연결 관리 화면의 [수정] 양식으로 수집 대상을 바꾸고, 코드 수정 없이
+    설정만으로 대상이 바뀌며 「확인 전」으로 돌아가는 것을 화면에서 확인한다(SWFR.CON.002 시연)."""
     v1 = auth(s0.tokens["TD-ACC-V1"])
     made = target.post(
         f"/api/projects/{s0.ids['TD-PRJ-9']}/connections",
@@ -220,6 +223,32 @@ def test_UC_010_S08_확인_전_활성화_교체_뒤_상태(target, s0, replay):
         headers=v1,
     )
     assert changed.status_code == 200 and changed.json()["status"] == "DRAFT", changed.text
+    if not screen:
+        return
+    assert target.post(f"/api/connections/{cid}/test", headers=v1).status_code == 200
+    sc = screen("TD-ACC-V1")
+    page = sc.page
+    sc.open(f"/p/{s0.ids['TD-PRJ-9']}/connections")
+    card = (
+        page.locator("div")
+        .filter(has_text="새 연결")
+        .filter(has=page.get_by_role("button", name="수정", exact=True))
+        .last
+    )
+    card.get_by_role("button", name="수정", exact=True).click()
+    page.locator("#connResource").fill("daon/test-repo-2")
+    sc.shot("대상-수정")
+    page.get_by_role("dialog").get_by_role("button", name="저장", exact=True).click()
+    sc.see("연결을 수정했습니다.", selector="body")
+    from playwright.sync_api import expect
+
+    expect(card).to_contain_text("daon/test-repo-2", timeout=15000)
+    expect(card).to_contain_text("확인 전", timeout=15000)
+    after = target.get(f"/api/connections/{cid}", headers=v1)
+    if after.status_code == 200:
+        body = after.json()
+        assert body["targetResource"] == "daon/test-repo-2" and body["status"] == "DRAFT", body
+    sc.done()
 
 
 # ------------------------------------------------------------------ UC-011

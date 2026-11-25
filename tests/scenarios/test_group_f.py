@@ -71,13 +71,45 @@ def test_UC_050_S04_거절(target, s0):
     assert _pending(target, s0) == 0
 
 
-def test_UC_050_S03_지표_요청(target, s0):
-    """대표 진척률 요청 → 값 30.0, 단계 L1, 산출 근거 (AC-050-1)."""
-    res = _request(target, s0, "METRIC", "REPRESENTATIVE", "대표 진척률 확인")
-    assert res.status_code == 201, res.text
-    snap = _detail(target, s0, res.json()["id"])["snapshot"]
+def _request_on_screen(sc, pid: str, type_label: str, target_label: str, title: str) -> None:
+    """발주기관 화면의 [요청 등록] 양식으로 확인 요청을 등록한다(SWFR.WEB.004 시연)."""
+    page = sc.page
+    sc.open(f"/p/{pid}/reviews")
+    page.get_by_role("button", name="요청 등록").click()
+    page.locator("#rrType").click()
+    page.get_by_role("option", name=type_label, exact=True).click()
+    page.locator("#rrTarget").click()
+    page.get_by_role("option", name=target_label).first.click()
+    page.locator("#rrTitle").fill(title)
+    sc.shot("요청-양식")
+    page.get_by_role("dialog").get_by_role("button", name="등록", exact=True).click()
+    sc.see("확인 요청을 등록했습니다.", selector="body")
+    sc.see(title)
+
+
+def test_UC_050_S03_지표_요청(target, s0, screen):
+    """대표 진척률 요청 → 값 30.0, 단계 L1, 산출 근거 (AC-050-1).
+
+    브라우저가 있으면 발주기관 화면의 요청 등록 양식으로 등록하고(시연), 없으면 API 로 등록한다.
+    어느 쪽이든 저장된 상태는 API 로 같은 기준으로 확인한다."""
+    pid = s0.ids["TD-PRJ-1"]
+    title = "대표 진척률 확인"
+    if screen:
+        sc = screen("TD-ACC-C1")
+        _request_on_screen(sc, pid, "지표", "대표 진척률", title)
+        rows = _get(target, s0, f"/api/projects/{pid}/review-requests?size=100")["content"]
+        made = [r for r in rows if r["title"] == title]
+        assert len(made) == 1, [r["title"] for r in rows]
+        rid = made[0]["id"]
+    else:
+        res = _request(target, s0, "METRIC", "REPRESENTATIVE", title)
+        assert res.status_code == 201, res.text
+        rid = res.json()["id"]
+    snap = _detail(target, s0, rid)["snapshot"]
     assert _ratio(snap["value"]) == 0.3 and snap["level"] == "L1" and snap["basis"], snap
-    s0.ids["RR-METRIC"] = res.json()["id"]
+    s0.ids["RR-METRIC"] = rid
+    if screen:
+        sc.done()
 
 
 def test_UC_050_S02_이슈_리스크_산출물_요청(target, s0):
