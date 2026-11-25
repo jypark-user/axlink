@@ -128,7 +128,7 @@ def run_sync(
     base, target = connection["base_url"], connection["target_resource"]
 
     # changed = 새로 생기거나 바뀐 원본 건수(fetched − skippedUnchanged). 화면의 「신규·갱신」.
-    # upserted 는 표준 모델로 올린(재승격 포함) 건수라 「반영」으로만 쓴다(IM-007 AC-011-2, GH-213).
+    # upserted 는 표준 모델로 올린(재승격 포함) 건수라 「반영」으로만 쓴다(IM-002 AC-011-2, GH-213).
     stats = {
         "fetched": 0,
         "changed": 0,
@@ -245,7 +245,7 @@ def run_sync(
     repository.mark_synced(cur, cid, finished, note)
     changed = stats["fetched"] - stats["skippedUnchanged"]
     if changed > 0:
-        # 수집도 사업의 사건이다(IM-007 AC-053-4, GH-221). 바뀐 원본이 있을 때만 남긴다 —
+        # 수집도 사업의 사건이다(IM-002 AC-053-4, GH-221). 바뀐 원본이 있을 때만 남긴다 —
         # 변경 없는 회차까지 적으면 기록이 수집 주기로 메워진다
         from app.activity import service as activity
 

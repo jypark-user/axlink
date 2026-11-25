@@ -6,7 +6,7 @@ IM-005 시험계획·결과서의 **원천 데이터**다. 문서 요약(IM-005 
 
 | 파일 | 성격 | 누가 쓰나 |
 |---|---|---|
-| `catalog.json` | IM-007·IM-007A·구현·검증 대응표에서 **생성**한 정적 카탈로그(UC·AC·시나리오·공통 시나리오·공통 제약·DEC·세부 의무·DEC 영향·시험→AC 초안) | `scripts/verification_records.py catalog` |
+| `catalog.json` | IM-002·IM-002A·구현·검증 대응표에서 **생성**한 정적 카탈로그(UC·AC·시나리오·공통 시나리오·공통 제약·DEC·세부 의무·DEC 영향·시험→AC 초안) | `scripts/verification_records.py catalog` |
 | `test-ac-map.csv` | 자동 시험 파일 → AC 연결 **초안**(대응표 산문에서 추출). 실행 기록에 적힌 연결이 우선한다 | 〃 |
 | `baseline-*.json` | 사이클 시작 시점의 기준 문서 버전·해시, 코드 커밋, 환경 관측 | 사이클 시작 때 사람(에이전트)이 작성 |
 | `cycles.jsonl` | 사이클 1건 1줄: 범위·대상 버전·계획·결과 집계 | 사이클 계획·확정 때 추가 |
@@ -30,8 +30,8 @@ IM-005 시험계획·결과서의 **원천 데이터**다. 문서 요약(IM-005 
 - **과거 줄은 고치지 않는다.** 잘못 적었으면 `corrections.jsonl` 에 정정 줄을 더한다.
 - 원격 대상·부분 환경에서 「그 환경에서는 못 돈다」로 건너뛴 시험은 실행 기록에 넣지 않는다. 최신 실행이 판정이 되므로 건너뜀이 앞선 결과를 가린다. junit 에서 건너뜀(xfail 제외)을 빼고 기록한다. `record-junit` 이 건너뜀을 적지 않는다. 이미 적힌 줄은 `corrections.jsonl` 에 `"void": true` 정정 줄을 더해 판정에서 뺀다.
 - ID 는 재사용하지 않는다. `C01`, `C01-R0001`, `DEF-V001`, `IMP-001`, `DEP-001`.
-  (제품 결함 대장 IM-006 의 `DEF-###` 과 구분하려고 검증 결함은 `DEF-V###` 로 쓴다.
-  제품 결함으로 확정되면 IM-006 번호를 `product_defect` 에 적는다.)
+  (제품 결함 대장 IM-005B 의 `DEF-###` 과 구분하려고 검증 결함은 `DEF-V###` 로 쓴다.
+  제품 결함으로 확정되면 IM-005B 번호를 `product_defect` 에 적는다.)
 - 시각은 ISO 8601, Asia/Seoul 오프셋 포함(`2026-11-05T16:10:00+09:00`).
 - 판정 값: `pass` 통과 · `fail` 실패 · `blocked` 실행 차단(환경 손상·선행 실패로 판정 불가) ·
   `not-run` 미실행. 업무상 거절이 기대 결과인 시험은 올바르게 거절하면 `pass`.
@@ -72,9 +72,9 @@ IM-005 시험계획·결과서의 **원천 데이터**다. 문서 요약(IM-005 
 | `code` | `{commit, api_digest, web_digest, migrate_digest, db_version}` | `{"commit":"645de1d",…,"db_version":"V58"}` |
 | `env` | `{name, tools, model}` 실행 환경·도구 연결·모델 | `{"name":"5174","tools":["github:TD-CON-1"],"model":"gemma4:31b-cloud"}` |
 | `mode` | 위 `mode` 값 | `api` |
-| `start_state` | IM-009 6절 상태 이름과 자료·액터·사업 접근 범위 | `{"state":"S0","actor":"V1","project":"TD-PRJ-1"}` |
+| `start_state` | IM-005A 6절 상태 이름과 자료·액터·사업 접근 범위 | `{"state":"S0","actor":"V1","project":"TD-PRJ-1"}` |
 | `procedure` | 입력과 실행 절차(명령·요청 요약) | `"POST /connections/{id}/sync …"` |
-| `expected` | 기대 결과(명세·IM-009 7절 값) | `"이력 변경 없음, 신규·갱신 0"` |
+| `expected` | 기대 결과(명세·IM-005A 7절 값) | `"이력 변경 없음, 신규·갱신 0"` |
 | `actual` | 실제 결과와 관측한 상태 변화 | `"upserted 274 로 기록됨"` |
 | `verdict` | 실행 전체 판정 | `fail` |
 | `reason` | 판정 이유(실패·차단·미실행이면 필수) | `"AC-011-2 차이: 전량 재승격 수가 신규·갱신으로 표기"` |
@@ -88,7 +88,7 @@ IM-005 시험계획·결과서의 **원천 데이터**다. 문서 요약(IM-005 
 `defect_id`, `ts`, `kind`(`product` 제품 결함 · `data` 시험 자료·스크립트 오류 · `spec` 명세 오류 ·
 `env` 환경 장애 · `policy` 정책 미결), `title`, `found_in_run`, `acs`, `cause`(원인 분석),
 `fix`(`{commits, pr, issue}`), `regression_test`(수정 전 실패·수정 후 통과 시험),
-`status`(`open`·`fixed`·`verified`·`wontfix`), `verified_by_run`, `product_defect`(IM-006 번호),
+`status`(`open`·`fixed`·`verified`·`wontfix`), `verified_by_run`, `product_defect`(IM-005B 번호),
 `spec_change_needed`(명세 정정이 필요하면 근거와 승인 필요 여부. 기대값을 임의로 바꾸지 않는다).
 
 ## impacts.jsonl

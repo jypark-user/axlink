@@ -1,4 +1,4 @@
-"""IM-009 시험자료 PDF 두 건(TD-DOC-4·TD-DOC-7)을 만든다. 둘 다 가상 시험자료다.
+"""IM-005A 시험자료 PDF 두 건(TD-DOC-4·TD-DOC-7)을 만든다. 둘 다 가상 시험자료다.
 
 만든 PDF 는 이 폴더에 커밋해 두고 시험은 그 파일을 쓴다(files.py). 다시 만들 때만 이 스크립트를
 돌린다. 글꼴 파일은 저장소에 넣지 않는다. 제작 절차·글꼴·해시는 README.md.
@@ -23,7 +23,7 @@ from reportlab.pdfgen import canvas
 
 HERE = Path(__file__).parent
 FONT = "NotoSansKR"
-MARK = "가상 시험자료 · 실제 계약 문서가 아님 · AX Link 검증용(IM-009 {tid})"
+MARK = "가상 시험자료 · 실제 계약 문서가 아님 · AX Link 검증용(IM-005A {tid})"
 W, H = A4
 
 
@@ -59,13 +59,13 @@ def _lines(c: canvas.Canvas, y: float, lines: list[tuple[float, str]], gap: floa
 def sow(path: Path) -> Path:
     """TD-DOC-4 과업지시서.pdf. 3쪽.
 
-    IM-009 4.2·7.5: 2쪽 「2. 납품 산출물」 「납품 산출물은 22종이다」, 3쪽 「3. 사업 기간」
+    IM-005A 4.2·7.5: 2쪽 「2. 납품 산출물」 「납품 산출물은 22종이다」, 3쪽 「3. 사업 기간」
     「사업 기간은 9개월이다」. 「사업 기간」은 3쪽에만 있다(7.5 의 쪽 번호 판정이 이걸 본다).
     """
     c = canvas.Canvas(str(path), pagesize=A4, invariant=1)
     c.setTitle("과업지시서(가상 시험자료)")
     c.setAuthor("AX Link 검증 시험자료")
-    c.setSubject("IM-009 TD-DOC-4. 실제 계약 문서가 아님")
+    c.setSubject("IM-005A TD-DOC-4. 실제 계약 문서가 아님")
     pages = [
         [
             (18, "시민포털 고도화 과업지시서"),
@@ -99,13 +99,13 @@ def sow(path: Path) -> Path:
 def card_spec(path: Path) -> Path:
     """TD-DOC-7 카드형-명세서.pdf. 1쪽.
 
-    IM-009 4.4: 표 없이 카드형 서술, 코드가 줄 머리에 없다. 요구사항 세 건이 카드 하나씩이다.
+    IM-005A 4.4: 표 없이 카드형 서술, 코드가 줄 머리에 없다. 요구사항 세 건이 카드 하나씩이다.
     코드는 「식별」 뒤에 적는다. 사람은 읽을 수 있고 글자도 뽑히는 정상 문서다.
     """
     c = canvas.Canvas(str(path), pagesize=A4, invariant=1)
     c.setTitle("요구사항 명세서 카드형(가상 시험자료)")
     c.setAuthor("AX Link 검증 시험자료")
-    c.setSubject("IM-009 TD-DOC-7. 실제 계약 문서가 아님")
+    c.setSubject("IM-005A TD-DOC-7. 실제 계약 문서가 아님")
     _page(c, "TD-DOC-7", 1, 1)
     y = _lines(c, H - 96, [
         (18, "알림 서비스 요구사항 명세서(카드형)"),

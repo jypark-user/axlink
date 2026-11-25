@@ -62,7 +62,7 @@ def test_PR_은_제목과_본문을_같이_본다():
 
 
 def test_PR_본문의_닫기_키워드는_같은_저장소_이슈와_구조적으로_잇는다():
-    """IM-009 TD-PR-1: 「버튼 정렬 수정」 본문 Closes #4 → 이슈 G4, 근거 유형 구조적 (DEF-V010)."""
+    """IM-005A TD-PR-1: 「버튼 정렬 수정」 본문 Closes #4 → 이슈 G4, 근거 유형 구조적 (DEF-V010)."""
     found = tr.pull_request_evidence({"title": "버튼 정렬 수정", "body": "Closes #4"}, KNOWN, PATHS)
     assert [(e.kind, e.target, e.link_kind) for e in found] == [
         ("ISSUE_RELATION", ("GH", "4"), "IMPLEMENTS")

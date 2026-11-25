@@ -47,7 +47,7 @@ UC-041,tests/test_wbs_schedule_api.py,AC-041-5,True,"tests/test_wbs_schedule_api
 UC-041,tests/test_dashboard_api.py::위젯_값은_DB_집계와_같다,(대응표 본문 참조),False,tests/test_dashboard_api.py::위젯_값은_DB_집계와_같다·::추천_구성의_모든_위젯이_돈다
 UC-041,tests/test_semantic_catalog_exhaustive.py,(대응표 본문 참조),False,tests/test_semantic_catalog_exhaustive.py
 UC-041,tests/test_project_clock.py,(대응표 본문 참조),False,tests/test_project_clock.py → CC-11
-UC-041,tests/test_overview.py,AC-041-1·AC-041-2·AC-041-4·AC-041-6·AC-041-9·AC-041-10·AC-041-11,False,"tests/test_overview.py(값 없으면 NO_DATA). **미검증**: AC-041-1(IM-009 값 대조 시험 없음), AC-041-2(AI 와 같은 문장 — 구조적 일치, 실모델 미실행), AC-041-4(차이), AC-041-6 문안, AC-041-9·10(미구"
+UC-041,tests/test_overview.py,AC-041-1·AC-041-2·AC-041-4·AC-041-6·AC-041-9·AC-041-10·AC-041-11,False,"tests/test_overview.py(값 없으면 NO_DATA). **미검증**: AC-041-1(IM-005A 값 대조 시험 없음), AC-041-2(AI 와 같은 문장 — 구조적 일치, 실모델 미실행), AC-041-4(차이), AC-041-6 문안, AC-041-9·10(미"
 UC-042,tests/test_dashboard_api.py,AC-042-1·AC-042-2·AC-042-4,False,"자동 시험 tests/test_dashboard_api.py(기본 대시보드·editable, 용역사 403, 위젯 생명주기·레이아웃, 카탈로그 없는 지표 400, 값 = DB 집계, 추천 구성 34조합 preview) → AC-042-1·2·4(위험 처리율 제외)·5"
 UC-042,tests/test_semantic_builder.py,AC-042-3,False,"tests/test_semantic_builder.py 14건. **미검증**: AC-042-3(generate 경로 시험 미확인), 다른 브라우저 동일성(브라우저)"
 UC-043,tests/test_issues.py,AC-043-4·AC-043-7,False,"자동 시험 tests/test_issues.py(카드 전체 100건 초과, 쪽 무관, 권한) → AC-043-4·7"
@@ -70,7 +70,7 @@ UC-060,tests/test_indexing.py,AC-060-9,False,"tests/test_indexing.py·tests/test
 UC-060,tests/test_answer_intents.py,AC-060-9,False,"tests/test_indexing.py·tests/test_answer_intents.py(SEARCH_DISABLED, 집계는 값으로 답 — AC-060-9)"
 UC-060,tests/test_route_cache.py,(대응표 본문 참조),False,tests/test_route_cache.py. 실모델 tests/test_rag_live.py(문서 1순위·무관·이슈 건수 — AXLINK_LIVE=1 때만)
 UC-060,tests/test_rag_live.py,(대응표 본문 참조),False,tests/test_route_cache.py. 실모델 tests/test_rag_live.py(문서 1순위·무관·이슈 건수 — AXLINK_LIVE=1 때만)
-UC-060,tests/test_embedding_live.py,AC-060-2·AC-060-7·AC-060-8·AC-060-10,False,"tests/test_embedding_live.py. **미검증**: AC-060-2(IM-009 값 대조), AC-060-7 문안 전부, AC-060-8(폐쇄망 모델 실측 없음, 공개 환경은 클라우드 모델 gemma4:31b-cloud), AC-060-10(실모델 유도 시험 없"
+UC-060,tests/test_embedding_live.py,AC-060-2·AC-060-7·AC-060-8·AC-060-10,False,"tests/test_embedding_live.py. **미검증**: AC-060-2(IM-005A 값 대조), AC-060-7 문안 전부, AC-060-8(폐쇄망 모델 실측 없음, 공개 환경은 클라우드 모델 gemma4:31b-cloud), AC-060-10(실모델 유도 시험 "
 UC-061,tests/test_llm_settings.py,AC-061-1·AC-061-2·AC-061-3,True,"자동 시험 tests/test_llm_settings.py(비관리자 403, 용도 판별, 임베딩 전용 400, 생성 실패 400, 저장 뒤 DB·verifiedAt, 임베딩 현황·PUT 409·관리자만) → AC-061-1·2·3 부분"
 UC-061,tests/test_llm.py,AC-061-4·AC-061-5,False,"tests/test_llm.py·tests/test_embedding.py. **미검증**: AC-061-4(미구현), AC-061-5 브라우저"
 UC-061,tests/test_embedding.py,AC-061-4·AC-061-5,False,"tests/test_llm.py·tests/test_embedding.py. **미검증**: AC-061-4(미구현), AC-061-5 브라우저"

@@ -3,7 +3,7 @@
 
 S0 에서 시작해 UC-040-S01 이 S0r(TD-RR-1 등록)을 만들고, 다섯 축·일정 줄·이슈 조회를 T0 기준으로
 본다. 스냅샷 추이(UC-041-S06)는 S0a → S1 전이가 필요해 맨 뒤에 돈다. DEC-01·17 과
-브라우저·실모델 시나리오는 보류한다. 값은 IM-009 7 절의 독립 계산값과 비교한다.
+브라우저·실모델 시나리오는 보류한다. 값은 IM-005A 7 절의 독립 계산값과 비교한다.
 """
 
 from __future__ import annotations
@@ -132,7 +132,7 @@ def test_UC_040_S03_현황과_일치(target, s0):
 
 
 def test_UC_040_S04_일정_준수_칸(target, s0, monkeypatch):
-    """T0 목록의 일정 준수 칸 1/3 (33.3%). 대상 MS-1·MS-2·MS-5, 달성 MS-1 (AC-040-5, DEC-01 (a), IM-009 7.1).
+    """T0 목록의 일정 준수 칸 1/3 (33.3%). 대상 MS-1·MS-2·MS-5, 달성 MS-1 (AC-040-5, DEC-01 (a), IM-005A 7.1).
 
     목록은 오늘 날짜로 센다. 시험 프로세스 안에서는 사업 시계를 T0 로 돌려 본다. 원격은 대상 서버
     시계가 T0 인 격리 인스턴스(AXLINK_TARGET_CLOCK_T0=1)에서만 돈다."""
@@ -400,7 +400,7 @@ def test_UC_041_S12_WBS_변형(target, s0, replay):
 
 
 def test_UC_041_S07_일정_준수율(target, s0, monkeypatch):
-    """T0 일정 준수율 1/3 = 33.3%, 계획선 편차와 별도 지표·별도 카드 (AC-041-9, DEC-01 (a), IM-009 7.1)."""
+    """T0 일정 준수율 1/3 = 33.3%, 계획선 편차와 별도 지표·별도 카드 (AC-041-9, DEC-01 (a), IM-005A 7.1)."""
     pid = s0.ids["TD-PRJ-1"]
     prog = _get(target, s0, f"/api/projects/{pid}/progress?at={T0}")
     sc = prog["scheduleCompliance"]
@@ -805,7 +805,7 @@ def test_UC_043_S07_출처_이슈_제외(target, s0):
 
 
 def test_UC_041_S06_스냅샷_추이(target, s0):
-    """S1: 09-25 행 30.0/72.9 → 09-26 행 39.0/73.4. 전일 대비 +9.0%p·+0.5%p (AC-041-8, IM-009 7.1)."""
+    """S1: 09-25 행 30.0/72.9 → 09-26 행 39.0/73.4. 전일 대비 +9.0%p·+0.5%p (AC-041-8, IM-005A 7.1)."""
     s0.s0a()
     s0.s1()
     rows = {r["snapshotDate"]: r for r in _get(target, s0, f"/api/projects/{s0.ids['TD-PRJ-1']}/snapshots?limit=366")}
@@ -857,7 +857,7 @@ def _ui_UC_041_S04(screen, s0):
 # ------------------------------------------------------------------ 화면 값 맞추기
 # 화면의 숫자는 화면이 받은 API 값을 프런트가 그대로 적은 것이어야 한다. 아래는 프런트의 표기
 # 규칙(frontend/src/features/widgets/widget-data.ts·renderers.tsx, lib/format.ts)을 옮긴 것이다.
-# 일정·위젯 화면은 서버의 오늘로 센다. 계획선·편차처럼 날짜에 따라 바뀌는 값은 IM-009 의 T0 값이
+# 일정·위젯 화면은 서버의 오늘로 센다. 계획선·편차처럼 날짜에 따라 바뀌는 값은 IM-005A 의 T0 값이
 # 아니라 같은 화면이 부르는 API(기준일 없이)의 값과 비교한다.
 
 _NUMERIC = {"number", "percent", "COUNT", "RATE_PCT", "DAYS", "PCT_POINT"}
@@ -968,7 +968,7 @@ def _ui_UC_041_S01(screen, target, s0):
     위젯 값 API, 카드마다 산출 근거 문장 = API (AC-041-1·3).
 
     시험이 카드를 API 로 놓고(화면이 쓰는 것과 같은 위젯 명세) 끝나면 지운다. 진척 30.0%·일반 이슈
-    처리율 66.7% 처럼 날짜와 무관한 값은 위 API 단언이 IM-009 와 이미 맞췄다."""
+    처리율 66.7% 처럼 날짜와 무관한 값은 위 API 단언이 IM-005A 와 이미 맞췄다."""
     if not screen:
         return
     pid = s0.ids["TD-PRJ-1"]

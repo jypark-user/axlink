@@ -1,4 +1,4 @@
-"""IM-007 예제 시나리오 실행 공통 설비.
+"""IM-002 예제 시나리오 실행 공통 설비.
 
 시나리오 시험은 이름에 시나리오 ID 를 넣는다(`test_UC_001_S01_...`). 실행 뒤
 `scripts/verification_records.py record-junit` 가 junit 에서 ID 를 읽어 runs.jsonl 에 옮긴다.

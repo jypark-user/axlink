@@ -1,4 +1,4 @@
-﻿# IM-009 시험자료 HWP 세 건(TD-DOC-12·13·15)을 한컴오피스 한글 자동화로 만든다. 가상 시험자료다.
+﻿# IM-005A 시험자료 HWP 세 건(TD-DOC-12·13·15)을 한컴오피스 한글 자동화로 만든다. 가상 시험자료다.
 #
 #   powershell -ExecutionPolicy Bypass -File tests\fixtures\im009\hwp\make_hwp.ps1 [-Out <폴더>]
 #
@@ -35,7 +35,7 @@ function Write-Text([object]$h, [string]$text) {
 }
 
 function Write-Doc([object]$h, [string]$tid) {
-    Write-Text $h "가상 시험자료 · 실제 계약 문서가 아님 · AX Link 검증용(IM-009 $tid)"
+    Write-Text $h "가상 시험자료 · 실제 계약 문서가 아님 · AX Link 검증용(IM-005A $tid)"
     Run $h 'BreakPara'
     Write-Text $h '설계검토회의록'
     Run $h 'BreakPara'

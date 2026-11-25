@@ -1,4 +1,4 @@
-"""실연동(GitHub) 시나리오: 실제 GitHub 저장소 두 곳을 원천으로 수집한다 (IM-009 TD-CON-1·3).
+"""실연동(GitHub) 시나리오: 실제 GitHub 저장소 두 곳을 원천으로 수집한다 (IM-005A TD-CON-1·3).
 
 재생 서버(tests/fixtures/im009/replay*.py)를 쓰지 않는다. 시험자료는
 `tests/fixtures/im009/live_github.py` 가 시험 저장소에 만들어 둔 S0 이고, 대응표는
@@ -8,9 +8,9 @@
 UC-011-S03 은 원천에 S1 커밋을 push 하므로 이 PC 의 gh CLI 로그인이 더 있어야 한다.
 
 재생 시험과 다른 점
-- 생성·닫힌 시각(이슈·PR·마일스톤)은 GitHub 이 정한다. IM-009 의 날짜(예 TD-MS-5 닫힌 날
+- 생성·닫힌 시각(이슈·PR·마일스톤)은 GitHub 이 정한다. IM-005A 의 날짜(예 TD-MS-5 닫힌 날
   2026-06-03) 대신 원천 API 가 준 값과 원시본·표준 모델 값이 같은지 본다. 커밋 시각은 저장소에
-  IM-009 값으로 넣었으므로 그 값과 비교한다.
+  IM-005A 값으로 넣었으므로 그 값과 비교한다.
 - 건수는 고정 기대값이 아니라 원천 API 의 건수와 비교한다. 실제 저장소는 파일을 커밋으로만 넣을 수
   있어 받침 커밋(초기 구성·PR head)이 있고, S1 을 돌릴 때마다 S1·복원 커밋이 쌓인다.
 - 원천 무기록은 수집·확인 요청·조치 보고 전후의 원천 스냅숏(이슈·PR·커밋·마일스톤·라벨·브랜치·
@@ -47,7 +47,7 @@ GH_KINDS = ("issue", "pull_request", "commit", "milestone", "tree")
 
 
 class LiveWorld(Seeder):
-    """IM-009 1·2절(조직·계정·사업·참여 업체)은 투입 스크립트 그대로, 연결과 수집은 실제 GitHub."""
+    """IM-005A 1·2절(조직·계정·사업·참여 업체)은 투입 스크립트 그대로, 연결과 수집은 실제 GitHub."""
 
     def __init__(self, client: Any, gh_map: dict) -> None:
         super().__init__(client)
@@ -228,7 +228,7 @@ def test_UC_010_S01_GitHub_등록_확인_활성(target, live, screen):
     """TD-CON-1·3 등록 → 확인(저장소 이름·항목 종류) → 활성. 자격증명 응답은 끝 4자만 (AC-010-1·2·6).
 
     화면 단계(원격 + 브라우저): TD-CON-1 은 V1 이 연동 화면에서 등록·연결 테스트·활성화한다. 화면이
-    고를 수 없는 매핑 규칙(IM-009 TD-CON-1 연결 설정)은 등록 뒤 API 로 넣는다. TD-CON-3 은 API 로."""  # noqa: E501
+    고를 수 없는 매핑 규칙(IM-005A TD-CON-1 연결 설정)은 등록 뒤 API 로 넣는다. TD-CON-3 은 API 로."""  # noqa: E501
     for con in OWNER:
         sc = screen(OWNER[con]) if screen and con == "TD-CON-1" else None
         made = _ui_register(sc, live, con) if sc else live.create_connection(con)
@@ -443,7 +443,7 @@ def test_UC_011_S01_GitHub_첫_수집(target, live):
         mine = [j for j in jobs if j["connectionId"] == live.ids[con]]
         if not mine or mine[0]["status"] != "SUCCEEDED":
             problems.append(f"{con} 이력 {[(j['kind'], j['status']) for j in mine]}")
-    # S0 계획서가 수집돼 진척률 30.0% (IM-009 7.1)
+    # S0 계획서가 수집돼 진척률 30.0% (IM-005A 7.1)
     prog = target.get(
         f"/api/projects/{live.ids['TD-PRJ-1']}/progress", headers=live.h("TD-ACC-C1")
     ).json()
@@ -688,7 +688,7 @@ def test_UC_051_S05_원천_무기록(target, live):
 
 def test_UC_011_S03_조치_뒤_증분(target, live):
     """S1 커밋(TD-CMT-2 설계서 파일, WBS 3.2 85%)을 push → 지금 수집 → 신규 커밋 2·파일 갱신,
-    WBS 현행 교체, 진척 39.0% (AC-011-1·2, IM-009 7.1). 끝에 원천을 S0 내용으로 되돌린다."""
+    WBS 현행 교체, 진척 39.0% (AC-011-1·2, IM-005A 7.1). 끝에 원천을 S0 내용으로 되돌린다."""
     if not lg.gh_available():
         pytest.skip("S1 push 에 gh CLI 로그인이 필요하다")
     live.ensure_synced()

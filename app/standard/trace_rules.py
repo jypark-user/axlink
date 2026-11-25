@@ -21,7 +21,7 @@ _REQ_CODE = re.compile(r"\b([A-Z]{2,5}(?:\.[A-Z]{2,5})+\.\d{3})\b")
 # 도구별 접두가 붙은 이슈 참조만 읽는다. 맨 #17 은 어느 도구인지 몰라 근거로 쓰지 않는다.
 _ISSUE_REF = re.compile(r"\b(GH|RM)-(\d+)\b")
 # 예외: PR 본문의 닫기 키워드(Closes #4 등)는 GitHub 이 같은 저장소 이슈와 잇는 연결이다.
-# 사람이 적은 맨 참조가 아니라 도구가 만든 관계라 구조적 근거로 읽는다(IM-009 7.4, DEF-V010).
+# 사람이 적은 맨 참조가 아니라 도구가 만든 관계라 구조적 근거로 읽는다(IM-005A 7.4, DEF-V010).
 # 다른 저장소(owner/repo#n)는 이 사업의 이슈가 아니라 읽지 않는다.
 _CLOSING_REF = re.compile(
     r"(?<![\w/])(?:close[sd]?|fix(?:e[sd])?|resolve[sd]?)\s*:?\s+#(\d+)\b", re.IGNORECASE

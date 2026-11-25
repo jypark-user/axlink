@@ -1,4 +1,4 @@
-"""시험 DB 저장 실패 주입 (IM-007 UC-021-S06·UC-032-S07).
+"""시험 DB 저장 실패 주입 (IM-002 UC-021-S06·UC-032-S07).
 
 한 흐름의 뒤쪽 단계 테이블에 「이 행이면 예외」 트리거를 걸어, 앞 단계가 이미 쓴 뒤에 저장이
 실패하게 만든다. 그 흐름이 한 트랜잭션으로 되돌아가는지(아무것도 안 바뀌는지) 본다.
@@ -46,7 +46,7 @@ def fail_insert(table: str, column: str, value: str, tag: str) -> Iterator[None]
             create or replace function {name}() returns trigger language plpgsql as $f$
             begin
               if NEW.{column}::text = '{marker}' then
-                raise exception 'IM-009 시험 저장 실패 주입({tag})';
+                raise exception 'IM-005A 시험 저장 실패 주입({tag})';
               end if;
               return NEW;
             end

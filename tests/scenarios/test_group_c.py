@@ -458,7 +458,7 @@ def test_UC_021_S08_없는_코드_참조_상위_코드(target, s0, replay):
 
 def test_UC_021_S10_분모_AI_범위(target, s0):
     """확정 뒤 이행률 분모 3(A·B·D), 1/3 = 33.3%. C 는 목록에 남되 구분 표시·분모 제외. AI 목록 표도
-    A·B·D 를 확정 목록으로, C 를 「확정 명세서에 없음」으로 가른다 (AC-021-10, DEC-11 (a), IM-009 7.4)."""
+    A·B·D 를 확정 목록으로, C 를 「확정 명세서에 없음」으로 가른다 (AC-021-10, DEC-11 (a), IM-005A 7.4)."""
     pid = s0.ids["TD-PRJ-1"]
     c1 = auth(s0.tokens["TD-ACC-C1"])
     summary = target.get(f"/api/projects/{pid}/requirements/summary", headers=c1).json()

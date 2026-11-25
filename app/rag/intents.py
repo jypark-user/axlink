@@ -330,7 +330,7 @@ def behind_tasks(cur: Any, projects: list[dict[str, Any]], at: date) -> IntentRe
 
 def delayed_tasks(cur: Any, projects: list[dict[str, Any]], at: date) -> IntentResult:
     """지연 작업과 그 사유를 묻는 질문의 재료. 지연은 종료일이 기준일 전에 지났는데 실적이
-    100% 가 아닌 말단 작업이다(IM-009 5.1). 계획선보다 뒤처졌을 뿐 종료일이 남은 작업(계획
+    100% 가 아닌 말단 작업이다(IM-005A 5.1). 계획선보다 뒤처졌을 뿐 종료일이 남은 작업(계획
     뒤짐)은 지연이 아니다. 계획 뒤짐 목록은 behind_tasks 가 따로 낸다."""
     result = IntentResult(DELAY_CAUSE, ANSWER, "지연 작업")
     items: list[tuple[date, dict[str, str]]] = []
