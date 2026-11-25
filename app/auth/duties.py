@@ -22,7 +22,11 @@ SUPER_ADMIN = "SUPER_ADMIN"
 # 행위 → (허용 역할, 거절 문구)
 DUTIES: dict[str, tuple[tuple[str, ...], str]] = {
     # UC-020 요구사항 명세서
-    "BASELINE_AUTHOR": ((CONTRACTOR,), "요구사항 명세서 등록·정리·제출은 용역사가 합니다."),
+    # 명세서 파일 올리기(등록)는 발주기관도 한다(11-25 사용자 결정). 정리·제출은 용역사만 한다
+    "BASELINE_REGISTER": (
+        (CONTRACTOR, CLIENT), "요구사항 명세서 등록은 용역사나 발주기관이 합니다."
+    ),
+    "BASELINE_AUTHOR": ((CONTRACTOR,), "요구사항 명세서 정리·제출은 용역사가 합니다."),
     # UC-021 요구사항 목록 확정·돌려보냄
     "BASELINE_CONFIRM": ((CLIENT,), "요구사항 목록 확정과 돌려보내기는 발주기관이 합니다."),
     # UC-023 요구사항 상태 지정·되돌림

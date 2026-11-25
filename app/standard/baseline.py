@@ -271,11 +271,10 @@ def unresolved_refs(
 # --- 용역사: 등록·정리·제출 ----------------------------------------------------
 
 
-def create(
-    cur: Any, principal: AuthPrincipal, project_id: str, document_id: str
-) -> BaselineResponse:
+def _guard_new(cur: Any, principal: AuthPrincipal, project_id: str) -> None:
+    """새 명세서를 등록할 수 있는지 본다. 파일을 받기 전에 먼저 거른다."""
     _check_project(cur, principal, project_id)
-    _require_role(principal, "BASELINE_AUTHOR", "요구사항 명세서 등록은 용역사가 합니다.")
+    duties.require(principal, "BASELINE_REGISTER")
     if repo.find_confirmed(cur, project_id) is not None:
         # 1단계는 최초 기준선만이다. 확정 뒤 새 명세서는 기준선을 바꾸지 않는다
         raise errors.ApiError(
@@ -286,6 +285,12 @@ def create(
         raise errors.ApiError(
             409, "BASELINE_IN_PROGRESS", "정리 중이거나 확정을 기다리는 요구사항 명세서가 있습니다."
         )
+
+
+def create(
+    cur: Any, principal: AuthPrincipal, project_id: str, document_id: str
+) -> BaselineResponse:
+    _guard_new(cur, principal, project_id)
     document = repo.find_document(cur, document_id)
     if document is None or str(document["project_id"]) != project_id:
         raise errors.not_found("문서", document_id)
@@ -295,7 +300,53 @@ def create(
             409, "DOCUMENT_NOT_EXTRACTED",
             "문서에서 글을 아직 읽지 못했습니다. 처리 뒤 다시 등록하세요.",
         )
+    return _build(cur, principal, project_id, document, text)
 
+
+def create_from_upload(
+    cur: Any, principal: AuthPrincipal, project_id: str, filename: str, content: bytes
+) -> BaselineResponse:
+    """요구사항 화면에서 명세서 파일을 바로 올려 등록한다(11-25 사용자 지시).
+
+    자료 화면에 먼저 올리고 문서 처리가 끝나기를 기다렸다가 고르던 것을 한 번에 한다. 파일은
+    자료와 같은 문서로 저장되고(검색 색인은 문서 처리 작업자가 이어서 한다), 항목 추출에 쓸 글은
+    여기서 바로 읽는다. 글을 읽지 못하면 등록하지 않고 문서 기록도 되돌린다.
+    """
+    from pathlib import Path
+
+    from app.config import settings
+    from app.document import extractor
+    from app.document import service as document_service
+
+    _guard_new(cur, principal, project_id)
+    doc = document_service.upload(cur, principal, project_id, filename, content)
+    document = repo.find_document(cur, doc.id)
+    assert document is not None
+    text = document.get("extracted_text")
+    if not text:
+        stored = repo.find_stored_file(cur, doc.id)
+        try:
+            result = extractor.extract(
+                Path(settings.document_root) / stored["stored_path"], stored["file_ext"]
+            )
+        except extractor.UnsupportedDocument as exc:
+            raise errors.validation_failed(f"명세서를 읽을 수 없습니다. {exc}") from exc
+        except Exception as exc:  # noqa: BLE001 — 파서 오류는 사용자에게 사유로 돌려준다
+            raise errors.validation_failed(
+                "명세서를 읽을 수 없습니다. 파일이 손상됐거나 지원하지 않는 형식입니다. "
+                f"({type(exc).__name__})"
+            ) from exc
+        text = result.text
+        if not text.strip():
+            raise errors.validation_failed(
+                f"명세서에서 글을 읽지 못했습니다. {result.warning}".strip()
+            )
+    return _build(cur, principal, project_id, document, text)
+
+
+def _build(
+    cur: Any, principal: AuthPrincipal, project_id: str, document: dict[str, Any], text: str
+) -> BaselineResponse:
     baseline_id = repo.insert(
         cur, project_id, repo.next_version(cur, project_id), document,
         structuring.guess_version(text), principal.user_id,

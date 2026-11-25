@@ -66,9 +66,10 @@ def _links(cur, pid: str) -> set[tuple]:
 
 
 def test_UC_020_S05_발주기관_시도(target, s0):
-    """C1·A1 이 등록 → 거절 (AC-020-3, DEC-05). 항목 수정·제출 거절은 S01 뒤 S11 과 함께 본다."""
-    res = target.post(_base(s0), json={"documentId": s0.ids["TD-DOC-1"]}, headers=auth(s0.tokens["TD-ACC-C1"]))
-    assert res.status_code == 403, res.text
+    """A1 이 등록 → 거절 (AC-020-3, DEC-05). 항목 수정·제출 거절은 S01 뒤 S11 과 함께 본다.
+
+    11-25 사용자 결정으로 발주기관(C1)도 명세서를 등록할 수 있다. 여기서 C1 으로 등록하면 뒤
+    시나리오의 첫 등록과 겹치므로 C1 등록은 tests/test_requirement_baseline.py 에서 본다."""
     # 관리자도 용역사 행위를 대신하지 않는다(DEC-05 2026-11-16)
     res = target.post(_base(s0), json={"documentId": s0.ids["TD-DOC-1"]}, headers=auth(s0.tokens["TD-ACC-A1"]))
     assert res.status_code == 403 and "플랫폼 관리자는" in res.json()["message"], res.text
@@ -344,7 +345,6 @@ def test_UC_020_S02_읽히지_않는_양식_보완(target, s0, screen):
         pytest.skip("화면 시나리오. 원격 대상 + AXLINK_BROWSER_CHROME 에서 돈다")
     pid = s0.ids["TD-PRJ-9"]
     v1, c1 = auth(s0.tokens["TD-ACC-V1"]), auth(s0.tokens["TD-ACC-C1"])
-    s0._upload("TD-ACC-V1", "TD-PRJ-9", "TD-DOC-7")
     cards = [
         ("UR.CARD.001", "알림 수신 설정", "시민은 민원 처리 알림을 받을 방법(문자, 앱)을 고를 수 있다.", "필수"),
         ("UR.CARD.002", "처리 결과 알림", "민원 처리가 끝나면 시민이 고른 방법으로 결과를 알린다.", "필수"),
@@ -355,9 +355,10 @@ def test_UC_020_S02_읽히지_않는_양식_보완(target, s0, screen):
         sc = screen("TD-ACC-V1")
         page = sc.page
         sc.open(f"/p/{pid}/requirement-baseline").see("요구사항 명세서")
-        page.locator("#spec-doc").click()
-        page.get_by_role("option", name=re.compile("카드형-명세서")).click()
-        page.get_by_role("button", name="명세서로 등록").click()
+        # 11-25 부터 자료 화면을 거치지 않고 이 화면에서 파일을 바로 올린다
+        page.get_by_role("button", name="요구사항 명세서 올리기").click()
+        page.get_by_role("dialog").locator("#specFile").set_input_files(str(s0.files["TD-DOC-7"]))
+        page.get_by_role("dialog").get_by_role("button", name="올리기", exact=True).click()
         sc.see("명세서에서 요구사항을 찾지 못했습니다")
         sc.shot("0건_안내")
         for code, title, body, priority in cards:

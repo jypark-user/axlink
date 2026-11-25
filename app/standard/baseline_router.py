@@ -3,7 +3,9 @@
 용역사: 명세서 등록(POST) → 항목 정리 → 제출. 발주기관: 반려 또는 확정.
 """
 
-from fastapi import APIRouter, Response
+from typing import Annotated
+
+from fastapi import APIRouter, File, Response, UploadFile
 
 from app.auth.deps import Principal
 from app.db import tx
@@ -36,6 +38,20 @@ def create(
     """올려 둔 명세서 문서에서 항목을 뽑아 작성 중 기준선을 만든다."""
     with tx() as cur:
         return baseline.create(cur, principal, project_id, body.documentId)
+
+
+@router.post(_BASE + "/upload", response_model=BaselineResponse, status_code=201)
+def upload(
+    project_id: str, principal: Principal, file: Annotated[UploadFile, File()]
+) -> BaselineResponse:
+    """요구사항 화면에서 명세서 파일을 바로 올려 등록한다(11-25)."""
+    from app.document import service as document_service
+
+    content = file.file.read(document_service.MAX_BYTES + 1)
+    with tx() as cur:
+        return baseline.create_from_upload(
+            cur, principal, project_id, file.filename or "", content
+        )
 
 
 @router.get(_BASE + "/{baseline_id}", response_model=BaselineResponse)

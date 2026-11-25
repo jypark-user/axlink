@@ -30,7 +30,9 @@ def _principal(role: str) -> AuthPrincipal:
 def test_관리자는_어떤_업무_판단에도_들지_않는다():
     for duty, (roles, _) in duties.DUTIES.items():
         assert duties.SUPER_ADMIN not in roles, duty
-        assert len(roles) == 1, duty  # 발주기관 또는 용역사 한쪽만
+        # 판단은 발주기관 또는 용역사 한쪽만. 명세서 등록만 두 쪽이 한다(11-25 사용자 결정)
+        expected = 2 if duty == "BASELINE_REGISTER" else 1
+        assert len(roles) == expected, duty
 
 
 @pytest.mark.parametrize("duty", sorted(duties.DUTIES))
@@ -44,6 +46,9 @@ def test_관리자_거절에는_대신하지_않는다는_말이_붙는다(duty)
 def test_허용_역할은_통과하고_반대편은_거절된다():
     duties.require(_principal("CLIENT"), "PRODUCT_APPROVE")
     duties.require(_principal("CONTRACTOR"), "BASELINE_AUTHOR")
+    duties.require(_principal("CLIENT"), "BASELINE_REGISTER")
+    with pytest.raises(errors.ApiError):
+        duties.require(_principal("CLIENT"), "BASELINE_AUTHOR")
     with pytest.raises(errors.ApiError) as raised:
         duties.require(_principal("CONTRACTOR"), "PRODUCT_APPROVE")
     assert duties.ADMIN_NOTE.strip() not in raised.value.message
