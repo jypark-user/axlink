@@ -1,5 +1,6 @@
 import { useState, type ReactNode } from 'react';
 import { GripVertical, Info, Pencil, RefreshCw, Trash2 } from 'lucide-react';
+import { Popover } from 'radix-ui';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import {
   AlertDialog,
@@ -46,10 +47,21 @@ export function WidgetHost({
   );
   /** 삭제는 저장과 무관하게 즉시다 — 되돌릴 수 없으니 한 번은 묻는다. */
   const [confirming, setConfirming] = useState(false);
-  /** 산출 근거를 펼쳐 둔 상태. 지표마다 근거가 붙는다 (QUR.WEB.002) — 늘 펴 두면 그림이 밀려 누르면 보인다. */
+  /** 산출 근거를 연 상태. 지표마다 근거가 붙는다 (QUR.WEB.002). 카드 안에 펼치면 숫자와 그림이
+   *  밀려 가려지므로 카드 위에 겹쳐 띄운다(11-25). */
   const [basisOpen, setBasisOpen] = useState(false);
   const basis = state.data?.basis ?? null;
-  const Renderer = resolveWidgetRenderer(widget.spec?.template ?? widget.template);
+  // 기간 축이 있는 질의는 최근 구간부터 남기고 자른다(상위 값이 아니다). 숫자 카드는 추세선만
+  // 짧아질 뿐 숫자는 전체 값이라 배지를 달지 않는다 — 배지가 카드 높이를 먹어 숫자가 잘렸다.
+  const template = widget.spec?.template ?? widget.template;
+  const timeAxis = (widget.spec?.query?.dimensions ?? []).some((d) => d.startsWith('period_'));
+  const truncatedNote =
+    !state.data?.truncated || template === 'STAT_CARD'
+      ? null
+      : timeAxis
+        ? '최근 구간만 표시'
+        : `상위 ${state.data.rows.length}건만 표시`;
+  const Renderer = resolveWidgetRenderer(template);
   const title = widget.spec?.title ?? widget.title;
   const empty = state.data !== null && state.data.rows.length === 0 && state.data.total === null;
 
@@ -75,16 +87,34 @@ export function WidgetHost({
         <CardAction className="flex items-center gap-1">
           {/* 편집 중에는 배치가 일이다 — 새로고침은 치우고 삭제만 남긴다. */}
           {!editing && basis && (
-            <Button
-              size="icon"
-              variant="ghost"
-              aria-label="산출 근거"
-              aria-pressed={basisOpen}
-              className={cn(basisOpen && 'text-primary')}
-              onClick={() => setBasisOpen((v) => !v)}
-            >
-              <Info className="size-4" />
-            </Button>
+            <Popover.Root open={basisOpen} onOpenChange={setBasisOpen}>
+              <Popover.Trigger asChild>
+                <Button
+                  size="icon"
+                  variant="ghost"
+                  aria-label="산출 근거"
+                  aria-pressed={basisOpen}
+                  className={cn(basisOpen && 'text-primary')}
+                >
+                  <Info className="size-4" />
+                </Button>
+              </Popover.Trigger>
+              <Popover.Portal>
+                <Popover.Content
+                  align="end"
+                  sideOffset={6}
+                  collisionPadding={12}
+                  className="border-border bg-popover text-popover-foreground z-50 w-80 max-w-[90vw] rounded-md border px-3 py-2 shadow-md"
+                >
+                  <p className="text-muted-foreground text-xs font-semibold tracking-wide">
+                    산출 근거
+                  </p>
+                  <p className="mt-1 text-xs leading-relaxed" data-testid="widget-basis">
+                    {basis}
+                  </p>
+                </Popover.Content>
+              </Popover.Portal>
+            </Popover.Root>
           )}
           {!editing && (
             <Button size="icon" variant="ghost" aria-label="새로고침" onClick={state.reload}>
@@ -148,17 +178,9 @@ export function WidgetHost({
           <Renderer spec={widget.spec} data={state.data} />
         )}
       </CardContent>
-      {!editing && basisOpen && basis && (
-        <div className="border-border mx-4 mb-3 rounded-md border bg-muted/40 px-3 py-2">
-          <p className="text-muted-foreground text-xs font-semibold tracking-wide">산출 근거</p>
-          <p className="text-foreground mt-1 text-xs leading-relaxed" data-testid="widget-basis">
-            {basis}
-          </p>
-        </div>
-      )}
-      {state.data?.truncated && (
+      {truncatedNote && (
         <div className="px-4 pb-2">
-          <Badge variant="warning">상위 {state.data.rows.length}건만 표시</Badge>
+          <Badge variant="warning">{truncatedNote}</Badge>
         </div>
       )}
 

@@ -959,8 +959,10 @@ def _check_widget_cards(sc, target, c1: dict, widgets: list[dict]) -> None:
                 for cell in cells:
                     expect(line).to_contain_text(cell)
         if data.get("basis"):
+            # 근거는 카드 위에 겹쳐 뜨는 창이라 카드 밖(문서 끝)에 그려진다. 한 번에 하나만 열린다
             card.get_by_role("button", name="산출 근거").click()
-            expect(card.get_by_test_id("widget-basis")).to_have_text(data["basis"].strip())
+            expect(sc.page.get_by_test_id("widget-basis")).to_have_text(data["basis"].strip())
+            sc.page.keyboard.press("Escape")
 
 
 def _ui_UC_041_S01(screen, target, s0):

@@ -61,3 +61,42 @@ describe('위젯 산출 근거', () => {
     expect(screen.queryByRole('button', { name: '산출 근거' })).toBeNull();
   });
 });
+
+describe('잘림 배지', () => {
+  const truncated = (): WidgetDataResponse => ({ ...data(null), truncated: true });
+  const withQuery = (template: string, dimensions: string[]): WidgetResponse => ({
+    ...widget,
+    template,
+    spec: {
+      template,
+      title: '미해결 이슈',
+      query: {
+        measure: 'open_issue_count',
+        dimensions,
+        filters: [],
+        projectScope: [],
+        limit: null,
+      },
+      options: null,
+    } as unknown as WidgetSpec,
+  });
+
+  it('숫자 카드는 추세선이 잘려도 배지를 달지 않는다', async () => {
+    response = truncated();
+    render(<WidgetHost widget={withQuery('STAT_CARD', ['period_day'])} editing={false} />);
+    await waitFor(() => expect(screen.getByText(/미해결 이슈 수/)).toBeTruthy());
+    expect(screen.queryByText(/만 표시/)).toBeNull();
+  });
+
+  it('기간 축 그림은 최근 구간만 남겼다고 말한다', async () => {
+    response = truncated();
+    render(<WidgetHost widget={withQuery('LINE_CHART', ['period_day'])} editing={false} />);
+    expect(await screen.findByText('최근 구간만 표시')).toBeTruthy();
+  });
+
+  it('기간 축이 없으면 상위 건수를 말한다', async () => {
+    response = truncated();
+    render(<WidgetHost widget={withQuery('BAR_CHART', ['issue_status'])} editing={false} />);
+    expect(await screen.findByText('상위 1건만 표시')).toBeTruthy();
+  });
+});
