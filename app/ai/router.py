@@ -6,9 +6,11 @@
 
 from fastapi import APIRouter, Query
 
-from app.ai import model_settings
+from app.ai import answer_mode, model_settings
 from app.ai.models import (
     AiRuntimeResponse,
+    AnswerModeResponse,
+    AnswerModeUpdateRequest,
     EmbeddingStatusResponse,
     EmbeddingUpdateRequest,
     LlmMeasureResponse,
@@ -39,6 +41,19 @@ def runtime(principal: Principal) -> AiRuntimeResponse:
         fixed=fixed,
         codeVersion=settings.build_label,
     )
+
+
+@router.get("/answer-mode", response_model=AnswerModeResponse)
+def get_answer_mode(principal: Principal) -> AnswerModeResponse:
+    """답변 방식(ARC-034). 로그인한 누구나 읽는다. 질의 화면이 지금 방식을 보인다."""
+    with tx() as cur:
+        return answer_mode.get(cur)
+
+
+@router.put("/answer-mode", response_model=AnswerModeResponse)
+def put_answer_mode(req: AnswerModeUpdateRequest, principal: Principal) -> AnswerModeResponse:
+    with tx() as cur:
+        return answer_mode.save(cur, principal, req)
 
 
 @router.get("/settings", response_model=LlmSettingResponse)

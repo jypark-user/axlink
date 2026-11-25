@@ -99,3 +99,15 @@ class AiRuntimeResponse(BaseModel):
     model: str | None
     fixed: bool  # 생성이나 임베딩이 고정 응답인가
     codeVersion: str | None = None  # noqa: N815 — 실행 코드 이름표(AXLINK_BUILD_LABEL)
+
+
+class AnswerModeResponse(BaseModel):
+    """답변 방식 (ARC-034). STRUCTURED = 지표 기반(기본), AI_JUDGE = AI 판단."""
+
+    mode: str
+    label: str
+    updatedAt: str | None  # noqa: N815
+
+
+class AnswerModeUpdateRequest(BaseModel):
+    mode: str = Field(pattern="^(STRUCTURED|AI_JUDGE)$")

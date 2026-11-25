@@ -21,7 +21,7 @@ from typing import Any
 
 from pydantic import BaseModel
 
-from app.ai import embedding_guard
+from app.ai import answer_mode, embedding_guard
 from app.ai.embedding import embedding_port
 from app.ai.llm import llm_port
 from app.auth import repository as auth_repo
@@ -37,6 +37,7 @@ from app.rag import (
     collection,
     entity_table,
     intents,
+    judge,
     lookup,
     milestones,
     number_guard,
@@ -227,6 +228,13 @@ def prepare(cur: Any, principal: AuthPrincipal, conversation_id: str, req: AskRe
 def stream(p: Prepared) -> Iterator[bytes]:
     """SSE 이벤트 순서: start → delta… → sources → (infographic) → (suggestions) → done.
     오류는 error 하나. 답의 종류는 done 의 finishReason 이 말한다."""
+    if p.target is None:
+        with tx() as cur:
+            mode = answer_mode.current(cur)
+        if mode == judge.AI_JUDGE:
+            # AI 판단(ARC-034). 판정 없이 사업 자원을 모아 모델 한 번으로 답한다
+            yield from _stream_judge(p)
+            return
     assistant_id: str | None = None
     pieces: list[str] = []
     try:
@@ -406,6 +414,117 @@ def stream(p: Prepared) -> Iterator[bytes]:
         yield _sse_raw("error", {"code": exc.code, "message": message})
     except Exception:
         log.exception("질의 처리 실패 conversation=%s", p.conversation_id)
+        _abort(assistant_id, pieces, p)
+        yield _sse_raw("error", {"code": "INTERNAL", "message": "답변 생성 중 오류가 났습니다."})
+
+
+def _stream_judge(p: Prepared) -> Iterator[bytes]:
+    """AI 판단 방식(ARC-034). 사업 자원 + 질문에 닿는 문서 조각을 한 번에 넘기고 모델이 판단한다.
+    값은 서버가 집계에서 뽑고, 내보내는 문장은 지표 기반과 같은 수치 검문을 지난다."""
+    assistant_id: str | None = None
+    pieces: list[str] = []
+    try:
+        llm = llm_port()
+        with tx() as cur:
+            resources = judge.build(cur, p.principal, p.scope, intents.today())
+        chunks: list[RetrievedChunk] = []
+        try:
+            query_vec = embedding_port().embed([p.question])[0]
+            with tx() as cur:
+                found = search.search_with_vector(cur, query_vec, p.question, p.scope)
+                if found.passes_gate():
+                    chunks = search.attach_status(
+                        cur, [answer.focus_rows(c, p.question) for c in found.chunks]
+                    )
+        except errors.ApiError as exc:
+            # 문서 검색이 멈춰도 사업 자원만으로 답한다. 모델 서버 장애는 아래 생성에서 드러난다
+            if exc.code not in (embedding_guard.MISMATCH, "AI_UNAVAILABLE"):
+                raise
+            log.warning(
+                "AI 판단 문서 검색 건너뜀 conversation=%s: %s", p.conversation_id, exc.message
+            )
+
+        routing_info = QueryRouting(
+            type=judge.AI_JUDGE, rewrittenQuery=None, measureKey=None, dimensions=[], viz=None
+        )
+        with tx() as cur:
+            assistant_id = repo.insert_message(
+                cur,
+                p.conversation_id,
+                repo.next_seq(cur, p.conversation_id),
+                "ASSISTANT",
+                "",
+                status="STREAMING",
+                route_type=judge.AI_JUDGE,
+            )
+            repo.insert_sources(
+                cur, assistant_id, [_source_row(i, c) for i, c in enumerate(chunks, 1)]
+            )
+            repo.touch_conversation(cur, p.conversation_id)
+        yield _sse(
+            "start",
+            SseStartEvent(
+                conversationId=p.conversation_id,
+                userMessageId=p.user_message_id,
+                assistantMessageId=assistant_id,
+                routing=routing_info,
+                retrievedChunkCount=len(chunks),
+            ),
+        )
+
+        facts = resources.facts()
+        for no, chunk in enumerate(chunks, 1):
+            facts += number_guard.facts_from_chunk(no, chunk.content)
+        gate = number_guard.SentenceGate(
+            number_guard.Checker(facts, question=p.question, subjects=resources.subjects())
+        )
+        prompt = judge.user_prompt(p.question, resources, chunks, p.previous)
+        raw = llm.stream(judge.SYSTEM_PROMPT, prompt, json_schema=answer.ANSWER_SCHEMA)
+        for piece in answer.decode_answer(answer.strip_think(raw)):
+            text = gate.feed(piece)
+            if text:
+                pieces.append(text)
+                yield _sse("delta", SseDeltaEvent(text=text))
+        text = gate.finish()
+        if text:
+            pieces.append(text)
+            yield _sse("delta", SseDeltaEvent(text=text))
+        finish_reason = STOP
+        if gate.blocked:
+            finish_reason = NUMBER_GUARD
+            log.info(
+                "AI 판단 수치 검문이 문장 %d개를 막았다: %s",
+                gate.blocked,
+                ", ".join(f"{v.value}{v.unit}({v.reason})" for v in gate.violations),
+            )
+
+        sources = [_source_from_chunk(i, c) for i, c in enumerate(chunks, 1)]
+        yield _sse("sources", SseSourcesEvent(sources=sources))
+        elapsed = _elapsed(p)
+        with tx() as cur:
+            repo.finish_message(
+                cur, assistant_id, "".join(pieces).strip(), "COMPLETE", elapsed, finish_reason
+            )
+        yield _sse(
+            "done",
+            SseDoneEvent(
+                assistantMessageId=assistant_id, finishReason=finish_reason, elapsedMs=elapsed
+            ),
+        )
+    except GeneratorExit:
+        _abort(assistant_id, pieces, p)
+        raise
+    except errors.ApiError as exc:
+        _abort(assistant_id, pieces, p)
+        message = exc.message
+        if exc.code == "AI_UNAVAILABLE":
+            log.warning(
+                "AI 판단 중 모델 서버 장애 conversation=%s: %s", p.conversation_id, exc.message
+            )
+            message = MODEL_UNAVAILABLE
+        yield _sse_raw("error", {"code": exc.code, "message": message})
+    except Exception:
+        log.exception("AI 판단 처리 실패 conversation=%s", p.conversation_id)
         _abort(assistant_id, pieces, p)
         yield _sse_raw("error", {"code": "INTERNAL", "message": "답변 생성 중 오류가 났습니다."})
 

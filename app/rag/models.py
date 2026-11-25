@@ -6,7 +6,9 @@ from pydantic import BaseModel, Field
 
 from app.semantic.models import WidgetDataResponse
 
-RouteType = Literal["DOCUMENT", "AGGREGATE", "MIXED", "OVERVIEW", "INTENT", "CLARIFY"]
+RouteType = Literal[
+    "DOCUMENT", "AGGREGATE", "MIXED", "OVERVIEW", "INTENT", "CLARIFY", "AI_JUDGE"
+]
 MessageFeedback = Literal["UP", "DOWN"]
 
 

@@ -83,7 +83,14 @@ export type ChunkSourceType =
   | 'DOCUMENT_UPLOAD';
 export type MessageRole = 'USER' | 'ASSISTANT';
 export type MessageFeedback = 'UP' | 'DOWN';
-export type RouteType = 'DOCUMENT' | 'AGGREGATE' | 'MIXED' | 'OVERVIEW' | 'INTENT' | 'CLARIFY';
+export type RouteType =
+  | 'DOCUMENT'
+  | 'AGGREGATE'
+  | 'MIXED'
+  | 'OVERVIEW'
+  | 'INTENT'
+  | 'CLARIFY'
+  | 'AI_JUDGE';
 export type WidgetTemplate =
   | 'STAT_CARD'
   | 'BAR_CHART'
@@ -1946,6 +1953,15 @@ export interface LlmModelListResponse {
   models: LlmModelResponse[];
   /** 조회 실패는 예외가 아니라 상태 문구다 */
   error: string | null;
+}
+
+/** 답변 방식 (ARC-034). STRUCTURED = 지표 기반(기본), AI_JUDGE = AI 판단. */
+export type AnswerMode = 'STRUCTURED' | 'AI_JUDGE';
+
+export interface AnswerModeResponse {
+  mode: AnswerMode;
+  label: string;
+  updatedAt: string | null;
 }
 
 export interface LlmSettingResponse {
