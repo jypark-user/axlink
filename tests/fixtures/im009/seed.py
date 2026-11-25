@@ -1,4 +1,4 @@
-"""IM-009 공통 시험 자료 투입 (상태 S0 → S0r · S0a · S1 · S1r).
+"""IM-005A 공통 시험 자료 투입 (상태 S0 → S0r · S0a · S1 · S1r).
 
 전용 시험 DB(이름이 `_test` 로 끝남)에만 쓴다. 제품의 API(FastAPI TestClient)와 수집·승격 코드를
 그대로 불러 자료를 넣는다. 도구 원천은 재생 자료(payloads.py)다. 실연동으로 S0 를 만들 때는
@@ -145,7 +145,7 @@ class Seeder:
                         "name": p.name,
                         "startDate": p.start.isoformat(),
                         "endDate": p.end.isoformat(),
-                        "description": f"IM-009 {tid}",
+                        "description": f"IM-005A {tid}",
                         "contractorName": "",
                         "deletePassword": "im009-delete",
                     },
@@ -597,7 +597,7 @@ class Seeder:
             )
         )
         self._upload("TD-ACC-V1", "TD-PRJ-1", "TD-DOC-5")
-        # 과업지시서(가상 시험자료 PDF, IM-009 4.2: 관련자료 S0). 문서 질의의 쪽 번호 판정 재료
+        # 과업지시서(가상 시험자료 PDF, IM-005A 4.2: 관련자료 S0). 문서 질의의 쪽 번호 판정 재료
         self._upload("TD-ACC-V1", "TD-PRJ-1", "TD-DOC-4")
         # 시험 사업 자료
         for tid in ("TD-DOC-8", "TD-DOC-9", "TD-DOC-14"):
@@ -642,7 +642,7 @@ class Seeder:
         items = self._raw_items("S1")
         with tx() as cur:
             # 09-15~09-25 스냅샷은 원천이 바뀌기 전 값(30.0/…)이어야 한다. 조치가 09-26 수집에
-            # 반영되므로 그날 행만 바뀐 뒤에 찍는다(IM-009 6절 S1, 7.1 「전일 대비」).
+            # 반영되므로 그날 행만 바뀐 뒤에 찍는다(IM-005A 6절 S1, 7.1 「전일 대비」).
             self._snapshots(cur, "TD-PRJ-1", d.T0, d.T1 - timedelta(days=1))
             if self.remote:
                 self.replay.state = "S1"

@@ -290,7 +290,7 @@ def report(
     if row["status"] != "REQUESTED":
         raise errors.validation_failed("요청 상태에서만 보고할 수 있습니다.")
     if not (req.body or "").strip():
-        # 공백만 든 보고는 보고가 아니다(IM-007 AC-051-3, GH-220). 상태를 바꾸지 않는다
+        # 공백만 든 보고는 보고가 아니다(IM-002 AC-051-3, GH-220). 상태를 바꾸지 않는다
         raise errors.validation_failed("보고문을 적어 주세요.")
     evidence = None
     if row["purpose"] == "WBS_COMPLETION":

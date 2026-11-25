@@ -398,7 +398,7 @@ def _all_evidence(monkeypatch) -> None:
 
 
 def test_UC_060_S01_문서_질문과_출처(target, s0, llm, monkeypatch):
-    """「납품 산출물은 몇 종인가」 → 22종·각주, 출처 과업지시서 2쪽, 원문 연결 (AC-060-1, IM-009 7.5)."""
+    """「납품 산출물은 몇 종인가」 → 22종·각주, 출처 과업지시서 2쪽, 원문 연결 (AC-060-1, IM-005A 7.5)."""
     llm({"route": "DOCUMENT", "query": "납품 산출물 종"}, "납품 산출물은 22종입니다[1].")
     _all_evidence(monkeypatch)
     events = _ask(target, s0, "TD-ACC-C1", "납품 산출물은 몇 종인가", [s0.ids["TD-PRJ-1"]])

@@ -117,7 +117,7 @@ class WbsProgress:
     warnings: list[str]
     estimated: bool = False
     unavailable: list[str] = field(default_factory=list)
-    # 지연 작업: 종료일이 기준일 전에 지났는데 실적 100% 미만인 말단(IM-009 7.1)
+    # 지연 작업: 종료일이 기준일 전에 지났는데 실적 100% 미만인 말단(IM-005A 7.1)
     delayed: list[str] = field(default_factory=list)
 
     @property

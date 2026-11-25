@@ -1,4 +1,4 @@
-"""IM-009 도메인 값(data.py)을 도구 원시 응답 꼴로 바꾼다.
+"""IM-005A 도메인 값(data.py)을 도구 원시 응답 꼴로 바꾼다.
 
 GitHub·Redmine 커넥터가 저장하는 raw_artifact 의 payload 와 같은 키만 쓴다
 (app/standard/mapping.py · mapping_redmine.py · trace_rules.py 가 읽는 키 기준).
@@ -14,7 +14,7 @@ from tests.fixtures.im009 import data as d
 
 REDMINE_STATUS = {
     "신규": {"id": 1, "name": "신규", "is_closed": False},
-    # IM-009 는 「진행중」으로 적지만 Redmine 기본 상태 이름은 「진행」이다. 원천 어휘를 쓴다
+    # IM-005A 는 「진행중」으로 적지만 Redmine 기본 상태 이름은 「진행」이다. 원천 어휘를 쓴다
     "진행중": {"id": 2, "name": "진행", "is_closed": False},
     "해결": {"id": 3, "name": "해결", "is_closed": False},
     "종료": {"id": 5, "name": "종료", "is_closed": True},

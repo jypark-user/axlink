@@ -290,7 +290,7 @@ def test_UC_030_S07_인식_결과_표시(target, s0, replay, screen):
 
 
 def test_UC_031_S07_지연_판정(target, s0):
-    """S0, T0: 3.2 는 지연(종료 07-31 < T0, 미제출) (AC-031-3, IM-009 7.2)."""
+    """S0, T0: 3.2 는 지연(종료 07-31 < T0, 미제출) (AC-031-3, IM-005A 7.2)."""
     items = {i["wbsId"]: i for i in _deliverables(target, s0)["items"]}
     assert items["3.2"]["status"] == "OVERDUE", items["3.2"]
     assert items["3.1"]["status"] == "SUBMITTED", items["3.1"]
@@ -453,7 +453,7 @@ def test_UC_031_S04_반려_뒤_재제출_이력(target, s0, screen):
 def _review_window_history(target, s0, screen):
     """산출물 검토 창(11-18·19 개편 뒤 승인 단위는 올라온 산출물): 3.2 양식에 올린 것을 반려
     「목차 누락」 → 같은 양식에 새 파일 → 새 것이 최신·승인 대기, 상세보기에 지난 버전의 반려·사유·
-    처리자·처리 일시 (AC-031-4·5, IM-007 v0.2.29)."""
+    처리자·처리 일시 (AC-031-4·5, IM-002 v0.2.29)."""
     pid = s0.ids["TD-PRJ-1"]
     v1, c1 = auth(s0.tokens["TD-ACC-V1"]), auth(s0.tokens["TD-ACC-C1"])
     item = next(i for i in _deliverables(target, s0)["items"] if i["wbsId"] == "3.2")
@@ -638,7 +638,7 @@ def test_UC_030_S04_머리글_없음(target, s0, replay):
 
 
 def test_UC_030_S06_가중치_없는_WBS_L2(target, s0, replay):
-    """가중치 열 없음 → 기간 비례 가중치 × 파일 실적, 「추정」 표시, 30.3% (A3, DEC-19 (b), IM-009 7.1)."""
+    """가중치 열 없음 → 기간 비례 가중치 × 파일 실적, 「추정」 표시, 30.3% (A3, DEC-19 (b), IM-005A 7.1)."""
     replay.faults = Faults(wbs_variant="TD-WBS-L2", wbs_sha="2c2c2c2c" + "0" * 32)
     _sync(target, s0)
     prog = _progress(target, s0)
@@ -776,7 +776,7 @@ def test_UC_032_S10_가중치_기준_확인(target, s0, replay):
 
 def test_UC_031_S10_승인률(target, s0):
     """S0 산출물 승인률 1/5 = 20.0%: 분모 = 예상 산출물 5(요청 없이 WBS 산출물 열), 분자 = 3.1 에 올라온 요구사항정의서 승인.
-    사업수행계획서는 WBS 산출물 열에 없어 세지 않는다. 산출 근거 문장 (AC-031-9, DEC-12 (b), IM-009 7.2)."""
+    사업수행계획서는 WBS 산출물 열에 없어 세지 않는다. 산출 근거 문장 (AC-031-9, DEC-12 (b), IM-005A 7.2)."""
     pid = s0.ids["TD-PRJ-1"]
     c1 = auth(s0.tokens["TD-ACC-C1"])
     prog = target.get(f"/api/projects/{pid}/progress?at={d.T0.isoformat()}", headers=c1).json()

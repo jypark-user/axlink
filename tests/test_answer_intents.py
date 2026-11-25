@@ -257,7 +257,7 @@ def one_submission(no_plan):  # noqa: F811 (픽스처 이름)
 def test_WBS_가_없으면_대표_진척률을_기준과_함께_일부만_답한다(ask, no_snapshots, monkeypatch):
     """WBS 없이 이슈 기반 추정 진척률(L3, DEC-17)이 선다. 계획 비교는 못 한다.
 
-    이슈 진척도 재료는 IM-009 TD-ISS-N1~N7 과 같게 둔다: 합 380, 대상 7, 진척도 있음 6.
+    이슈 진척도 재료는 IM-005A TD-ISS-N1~N7 과 같게 둔다: 합 380, 대상 7, 진척도 있음 6.
     """
     monkeypatch.setattr(
         intents.progress_service.repository, "issue_progress", lambda cur, pid: (380.0, 7, 6)
@@ -606,7 +606,7 @@ def test_검색이_멈춰도_집계_질문은_값으로_답한다(ask, monkeypat
 @requires_db
 @pytest.mark.usefixtures("plan_file")
 def test_지연_사유_질문의_지연은_종료일이_지나고_실적이_100이_아닌_작업이다(ask, monkeypatch):
-    """IM-009 5.1: 지연 = 종료일 < 기준일 and 실적 < 100%. 계획선보다 뒤처졌지만 종료일이 남은
+    """IM-005A 5.1: 지연 = 종료일 < 기준일 and 실적 < 100%. 계획선보다 뒤처졌지만 종료일이 남은
     작업(계획 뒤짐)은 지연이 아니다. 09-29 기준 1.2(종료 09-30, 실적 50%, 계획선 87.5%)는
     계획 뒤짐이지만 지연이 아니고, 2.1(종료 09-12, 실적 0%)만 지연이다(UC-060-S07 실모델)."""
     from datetime import datetime

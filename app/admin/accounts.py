@@ -229,7 +229,7 @@ def set_user_status(
 
 
 def reset_password(cur: Any, principal: AuthPrincipal, user_id: str) -> ClientUserCreatedResponse:
-    """임시 비밀번호를 다시 발급한다(IM-007 AC-001-5, GH-206).
+    """임시 비밀번호를 다시 발급한다(IM-002 AC-001-5, GH-206).
 
     새 비밀번호는 이 응답에만 담는다. 옛 비밀번호와 살아 있는 갱신 토큰은 전부 무효가 된다.
     발급 사실은 이력에 남기되 비밀번호 자체는 어디에도 적지 않는다.

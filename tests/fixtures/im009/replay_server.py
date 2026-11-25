@@ -1,4 +1,4 @@
-"""도구 원천 재생 서버. IM-009 자료를 GitHub·Redmine REST 응답 꼴로 HTTP 에 낸다.
+"""도구 원천 재생 서버. IM-005A 자료를 GitHub·Redmine REST 응답 꼴로 HTTP 에 낸다.
 
 프로세스 안 재생기(replay.install)는 시험 프로세스의 어댑터 함수를 바꾼다. 원격 서버(5174)에
 시나리오를 돌리면 그 서버의 어댑터는 바뀌지 않는다. 이 서버는 같은 자료(ReplaySource)를 HTTP 로
@@ -79,7 +79,7 @@ def _faults_from(body: dict[str, Any]) -> Faults:
 
 
 def create_app(source: ReplaySource) -> FastAPI:
-    app = FastAPI(title="IM-009 원천 재생")
+    app = FastAPI(title="IM-005A 원천 재생")
     embed_proxy.mount(app)  # 5174 전용 임베딩 장애 주입(UC-070-S05·S07)
     app.include_router(replay_ollama.router)  # 대본 모델(원격 대상의 llm 시나리오)
     gh_items = source.fetch_items("GITHUB")

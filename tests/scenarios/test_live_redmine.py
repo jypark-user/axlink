@@ -1,10 +1,10 @@
 # ruff: noqa: E501
 """실연동(Redmine) 시나리오: 실제 Redmine 프로젝트를 원천으로 수집한다 (AC-011-12).
 
-재생 서버를 쓰지 않는다. 원천은 시험용 Redmine(axlink-rm)의 프로젝트 하나다. IM-009 TD-CON-2 와
+재생 서버를 쓰지 않는다. 원천은 시험용 Redmine(axlink-rm)의 프로젝트 하나다. IM-005A TD-CON-2 와
 같은 자료를 넣지 못했으므로(트래커·커스텀 필드는 관리자 화면에서만 만든다) 고정 기대값 대신
 **원천 API 가 준 값과 원시본·표준 모델 값이 같은지** 본다. test_live_github.py 와 같은 원칙이다.
-IM-009 기대값(R4 트래커·버전, R7 리스크 등)과의 대조는 재생 시험 UC-011-S12 가 맡는다.
+IM-005A 기대값(R4 트래커·버전, R7 리스크 등)과의 대조는 재생 시험 UC-011-S12 가 맡는다.
 
 돌리는 조건: AXLINK_LIVE_REDMINE=1, 시험용 DB(*_test), 수집 계정 API 키 AXLINK_VERIFY_RM_KEY.
 - AXLINK_VERIFY_RM_URL: 시험 프로세스가 원천을 읽는 주소(기본 http://127.0.0.1:3000)
@@ -82,7 +82,7 @@ class Source:
 
 
 class LiveRedmine(Seeder):
-    """IM-009 1·2절(조직·계정·사업·참여 업체)은 투입 스크립트 그대로, 연결과 수집은 실제 Redmine."""
+    """IM-005A 1·2절(조직·계정·사업·참여 업체)은 투입 스크립트 그대로, 연결과 수집은 실제 Redmine."""
 
     def base(self) -> None:
         self._orgs_and_clients()

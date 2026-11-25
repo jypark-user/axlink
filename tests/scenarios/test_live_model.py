@@ -9,7 +9,7 @@
 실모델 문장은 실행마다 다르다. 단언은 절대 규칙에 기댄다.
 - 수치: 답에 나간 수치는 수치 검문(NUMBER_GUARD)을 통과한 것이다. 집계 수치는 같은 지표를
   시맨틱 레이어(/api/widgets/preview)로 다시 뽑은 값과 맞춘다.
-- 출처: 본문 각주 번호가 가리키는 출처의 문서·위치가 IM-009 7.5 와 같다.
+- 출처: 본문 각주 번호가 가리키는 출처의 문서·위치가 IM-005A 7.5 와 같다.
 - 근거: 게이트·검문이 막은 경우는 그것이 기대일 때만 통과다(UC-060-S05b).
 문장 표현은 느슨하게 본다(「22종」이 있고 각주가 있다 등).
 
@@ -23,7 +23,7 @@
 
 기준일: UC-060-S07 의 기대(3.2 지연 1건)는 T0(2026-09-15) 기준이다. 프로세스 안은 사업 시계를
 T0 로 돌린다. 원격은 서버 시계를 바꿀 수단이 없어, 대상 컨테이너 시계를 T0 로 둔 격리 환경일 때만
-AXLINK_TARGET_CLOCK_T0=1 로 돌린다(IM-009 기준일 원칙: 공유 PC 시계는 바꾸지 않는다).
+AXLINK_TARGET_CLOCK_T0=1 로 돌린다(IM-005A 기준일 원칙: 공유 PC 시계는 바꾸지 않는다).
 """
 
 from __future__ import annotations
@@ -197,7 +197,7 @@ def _check_s01(target, s0, rp=None) -> None:
 def _check_s02(target, s0, rp=None) -> None:
     """「일반 이슈가 몇 건이야」 → 9건(결함 제외). 지표 값은 시맨틱 레이어 값과 같고 검문을 통과, 그림 없음."""
     expected = _general_issues(s0)
-    assert expected == 9, f"S0 의 일반 이슈가 IM-009 기대 9건이 아니다: {expected}"
+    assert expected == 9, f"S0 의 일반 이슈가 IM-005A 기대 9건이 아니다: {expected}"
     events = _ask_live(target, s0, "일반 이슈가 몇 건이야", rp)
     text, done, start = _text(events), _done(events), events[0][1]
     assert start["routing"]["type"] in ("AGGREGATE", "MIXED"), start["routing"]
@@ -222,7 +222,7 @@ def _check_s03(target, s0, rp=None) -> None:
 def _check_s07(target, s0, rp=None) -> None:
     """「이번 달 지연된 작업과 사유」(T0) → 3.2 설계(계획 07-31, 실적 40%) 1건, 사유 각주 TD-DOC-5 또는 #204.
 
-    IM-009 5.1: 지연 = 종료일 < 기준일 이고 실적 < 100%. 계획 뒤짐(3.2·3.3·3.4)과 다르다. 「2건으로
+    IM-005A 5.1: 지연 = 종료일 < 기준일 이고 실적 < 100%. 계획 뒤짐(3.2·3.3·3.4)과 다르다. 「2건으로
     답하는 것」이 안 되는 것이므로 3.3·3.4 를 지연 작업으로 내놓으면 실패다."""
     events = _ask_live(target, s0, "이번 달 지연된 작업과 사유", rp)
     text, done = _text(events), _done(events)
@@ -243,7 +243,7 @@ def _check_s07(target, s0, rp=None) -> None:
 
 @pytest.mark.parametrize("variant", [LIVE])
 def test_UC_060_S01_문서_질문과_출처(target, s0, variant, record_property):
-    """실모델: 「납품 산출물은 몇 종인가」 → 22종·각주, 출처 과업지시서 2쪽, 원문 연결 (AC-060-1, IM-009 7.5)."""
+    """실모델: 「납품 산출물은 몇 종인가」 → 22종·각주, 출처 과업지시서 2쪽, 원문 연결 (AC-060-1, IM-005A 7.5)."""
     _check_s01(target, s0, record_property)
 
 
@@ -290,7 +290,7 @@ def test_UC_060_S05b_실모델_유도(target, s0, variant, record_property, capl
 
 @pytest.mark.parametrize("variant", [LIVE])
 def test_UC_060_S07_지연_작업과_사유(target, s0, variant, record_property, monkeypatch):
-    """실모델: T0 「이번 달 지연된 작업과 사유」 → 3.2 1건과 사유 근거 (AC-060-1·2, IM-009 7.5)."""
+    """실모델: T0 「이번 달 지연된 작업과 사유」 → 3.2 1건과 사유 근거 (AC-060-1·2, IM-005A 7.5)."""
     _at_t0(monkeypatch)
     _check_s07(target, s0, record_property)
 
@@ -421,7 +421,7 @@ def _confirmed(target, s0) -> dict[str, str]:
 @pytest.mark.parametrize("variant", [LIVE])
 def test_UC_021_S10_분모_AI_범위(target, s0, variant, record_property):
     """실모델: 확정 뒤 이행률 분모 3(A·B·D) 33.3%, AI 「요구사항 목록」 표는 A·B·D 「확정 목록」과
-    C 「확정 명세서에 없음(이행률 제외)」을 가른다 (AC-021-10, DEC-11 (a), IM-009 7.4).
+    C 「확정 명세서에 없음(이행률 제외)」을 가른다 (AC-021-10, DEC-11 (a), IM-005A 7.4).
 
     API 값은 test_group_c 의 같은 시나리오와 같다. 이 경우(실모델)만으로 시나리오를 판정할 수 있게
     분모·카드 값도 함께 본다."""
