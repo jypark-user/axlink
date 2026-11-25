@@ -86,9 +86,9 @@ def test_junit_의_경우와_모의_모델_표시를_적는다(tmp_path, monkeyp
     recs.mkdir()
     (recs / "catalog.json").write_text(json.dumps({
         "sources": {k: {"version": "v0"} for k in (
-            "IM-007-유스케이스명세서.md",
-            "IM-007A-요구사항-세부의무-대응표.md",
-            "IM-009-공통시험자료.md",
+            "IM-002-유스케이스명세서.md",
+            "IM-002A-요구사항-세부의무-대응표.md",
+            "IM-005A-공통시험자료.md",
         )},
         "scenarios": {"UC-060-S10": {"acs": ["AC-060-9"], "state": "S0", "expected": "x"}},
         "acs": {"AC-060-9": {"obligations": []}},
@@ -120,9 +120,9 @@ def test_junit_의_실모델_이름은_모의_모델로_읽지_않는다(tmp_pat
     recs.mkdir()
     (recs / "catalog.json").write_text(json.dumps({
         "sources": {k: {"version": "v0"} for k in (
-            "IM-007-유스케이스명세서.md",
-            "IM-007A-요구사항-세부의무-대응표.md",
-            "IM-009-공통시험자료.md",
+            "IM-002-유스케이스명세서.md",
+            "IM-002A-요구사항-세부의무-대응표.md",
+            "IM-005A-공통시험자료.md",
         )},
         "scenarios": {"UC-060-S10": {"acs": ["AC-060-9"], "state": "S0", "expected": "x"}},
         "acs": {"AC-060-9": {"obligations": []}},

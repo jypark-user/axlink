@@ -1,7 +1,7 @@
-"""IM-009 공통 시험 자료의 상수 (docs/30-test/IM-009-공통시험자료.md 1~5절).
+"""IM-005A 공통 시험 자료의 상수 (docs/30-test/IM-005A-공통시험자료.md 1~5절).
 
 도구 원시 응답(GitHub·Redmine REST)과 무관한 **도메인 값**만 둔다. 원시 응답 꼴로 바꾸는 일은
-`payloads.py` 가 한다. 값을 바꾸면 7절 기대값이 깨지므로, 바꾸려면 IM-009 를 먼저 고친다.
+`payloads.py` 가 한다. 값을 바꾸면 7절 기대값이 깨지므로, 바꾸려면 IM-005A 를 먼저 고친다.
 """
 
 from __future__ import annotations
@@ -151,7 +151,7 @@ CONNECTIONS = {
         "https://redmine.example.test",
         "citizen-portal",
         "TD-ORG-V1",
-        # 결함 트래커는 DEC-02 (a) 의 연결 설정이다(IM-009 3절 TD-CON-2)
+        # 결함 트래커는 DEC-02 (a) 의 연결 설정이다(IM-005A 3절 TD-CON-2)
         {"riskTracker": "리스크", "reqIdField": "요구사항 ID", "defectTracker": "결함"},
     ),
     "TD-CON-3": Connection(
@@ -626,5 +626,5 @@ EXPECTED_S0 = {
     "requirements": 3,
     "submissions": 2,
     "progress_ratio": 0.3000,
-    "plan_ratio_t0": 0.6695,  # 표시값은 IM-009 7.1 참조(반올림 정정 DEF-V001)
+    "plan_ratio_t0": 0.6695,  # 표시값은 IM-005A 7.1 참조(반올림 정정 DEF-V001)
 }

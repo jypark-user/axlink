@@ -525,7 +525,7 @@ def delete(cur: Any, principal: AuthPrincipal, document_id: str) -> None:
         raise errors.not_found("문서", document_id)
     _require_project(cur, principal, str(row["project_id"]))
     # 요구사항 명세서로 등록된 문서는 등록(정리 중·확정 대기·확정본)이 살아 있는 동안 지우지 않는다.
-    # 확정본은 요구사항의 원문 위치(표·행)가 이 문서를 가리킨다(IM-007 AC-020-8, GH-218).
+    # 확정본은 요구사항의 원문 위치(표·행)가 이 문서를 가리킨다(IM-002 AC-020-8, GH-218).
     cur.execute(
         "select status from requirement_baseline where document_upload_id = %s limit 1",
         (document_id,),

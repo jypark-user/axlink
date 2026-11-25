@@ -1,11 +1,11 @@
-"""IM-009 시험자료를 실제 GitHub 저장소 두 곳에 만든다 (TD-CON-1 · TD-CON-3, 실연동 시험용).
+"""IM-005A 시험자료를 실제 GitHub 저장소 두 곳에 만든다 (TD-CON-1 · TD-CON-3, 실연동 시험용).
 
 재생 자료(payloads.py)와 같은 도메인 값(data.py)을 실제 저장소에 쓴다. 쓰기는 이 PC 의 `gh` CLI
 로그인으로만 한다(이슈·라벨·마일스톤·PR 은 `gh api`, 커밋은 `gh auth git-credential` 로 push).
 토큰 값을 이 모듈이 읽거나 남기지 않는다. 읽기 쪽(AX Link 연결과 원천 비교)은 읽기 전용 토큰
 `AXLINK_VERIFY_GH_TOKEN` 을 쓴다.
 
-실제 GitHub 은 생성·닫힌 시각을 지정할 수 없다. 커밋의 저자·커미터 시각만 IM-009 값으로 맞추고,
+실제 GitHub 은 생성·닫힌 시각을 지정할 수 없다. 커밋의 저자·커미터 시각만 IM-005A 값으로 맞추고,
 이슈·PR·마일스톤의 시각은 원천(GitHub API)이 준 값과 AX Link 값을 비교한다.
 
 번호는 생성 순서로 맞춘다. TD-CON-1: 마일스톤 M-a #1 · M-b #2, 이슈 G1~G5 #1~#5, PR #6~#8.
@@ -59,18 +59,18 @@ DESIGN_DOC_PATH = "docs/20-design/설계-민원조회.md"
 DESIGN_FILE_PATH = "docs/20-design/SW설계서_v0.9.docx"
 REQ_LABEL = "유형: 요구사항"
 
-# 연결 설정(IM-009 3절 TD-CON-1)
+# 연결 설정(IM-005A 3절 TD-CON-1)
 MAPPING_CON1 = {
     "designDocPaths": "docs/20-design/*.md",
     "collectFiles": f"{WBS_PATH}=PROJECT_PLAN",
 }
 
-# IM-009 에 없는 받침 커밋. 실제 저장소는 파일을 커밋으로만 넣을 수 있어서 생긴다
+# IM-005A 에 없는 받침 커밋. 실제 저장소는 파일을 커밋으로만 넣을 수 있어서 생긴다
 SETUP_MESSAGE = "chore: 시험 저장소 초기 구성"
 SETUP_DATE = "2026-03-20T09:00:00Z"
-README_CON1 = "# 가상 시험 저장소 (IM-009 TD-CON-1)\n\n실제 사업 자료가 아니다.\n"
+README_CON1 = "# 가상 시험 저장소 (IM-005A TD-CON-1)\n\n실제 사업 자료가 아니다.\n"
 # PR 의 head 커밋. TD-PR-1 은 TD-CMT-3 이 head 다. 나머지 둘은 코드 참조가 없는 메시지로 둔다
-# (메시지에 요구사항 코드나 RM- 참조를 넣으면 IM-009 7.4 에 없는 추적 링크가 생긴다)
+# (메시지에 요구사항 코드나 RM- 참조를 넣으면 IM-005A 7.4 에 없는 추적 링크가 생긴다)
 PR_HEADS = {
     "TD-PR-1": ("fix/button-align", "TD-CMT-3", None, None),
     "TD-PR-2": (
@@ -210,7 +210,7 @@ def _now_git() -> str:
 
 
 def _source(path: str, note: str) -> bytes:
-    return f"# {path}\n# 가상 시험자료(IM-009). {note}\n".encode()
+    return f"# {path}\n# 가상 시험자료(IM-005A). {note}\n".encode()
 
 
 def _files_dir() -> Path:
@@ -514,7 +514,7 @@ def state() -> str:
 def to_s1() -> dict[str, str]:
     """TD-CON-1 을 S1 로: TD-CMT-2(설계서 파일), WBS 3.2 85% 커밋을 push 한다.
 
-    저자 시각은 IM-009 값, 커미터 시각은 지금이다. 증분 수집의 since 필터는 커미터 시각을 보므로
+    저자 시각은 IM-005A 값, 커미터 시각은 지금이다. 증분 수집의 since 필터는 커미터 시각을 보므로
     지금으로 둬야 다음 회차가 이 커밋을 읽는다."""
     if not gh_available():
         raise LiveSeedError("gh CLI 로그인이 필요하다")

@@ -559,7 +559,7 @@ def _load_plan(
 
     파일은 계획서 버전마다 한 번만 연다(ARC-016). 그 뒤로 진척·일정·확인 요청·항목 화면이
     같은 행을 본다. 새 판을 못 읽으면 직전 판에서 읽어 둔 행을 「이전 기준선」으로 쓰고 그렇다고
-    경고한다(IM-007 AC-030-3, DEF-V038). 화면이 갑자기 비는 것보다 어느 판인지 밝히고 직전 값을
+    경고한다(IM-002 AC-030-3, DEF-V038). 화면이 갑자기 비는 것보다 어느 판인지 밝히고 직전 값을
     보이는 편이 낫다. 읽어 둔 행이 없으면 못 읽었다고만 한다.
     """
     if plan_row is None or _placeholder(plan_row):
@@ -1134,7 +1134,7 @@ def _representative(
     if issue_estimate.denominator:
         return "L3", ISSUE_PROGRESS, issue_estimate.value
     # 점검표만 있고 제출본이 하나도 없으면 L4 를 세우지 않는다. 0% 는 「진척이 없다」는 주장이라
-    # 재료가 없는 것과 다르다(DEF-V003, IM-007 AC-002-1 「데이터 없음·산출 불가」)
+    # 재료가 없는 것과 다르다(DEF-V003, IM-002 AC-002-1 「데이터 없음·산출 불가」)
     if product.denominator and product.numerator:
         return "L4", "WORK_PRODUCT", product.value
     return _NONE, _NONE, None

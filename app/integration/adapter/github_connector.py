@@ -395,7 +395,7 @@ class GitHubConnector:
     tool = "GITHUB"
     item_kinds = tuple(ITEM_PATHS)
     # 이슈는 수집의 본체다. 이슈 권한이 빠지면 커밋·PR 만 받고 성공으로 끝나지 않는다
-    # (IM-007 AC-011-6b, GH-212). 파일 목록·PR·커밋은 선택 대상이라 건너뛰고 부분 성공이다.
+    # (IM-002 AC-011-6b, GH-212). 파일 목록·PR·커밋은 선택 대상이라 건너뛰고 부분 성공이다.
     required_kinds = ("issue",)
 
     def verify(self, base_url: str, target: str, secret: str) -> ProbeResult:

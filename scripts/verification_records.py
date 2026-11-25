@@ -4,7 +4,7 @@
 
 두 가지 일을 한다.
 
-  catalog : IM-007 유스케이스 명세서와 IM-007A 세부 의무 대응표, 구현·검증 대응표를 읽어
+  catalog : IM-002 유스케이스 명세서와 IM-002A 세부 의무 대응표, 구현·검증 대응표를 읽어
             UC·AC·시나리오·세부 의무·DEC 의 정적 카탈로그(catalog.json)와
             자동 시험 → AC 연결 초안(test-ac-map.csv)을 만든다.
             카탈로그는 기준 문서에서 **생성**한다. 손으로 고치지 않는다.
@@ -45,10 +45,10 @@ ROOT = Path(__file__).resolve().parent.parent
 REQ = ROOT / "docs" / "10-requirements"
 TEST = ROOT / "docs" / "30-test"
 IM001 = REQ / "IM-001-요구사항정의서.md"
-IM007 = REQ / "IM-007-유스케이스명세서.md"
-IM007A = REQ / "IM-007A-요구사항-세부의무-대응표.md"
-IM008 = REQ / "IM-008-용어사전.md"
-IM009 = TEST / "IM-009-공통시험자료.md"
+IM007 = REQ / "IM-002-유스케이스명세서.md"
+IM007A = REQ / "IM-002A-요구사항-세부의무-대응표.md"
+IM008 = REQ / "IM-010-용어사전.md"
+IM009 = TEST / "IM-005A-공통시험자료.md"
 IM005 = TEST / "IM-005-시험계획및결과서.md"
 MAPPING = TEST / "구현-검증-대응표.md"
 RECORDS = TEST / "검증기록"
@@ -309,12 +309,12 @@ def parse_im007a(text: str) -> dict[str, dict]:
 
 
 def decided_status(status: str) -> bool:
-    """IM-007 6절 상태 칸이 사용자 결정을 적은 것인가. 「**결정 (b) 2026-11-10 사용자**: …」 꼴."""
+    """IM-002 6절 상태 칸이 사용자 결정을 적은 것인가. 「**결정 (b) 2026-11-10 사용자**: …」 꼴."""
     return status.strip().startswith("**결정")
 
 
 def parse_dec_impacts(text: str) -> dict[str, dict]:
-    """IM-007A 부록 A.2 「결정 대기에 걸린 수용 기준」 → DEC 별 영향 AC·시나리오."""
+    """IM-002A 부록 A.2 「결정 대기에 걸린 수용 기준」 → DEC 별 영향 AC·시나리오."""
     out: dict[str, dict] = {}
     in_a2 = False
     for line in text.splitlines():
@@ -652,7 +652,7 @@ def compute_status(cat: dict) -> dict:
                 # 통과 근거가 있어도 이 AC 에 걸린 결함이 열려 있거나 재확인 전이다
                 st = "pass-defect-open"
             if st == "pass" and ac["decs"]:
-                # 결정 전에는 통과 판정을 내리지 않는다(IM-007 0.6)
+                # 결정 전에는 통과 판정을 내리지 않는다(IM-002 0.6)
                 st = "pass-decision-wait"
         ac_status[aid] = {
             "ac": aid,
@@ -916,9 +916,9 @@ def record_junit(a: argparse.Namespace) -> int:
                 "obligations": obligations,
                 "requirements": sorted({o.split("-o")[0] for o in obligations}),
                 "spec": {
-                    "im007": src["IM-007-유스케이스명세서.md"]["version"],
-                    "im007a": src["IM-007A-요구사항-세부의무-대응표.md"]["version"],
-                    "im009": src["IM-009-공통시험자료.md"]["version"],
+                    "im007": src["IM-002-유스케이스명세서.md"]["version"],
+                    "im007a": src["IM-002A-요구사항-세부의무-대응표.md"]["version"],
+                    "im009": src["IM-005A-공통시험자료.md"]["version"],
                     "baseline": a.baseline,
                 },
                 "code": {"commit": a.code, "db_version": a.db},

@@ -38,7 +38,7 @@ from app.standard import repository as standard_repository
 
 log = logging.getLogger(__name__)
 
-# 사업 상태 전이. 종료 뒤에는 되돌리지 않는다 — 종료는 보관이고 삭제가 아니다(IM-007 UC-002 3).
+# 사업 상태 전이. 종료 뒤에는 되돌리지 않는다 — 종료는 보관이고 삭제가 아니다(IM-002 UC-002 3).
 _STATUS_TRANSITIONS: dict[str, tuple[str, ...]] = {
     "PLANNING": ("ACTIVE", "CLOSING", "CLOSED"),
     "ACTIVE": ("CLOSING", "CLOSED"),
@@ -87,7 +87,7 @@ def create(
     delete_hash = bcrypt.hashpw(req.deletePassword.encode("utf-8"), bcrypt.gensalt()).decode()
     try:
         # 같은 발주기관 안에서 사업명은 하나다(uq_project__client_name). 위반은 거절이지 서버 오류가
-        # 아니다(IM-007 AC-002-4, GH-204). 저장점으로 감싸 트랜잭션은 살려 둔다.
+        # 아니다(IM-002 AC-002-4, GH-204). 저장점으로 감싸 트랜잭션은 살려 둔다.
         with cur.connection.transaction():
             project_id = repository.insert_project(
                 cur, principal.org_id, req.name.strip(), start, end, req.description.strip(),
@@ -297,7 +297,7 @@ def list_invites(
 
 
 def revoke_invite(cur: Any, principal: AuthPrincipal, project_id: str, invite_id: str) -> None:
-    """초대 링크 취소(IM-007 AC-003-4, GH-209). 취소한 링크로는 더 가입할 수 없다."""
+    """초대 링크 취소(IM-002 AC-003-4, GH-209). 취소한 링크로는 더 가입할 수 없다."""
     _require_client(principal)
     _require_allowed(cur, principal, project_id)
     participants.require_manager(cur, principal, project_id)
