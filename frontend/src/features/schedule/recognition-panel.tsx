@@ -5,7 +5,7 @@ import { formatDateTime } from '@/lib/format';
 import type { WbsRecognitionResponse } from '@/types/api';
 
 /**
- * 계획서 인식 결과 (IM-007 UC-030 3단계, AC-030-4). DEC-04 (b): 확인·열 재지정 단계는 없고,
+ * 계획서 인식 결과 (IM-002 UC-030 3단계, AC-030-4). DEC-04 (b): 확인·열 재지정 단계는 없고,
  * 어떻게 읽었는지와 경고를 보여 준다. 고칠 것이 있으면 원본을 고쳐 다시 수집한다.
  * 읽지 못한 판은 사유를 보이고 작업 0건·진척 0% 로 보이지 않는다.
  */
