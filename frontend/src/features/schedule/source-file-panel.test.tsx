@@ -22,7 +22,7 @@ const base = {
 } as unknown as WbsScheduleResponse;
 
 describe('수치의 원천', () => {
-  it('저장소 파일이면 저장소·경로·읽은 판과 반영 방법을 보인다', () => {
+  it('저장소 파일이면 저장소·경로·읽은 버전과 반영 방법을 보인다', () => {
     render(
       <SourceFilePanel
         data={{

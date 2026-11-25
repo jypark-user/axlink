@@ -42,7 +42,7 @@ export function SourceFilePanel({ data }: { data: WbsScheduleResponse }): ReactN
       </>
     );
     how =
-      '위의 「WBS 새 버전 올리기」로 고친 파일을 올리면 그 판으로 바뀝니다. 이 화면에서 고친 값은 반영되지 않습니다.';
+      '위의 「WBS 새 버전 올리기」로 고친 파일을 올리면 그 버전으로 바뀝니다. 이 화면에서 고친 값은 반영되지 않습니다.';
   } else {
     where = <FileLink path={f?.path ?? data.sourceLabel} url={f?.url ?? data.sourceUrl} />;
     how = '원천 파일이 바뀌어 다시 수집되면 이 화면과 진척률이 바뀝니다.';
@@ -61,7 +61,7 @@ export function SourceFilePanel({ data }: { data: WbsScheduleResponse }): ReactN
           <p className="text-muted-foreground text-xs">
             {revision && (
               <>
-                읽은 판 <span className="tnum font-mono">{revision.slice(0, 12)}</span>
+                읽은 버전 <span className="tnum font-mono">{revision.slice(0, 12)}</span>
               </>
             )}
             {f?.readAt && <> · 반영 {formatDateTime(f.readAt)}</>}

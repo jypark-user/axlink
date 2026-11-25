@@ -207,7 +207,7 @@ export const DASHBOARD_PRESETS: DashboardPreset[] = [
   {
     id: 'full',
     name: '전체 인포템플릿',
-    description: '그릴 수 있는 위젯 전부를 한 판에 — 어떤 그림이 있는지 훑어보고 골라내는 용도.',
+    description: '그릴 수 있는 위젯 전부를 한 화면에 — 어떤 그림이 있는지 훑어보고 골라내는 용도.',
     // GANTT_SUMMARY 만 뺐다 — planned/actual 컬럼을 요구하는데 시맨틱 집계는 그 모양을 못 만든다.
     widgets: [
       // ① 지금 위치 — 숫자·목표선·잔추세
@@ -376,7 +376,7 @@ export const DASHBOARD_PRESETS: DashboardPreset[] = [
     id: 'overview',
     name: '전체 진행 현황',
     description:
-      '진척·일정·품질·리스크·산출물 다섯 축을 한 판에. 핵심 수치로 지금 위치를 읽고, 추이와 구성비로 흐름을 본다. 보고용.',
+      '진척·일정·품질·리스크·산출물 다섯 축을 한 화면에. 핵심 수치로 지금 위치를 읽고, 추이와 구성비로 흐름을 본다. 보고용.',
     // 한 화면에 다섯 축(SWFR.WEB.001): 진척률 · 일정 · 품질 · 리스크 · 산출물. 카드 넷이 윗줄이다.
     widgets: [
       // 기간 축을 달아 카드 안에 추세선이 그려지게 한다 — 숫자만으로는 방향을 모른다.
