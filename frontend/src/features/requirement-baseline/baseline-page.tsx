@@ -1,5 +1,5 @@
 import { Fragment, useState, type ReactNode } from 'react';
-import { BookOpen, ExternalLink } from 'lucide-react';
+import { ExternalLink } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import { GUIDE_NEW_TAB } from '@/features/help/guide-links';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
@@ -107,15 +107,8 @@ export function BaselinePage(): ReactNode {
   return (
     <>
       <PageHeader
+        guide="requirement-baseline"
         title="요구사항 등록·확정"
-        description="용역사가 요구사항 명세서를 등록하고, 발주기관이 검토해 사업의 요구사항 목록으로 확정합니다."
-        actions={
-          <Button asChild variant="outline">
-            <Link to={GUIDE} {...GUIDE_NEW_TAB}>
-              <BookOpen className="size-4" /> 설명서
-            </Link>
-          </Button>
-        }
       />
       <div className="flex flex-col gap-5">
         <DataState state={state} onRetry={state.reload}>

@@ -49,6 +49,7 @@ export function DocumentDetailPage(): ReactNode {
       {(doc) => (
         <>
           <PageHeader
+        guide="deliverables#documents"
             title={doc.fileName}
             description={
               <span className="flex flex-wrap items-center gap-2">

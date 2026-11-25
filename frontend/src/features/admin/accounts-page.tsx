@@ -64,8 +64,8 @@ export function AccountsPage(): ReactNode {
   return (
     <>
       <PageHeader
+        guide="admin#accounts"
         title="발주기관·계정"
-        description="발주기관 조직을 만들고 담당자 계정을 발급합니다. 용역사 계정은 사업의 초대 링크로 가입합니다. 계정은 지우지 않고 중지합니다."
       />
       <div className="grid gap-5 lg:grid-cols-[20rem_1fr]">
         <Card>

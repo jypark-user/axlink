@@ -110,8 +110,8 @@ export function SnapshotsPage(): ReactNode {
   return (
     <>
       <PageHeader
+        guide="status#snapshots"
         title="스냅샷"
-        description="매일 한 번 지표를 한 줄로 고정한 기록입니다. 도구에서 읽어 오는 동기화와는 다른 것으로, 이 기록이 추이 그래프와 보고서 수치의 출처입니다."
         actions={
           <>
             {/* 일별 스냅샷 빈도·시각. 동기화 화면의 수집 설정에서 옮겨 왔다(11-18 사용자 지시) */}

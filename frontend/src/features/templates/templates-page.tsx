@@ -68,8 +68,8 @@ export function TemplatesPage(): ReactNode {
   return (
     <>
       <PageHeader
+        guide="admin#templates"
         title="인포 템플릿"
-        description="위젯과 AI 답변이 고를 수 있는 그림 23종입니다. 어떤 모양의 값이 들어오면 어떻게 그려지는지, 그리고 모델이 언제 고르는지를 봅니다."
       />
       <DataState state={state} onRetry={state.reload}>
         {(list) => {

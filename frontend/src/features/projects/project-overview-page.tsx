@@ -4,6 +4,7 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Tile } from '@/components/ui/page';
 import { Window } from '@/components/ui/window';
+import { PageHeader } from '@/components/layout/page-header';
 import { useProjectContext } from '@/components/layout/project-shell';
 import { AssignmentsPage } from '@/features/assignments/assignments-page';
 import { useAuth } from '@/features/auth/auth-context';
@@ -49,67 +50,69 @@ export function ProjectOverviewPage(): ReactNode {
   };
 
   return (
-    <div className="@container">
-      <div className="grid grid-cols-1 items-start gap-3 @3xl:grid-cols-12">
-        <Tile span={12}>
-          <Window
-            title="기본 정보"
-            hint="사업을 등록할 때 입력한 내용입니다."
-            action={
-              canEdit ? (
-                <div className="flex gap-2">
-                  <Button variant="outline" size="sm" onClick={() => setEditOpen(true)}>
-                    <Pencil className="size-4" />
-                    수정
-                  </Button>
-                  {!closed && (
-                    <Button variant="outline" size="sm" onClick={() => void closeProject()}>
-                      종료 처리
-                    </Button>
-                  )}
-                </div>
-              ) : null
-            }
-          >
-            <dl className="grid grid-cols-1 gap-x-6 gap-y-3 @2xl:grid-cols-2">
-              <Row term="사업명" desc={project.name} />
-              <Row
-                term="상태"
-                desc={
-                  <Badge variant={badgeVariantFor(project.status)}>{label(project.status)}</Badge>
-                }
-              />
-              <Row term="사업 기간" desc={formatPeriod(project.startDate, project.endDate)} />
-              <Row term="발주사" desc={project.clientOrgName} />
-              <Row term="용역사" desc={project.contractorName} />
-              <Row term="현재 SI 단계" desc={label(project.currentSiPhase)} />
-              <Row term="최근 수정" desc={formatDateTime(project.updatedAt)} />
-            </dl>
-
-            <p className="text-foreground text-sm mt-5 whitespace-pre-line">
-              {project.description || '설명이 없습니다.'}
-            </p>
-          </Window>
-        </Tile>
-
-        {canEdit && (
+    <>
+      <PageHeader guide="project-setup#overview" title="사업 관리" />
+      <div className="@container">
+        <div className="grid grid-cols-1 items-start gap-3 @3xl:grid-cols-12">
           <Tile span={12}>
-            <Window title="용역사" hint="이 사업에 참여한 용역사 계정입니다.">
-              <AssignmentsPage />
+            <Window
+              title="기본 정보"
+              action={
+                canEdit ? (
+                  <div className="flex gap-2">
+                    <Button variant="outline" size="sm" onClick={() => setEditOpen(true)}>
+                      <Pencil className="size-4" />
+                      수정
+                    </Button>
+                    {!closed && (
+                      <Button variant="outline" size="sm" onClick={() => void closeProject()}>
+                        종료 처리
+                      </Button>
+                    )}
+                  </div>
+                ) : null
+              }
+            >
+              <dl className="grid grid-cols-1 gap-x-6 gap-y-3 @2xl:grid-cols-2">
+                <Row term="사업명" desc={project.name} />
+                <Row
+                  term="상태"
+                  desc={
+                    <Badge variant={badgeVariantFor(project.status)}>{label(project.status)}</Badge>
+                  }
+                />
+                <Row term="사업 기간" desc={formatPeriod(project.startDate, project.endDate)} />
+                <Row term="발주사" desc={project.clientOrgName} />
+                <Row term="용역사" desc={project.contractorName} />
+                <Row term="현재 SI 단계" desc={label(project.currentSiPhase)} />
+                <Row term="최근 수정" desc={formatDateTime(project.updatedAt)} />
+              </dl>
+
+              <p className="text-foreground text-sm mt-5 whitespace-pre-line">
+                {project.description || '설명이 없습니다.'}
+              </p>
             </Window>
           </Tile>
+
+          {canEdit && (
+            <Tile span={12}>
+              <Window title="용역사">
+                <AssignmentsPage />
+              </Window>
+            </Tile>
+          )}
+        </div>
+
+        {canEdit && (
+          <ProjectEditDialog
+            project={project}
+            open={editOpen}
+            onOpenChange={setEditOpen}
+            onSaved={replaceProject}
+          />
         )}
       </div>
-
-      {canEdit && (
-        <ProjectEditDialog
-          project={project}
-          open={editOpen}
-          onOpenChange={setEditOpen}
-          onSaved={replaceProject}
-        />
-      )}
-    </div>
+    </>
   );
 }
 

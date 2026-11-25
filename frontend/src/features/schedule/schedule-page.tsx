@@ -70,8 +70,8 @@ export function SchedulePage(): ReactNode {
   return (
     <>
       <PageHeader
+        guide="status#schedule"
         title="일정(WBS)"
-        description="용역사 WBS 기준의 작업 일정과 진척입니다."
         actions={
           state.data?.planUpload ? (
             <PlanUploadButton
