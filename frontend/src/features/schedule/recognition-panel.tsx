@@ -17,7 +17,7 @@ export function RecognitionPanel({
   /** 화면에 보이는 말단 작업 수. 직전 판을 쓰고 있을 때 몇 건인지 알린다 */
   shownLeaves: number;
 }): ReactNode {
-  const version = r.planVersion ? `버전 ${r.planVersion}` : '현행 판';
+  const version = r.planVersion ? `버전 ${r.planVersion}` : '현행 버전';
   let hint: string | undefined;
   if (r.status === 'OK')
     hint = r.readAt ? `${version} · ${formatDateTime(r.readAt)} 읽음` : version;
@@ -83,7 +83,7 @@ export function RecognitionPanel({
           )}
           {r.columns.length === 0 && r.recordedBeforeTracking && (
             <p className="text-muted-foreground mb-3 text-sm">
-              이 판은 인식 결과를 남기기 전에 읽어 열 매핑 기록이 없습니다. 새 버전을 수집하면
+              이 버전은 인식 결과를 남기기 전에 읽어 열 매핑 기록이 없습니다. 새 버전을 수집하면
               보입니다.
             </p>
           )}

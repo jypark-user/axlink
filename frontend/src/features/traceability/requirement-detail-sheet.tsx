@@ -185,7 +185,7 @@ function BaselineSection({
             b.sourceFilename
           )}
           {b.sourceDocVersion && (
-            <span className="text-muted-foreground"> · 문서 판본 {b.sourceDocVersion}</span>
+            <span className="text-muted-foreground"> · 문서 버전 {b.sourceDocVersion}</span>
           )}
         </Row>
         <Row term="원문 위치">{b.location ?? '위치 기록 없음'}</Row>

@@ -637,7 +637,7 @@ def _previous_baseline(
     if plan is None:
         return None, reason
     previous = standard_repo.work_product_row(cur, loaded)
-    label = f"버전 {previous['version']}" if previous else "직전 판"
+    label = f"버전 {previous['version']}" if previous else "직전 버전"
     return plan, f"{reason} 직전에 읽은 계획서({label})의 작업을 이전 기준선으로 보입니다."
 
 

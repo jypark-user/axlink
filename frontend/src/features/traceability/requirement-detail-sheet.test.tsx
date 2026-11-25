@@ -126,7 +126,7 @@ describe('요구사항 상세', () => {
     expect(get).toHaveBeenCalledWith('/projects/p1/requirements/r1');
     const doc = screen.getByRole('link', { name: 'IM-001-요구사항정의서_v1.0.docx' });
     expect(doc).toHaveAttribute('href', '/p/p1/documents/d1');
-    expect(screen.getByText(/문서 판본 1.0/)).toBeInTheDocument();
+    expect(screen.getByText(/문서 버전 1.0/)).toBeInTheDocument();
   });
 
   it('끊긴 연결은 상태와 사유를, 이력은 확정 판정을 사람 말로 보인다', async () => {
