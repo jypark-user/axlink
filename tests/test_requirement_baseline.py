@@ -211,8 +211,7 @@ def test_신규_사업은_등록_정리_제출_확정을_거쳐서만_요구사�
         clean["docs"].append(doc)
 
     assert client.get(_base(), headers=po).json()["state"] == "NONE"
-    # 발주기관은 명세서를 등록하지 않는다
-    assert client.post(_base(), json={"documentId": doc}, headers=po).status_code == 403
+    # 발주기관도 명세서를 등록할 수 있다(11-25). 이 흐름은 용역사 등록으로 본다
 
     created = client.post(_base(), json={"documentId": doc}, headers=pm)
     assert created.status_code == 201, created.text
@@ -785,3 +784,58 @@ def test_확정_때_색인이_실패해도_다음_수집이_채운다(client, cl
         b = _req_codes(cur)["SWFR.TST.202"]
         _promote(cur, legacy["cid"])
         assert "명세서 쪽 제목" in _indexed(cur, str(b["id"]))
+
+
+# ---------------------------------------------------------------- 요구사항 화면에서 바로 올리기
+
+
+@requires_db
+def test_명세서_파일을_요구사항_화면에서_바로_올려_등록한다(client, client_token, clean):
+    pm, po = _auth(client_token("r3")), _auth(client_token("r2"))
+    codes = ["SWFR.TST.201", "SWFR.TST.202"]
+    clean["codes"] += codes
+    spec = _spec_table([
+        ("SWFR.TST.201", "명세서를 바로 올린다", "필수"),
+        ("SWFR.TST.202", "올린 명세서에서 항목을 뽑는다", "권장"),
+    ]) + f"\n<!-- {uuid.uuid4().hex} -->\n"
+    url = f"{_base()}/upload"
+    spec_bytes = spec.encode("utf-8")
+
+    def send(headers, name="요구사항명세서.md", body=spec_bytes):
+        return client.post(url, headers=headers, files={"file": (name, body, "text/markdown")})
+
+    try:
+        # 지원하지 않는 형식과 빈 파일은 받지 않는다
+        assert send(po, name="spec.exe").status_code == 400
+        assert send(po, body=b"").status_code == 400
+
+        # 발주기관도 올린다(11-25). 정리·제출은 용역사가 이어 한다
+        res = send(po)
+        assert res.status_code == 201, res.text
+        body = res.json()
+        assert body["status"] == "DRAFT"
+        assert sorted(i["code"] for i in body["items"]) == codes
+        assert client.get(_base(), headers=po).json()["workingStatus"] == "DRAFT"
+        seen = client.get(_base(), headers=pm).json()["working"]
+        assert seen["id"] == body["id"]
+        assert client.post(f"{_base()}/{body['id']}/submit", headers=po).status_code == 403
+        # 올린 파일은 자료와 같은 문서로 남는다
+        with tx() as cur:
+            docs = fetch_all(
+                cur,
+                "select id from document_upload where project_id = %s "
+                "and original_filename = '요구사항명세서.md'",
+                (PID,),
+            )
+        assert len(docs) == 1
+        # 정리 중인 명세서가 있으면 또 올리지 못한다
+        assert send(pm).status_code == 409
+        assert send(po).status_code == 409
+    finally:
+        with tx() as cur:
+            cur.execute("delete from requirement_baseline where project_id = %s", (PID,))
+            cur.execute(
+                "delete from document_upload where project_id = %s "
+                "and original_filename in ('요구사항명세서.md', 'spec.exe')",
+                (PID,),
+            )

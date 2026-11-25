@@ -60,7 +60,7 @@ export function BaselineBanner({
         <AlertDescription>
           {state.requirementCount > 0
             ? `지금 보이는 요구사항 ${state.requirementCount}건은 확정된 요구사항 목록이 아닙니다.`
-            : '용역사가 요구사항 명세서를 등록하고 발주기관이 확정하면 목록이 생깁니다.'}
+            : '요구사항 명세서를 올려 용역사가 정리·제출하고 발주기관이 확정하면 목록이 생깁니다.'}
           {working
             ? ' 명세서에서 뽑은 확정 전 목록은 요구사항 등록·확정 화면에 있고, 발주기관이 확정하면 이 목록이 그것으로 바뀝니다.'
             : ''}

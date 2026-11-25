@@ -37,11 +37,11 @@ import { useToast } from '@/components/common/toaster';
 import { PageHeader } from '@/components/layout/page-header';
 import { useProjectContext } from '@/components/layout/project-shell';
 import { useAuth } from '@/features/auth/auth-context';
+import { SpecUploadButton } from '@/features/requirement-baseline/spec-upload-dialog';
 import { isApiError } from '@/lib/api-error';
 import { formatDateTime } from '@/lib/format';
 import { api } from '@/lib/http';
 import { label } from '@/lib/labels';
-import { toQueryString } from '@/lib/query';
 import { useAsync } from '@/lib/use-async';
 import type {
   BaselineItem,
@@ -50,8 +50,6 @@ import type {
   BaselineProblem,
   BaselineResponse,
   BaselineStateResponse,
-  DocumentUploadResponse,
-  PageResponse,
   Priority,
   UnresolvedRefResponse,
 } from '@/types/api';
@@ -117,8 +115,8 @@ export function BaselinePage(): ReactNode {
               {s.state === 'NONE' && (
                 <NoBaseline
                   projectId={project.id}
-                  base={base}
                   isAuthor={isAuthor}
+                  isConfirmer={isConfirmer}
                   s={s}
                   onChanged={state.reload}
                 />
@@ -155,49 +153,17 @@ export function BaselinePage(): ReactNode {
 
 function NoBaseline({
   projectId,
-  base,
   isAuthor,
+  isConfirmer,
   s,
   onChanged,
 }: {
   projectId: string;
-  base: string;
   isAuthor: boolean;
+  isConfirmer: boolean;
   s: BaselineStateResponse;
   onChanged: () => void;
 }): ReactNode {
-  const { toast } = useToast();
-  const [documentId, setDocumentId] = useState('');
-  const [busy, setBusy] = useState(false);
-  const docs = useAsync<PageResponse<DocumentUploadResponse>>(
-    () =>
-      isAuthor
-        ? api.get<PageResponse<DocumentUploadResponse>>(
-            `/projects/${projectId}/documents${toQueryString({ page: 0, size: 100 })}`,
-          )
-        : Promise.resolve({ content: [] } as unknown as PageResponse<DocumentUploadResponse>),
-    [projectId, isAuthor],
-  );
-  const readable = (docs.data?.content ?? []).filter(
-    (d) => (d.extractedCharCount ?? 0) > 0 && d.status !== 'FAILED',
-  );
-
-  const create = async () => {
-    setBusy(true);
-    try {
-      await api.post<BaselineResponse>(base, { documentId });
-      onChanged();
-    } catch (err) {
-      toast({
-        title: '등록하지 못했습니다.',
-        description: isApiError(err) ? err.message : undefined,
-        variant: 'error',
-      });
-    } finally {
-      setBusy(false);
-    }
-  };
-
   return (
     <Window
       title="등록된 요구사항 명세서가 없습니다"
@@ -207,31 +173,9 @@ function NoBaseline({
           : '명세서를 등록해 요구사항 목록을 만듭니다.'
       }
     >
-      {isAuthor ? (
+      {isAuthor || isConfirmer ? (
         <div className="flex flex-wrap items-end gap-3">
-          <div className="flex min-w-72 flex-col gap-1.5">
-            <Label htmlFor="spec-doc">요구사항 명세서</Label>
-            <Select value={documentId} onValueChange={setDocumentId}>
-              <SelectTrigger id="spec-doc" className="w-full">
-                <SelectValue placeholder="자료 화면에 올린 문서에서 고르기" />
-              </SelectTrigger>
-              <SelectContent>
-                {readable.map((d) => (
-                  <SelectItem key={d.id} value={d.id}>
-                    {d.fileName} · {formatDateTime(d.uploadedAt)}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </div>
-          <Button disabled={!documentId || busy} onClick={create}>
-            명세서로 등록
-          </Button>
-          {readable.length === 0 && !docs.loading && (
-            <p className="text-muted-foreground text-sm">
-              먼저 자료 화면에 명세서 파일을 올리세요.
-            </p>
-          )}
+          <SpecUploadButton projectId={projectId} variant="default" onUploaded={onChanged} />
           <SpecCautions />
         </div>
       ) : (
@@ -246,7 +190,7 @@ function NoBaseline({
   );
 }
 
-/** 명세서를 고르기 전에 보는 주의. 자세한 형식표는 설명서에 둔다. */
+/** 명세서를 올리기 전에 보는 주의. 자세한 형식표는 설명서에 둔다. */
 function SpecCautions(): ReactNode {
   return (
     <Alert className="mt-2 w-full">

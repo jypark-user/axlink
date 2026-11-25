@@ -33,6 +33,15 @@ def find_document(cur: Any, document_id: str) -> dict[str, Any] | None:
     )
 
 
+def find_stored_file(cur: Any, document_id: str) -> dict[str, Any]:
+    """올린 명세서 파일의 저장 위치와 형식."""
+    row = fetch_one(
+        cur, "select stored_path, file_ext from document_upload where id = %s", (document_id,)
+    )
+    assert row is not None
+    return row
+
+
 def find_open(cur: Any, project_id: str) -> dict[str, Any] | None:
     return fetch_one(
         cur,
