@@ -200,6 +200,7 @@ export function DashboardPage(): ReactNode {
   return (
     <>
       <PageHeader
+        guide="status#dashboard"
         title="대시보드"
         description={
           project ? (

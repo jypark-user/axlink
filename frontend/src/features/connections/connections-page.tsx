@@ -1,7 +1,4 @@
 import { useState, type ReactNode } from 'react';
-import { Link } from 'react-router-dom';
-import { GUIDE_NEW_TAB } from '@/features/help/guide-links';
-import { BookOpen } from 'lucide-react';
 import {
   AlertDialog,
   AlertDialogAction,
@@ -87,16 +84,12 @@ export function ConnectionsPage(): ReactNode {
   return (
     <>
       <PageHeader
+        guide="tool-integration"
         title="연동"
-        description="GitHub · Redmine 연결과 수집 상태입니다."
         actions={
           <>
-            <Button asChild variant="outline">
-              <Link to="/guide/tool-integration" {...GUIDE_NEW_TAB}>
-                <BookOpen className="size-4" /> 연동 가이드
-              </Link>
-            </Button>
             <Button
+              size="sm"
               onClick={() => {
                 setEditing(null);
                 setFormOpen(true);

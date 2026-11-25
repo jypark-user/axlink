@@ -83,9 +83,21 @@ const jobColumns = (reload: () => void): ColumnDef<SyncJobResponse, unknown>[] =
       <Badge variant={badgeVariantFor(row.original.status)}>{label(row.original.status)}</Badge>
     ),
   },
-  // 수집 수치는 한 칸에 몰아 두면 읽기 어려워 네 칸으로 나눴다(11-20). 숫자만 들어가 폭을 좁힌다
+  // 수집 수치는 한 칸에 몰아 두면 읽기 어려워 칸을 나눴다(11-20). 숫자만 들어가 폭을 좁힌다
   statColumn('fetched', '수집'),
-  statColumn('upserted', '반영'),
+  // 수집에는 앞 회차와 겹쳐 다시 읽은 원본도 든다. 실제 변화량은 변경으로 따로 보인다(11-25).
+  // 변경을 따로 적기 전의 회차는 changed 가 없어 수집에서 그대로인 건수를 빼서 낸다
+  {
+    id: 'changed',
+    header: '변경',
+    meta: { className: NUM_COL },
+    cell: ({ row }) => {
+      const s = row.original.stats;
+      const n = s.changed || Math.max(0, (s.fetched ?? 0) - (s.skippedUnchanged ?? 0));
+      return <span className="tnum">{n}</span>;
+    },
+  },
+  statColumn('upserted', '반영(누적)'),
   statColumn('unmapped', '미매핑', (n) => (n > 0 ? 'text-warning' : undefined)),
   statColumn('indexed', '색인'),
   {
@@ -165,8 +177,8 @@ export function CollectionPage(): ReactNode {
   return (
     <>
       <PageHeader
+        guide="project-setup#collection"
         title="동기화"
-        description="도구에서 가져온 수집 잡 이력입니다. 30초마다 자동 갱신됩니다."
         actions={
           <>
             <ScheduleSettingsDialog projectId={project.id} part="sync" onSaved={reload} />

@@ -39,8 +39,6 @@ import type {
   SourceRef,
 } from '@/types/api';
 
-/** 이 화면이 세는 범위. 명세서 등록 전에 요구사항으로 만든 이슈는 요구사항 화면에 있다. */
-const GENERAL_ISSUE_SCOPE = '수집한 이슈입니다';
 const EMPTY_TEXT = '수집된 이슈가 없습니다. 연동을 붙이면 도구의 이슈가 여기 쌓입니다.';
 /**
  * 종류(일반·결함)와 심각도는 이 화면에서 뺐다(11-18 사용자 지시). 결함 매핑을 둔 연결이 없고
@@ -99,8 +97,8 @@ export function IssuesPage(): ReactNode {
   return (
     <>
       <PageHeader
+        guide="status#issues"
         title="이슈"
-        description={`${GENERAL_ISSUE_SCOPE}. 리스크와 예전에 요구사항으로 만든 이슈는 들지 않습니다.`}
       />
       <div className="@container flex flex-col gap-5">
         {connections.length > 0 && (

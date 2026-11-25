@@ -154,6 +154,7 @@ export function DocumentsPage(): ReactNode {
   return (
     <>
       <PageHeader
+        guide="deliverables#documents"
         title="자료"
         actions={
           <>

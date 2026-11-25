@@ -34,11 +34,11 @@ export function ProjectListPage(): ReactNode {
   return (
     <>
       <PageHeader
+        guide="project-setup#projects"
         title="사업 목록"
-        description="참여 중인 사업 목록입니다."
         actions={
           me?.role === 'CLIENT' ? (
-            <Button onClick={() => setCreateOpen(true)}>사업 등록</Button>
+            <Button size="sm" onClick={() => setCreateOpen(true)}>사업 등록</Button>
           ) : null
         }
       />

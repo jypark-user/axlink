@@ -182,7 +182,11 @@ export function DeliverablesPage(): ReactNode {
 
   return (
     <>
-      <PageHeader title="산출물" actions={<Iso29110Button projectId={project.id} />} />
+      <PageHeader
+        guide="deliverables#deliverables"
+        title="산출물"
+        actions={<Iso29110Button projectId={project.id} />}
+      />
       <input
         ref={inputRef}
         type="file"

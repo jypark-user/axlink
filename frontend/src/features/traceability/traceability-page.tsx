@@ -110,8 +110,8 @@ export function TraceabilityPage(): ReactNode {
   return (
     <>
       <PageHeader
+        guide="status#requirements"
         title="요구사항"
-        description="요구사항마다 이어진 설계 문서, 코드 변경, 시험을 봅니다. 이어져 있다고 완료나 통과를 뜻하지는 않습니다. 근거가 사라진 연결은 붉게 표시합니다."
       />
       <div className="@container flex flex-col gap-5">
         {baseline.data && <BaselineBanner projectId={project.id} state={baseline.data} />}

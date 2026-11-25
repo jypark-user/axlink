@@ -221,16 +221,10 @@ export function ReviewRequestsPage(): ReactNode {
   return (
     <div className="flex flex-col gap-4">
       <PageHeader
+        guide="reviews"
         title="확인 요청"
-        description={
-          isClient
-            ? '확인이 필요한 항목을 짚어 요청하고, 용역사의 조치 보고를 검토합니다. 요청 시점의 상태가 함께 저장됩니다.'
-            : isContractor
-              ? '발주기관이 요청한 항목의 조치 결과를 보고합니다. 요청 시점과 지금의 상태 차이가 보고에 함께 붙습니다.'
-              : '확인 요청과 조치 기록을 봅니다. 플랫폼 관리자는 요청·보고·확인을 대신하지 않습니다.'
-        }
         actions={
-          isClient ? <Button onClick={() => setCreateOpen(true)}>요청 등록</Button> : undefined
+          isClient ? <Button size="sm" onClick={() => setCreateOpen(true)}>요청 등록</Button> : undefined
         }
       />
       <DataState

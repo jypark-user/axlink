@@ -40,8 +40,8 @@ export function ErrorLogPage(): ReactNode {
   return (
     <>
       <PageHeader
+        guide="admin#errors"
         title="서버 오류 기록"
-        description="500 으로 끝난 요청입니다. 문서 읽기 실패처럼 화면에 이미 보이는 오류는 여기 없습니다."
         actions={
           <>
             <Button size="sm" variant="outline" onClick={reload}>
