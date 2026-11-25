@@ -1,5 +1,6 @@
 import { IssueProgressCell } from './issue-progress';
 import { useEffect, useMemo, useState, type ReactNode } from 'react';
+import { useNavigate } from 'react-router-dom';
 import type { ColumnDef } from '@tanstack/react-table';
 import { ExternalLink, PencilLine, X } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
@@ -42,6 +43,7 @@ import type {
 } from '@/types/api';
 import type { BaselineStateResponse } from '@/types/api';
 import { BaselineBanner } from '@/features/requirement-baseline/baseline-banner';
+import { SpecUploadButton } from '@/features/requirement-baseline/spec-upload-dialog';
 
 const PAGE_SIZE = 20;
 
@@ -50,6 +52,7 @@ export function TraceabilityPage(): ReactNode {
   const { me } = useAuth();
   // 요구사항 상태 지정은 발주기관이 한다(ARC-025). 용역사는 지정 결과와 사유만 본다
   const canDecide = me?.role === 'CLIENT'; // 상태 지정은 발주기관만. 관리자는 대신하지 않는다(DEC-05)
+  const navigate = useNavigate();
   const [deciding, setDeciding] = useState<TraceabilityRowResponse | null>(null);
   const [opened, setOpened] = useState<string | null>(null);
   const [page, setPage] = useState(0);
@@ -89,6 +92,13 @@ export function TraceabilityPage(): ReactNode {
     [project.id, page, filter, q],
   );
 
+  // 명세서 올리기는 용역사와 발주기관(11-25), 등록된 명세서가 없을 때만 보인다. 정리 중이거나
+  // 확정된 뒤에는 요구사항 등록·확정 화면에서 이어 한다
+  const canUploadSpec =
+    (me?.role === 'CONTRACTOR' || me?.role === 'CLIENT') &&
+    baseline.data?.state === 'NONE' &&
+    !baseline.data.workingStatus;
+
   const columns = useMemo(
     () => buildColumns(canDecide ? setDeciding : null, setOpened),
     [canDecide],
@@ -112,6 +122,14 @@ export function TraceabilityPage(): ReactNode {
       <PageHeader
         guide="status#requirements"
         title="요구사항"
+        actions={
+          canUploadSpec ? (
+            <SpecUploadButton
+              projectId={project.id}
+              onUploaded={() => navigate(`/p/${project.id}/requirement-baseline`)}
+            />
+          ) : null
+        }
       />
       <div className="@container flex flex-col gap-5">
         {baseline.data && <BaselineBanner projectId={project.id} state={baseline.data} />}

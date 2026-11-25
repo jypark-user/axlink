@@ -64,7 +64,7 @@ describe('요구사항 화면 머리의 확정 상태', () => {
     const { container } = renderBanner(state({}));
     expect(screen.getByText('요구사항 목록 확정 전 · 명세서 미등록')).toBeInTheDocument();
     expect(
-      screen.getByText('용역사가 요구사항 명세서를 등록하고 발주기관이 확정하면 목록이 생깁니다.'),
+      screen.getByText('요구사항 명세서를 올려 용역사가 정리·제출하고 발주기관이 확정하면 목록이 생깁니다.'),
     ).toBeInTheDocument();
     expect(container.textContent).not.toContain('기준선');
   });
