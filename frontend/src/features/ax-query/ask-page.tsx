@@ -14,7 +14,12 @@ import { toQueryString } from '@/lib/query';
 import { cn } from '@/lib/utils';
 import { useAsync } from '@/lib/use-async';
 import { AnswerBody, SourceEvidence } from '@/features/ax-query/answer-body';
-import { ModelBadge, SuggestionChips, answerKindLabel } from '@/features/ax-query/answer-kind';
+import {
+  ModelBadge,
+  SuggestionChips,
+  answerKindLabel,
+  routeLabel,
+} from '@/features/ax-query/answer-kind';
 import { ComposerActions } from '@/features/ax-query/composer-actions';
 import { ResourcePanel, type PanelView } from '@/features/ax-query/resource-panel';
 import { MentionMenu, useProjectMentions } from '@/features/ax-query/project-mentions';
@@ -134,6 +139,8 @@ export function AskPage(): ReactNode {
   const [activeFootnote, setActiveFootnote] = useState<number | null>(null);
   const [panel, setPanel] = useState<PanelView | null>(null);
   const [panelSources, setPanelSources] = useState<MessageSourceResponse[]>([]);
+  /** 근거 패널을 연 답. 각주 번호는 답마다 1부터라 번호만으로는 어느 답의 근거인지 모른다 */
+  const [panelOwner, setPanelOwner] = useState<string | null>(null);
   const [messagesNonce, setMessagesNonce] = useState(0);
   const inputRef = useRef<HTMLTextAreaElement>(null);
   const streamRef = useRef<HTMLDivElement>(null);
@@ -276,11 +283,13 @@ export function AskPage(): ReactNode {
   // 권장 질문은 키를 같이 보낸다. 서버가 검증하고 다시 분류하지 않는다(같은 안내 반복 방지)
   const pick = (item: SuggestionItem) => void send(item.question, false, item.hint);
 
-  const openEvidence = (sources: MessageSourceResponse[]) => (footnoteNo: number) => {
-    setPanelSources(sources);
-    setActiveFootnote(footnoteNo);
-    setPanel('evidence');
-  };
+  const openEvidence =
+    (owner: string, sources: MessageSourceResponse[]) => (footnoteNo: number) => {
+      setPanelOwner(owner);
+      setPanelSources(sources);
+      setActiveFootnote(footnoteNo);
+      setPanel('evidence');
+    };
 
   const rate = async (messageId: string, feedback: MessageFeedback) => {
     try {
@@ -436,12 +445,20 @@ export function AskPage(): ReactNode {
               </div>
             ) : (
               <div key={m.id} className="min-w-0">
-                {m.routing && (
+                {m.routing && (routeLabel(m.routing.type) || answerKindLabel(m.finishReason)) && (
                   <p className="text-muted-foreground text-xs font-semibold tracking-wide mb-2">
-                    {m.routing.type}
-                    {answerKindLabel(m.finishReason) && (
-                      <span className="ml-2 font-normal">· {answerKindLabel(m.finishReason)}</span>
-                    )}
+                    {routeLabel(m.routing.type)}
+                    {answerKindLabel(m.finishReason) &&
+                      answerKindLabel(m.finishReason) !== routeLabel(m.routing.type) && (
+                        <span
+                          className={
+                            routeLabel(m.routing.type) ? 'ml-2 font-normal' : 'font-normal'
+                          }
+                        >
+                          {routeLabel(m.routing.type) ? '· ' : ''}
+                          {answerKindLabel(m.finishReason)}
+                        </span>
+                      )}
                     {m.routing.routeCached && (
                       <span
                         className="ml-2 font-normal"
@@ -456,12 +473,14 @@ export function AskPage(): ReactNode {
                   content={m.content}
                   sources={m.sources}
                   infographics={m.infographics}
-                  onFootnoteClick={openEvidence(m.sources)}
+                  onFootnoteClick={openEvidence(m.id, m.sources)}
                 />
                 <SourceEvidence
                   sources={m.sources}
-                  activeFootnote={panel === 'evidence' ? activeFootnote : null}
-                  onSelect={openEvidence(m.sources)}
+                  activeFootnote={
+                    panel === 'evidence' && panelOwner === m.id ? activeFootnote : null
+                  }
+                  onSelect={openEvidence(m.id, m.sources)}
                 />
                 <div className="mt-3 flex items-center gap-1">
                   {(
@@ -515,12 +534,14 @@ export function AskPage(): ReactNode {
                     content={stream.draftText}
                     sources={stream.sources}
                     infographics={stream.infographics}
-                    onFootnoteClick={openEvidence(stream.sources)}
+                    onFootnoteClick={openEvidence('stream', stream.sources)}
                   />
                   <SourceEvidence
                     sources={stream.sources}
-                    activeFootnote={panel === 'evidence' ? activeFootnote : null}
-                    onSelect={openEvidence(stream.sources)}
+                    activeFootnote={
+                      panel === 'evidence' && panelOwner === 'stream' ? activeFootnote : null
+                    }
+                    onSelect={openEvidence('stream', stream.sources)}
                   />
                   <div className="mt-3 flex items-center">
                     {answerKindLabel(stream.finishReason) && (

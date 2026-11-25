@@ -19,6 +19,23 @@ const KIND_LABEL: Record<string, string> = {
   MODEL_DOWN: '모델 장애, 집계 값만',
 };
 
+/** 답을 만든 경로. 내부 코드(AGGREGATE, AI_JUDGE 등)를 화면에 그대로 내지 않는다. 모르는 값은 감춘다 */
+const ROUTE_LABEL: Record<string, string> = {
+  AGGREGATE: '집계',
+  DOCUMENT: '문서 근거',
+  MIXED: '집계와 문서',
+  OVERVIEW: '사업 현황',
+  INTENT: '일정',
+  LIST: '목록',
+  CLARIFY: '되묻기',
+  OFF_TOPIC: '사업 밖 질문',
+  AI_JUDGE: 'AI 판단',
+};
+
+export function routeLabel(type: string | null | undefined): string | null {
+  return type ? (ROUTE_LABEL[type] ?? null) : null;
+}
+
 export function answerKindLabel(reason: string | null | undefined): string | null {
   return reason ? (KIND_LABEL[reason] ?? null) : null;
 }
